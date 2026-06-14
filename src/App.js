@@ -773,6 +773,8 @@ function BookingConfirm({ go, bookingId }) {
 // ── LIVE RIDE ─────────────────────────────────────────────────────────────────
 function LiveRide({ go, bookingId }) {
   const [booking, setBooking] = useState(null);
+  const [rating,  setRating]  = useState(0);
+  const [rated,   setRated]   = useState(false);
 
   useEffect(() => {
     if (!bookingId) return;
@@ -782,18 +784,54 @@ function LiveRide({ go, bookingId }) {
     return () => unsub();
   }, [bookingId]);
 
+  const submitRating = async () => {
+    if (!rating || !bookingId) return;
+    await updateDoc(doc(db,'bookings',bookingId), { customerRating:rating });
+    setRated(true);
+  };
+
   const pickupCoords  = booking?.pickup  ? { lat:booking.pickup.lat,  lng:booking.pickup.lng  } : MANCHESTER_CENTER;
   const dropoffCoords = booking?.dropoff ? { lat:booking.dropoff.lat, lng:booking.dropoff.lng } : null;
   const markers = [{ position:pickupCoords, title:'Pickup' }];
   if (dropoffCoords) markers.push({ position:dropoffCoords, title:'Drop-off' });
 
-  const statusLabel = booking?.status==='active' ? '🟢 Driver on the way' : booking?.status==='completed' ? '✅ Ride completed' : '🔍 Finding your driver...';
+  if (booking?.status === 'completed') {
+    return (
+      <div style={{ ...s.content, background:'#0f1923', minHeight:'100vh' }}>
+        <div style={{ padding:24, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'100vh' }}>
+          <div style={{ fontSize:64, marginBottom:16 }}>✅</div>
+          <h2 style={{ fontSize:22, fontWeight:500, color:WHITE, marginBottom:8 }}>Ride completed!</h2>
+          <p style={{ fontSize:14, color:'rgba(255,255,255,0.5)', marginBottom:24, textAlign:'center' }}>You have arrived at your destination</p>
+          <div style={{ background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:14, padding:16, width:'100%', maxWidth:380, marginBottom:20 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:14, marginBottom:8 }}><span style={{ color:'rgba(255,255,255,0.6)' }}>Driver</span><span style={{ color:WHITE, fontWeight:500 }}>{booking.driverName||'--'}</span></div>
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:14, marginBottom:8 }}><span style={{ color:'rgba(255,255,255,0.6)' }}>From</span><span style={{ color:WHITE }}>{booking.pickup?.address?.split(',')[0]}</span></div>
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:14, marginBottom:8 }}><span style={{ color:'rgba(255,255,255,0.6)' }}>To</span><span style={{ color:WHITE }}>{booking.dropoff?.address?.split(',')[0]}</span></div>
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:16, fontWeight:500, borderTop:'0.5px solid rgba(255,255,255,0.1)', paddingTop:10, marginTop:4 }}><span style={{ color:'rgba(255,255,255,0.6)' }}>Total paid</span><span style={{ color:'#1a9e5a' }}>J${booking.fare?.toLocaleString()}</span></div>
+          </div>
+          {!rated ? (
+            <div style={{ width:'100%', maxWidth:380, marginBottom:20, textAlign:'center' }}>
+              <p style={{ fontSize:14, color:'rgba(255,255,255,0.6)', marginBottom:12 }}>Rate your driver</p>
+              <div style={{ display:'flex', gap:8, justifyContent:'center', marginBottom:16 }}>
+                {[1,2,3,4,5].map(star => (
+                  <div key={star} onClick={() => setRating(star)} style={{ fontSize:32, cursor:'pointer', opacity:star<=rating?1:0.3 }}>⭐</div>
+                ))}
+              </div>
+              {rating > 0 && <button style={s.btnY} onClick={submitRating}>Submit Rating</button>}
+            </div>
+          ) : (
+            <div style={{ ...s.successBox, width:'100%', maxWidth:380, textAlign:'center', marginBottom:20 }}>⭐ Thanks for rating your driver!</div>
+          )}
+          <button style={{ ...s.btnO, width:'100%', maxWidth:380 }} onClick={() => go('customer-dash')}>Back to Dashboard</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ ...s.content, background:'#0f1923' }}>
       <VilleMap height={240} center={pickupCoords} zoom={14} markers={markers}/>
       <div style={{ background:'rgba(26,26,46,0.95)', padding:'8px 16px', textAlign:'center', fontSize:13, color:YELLOW, fontWeight:500 }}>
-        {statusLabel}
+        {booking?.status==='active' ? '🟢 Driver on the way' : '🔍 Finding your driver...'}
       </div>
       <div style={{ padding:14 }}>
         {booking?.driverId ? (
@@ -888,8 +926,15 @@ function DriverDash({ go, user, setUser }) {
         </div>
       </div>
 
+      {/* Bottom nav menu */}
+      <div style={{ background:'rgba(26,26,46,0.98)', borderBottom:'0.5px solid rgba(255,255,255,0.08)', display:'flex' }}>
+        <div style={{ flex:1, padding:'10px 0', textAlign:'center', fontSize:11, color:YELLOW, cursor:'pointer', borderBottom:'2px solid '+YELLOW }}>🚕 Rides</div>
+        <div style={{ flex:1, padding:'10px 0', textAlign:'center', fontSize:11, color:'rgba(255,255,255,0.5)', cursor:'pointer' }} onClick={() => go('driver-profile')}>👤 Profile</div>
+        <div style={{ flex:1, padding:'10px 0', textAlign:'center', fontSize:11, color:'rgba(255,255,255,0.5)', cursor:'pointer' }} onClick={() => go('driver-settings')}>⚙️ Settings</div>
+      </div>
+
       {/* Real map showing Manchester */}
-      <VilleMap height={180} center={MANCHESTER_CENTER} zoom={12}/>
+      <VilleMap height={160} center={MANCHESTER_CENTER} zoom={12}/>
 
       <div style={{ padding:14 }}>
         {notifStatus === "idle" && (
@@ -1002,6 +1047,182 @@ function DriverActive({ go, user }) {
   );
 }
 
+// ── DRIVER PROFILE ───────────────────────────────────────────────────────────
+function DriverProfile({ go, user, setUser }) {
+  const [form, setForm]       = useState({ name: user?.name||'', phone: '', email: user?.email||'' });
+  const [loading, setLoading] = useState(false);
+  const [msg, setMsg]         = useState('');
+  const [error, setError]     = useState('');
+  const set = (k,v) => setForm(p => ({ ...p, [k]:v }));
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    getDoc(doc(db,'drivers',user.uid)).then(snap => {
+      if (snap.exists()) {
+        const d = snap.data();
+        setForm({ name:d.name||'', phone:d.phone||'', email:user.email||'' });
+      }
+    });
+  }, [user]);
+
+  const handleSave = async () => {
+    setError(''); setMsg(''); setLoading(true);
+    try {
+      await updateDoc(doc(db,'drivers',user.uid), { name:form.name, phone:form.phone });
+      setUser(prev => ({ ...prev, name:form.name }));
+      setMsg('Profile updated successfully!');
+    } catch(err) { setError('Failed to update profile.'); }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ ...s.content, background:'#0f1923' }}>
+      <TopBar title="My Profile" onBack={() => go('driver-dash')}/>
+      <div style={{ padding:20, maxWidth:420, margin:'0 auto' }}>
+        <div style={{ textAlign:'center', marginBottom:24 }}>
+          <div style={{ width:72, height:72, borderRadius:'50%', background:'rgba(232,180,0,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:32, margin:'0 auto 10px' }}>👤</div>
+          <div style={{ fontSize:16, fontWeight:500, color:WHITE }}>{user?.name}</div>
+          <div style={{ fontSize:12, color:'rgba(255,255,255,0.45)' }}>{user?.email}</div>
+          <div style={{ display:'inline-block', marginTop:6, background:'rgba(26,158,90,0.15)', color:'#1a9e5a', borderRadius:20, padding:'3px 12px', fontSize:11, fontWeight:500 }}>✓ Approved Driver</div>
+        </div>
+        {msg   && <div style={s.successBox}>{msg}</div>}
+        {error && <div style={s.errBox}>{error}</div>}
+        <label style={s.lbl}>Full Name</label>
+        <input style={s.inp} value={form.name} onChange={e => set('name',e.target.value)} placeholder="Your full name"/>
+        <label style={s.lbl}>Phone Number</label>
+        <input style={s.inp} value={form.phone} onChange={e => set('phone',e.target.value)} placeholder="+1 (876) 555-0100"/>
+        <label style={s.lbl}>Email Address</label>
+        <input style={{ ...s.inp, opacity:0.5 }} value={form.email} disabled placeholder="Email cannot be changed here"/>
+        <p style={{ fontSize:11, color:'rgba(255,255,255,0.35)', marginBottom:16 }}>To change your email go to Settings</p>
+        <button style={{ ...s.btnY, opacity:loading?0.7:1 }} onClick={handleSave} disabled={loading}>
+          {loading ? 'Saving...' : 'Save Changes'}
+        </button>
+        <button style={s.btnO} onClick={() => go('driver-settings')}>Go to Settings</button>
+      </div>
+    </div>
+  );
+}
+
+// ── DRIVER SETTINGS ───────────────────────────────────────────────────────────
+function DriverSettings({ go, user, setUser }) {
+  const [newPassword,    setNewPassword]    = useState('');
+  const [confirmPassword,setConfirmPassword] = useState('');
+  const [newEmail,       setNewEmail]       = useState('');
+  const [loadingPass,    setLoadingPass]    = useState(false);
+  const [loadingEmail,   setLoadingEmail]   = useState(false);
+  const [loadingDeact,   setLoadingDeact]   = useState(false);
+  const [msgPass,        setMsgPass]        = useState('');
+  const [msgEmail,       setMsgEmail]       = useState('');
+  const [errPass,        setErrPass]        = useState('');
+  const [errEmail,       setErrEmail]       = useState('');
+  const [showDeact,      setShowDeact]      = useState(false);
+
+  const handlePasswordChange = async () => {
+    setErrPass(''); setMsgPass('');
+    if (!newPassword || !confirmPassword) { setErrPass('Please fill in both fields.'); return; }
+    if (newPassword.length < 6) { setErrPass('Password must be at least 6 characters.'); return; }
+    if (newPassword !== confirmPassword) { setErrPass('Passwords do not match.'); return; }
+    setLoadingPass(true);
+    try {
+      const { updatePassword } = await import('firebase/auth');
+      await updatePassword(auth.currentUser, newPassword);
+      setMsgPass('Password updated successfully!');
+      setNewPassword(''); setConfirmPassword('');
+    } catch(err) {
+      if (err.code === 'auth/requires-recent-login') setErrPass('Please log out and log back in before changing your password.');
+      else setErrPass(err.message);
+    }
+    setLoadingPass(false);
+  };
+
+  const handleEmailChange = async () => {
+    setErrEmail(''); setMsgEmail('');
+    if (!newEmail) { setErrEmail('Please enter a new email address.'); return; }
+    setLoadingEmail(true);
+    try {
+      const { updateEmail, sendEmailVerification } = await import('firebase/auth');
+      await updateEmail(auth.currentUser, newEmail);
+      await sendEmailVerification(auth.currentUser);
+      await updateDoc(doc(db,'drivers',user.uid), { email:newEmail });
+      setUser(prev => ({ ...prev, email:newEmail }));
+      setMsgEmail('Email updated! Please verify your new email address.');
+      setNewEmail('');
+    } catch(err) {
+      if (err.code === 'auth/requires-recent-login') setErrEmail('Please log out and log back in before changing your email.');
+      else setErrEmail(err.message);
+    }
+    setLoadingEmail(false);
+  };
+
+  const handleDeactivate = async () => {
+    if (!window.confirm('Are you sure you want to deactivate your account? You will not be able to accept rides.')) return;
+    setLoadingDeact(true);
+    try {
+      await updateDoc(doc(db,'drivers',user.uid), { status:'suspended', deactivatedAt:serverTimestamp() });
+      await signOut(auth);
+      setUser(null);
+      go('splash');
+    } catch(err) { alert('Error: ' + err.message); }
+    setLoadingDeact(false);
+  };
+
+  const handleLogout = async () => { await signOut(auth); setUser(null); go('splash'); };
+
+  return (
+    <div style={{ ...s.content, background:'#0f1923' }}>
+      <TopBar title="Settings" onBack={() => go('driver-dash')}/>
+      <div style={{ padding:20, maxWidth:420, margin:'0 auto' }}>
+
+        {/* Change Password */}
+        <div style={{ background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:16, marginBottom:16 }}>
+          <div style={{ fontSize:15, fontWeight:500, color:WHITE, marginBottom:14 }}>🔒 Change Password</div>
+          {errPass && <div style={s.errBox}>{errPass}</div>}
+          {msgPass && <div style={s.successBox}>{msgPass}</div>}
+          <label style={s.lbl}>New Password</label>
+          <input style={s.inp} type="password" placeholder="At least 6 characters" value={newPassword} onChange={e => setNewPassword(e.target.value)}/>
+          <label style={s.lbl}>Confirm New Password</label>
+          <input style={s.inp} type="password" placeholder="Repeat new password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}/>
+          <button style={{ ...s.btnY, opacity:loadingPass?0.7:1 }} onClick={handlePasswordChange} disabled={loadingPass}>
+            {loadingPass ? 'Updating...' : 'Update Password'}
+          </button>
+        </div>
+
+        {/* Change Email */}
+        <div style={{ background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:16, marginBottom:16 }}>
+          <div style={{ fontSize:15, fontWeight:500, color:WHITE, marginBottom:4 }}>✉️ Change Email</div>
+          <div style={{ fontSize:12, color:'rgba(255,255,255,0.4)', marginBottom:14 }}>Current: {user?.email}</div>
+          {errEmail && <div style={s.errBox}>{errEmail}</div>}
+          {msgEmail && <div style={s.successBox}>{msgEmail}</div>}
+          <label style={s.lbl}>New Email Address</label>
+          <input style={s.inp} type="email" placeholder="new@email.com" value={newEmail} onChange={e => setNewEmail(e.target.value)}/>
+          <button style={{ ...s.btnY, opacity:loadingEmail?0.7:1 }} onClick={handleEmailChange} disabled={loadingEmail}>
+            {loadingEmail ? 'Updating...' : 'Update Email'}
+          </button>
+        </div>
+
+        {/* Logout */}
+        <div style={{ background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:16, marginBottom:16 }}>
+          <div style={{ fontSize:15, fontWeight:500, color:WHITE, marginBottom:12 }}>🚪 Logout</div>
+          <button style={s.btnO} onClick={handleLogout}>Log out of VilleCabs</button>
+        </div>
+
+        {/* Deactivate */}
+        <div style={{ background:'rgba(226,75,74,0.08)', border:'0.5px solid rgba(226,75,74,0.25)', borderRadius:14, padding:16 }}>
+          <div style={{ fontSize:15, fontWeight:500, color:'#f09595', marginBottom:6 }}>⚠️ Deactivate Account</div>
+          <div style={{ fontSize:12, color:'rgba(255,255,255,0.45)', marginBottom:14, lineHeight:1.6 }}>
+            Deactivating your account will suspend your driver profile. You will no longer receive ride requests. Contact admin to reactivate.
+          </div>
+          <button style={{ width:'100%', padding:'12px', background:'rgba(226,75,74,0.15)', color:'#f09595', border:'0.5px solid rgba(226,75,74,0.4)', borderRadius:12, fontSize:14, cursor:'pointer', opacity:loadingDeact?0.7:1 }}
+            onClick={handleDeactivate} disabled={loadingDeact}>
+            {loadingDeact ? 'Deactivating...' : 'Deactivate My Account'}
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
 // ── LOADING ───────────────────────────────────────────────────────────────────
 function LoadingScreen() {
   return (
@@ -1065,6 +1286,8 @@ export default function App() {
     'driver-login':   <DriverLogin {...props}/>,
     'driver-dash':    <DriverDash {...props}/>,
     'driver-active':  <DriverActive {...props}/>,
+    'driver-profile': <DriverProfile {...props}/>,
+    'driver-settings':<DriverSettings {...props}/>,
   };
 
   return (
