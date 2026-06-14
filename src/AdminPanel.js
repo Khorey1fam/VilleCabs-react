@@ -206,7 +206,7 @@ function DriversTab() {
             ))}
           </div>
 
-          <div style={{ display:'flex', gap:8', flexWrap:'wrap' }}>
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
             {driver.status === 'pending' && (
               <>
                 <button onClick={() => approve(driver.id)} style={s.btnApprove}>✓ Approve</button>
