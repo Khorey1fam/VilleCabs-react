@@ -1020,7 +1020,7 @@ export default function App() {
     'driver-active':  <DriverActive {...props}/>,
   };
 
-if (window.location.pathname === '/admin') return <AdminPanel/>;
+if (window.location.pathname.startsWith('/admin')) return <AdminPanel/>;
 
   return (
     <div style={s.screen}>
