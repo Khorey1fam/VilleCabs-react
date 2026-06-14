@@ -7,9 +7,10 @@ import {
 } from 'firebase/auth';
 import {
   getFirestore, doc, setDoc, getDoc, addDoc, collection,
-  onSnapshot, updateDoc, query, where, orderBy, serverTimestamp
+  onSnapshot, updateDoc, query, where, orderBy, serverTimestamp, getDocs
 } from 'firebase/firestore';
 import { GoogleMap, useJsApiLoader, Marker, DirectionsRenderer } from '@react-google-maps/api';
+import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 
 const firebaseConfig = {
   apiKey:            process.env.REACT_APP_FIREBASE_API_KEY,
@@ -23,6 +24,7 @@ const app            = initializeApp(firebaseConfig);
 const auth           = getAuth(app);
 const db             = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
+const messaging     = getMessaging(app);
 
 const YELLOW = '#e8b400';
 const DARK   = '#1a1a2e';
@@ -664,6 +666,18 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
         createdAt:    serverTimestamp(),
       });
       setBookingId(ref.id);
+      // Notify all approved drivers via FCM
+      try {
+        const driverSnap = await getDocs(query(collection(db,"drivers"), where("status","==","approved")));
+        const tokens = driverSnap.docs.map(d => d.data().fcmToken).filter(Boolean);
+        await setDoc(doc(db,"notifications","latest_ride"), {
+          title: "New VilleCabs ride request!",
+          body: `${user.name} needs a ${v.name} from ${pickupData?.address?.split(",")[0]||"Manchester"} — J$${price}`,
+          tokens,
+          bookingId: ref.id,
+          createdAt: serverTimestamp(),
+        });
+      } catch(e) { console.log("Notification send skipped:", e.message); }
       go('booking-confirm');
     } catch(err) { setError('Failed to create booking. Please try again.'); }
     setLoading(false);
@@ -818,6 +832,7 @@ function LiveRide({ go, bookingId }) {
 // ── DRIVER DASHBOARD ──────────────────────────────────────────────────────────
 function DriverDash({ go, user, setUser }) {
   const [rides,   setRides]   = useState([]);
+  const [notifStatus, setNotifStatus] = useState("idle");
   const [loading, setLoading] = useState(true);
   const handleLogout = async () => { await signOut(auth); setUser(null); go('splash'); };
 
@@ -829,6 +844,23 @@ function DriverDash({ go, user, setUser }) {
     });
     return () => unsub();
   }, []);
+
+  const requestNotifPermission = async () => {
+    setNotifStatus("requesting");
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission === "granted") {
+        const token = await getToken(messaging, { vapidKey: process.env.REACT_APP_VAPID_KEY });
+        if (token) {
+          await setDoc(doc(db,"drivers",user.uid), { fcmToken: token }, { merge: true });
+          setNotifStatus("enabled");
+          onMessage(messaging, payload => {
+            const n = new Notification(payload.notification.title, { body: payload.notification.body, icon: "/favicon.ico" });
+          });
+        }
+      } else { setNotifStatus("denied"); }
+    } catch(err) { console.error(err); setNotifStatus("error"); }
+  };
 
   const acceptRide = async (rideId) => {
     try {
@@ -860,6 +892,22 @@ function DriverDash({ go, user, setUser }) {
       <VilleMap height={180} center={MANCHESTER_CENTER} zoom={12}/>
 
       <div style={{ padding:14 }}>
+        {notifStatus === "idle" && (
+          <div onClick={requestNotifPermission} style={{ background:"rgba(232,180,0,0.1)", border:"1px solid rgba(232,180,0,0.3)", borderRadius:10, padding:"10px 14px", marginBottom:12, display:"flex", alignItems:"center", gap:10, cursor:"pointer", fontSize:13 }}>
+            <span style={{ fontSize:18 }}>🔔</span>
+            <div style={{ flex:1 }}><div style={{ color:"#e8b400", fontWeight:500 }}>Enable ride notifications</div><div style={{ fontSize:11, color:"rgba(255,255,255,0.5)", marginTop:2 }}>Tap to get alerted when customers book</div></div>
+          </div>
+        )}
+        {notifStatus === "enabled" && (
+          <div style={{ background:"rgba(26,158,90,0.1)", border:"0.5px solid rgba(26,158,90,0.3)", borderRadius:10, padding:"8px 14px", marginBottom:12, fontSize:12, color:"#9fe1cb", display:"flex", alignItems:"center", gap:8 }}>
+            🔔 Notifications enabled — you'll be alerted for new rides
+          </div>
+        )}
+        {notifStatus === "denied" && (
+          <div style={{ background:"rgba(226,75,74,0.1)", border:"0.5px solid rgba(226,75,74,0.3)", borderRadius:10, padding:"8px 14px", marginBottom:12, fontSize:12, color:"#f09595" }}>
+            ⚠️ Notifications blocked. Enable them in your browser settings.
+          </div>
+        )}
         {loading ? (
           <div style={{ textAlign:'center', padding:30, color:'rgba(255,255,255,0.4)' }}>Loading rides...</div>
         ) : rides.length === 0 ? (
@@ -1018,7 +1066,6 @@ export default function App() {
     'driver-dash':    <DriverDash {...props}/>,
     'driver-active':  <DriverActive {...props}/>,
   };
-
 
   return (
     <div style={s.screen}>
