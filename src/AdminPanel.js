@@ -1,0 +1,426 @@
+import React, { useState, useEffect } from 'react';
+import { initializeApp, getApps } from 'firebase/app';
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
+import { getFirestore, collection, query, where, onSnapshot, updateDoc, doc, orderBy, serverTimestamp } from 'firebase/firestore';
+
+const firebaseConfig = {
+  apiKey:            process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain:        process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId:         process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket:     process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId:             process.env.REACT_APP_FIREBASE_APP_ID,
+};
+
+const app  = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db   = getFirestore(app);
+
+const YELLOW = '#e8b400';
+const DARK   = '#1a1a2e';
+const GREEN  = '#1a9e5a';
+const WHITE  = '#ffffff';
+const RED    = '#e24b4a';
+
+const s = {
+  page:     { minHeight:'100vh', background:'#0f1015', color:WHITE, fontFamily:"'Segoe UI', sans-serif" },
+  topbar:   { background:DARK, padding:'14px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'0.5px solid rgba(255,255,255,0.1)' },
+  logo:     { display:'flex', alignItems:'center', gap:10, fontSize:18, fontWeight:600, color:WHITE },
+  logobadge:{ background:YELLOW, borderRadius:8, padding:'4px 10px', fontSize:12, color:DARK, fontWeight:700 },
+  sidebar:  { width:200, background:DARK, minHeight:'100vh', padding:'20px 0', flexShrink:0, borderRight:'0.5px solid rgba(255,255,255,0.08)' },
+  navitem:  { padding:'12px 20px', fontSize:14, cursor:'pointer', color:'rgba(255,255,255,0.6)', display:'flex', alignItems:'center', gap:10, borderLeft:'3px solid transparent' },
+  navactive:{ padding:'12px 20px', fontSize:14, cursor:'pointer', color:WHITE, fontWeight:500, display:'flex', alignItems:'center', gap:10, borderLeft:`3px solid ${YELLOW}`, background:'rgba(232,180,0,0.08)' },
+  main:     { flex:1, padding:'24px', overflowY:'auto' },
+  card:     { background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, padding:'16px 20px', marginBottom:14 },
+  statgrid: { display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:24 },
+  stat:     { background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, padding:'16px 20px' },
+  badge:    { display:'inline-block', padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:500 },
+  btnApprove:{ background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:'8px 16px', fontSize:13, fontWeight:500, cursor:'pointer', marginRight:8 },
+  btnReject: { background:'rgba(226,75,74,0.15)', color:'#f09595', border:'0.5px solid rgba(226,75,74,0.4)', borderRadius:8, padding:'8px 16px', fontSize:13, cursor:'pointer' },
+  btnSuspend:{ background:'rgba(255,255,255,0.06)', color:'rgba(255,255,255,0.5)', border:'0.5px solid rgba(255,255,255,0.15)', borderRadius:8, padding:'8px 16px', fontSize:13, cursor:'pointer' },
+  inp:      { width:'100%', padding:'12px 14px', background:'rgba(255,255,255,0.06)', border:'0.5px solid rgba(255,255,255,0.15)', borderRadius:10, color:WHITE, fontSize:14, boxSizing:'border-box', outline:'none', marginBottom:12 },
+  errBox:   { background:'rgba(226,75,74,0.15)', border:'0.5px solid rgba(226,75,74,0.4)', borderRadius:10, padding:'10px 14px', marginBottom:12, fontSize:13, color:'#f09595' },
+};
+
+// ── ADMIN LOGIN ───────────────────────────────────────────────────────────────
+function AdminLogin({ onLogin }) {
+  const [email,    setEmail]    = useState('');
+  const [password, setPassword] = useState('');
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState('');
+
+  const ADMIN_EMAIL = process.env.REACT_APP_ADMIN_EMAIL || 'admin@villecabs.com';
+
+  const handleLogin = async () => {
+    setError('');
+    if (!email || !password) { setError('Please enter email and password.'); return; }
+    if (email !== ADMIN_EMAIL) { setError('Access denied. Admin accounts only.'); return; }
+    setLoading(true);
+    try {
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      onLogin(cred.user);
+    } catch(err) { setError('Incorrect email or password.'); }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ minHeight:'100vh', background:'#0f1015', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'Segoe UI', sans-serif" }}>
+      <div style={{ width:380, background:DARK, border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:20, padding:32 }}>
+        <div style={{ textAlign:'center', marginBottom:28 }}>
+          <div style={{ fontSize:40, marginBottom:10 }}>🚕</div>
+          <div style={{ fontSize:22, fontWeight:700, color:WHITE, letterSpacing:2 }}>VilleCabs</div>
+          <div style={{ fontSize:13, color:'rgba(255,255,255,0.4)', marginTop:4 }}>Admin Panel</div>
+        </div>
+        {error && <div style={s.errBox}>⚠️ {error}</div>}
+        <label style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginBottom:4, display:'block' }}>Admin Email</label>
+        <input style={s.inp} type="email" placeholder="admin@villecabs.com" value={email} onChange={e => setEmail(e.target.value)}/>
+        <label style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginBottom:4, display:'block' }}>Password</label>
+        <input style={s.inp} type="password" placeholder="Admin password" value={password} onChange={e => setPassword(e.target.value)}
+          onKeyDown={e => e.key==='Enter' && handleLogin()}/>
+        <button onClick={handleLogin} disabled={loading}
+          style={{ width:'100%', padding:'14px', background:YELLOW, color:DARK, border:'none', borderRadius:12, fontSize:15, fontWeight:700, cursor:'pointer', marginTop:4, opacity:loading?0.7:1 }}>
+          {loading ? 'Signing in...' : 'Sign In'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── STAT CARD ─────────────────────────────────────────────────────────────────
+function StatCard({ label, value, color = WHITE, sub }) {
+  return (
+    <div style={s.stat}>
+      <div style={{ fontSize:11, color:'rgba(255,255,255,0.45)', marginBottom:6 }}>{label}</div>
+      <div style={{ fontSize:26, fontWeight:500, color }}>{value}</div>
+      {sub && <div style={{ fontSize:11, color:'rgba(255,255,255,0.35)', marginTop:4 }}>{sub}</div>}
+    </div>
+  );
+}
+
+// ── DRIVERS TAB ───────────────────────────────────────────────────────────────
+function DriversTab() {
+  const [drivers, setDrivers]   = useState([]);
+  const [filter,  setFilter]    = useState('pending');
+  const [loading, setLoading]   = useState(true);
+  const [confirm, setConfirm]   = useState(null);
+
+  useEffect(() => {
+    const q = filter === 'all'
+      ? query(collection(db,'drivers'), orderBy('createdAt','desc'))
+      : query(collection(db,'drivers'), where('status','==',filter), orderBy('createdAt','desc'));
+    const unsub = onSnapshot(q, snap => {
+      setDrivers(snap.docs.map(d => ({ id:d.id, ...d.data() })));
+      setLoading(false);
+    });
+    return () => unsub();
+  }, [filter]);
+
+  const approve = async (id) => {
+    await updateDoc(doc(db,'drivers',id), { status:'approved', approvedAt:serverTimestamp() });
+  };
+
+  const reject = async (id, reason = '') => {
+    await updateDoc(doc(db,'drivers',id), { status:'rejected', rejectionReason:reason, rejectedAt:serverTimestamp() });
+    setConfirm(null);
+  };
+
+  const suspend = async (id) => {
+    await updateDoc(doc(db,'drivers',id), { status:'suspended', suspendedAt:serverTimestamp() });
+  };
+
+  const statusBadge = (status) => {
+    const map = {
+      pending:   { bg:'rgba(232,180,0,0.15)',  color:'#e8b400',  text:'Pending'   },
+      approved:  { bg:'rgba(26,158,90,0.15)',  color:'#1a9e5a',  text:'Approved'  },
+      rejected:  { bg:'rgba(226,75,74,0.15)', color:'#f09595',  text:'Rejected'  },
+      suspended: { bg:'rgba(255,255,255,0.08)',color:'rgba(255,255,255,0.4)', text:'Suspended' },
+    };
+    const m = map[status] || map.pending;
+    return <span style={{ ...s.badge, background:m.bg, color:m.color }}>{m.text}</span>;
+  };
+
+  const filters = ['pending','approved','rejected','all'];
+
+  return (
+    <div>
+      {/* Confirm reject modal */}
+      {confirm && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:100, display:'flex', alignItems:'center', justifyContent:'center' }}>
+          <div style={{ background:DARK, borderRadius:16, padding:24, width:360, border:'0.5px solid rgba(255,255,255,0.15)' }}>
+            <div style={{ fontSize:16, fontWeight:500, marginBottom:8 }}>Reject driver application?</div>
+            <div style={{ fontSize:13, color:'rgba(255,255,255,0.5)', marginBottom:16 }}>Optionally enter a reason — this will be stored on their profile.</div>
+            <input style={s.inp} placeholder="Reason (optional)" id="reject-reason"/>
+            <div style={{ display:'flex', gap:8, marginTop:4 }}>
+              <button onClick={() => reject(confirm, document.getElementById('reject-reason')?.value||'')}
+                style={{ flex:1, background:RED, color:WHITE, border:'none', borderRadius:8, padding:10, cursor:'pointer', fontWeight:500 }}>Confirm Reject</button>
+              <button onClick={() => setConfirm(null)}
+                style={{ flex:1, background:'rgba(255,255,255,0.06)', color:'rgba(255,255,255,0.6)', border:'0.5px solid rgba(255,255,255,0.15)', borderRadius:8, padding:10, cursor:'pointer' }}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div style={{ display:'flex', gap:8, marginBottom:20, flexWrap:'wrap' }}>
+        {filters.map(f => (
+          <button key={f} onClick={() => setFilter(f)}
+            style={{ padding:'7px 16px', borderRadius:20, fontSize:13, border:'0.5px solid rgba(255,255,255,0.15)', background:filter===f?YELLOW:'rgba(255,255,255,0.05)', color:filter===f?DARK:'rgba(255,255,255,0.6)', cursor:'pointer', textTransform:'capitalize', fontWeight:filter===f?600:400 }}>
+            {f === 'all' ? 'All drivers' : f}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign:'center', padding:40, color:'rgba(255,255,255,0.4)' }}>Loading drivers...</div>
+      ) : drivers.length === 0 ? (
+        <div style={{ textAlign:'center', padding:40 }}>
+          <div style={{ fontSize:36, marginBottom:12 }}>👤</div>
+          <div style={{ color:'rgba(255,255,255,0.4)', fontSize:14 }}>No {filter} applications</div>
+        </div>
+      ) : drivers.map(driver => (
+        <div key={driver.id} style={s.card}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+              <div style={{ width:44, height:44, borderRadius:'50%', background:'rgba(232,180,0,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>👤</div>
+              <div>
+                <div style={{ fontSize:15, fontWeight:500, color:WHITE }}>{driver.name}</div>
+                <div style={{ fontSize:12, color:'rgba(255,255,255,0.45)' }}>{driver.email} · {driver.phone}</div>
+              </div>
+            </div>
+            {statusBadge(driver.status)}
+          </div>
+
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:12 }}>
+            {[['TRN', driver.trn],['Date of Birth', driver.dob],['Vehicle', `${driver.vehicleMake||''} ${driver.vehicleModel||''}`],['Plate', driver.licensePlate],['Applied', driver.createdAt?.toDate?.()?.toLocaleDateString('en-JM')||'--'],['Rating', driver.rating ? `★ ${driver.rating}` : 'New']].map(([k,v]) => (
+              <div key={k} style={{ background:'rgba(255,255,255,0.04)', borderRadius:8, padding:'8px 10px' }}>
+                <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)', marginBottom:2 }}>{k}</div>
+                <div style={{ fontSize:12, color:WHITE }}>{v||'--'}</div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:12 }}>
+            {['license','fitness','registration'].map(docType => (
+              <span key={docType} style={{ ...s.badge, background: driver.docs?.[docType] && driver.docs[docType]!=='pending_upload' ? 'rgba(26,158,90,0.15)' : 'rgba(226,75,74,0.12)', color: driver.docs?.[docType] && driver.docs[docType]!=='pending_upload' ? '#9fe1cb' : '#f09595', fontSize:11 }}>
+                {driver.docs?.[docType] && driver.docs[docType]!=='pending_upload' ? '✓' : '⚠'} {docType}
+              </span>
+            ))}
+          </div>
+
+          <div style={{ display:'flex', gap:8', flexWrap:'wrap' }}>
+            {driver.status === 'pending' && (
+              <>
+                <button onClick={() => approve(driver.id)} style={s.btnApprove}>✓ Approve</button>
+                <button onClick={() => setConfirm(driver.id)} style={s.btnReject}>✗ Reject</button>
+              </>
+            )}
+            {driver.status === 'approved' && (
+              <button onClick={() => suspend(driver.id)} style={s.btnSuspend}>Suspend driver</button>
+            )}
+            {(driver.status === 'rejected' || driver.status === 'suspended') && (
+              <button onClick={() => approve(driver.id)} style={s.btnApprove}>Re-activate</button>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── RIDES TAB ─────────────────────────────────────────────────────────────────
+function RidesTab() {
+  const [rides,   setRides]   = useState([]);
+  const [filter,  setFilter]  = useState('all');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const q = filter === 'all'
+      ? query(collection(db,'bookings'), orderBy('createdAt','desc'))
+      : query(collection(db,'bookings'), where('status','==',filter), orderBy('createdAt','desc'));
+    const unsub = onSnapshot(q, snap => {
+      setRides(snap.docs.map(d => ({ id:d.id, ...d.data() })));
+      setLoading(false);
+    });
+    return () => unsub();
+  }, [filter]);
+
+  const statusBadge = (status) => {
+    const map = {
+      searching: { bg:'rgba(232,180,0,0.15)',  color:'#e8b400',  text:'Searching' },
+      active:    { bg:'rgba(26,158,90,0.15)',  color:'#1a9e5a',  text:'Active'    },
+      completed: { bg:'rgba(255,255,255,0.08)',color:'rgba(255,255,255,0.5)', text:'Completed' },
+      cancelled: { bg:'rgba(226,75,74,0.12)', color:'#f09595',  text:'Cancelled' },
+    };
+    const m = map[status] || map.searching;
+    return <span style={{ ...s.badge, background:m.bg, color:m.color }}>{m.text}</span>;
+  };
+
+  const total = rides.reduce((sum, r) => sum + (r.fare||0), 0);
+  const filters = ['all','searching','active','completed'];
+
+  return (
+    <div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:20 }}>
+        <StatCard label="Total rides" value={rides.length} sub="in current filter"/>
+        <StatCard label="Total revenue" value={`J$${total.toLocaleString()}`} color={YELLOW} sub="all rides"/>
+        <StatCard label="Active now" value={rides.filter(r=>r.status==='active').length} color={GREEN} sub="in progress"/>
+      </div>
+
+      <div style={{ display:'flex', gap:8, marginBottom:20, flexWrap:'wrap' }}>
+        {filters.map(f => (
+          <button key={f} onClick={() => setFilter(f)}
+            style={{ padding:'7px 16px', borderRadius:20, fontSize:13, border:'0.5px solid rgba(255,255,255,0.15)', background:filter===f?YELLOW:'rgba(255,255,255,0.05)', color:filter===f?DARK:'rgba(255,255,255,0.6)', cursor:'pointer', textTransform:'capitalize', fontWeight:filter===f?600:400 }}>
+            {f === 'all' ? 'All rides' : f}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign:'center', padding:40, color:'rgba(255,255,255,0.4)' }}>Loading rides...</div>
+      ) : rides.length === 0 ? (
+        <div style={{ textAlign:'center', padding:40 }}>
+          <div style={{ fontSize:36, marginBottom:12 }}>🚕</div>
+          <div style={{ color:'rgba(255,255,255,0.4)', fontSize:14 }}>No {filter} rides yet</div>
+        </div>
+      ) : (
+        <div style={{ background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, overflow:'hidden' }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 80px 80px', padding:'10px 16px', background:'rgba(255,255,255,0.04)', fontSize:11, color:'rgba(255,255,255,0.4)', fontWeight:500, textTransform:'uppercase', letterSpacing:0.5 }}>
+            <span>Customer</span><span>Route</span><span>Driver</span><span>Fare</span><span>Status</span>
+          </div>
+          {rides.map((r,i) => (
+            <div key={r.id} style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 80px 80px', padding:'12px 16px', borderTop:'0.5px solid rgba(255,255,255,0.06)', fontSize:13, alignItems:'center', background:i%2===0?'transparent':'rgba(255,255,255,0.02)' }}>
+              <span style={{ color:WHITE }}>{r.customerName||'--'}</span>
+              <span style={{ color:'rgba(255,255,255,0.55)', fontSize:12 }}>{r.pickup?.address?.split(',')[0]||'--'} → {r.dropoff?.address?.split(',')[0]||'--'}</span>
+              <span style={{ color:'rgba(255,255,255,0.55)', fontSize:12 }}>{r.driverName||'Unassigned'}</span>
+              <span style={{ color:GREEN, fontWeight:500 }}>J${r.fare?.toLocaleString()||'--'}</span>
+              <span>{statusBadge(r.status)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── OVERVIEW TAB ──────────────────────────────────────────────────────────────
+function OverviewTab() {
+  const [stats, setStats] = useState({ pending:0, approved:0, total_rides:0, revenue:0, active_rides:0, customers:0 });
+
+  useEffect(() => {
+    const unsubDrivers = onSnapshot(collection(db,'drivers'), snap => {
+      const pending  = snap.docs.filter(d => d.data().status==='pending').length;
+      const approved = snap.docs.filter(d => d.data().status==='approved').length;
+      setStats(p => ({ ...p, pending, approved }));
+    });
+    const unsubRides = onSnapshot(collection(db,'bookings'), snap => {
+      const rides       = snap.docs.map(d => d.data());
+      const total_rides = rides.length;
+      const revenue     = rides.reduce((sum,r) => sum + (r.fare||0), 0);
+      const active_rides= rides.filter(r => r.status==='active').length;
+      setStats(p => ({ ...p, total_rides, revenue, active_rides }));
+    });
+    const unsubCustomers = onSnapshot(collection(db,'customers'), snap => {
+      setStats(p => ({ ...p, customers:snap.size }));
+    });
+    return () => { unsubDrivers(); unsubRides(); unsubCustomers(); };
+  }, []);
+
+  return (
+    <div>
+      <div style={{ fontSize:16, fontWeight:500, marginBottom:16 }}>Overview — Manchester, Jamaica</div>
+      <div style={s.statgrid}>
+        <StatCard label="Pending applications" value={stats.pending}    color={YELLOW} sub="awaiting review"/>
+        <StatCard label="Active drivers"        value={stats.approved}  color={GREEN}  sub="approved"/>
+        <StatCard label="Total rides"           value={stats.total_rides}              sub="all time"/>
+        <StatCard label="Total revenue"         value={`J$${stats.revenue.toLocaleString()}`} color={YELLOW} sub="platform earnings × 15%"/>
+      </div>
+      <div style={s.statgrid}>
+        <StatCard label="Active rides now" value={stats.active_rides} color={GREEN} sub="in progress"/>
+        <StatCard label="Registered customers" value={stats.customers} sub="signed up"/>
+        <StatCard label="Platform fee" value="15%" sub="per ride"/>
+        <StatCard label="Service area" value="Manchester" sub="Jamaica"/>
+      </div>
+
+      <div style={{ ...s.card, marginTop:8 }}>
+        <div style={{ fontSize:14, fontWeight:500, marginBottom:12 }}>Quick actions</div>
+        <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
+          <div style={{ background:'rgba(232,180,0,0.1)', border:'0.5px solid rgba(232,180,0,0.25)', borderRadius:10, padding:'12px 16px', fontSize:13, color:YELLOW, cursor:'pointer' }}>
+            👤 Review pending drivers ({stats.pending})
+          </div>
+          <div style={{ background:'rgba(26,158,90,0.1)', border:'0.5px solid rgba(26,158,90,0.25)', borderRadius:10, padding:'12px 16px', fontSize:13, color:'#9fe1cb', cursor:'pointer' }}>
+            🚕 View active rides ({stats.active_rides})
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── MAIN ADMIN APP ────────────────────────────────────────────────────────────
+export default function AdminPanel() {
+  const [adminUser, setAdminUser] = useState(null);
+  const [loading,   setLoading]   = useState(true);
+  const [tab,       setTab]       = useState('overview');
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setAdminUser(u);
+      setLoading(false);
+    });
+    return () => unsub();
+  }, []);
+
+  const handleLogout = async () => { await signOut(auth); setAdminUser(null); };
+
+  if (loading) return (
+    <div style={{ minHeight:'100vh', background:'#0f1015', display:'flex', alignItems:'center', justifyContent:'center', color:WHITE, fontFamily:"'Segoe UI', sans-serif" }}>
+      <div style={{ textAlign:'center' }}><div style={{ fontSize:40, marginBottom:12 }}>🚕</div><div style={{ color:'rgba(255,255,255,0.4)' }}>Loading...</div></div>
+    </div>
+  );
+
+  if (!adminUser) return <AdminLogin onLogin={setAdminUser}/>;
+
+  const tabs = [
+    { id:'overview', label:'Overview',    icon:'📊' },
+    { id:'drivers',  label:'Drivers',     icon:'🚗' },
+    { id:'rides',    label:'Rides',       icon:'🚕' },
+  ];
+
+  return (
+    <div style={s.page}>
+      <div style={s.topbar}>
+        <div style={s.logo}>
+          <span>🚕</span> VilleCabs
+          <span style={s.logobadge}>ADMIN</span>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+          <span style={{ fontSize:13, color:'rgba(255,255,255,0.5)' }}>{adminUser.email}</span>
+          <button onClick={handleLogout} style={{ background:'none', border:'0.5px solid rgba(255,255,255,0.2)', borderRadius:8, color:'rgba(255,255,255,0.5)', fontSize:12, padding:'6px 14px', cursor:'pointer' }}>Logout</button>
+        </div>
+      </div>
+
+      <div style={{ display:'flex' }}>
+        <div style={s.sidebar}>
+          <div style={{ padding:'12px 20px', fontSize:11, color:'rgba(255,255,255,0.3)', textTransform:'uppercase', letterSpacing:1, marginBottom:4 }}>Menu</div>
+          {tabs.map(t => (
+            <div key={t.id} onClick={() => setTab(t.id)} style={tab===t.id ? s.navactive : s.navitem}>
+              <span>{t.icon}</span> {t.label}
+            </div>
+          ))}
+          <div style={{ margin:'20px 20px 0', height:'0.5px', background:'rgba(255,255,255,0.08)' }}/>
+          <div style={{ padding:'16px 20px', fontSize:12, color:'rgba(255,255,255,0.3)', lineHeight:1.6 }}>
+            VilleCabs Admin<br/>Manchester, Jamaica
+          </div>
+        </div>
+
+        <div style={s.main}>
+          <div style={{ fontSize:20, fontWeight:500, marginBottom:20, color:WHITE, textTransform:'capitalize' }}>
+            {tab === 'overview' ? '📊 Dashboard Overview' : tab === 'drivers' ? '🚗 Driver Management' : '🚕 Ride Management'}
+          </div>
+          {tab === 'overview' && <OverviewTab/>}
+          {tab === 'drivers'  && <DriversTab/>}
+          {tab === 'rides'    && <RidesTab/>}
+        </div>
+      </div>
+    </div>
+  );
+}

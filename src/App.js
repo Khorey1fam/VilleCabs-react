@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import AdminPanel from './AdminPanel';
 import { initializeApp } from 'firebase/app';
 import {
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
@@ -1018,6 +1019,8 @@ export default function App() {
     'driver-dash':    <DriverDash {...props}/>,
     'driver-active':  <DriverActive {...props}/>,
   };
+
+if (window.location.pathname === '/admin') return <AdminPanel/>;
 
   return (
     <div style={s.screen}>
