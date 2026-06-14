@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import {
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
@@ -9,6 +9,7 @@ import {
   getFirestore, doc, setDoc, getDoc, addDoc, collection,
   onSnapshot, updateDoc, query, where, orderBy, serverTimestamp
 } from 'firebase/firestore';
+import { GoogleMap, useJsApiLoader, Marker, DirectionsRenderer } from '@react-google-maps/api';
 
 const firebaseConfig = {
   apiKey:            process.env.REACT_APP_FIREBASE_API_KEY,
@@ -28,30 +29,54 @@ const DARK   = '#1a1a2e';
 const GREEN  = '#1a9e5a';
 const WHITE  = '#ffffff';
 
+// Manchester, Jamaica centre
+const MANCHESTER_CENTER = { lat: 18.0416, lng: -77.5036 };
+const LIBRARIES = ['places'];
+
+// Dark map style matching VilleCabs theme
+const MAP_STYLE = [
+  { elementType:'geometry', stylers:[{ color:'#1a2744' }] },
+  { elementType:'labels.text.fill', stylers:[{ color:'#8ec3b9' }] },
+  { elementType:'labels.text.stroke', stylers:[{ color:'#1a3646' }] },
+  { featureType:'road', elementType:'geometry', stylers:[{ color:'#304a7d' }] },
+  { featureType:'road', elementType:'geometry.stroke', stylers:[{ color:'#255763' }] },
+  { featureType:'road.highway', elementType:'geometry', stylers:[{ color:'#e8b400' }] },
+  { featureType:'road.highway', elementType:'geometry.stroke', stylers:[{ color:'#1f2835' }] },
+  { featureType:'road.highway', elementType:'labels.text.fill', stylers:[{ color:'#f3d19c' }] },
+  { featureType:'water', elementType:'geometry', stylers:[{ color:'#0e1626' }] },
+  { featureType:'water', elementType:'labels.text.fill', stylers:[{ color:'#515c6d' }] },
+  { featureType:'poi', elementType:'geometry', stylers:[{ color:'#1a3a2a' }] },
+  { featureType:'poi.park', elementType:'geometry', stylers:[{ color:'#1a4a2e' }] },
+  { featureType:'transit', elementType:'geometry', stylers:[{ color:'#2f3948' }] },
+  { featureType:'administrative', elementType:'geometry', stylers:[{ color:'#2a3a5a' }] },
+  { featureType:'administrative.country', elementType:'labels.text.fill', stylers:[{ color:'#9d9d9d' }] },
+  { featureType:'administrative.locality', elementType:'labels.text.fill', stylers:[{ color:'#e8b400' }] },
+];
+
 const s = {
-  screen:    { minHeight: '100vh', fontFamily: "'Segoe UI', sans-serif", background: DARK, color: WHITE },
-  mapBg:     { position: 'fixed', inset: 0, zIndex: 0, background: DARK },
-  overlay:   { position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(15,25,50,0.72)', backdropFilter: 'blur(4px)' },
-  content:   { position: 'relative', zIndex: 2, minHeight: '100vh' },
-  center:    { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '0 24px' },
-  card:      { background: 'rgba(255,255,255,0.06)', border: '0.5px solid rgba(255,255,255,0.15)', borderRadius: 20, padding: '28px 24px', width: '100%', maxWidth: 380 },
-  btnY:      { width: '100%', padding: '14px 20px', background: YELLOW, color: DARK, border: 'none', borderRadius: 12, fontSize: 15, fontWeight: 700, cursor: 'pointer', marginBottom: 10 },
-  btnO:      { width: '100%', padding: '14px 20px', background: 'transparent', color: WHITE, border: '1.5px solid rgba(255,255,255,0.35)', borderRadius: 12, fontSize: 15, fontWeight: 500, cursor: 'pointer', marginBottom: 10 },
-  btnG:      { width: '100%', padding: '14px 20px', background: GREEN, color: WHITE, border: 'none', borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: 'pointer', marginBottom: 10 },
-  inp:       { width: '100%', padding: '12px 14px', background: 'rgba(255,255,255,0.08)', border: '0.5px solid rgba(255,255,255,0.2)', borderRadius: 10, color: WHITE, fontSize: 14, marginBottom: 12, boxSizing: 'border-box', outline: 'none' },
-  lbl:       { fontSize: 11, color: 'rgba(255,255,255,0.55)', marginBottom: 4, display: 'block', fontWeight: 500 },
-  topBar:    { background: 'rgba(26,26,46,0.95)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, borderBottom: '0.5px solid rgba(255,255,255,0.1)' },
-  backBtn:   { background: 'none', border: 'none', color: YELLOW, fontSize: 22, cursor: 'pointer', padding: '2px 6px' },
-  topTitle:  { color: WHITE, fontSize: 16, fontWeight: 500 },
-  link:      { color: YELLOW, fontSize: 13, cursor: 'pointer', textAlign: 'center', marginTop: 8, background: 'none', border: 'none', width: '100%', display: 'block', padding: 4 },
-  divLine:   { display: 'flex', alignItems: 'center', gap: 10, margin: '8px 0 14px', color: 'rgba(255,255,255,0.3)', fontSize: 12 },
-  errBox:    { background: 'rgba(226,75,74,0.15)', border: '0.5px solid rgba(226,75,74,0.4)', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#f09595' },
-  successBox:{ background: 'rgba(26,158,90,0.15)', border: '0.5px solid rgba(26,158,90,0.4)', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#9fe1cb' },
-  uploadBox: { border: '1.5px dashed rgba(255,255,255,0.25)', borderRadius: 10, padding: 14, textAlign: 'center', cursor: 'pointer', marginBottom: 12, background: 'rgba(255,255,255,0.04)' },
-  uploadOk:  { border: '1.5px dashed #1a9e5a', borderRadius: 10, padding: 14, textAlign: 'center', cursor: 'pointer', marginBottom: 12, background: 'rgba(26,158,90,0.1)' },
+  screen:    { minHeight:'100vh', fontFamily:"'Segoe UI', sans-serif", background:DARK, color:WHITE },
+  mapBg:     { position:'fixed', inset:0, zIndex:0, background:DARK },
+  overlay:   { position:'fixed', inset:0, zIndex:1, background:'rgba(15,25,50,0.72)', backdropFilter:'blur(4px)' },
+  content:   { position:'relative', zIndex:2, minHeight:'100vh' },
+  center:    { display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'100vh', padding:'0 24px' },
+  card:      { background:'rgba(255,255,255,0.06)', border:'0.5px solid rgba(255,255,255,0.15)', borderRadius:20, padding:'28px 24px', width:'100%', maxWidth:380 },
+  btnY:      { width:'100%', padding:'14px 20px', background:YELLOW, color:DARK, border:'none', borderRadius:12, fontSize:15, fontWeight:700, cursor:'pointer', marginBottom:10 },
+  btnO:      { width:'100%', padding:'14px 20px', background:'transparent', color:WHITE, border:'1.5px solid rgba(255,255,255,0.35)', borderRadius:12, fontSize:15, fontWeight:500, cursor:'pointer', marginBottom:10 },
+  btnG:      { width:'100%', padding:'14px 20px', background:GREEN, color:WHITE, border:'none', borderRadius:12, fontSize:15, fontWeight:600, cursor:'pointer', marginBottom:10 },
+  inp:       { width:'100%', padding:'12px 14px', background:'rgba(255,255,255,0.08)', border:'0.5px solid rgba(255,255,255,0.2)', borderRadius:10, color:WHITE, fontSize:14, marginBottom:12, boxSizing:'border-box', outline:'none' },
+  lbl:       { fontSize:11, color:'rgba(255,255,255,0.55)', marginBottom:4, display:'block', fontWeight:500 },
+  topBar:    { background:'rgba(26,26,46,0.97)', padding:'12px 16px', display:'flex', alignItems:'center', gap:12, borderBottom:'0.5px solid rgba(255,255,255,0.1)', position:'sticky', top:0, zIndex:10 },
+  backBtn:   { background:'none', border:'none', color:YELLOW, fontSize:22, cursor:'pointer', padding:'2px 6px' },
+  topTitle:  { color:WHITE, fontSize:16, fontWeight:500 },
+  link:      { color:YELLOW, fontSize:13, cursor:'pointer', textAlign:'center', marginTop:8, background:'none', border:'none', width:'100%', display:'block', padding:4 },
+  divLine:   { display:'flex', alignItems:'center', gap:10, margin:'8px 0 14px', color:'rgba(255,255,255,0.3)', fontSize:12 },
+  errBox:    { background:'rgba(226,75,74,0.15)', border:'0.5px solid rgba(226,75,74,0.4)', borderRadius:10, padding:'10px 14px', marginBottom:12, fontSize:13, color:'#f09595' },
+  successBox:{ background:'rgba(26,158,90,0.15)', border:'0.5px solid rgba(26,158,90,0.4)', borderRadius:10, padding:'10px 14px', marginBottom:12, fontSize:13, color:'#9fe1cb' },
+  uploadBox: { border:'1.5px dashed rgba(255,255,255,0.25)', borderRadius:10, padding:14, textAlign:'center', cursor:'pointer', marginBottom:12, background:'rgba(255,255,255,0.04)' },
+  uploadOk:  { border:'1.5px dashed #1a9e5a', borderRadius:10, padding:14, textAlign:'center', cursor:'pointer', marginBottom:12, background:'rgba(26,158,90,0.1)' },
 };
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── SVG fallback map (for auth screens) ──────────────────────────────────────
 function MapBg() {
   return (
     <>
@@ -61,20 +86,12 @@ function MapBg() {
           <ellipse cx="200" cy="150" rx="180" ry="120" fill="#1a4a2e" opacity="0.6"/>
           <ellipse cx="600" cy="100" rx="220" ry="140" fill="#1a4a2e" opacity="0.5"/>
           <ellipse cx="400" cy="400" rx="250" ry="150" fill="#1a4a2e" opacity="0.4"/>
-          <ellipse cx="100" cy="450" rx="150" ry="100" fill="#1a4a2e" opacity="0.5"/>
-          <ellipse cx="700" cy="480" rx="180" ry="120" fill="#1a4a2e" opacity="0.4"/>
           <line x1="0" y1="300" x2="800" y2="300" stroke={YELLOW} strokeWidth="4" opacity="0.35"/>
           <line x1="400" y1="0" x2="400" y2="600" stroke={YELLOW} strokeWidth="4" opacity="0.35"/>
           <line x1="0" y1="150" x2="800" y2="450" stroke={YELLOW} strokeWidth="2.5" opacity="0.2"/>
-          <line x1="800" y1="150" x2="0" y2="450" stroke={YELLOW} strokeWidth="2.5" opacity="0.2"/>
-          <line x1="200" y1="0" x2="200" y2="600" stroke={WHITE} strokeWidth="1.5" opacity="0.1"/>
-          <line x1="600" y1="0" x2="600" y2="600" stroke={WHITE} strokeWidth="1.5" opacity="0.1"/>
           <circle cx="375" cy="285" r="10" fill={YELLOW} opacity="0.9"/>
           <circle cx="375" cy="285" r="5" fill={DARK}/>
-          <circle cx="575" cy="170" r="7" fill={GREEN} opacity="0.8"/>
-          <circle cx="575" cy="170" r="3.5" fill={WHITE}/>
           <text x="370" y="316" textAnchor="middle" fill={YELLOW} fontSize="11" opacity="0.7" fontWeight="bold">Mandeville</text>
-          <text x="580" y="195" textAnchor="middle" fill={WHITE} fontSize="9" opacity="0.5">Christiana</text>
         </svg>
       </div>
       <div style={s.overlay}/>
@@ -82,6 +99,58 @@ function MapBg() {
   );
 }
 
+// ── Google Map component ──────────────────────────────────────────────────────
+function VilleMap({ height = 260, center = MANCHESTER_CENTER, zoom = 14, onClick, markers = [], directions = null, children }) {
+  const { isLoaded } = useJsApiLoader({
+    googleMapsApiKey: process.env.REACT_APP_GOOGLE_MAPS_KEY,
+    libraries: LIBRARIES,
+  });
+
+  if (!isLoaded) return (
+    <div style={{ height, background:'#1a2744', display:'flex', alignItems:'center', justifyContent:'center', color:YELLOW, fontSize:13 }}>
+      Loading map...
+    </div>
+  );
+
+  return (
+    <GoogleMap
+      mapContainerStyle={{ width:'100%', height }}
+      center={center}
+      zoom={zoom}
+      onClick={onClick}
+      options={{ styles:MAP_STYLE, disableDefaultUI:true, zoomControl:true }}
+    >
+      {markers.map((m, i) => (
+        <Marker key={i} position={m.position} label={m.label} title={m.title}/>
+      ))}
+      {directions && <DirectionsRenderer directions={directions} options={{ suppressMarkers:false }}/>}
+      {children}
+    </GoogleMap>
+  );
+}
+
+// ── Geocode helper ────────────────────────────────────────────────────────────
+function geocodeLatLng(lat, lng) {
+  return new Promise((resolve) => {
+    const geocoder = new window.google.maps.Geocoder();
+    geocoder.geocode({ location:{ lat, lng } }, (results, status) => {
+      if (status === 'OK' && results[0]) resolve(results[0].formatted_address);
+      else resolve(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+    });
+  });
+}
+
+function getDirections(origin, destination) {
+  return new Promise((resolve) => {
+    const service = new window.google.maps.DirectionsService();
+    service.route({ origin, destination, travelMode: window.google.maps.TravelMode.DRIVING }, (result, status) => {
+      if (status === 'OK') resolve(result);
+      else resolve(null);
+    });
+  });
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 function TopBar({ title, onBack }) {
   return (
     <div style={s.topBar}>
@@ -90,20 +159,17 @@ function TopBar({ title, onBack }) {
     </div>
   );
 }
-
 function Divider() {
   return (
     <div style={s.divLine}>
-      <div style={{ flex:1, height:'0.5px', background:'rgba(255,255,255,0.15)' }}/>
-      <span>or</span>
+      <div style={{ flex:1, height:'0.5px', background:'rgba(255,255,255,0.15)' }}/><span>or</span>
       <div style={{ flex:1, height:'0.5px', background:'rgba(255,255,255,0.15)' }}/>
     </div>
   );
 }
-
 function GoogleBtn({ onClick, loading }) {
   return (
-    <button style={{ ...s.btnO, display:'flex', alignItems:'center', justifyContent:'center', gap:10, opacity: loading ? 0.7 : 1 }} onClick={onClick} disabled={loading}>
+    <button style={{ ...s.btnO, display:'flex', alignItems:'center', justifyContent:'center', gap:10, opacity:loading?0.7:1 }} onClick={onClick} disabled={loading}>
       <svg width="18" height="18" viewBox="0 0 24 24">
         <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
         <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -159,12 +225,12 @@ function RoleSelect({ go }) {
 
 // ── CUSTOMER SIGNUP ───────────────────────────────────────────────────────────
 function CustomerSignup({ go, setUser }) {
-  const [form, setForm]     = useState({ name:'', phone:'', email:'', password:'' });
+  const [form, setForm]       = useState({ name:'', phone:'', email:'', password:'' });
   const [loading, setLoading] = useState(false);
-  const [error, setError]   = useState('');
+  const [error, setError]     = useState('');
   const set = (k,v) => setForm(p => ({ ...p, [k]:v }));
 
-  const handleEmailSignup = async () => {
+  const handleEmail = async () => {
     setError('');
     if (!form.name||!form.phone||!form.email||!form.password) { setError('Please fill in all fields.'); return; }
     if (form.password.length < 6) { setError('Password must be at least 6 characters.'); return; }
@@ -175,18 +241,17 @@ function CustomerSignup({ go, setUser }) {
       await setDoc(doc(db,'customers',cred.user.uid), { name:form.name, phone:form.phone, email:form.email, role:'customer', createdAt:serverTimestamp() });
       setUser({ uid:cred.user.uid, name:form.name, email:form.email, role:'customer' });
       go('otp');
-    } catch(err) { setError(err.code==='auth/email-already-in-use' ? 'This email is already registered.' : err.message); }
+    } catch(err) { setError(err.code==='auth/email-already-in-use'?'Email already registered.':err.message); }
     setLoading(false);
   };
 
   const handleGoogle = async () => {
     setError(''); setLoading(true);
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const u = result.user;
-      const snap = await getDoc(doc(db,'customers',u.uid));
-      if (!snap.exists()) await setDoc(doc(db,'customers',u.uid), { name:u.displayName, email:u.email, role:'customer', createdAt:serverTimestamp() });
-      setUser({ uid:u.uid, name:u.displayName, email:u.email, role:'customer' });
+      const r = await signInWithPopup(auth, googleProvider);
+      const snap = await getDoc(doc(db,'customers',r.user.uid));
+      if (!snap.exists()) await setDoc(doc(db,'customers',r.user.uid), { name:r.user.displayName, email:r.user.email, role:'customer', createdAt:serverTimestamp() });
+      setUser({ uid:r.user.uid, name:r.user.displayName, email:r.user.email, role:'customer' });
       go('customer-dash');
     } catch(err) { setError(err.message); }
     setLoading(false);
@@ -204,7 +269,7 @@ function CustomerSignup({ go, setUser }) {
         {[['name','Full Name','e.g. Kezia Brown','text'],['phone','Phone Number','+1 (876) 555-0100','tel'],['email','Email Address','you@email.com','email'],['password','Password','At least 6 characters','password']].map(([k,lbl,ph,type]) => (
           <div key={k}><label style={s.lbl}>{lbl}</label><input style={s.inp} type={type} placeholder={ph} value={form[k]} onChange={e => set(k,e.target.value)}/></div>
         ))}
-        <button style={{ ...s.btnY, opacity:loading?0.7:1 }} onClick={handleEmailSignup} disabled={loading}>{loading?'Creating account...':'Send Confirmation Code'}</button>
+        <button style={{ ...s.btnY, opacity:loading?0.7:1 }} onClick={handleEmail} disabled={loading}>{loading?'Creating account...':'Send Confirmation Code'}</button>
         <button style={s.link} onClick={() => go('customer-login')}>Already have an account? Log in</button>
       </div>
     </div>
@@ -227,7 +292,6 @@ function OTPScreen({ go, user }) {
         <div style={{ width:'100%', maxWidth:320 }}>
           <button style={s.btnY} onClick={() => go('customer-dash')}>I've verified my email →</button>
           <button style={s.btnO} onClick={resend}>Resend verification email</button>
-          <p style={{ fontSize:11, color:'rgba(255,255,255,0.35)', textAlign:'center', marginTop:8 }}>Check your spam folder if you don't see it</p>
         </div>
       </div>
     </div>
@@ -251,19 +315,18 @@ function CustomerLogin({ go, setUser }) {
       const data = snap.exists() ? snap.data() : {};
       setUser({ uid:cred.user.uid, name:data.name||cred.user.displayName||'Rider', email:cred.user.email, role:'customer' });
       go('customer-dash');
-    } catch(err) { setError(err.code==='auth/invalid-credential'?'Incorrect email or password.':err.message); }
+    } catch(err) { setError('Incorrect email or password.'); }
     setLoading(false);
   };
 
   const handleGoogle = async () => {
     setError(''); setLoading(true);
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      const u = result.user;
-      const snap = await getDoc(doc(db,'customers',u.uid));
-      if (!snap.exists()) await setDoc(doc(db,'customers',u.uid), { name:u.displayName, email:u.email, role:'customer', createdAt:serverTimestamp() });
+      const r = await signInWithPopup(auth, googleProvider);
+      const snap = await getDoc(doc(db,'customers',r.user.uid));
+      if (!snap.exists()) await setDoc(doc(db,'customers',r.user.uid), { name:r.user.displayName, email:r.user.email, role:'customer', createdAt:serverTimestamp() });
       const data = snap.exists() ? snap.data() : {};
-      setUser({ uid:u.uid, name:data.name||u.displayName, email:u.email, role:'customer' });
+      setUser({ uid:r.user.uid, name:data.name||r.user.displayName, email:r.user.email, role:'customer' });
       go('customer-dash');
     } catch(err) { setError(err.message); }
     setLoading(false);
@@ -309,7 +372,7 @@ function DriverLogin({ go, setUser }) {
       if (data.status==='rejected') { setError('Your application was not approved. Contact support.'); setLoading(false); return; }
       setUser({ uid:cred.user.uid, name:data.name, email:cred.user.email, role:'driver' });
       go('driver-dash');
-    } catch(err) { setError(err.code==='auth/invalid-credential'?'Incorrect email or password.':err.message); }
+    } catch(err) { setError('Incorrect email or password.'); }
     setLoading(false);
   };
 
@@ -318,7 +381,7 @@ function DriverLogin({ go, setUser }) {
       <TopBar title="Driver Login" onBack={() => go('splash')}/>
       <div style={{ padding:'32px 20px', maxWidth:420, margin:'0 auto' }}>
         <h2 style={{ fontSize:20, fontWeight:500, marginBottom:4 }}>Welcome back</h2>
-        <p style={{ color:'rgba(255,255,255,0.5)', fontSize:13, marginBottom:20 }}>Sign in to your VilleCabs driver account</p>
+        <p style={{ color:'rgba(255,255,255,0.5)', fontSize:13, marginBottom:20 }}>Sign in to your driver account</p>
         {error && <div style={s.errBox}>⚠️ {error}</div>}
         <label style={s.lbl}>Email</label>
         <input style={s.inp} type="email" placeholder="you@email.com" value={email} onChange={e => setEmail(e.target.value)}/>
@@ -333,8 +396,8 @@ function DriverLogin({ go, setUser }) {
 
 // ── DRIVER SIGNUP ─────────────────────────────────────────────────────────────
 function DriverSignup({ go }) {
-  const [form, setForm] = useState({ name:'',trn:'',dob:'',phone:'',email:'',password:'',make:'',model:'',plate:'' });
-  const [docs, setDocs] = useState({ license:false, fitness:false, registration:false });
+  const [form, setForm]       = useState({ name:'',trn:'',dob:'',phone:'',email:'',password:'',make:'',model:'',plate:'' });
+  const [docs, setDocs]       = useState({ license:false, fitness:false, registration:false });
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
   const set = (k,v) => setForm(p => ({ ...p, [k]:v }));
@@ -354,14 +417,14 @@ function DriverSignup({ go }) {
         docs:{ license:'pending_upload', fitness:'pending_upload', registration:'pending_upload' },
       });
       go('driver-pending');
-    } catch(err) { setError(err.code==='auth/email-already-in-use'?'This email is already registered.':err.message); }
+    } catch(err) { setError(err.code==='auth/email-already-in-use'?'Email already registered.':err.message); }
     setLoading(false);
   };
 
   return (
     <div style={s.content}>
       <TopBar title="Driver Registration" onBack={() => go('role')}/>
-      <div style={{ padding:'20px 20px', maxWidth:420, margin:'0 auto' }}>
+      <div style={{ padding:'20px', maxWidth:420, margin:'0 auto' }}>
         <h2 style={{ fontSize:20, fontWeight:500, marginBottom:4 }}>Drive with VilleCabs</h2>
         <p style={{ color:'rgba(255,255,255,0.5)', fontSize:13, marginBottom:16 }}>Fill in your details to apply</p>
         {error && <div style={s.errBox}>⚠️ {error}</div>}
@@ -414,10 +477,7 @@ function DriverPending({ go }) {
 
 // ── CUSTOMER DASHBOARD ────────────────────────────────────────────────────────
 function CustomerDash({ go, user, setUser }) {
-  const [pickup,  setPickup]  = useState('Manchester, Jamaica');
-  const [dropoff, setDropoff] = useState('');
   const handleLogout = async () => { await signOut(auth); setUser(null); go('splash'); };
-
   return (
     <div style={{ ...s.content, background:'#0f1923', minHeight:'100vh' }}>
       <div style={{ background:DARK, padding:'16px 20px' }}>
@@ -433,26 +493,18 @@ function CustomerDash({ go, user, setUser }) {
           <button onClick={handleLogout} style={{ background:'none', border:'0.5px solid rgba(255,255,255,0.2)', borderRadius:8, color:'rgba(255,255,255,0.5)', fontSize:11, padding:'6px 12px', cursor:'pointer' }}>Logout</button>
         </div>
       </div>
-      <div style={{ height:200, background:'#1a2744', position:'relative', overflow:'hidden' }}>
-        <svg width="100%" height="100%" viewBox="0 0 400 200" preserveAspectRatio="xMidYMid slice">
-          <rect width="400" height="200" fill="#1a2744"/>
-          <line x1="0" y1="100" x2="400" y2="100" stroke="rgba(255,255,255,0.12)" strokeWidth="4"/>
-          <line x1="200" y1="0" x2="200" y2="200" stroke="rgba(255,255,255,0.12)" strokeWidth="4"/>
-          <line x1="0" y1="60" x2="400" y2="140" stroke="rgba(255,255,255,0.07)" strokeWidth="2"/>
-          <circle cx="130" cy="80" r="8" fill={GREEN} opacity="0.9"/>
-          <circle cx="130" cy="80" r="4" fill={WHITE}/>
-          <circle cx="270" cy="120" r="8" fill={YELLOW} opacity="0.9"/>
-          <circle cx="270" cy="120" r="4" fill={DARK}/>
-        </svg>
-        <div style={{ position:'absolute', top:8, left:'50%', transform:'translateX(-50%)', background:'rgba(26,26,46,0.85)', borderRadius:20, padding:'3px 12px', fontSize:11, color:YELLOW, fontWeight:500, whiteSpace:'nowrap' }}>📍 Manchester, Jamaica</div>
-        <button onClick={() => go('pin-pickup')} style={{ position:'absolute', right:10, bottom:10, background:YELLOW, border:'none', borderRadius:20, padding:'6px 14px', fontSize:12, fontWeight:500, color:DARK, cursor:'pointer' }}>📌 Pin location</button>
-      </div>
+
+      {/* Real Google Map of Manchester Jamaica */}
+      <VilleMap height={220} center={MANCHESTER_CENTER} zoom={13}>
+        <Marker position={MANCHESTER_CENTER} title="Manchester, Jamaica"/>
+      </VilleMap>
+
       <div style={{ padding:16 }}>
         <div onClick={() => go('pin-pickup')} style={{ background:'rgba(255,255,255,0.06)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:12, padding:12, marginBottom:10, display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
           <div style={{ width:10, height:10, borderRadius:'50%', background:GREEN, flexShrink:0 }}/>
           <div style={{ flex:1 }}>
             <div style={{ fontSize:13, color:WHITE }}>Pickup location</div>
-            <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>{pickup}</div>
+            <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>Manchester, Jamaica (tap to pin)</div>
           </div>
           <span style={{ color:'rgba(255,255,255,0.3)' }}>›</span>
         </div>
@@ -460,7 +512,7 @@ function CustomerDash({ go, user, setUser }) {
           <div style={{ width:10, height:10, borderRadius:'50%', background:YELLOW, flexShrink:0 }}/>
           <div style={{ flex:1 }}>
             <div style={{ fontSize:13, color:WHITE }}>Drop-off location</div>
-            <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>{dropoff||'Where are you going?'}</div>
+            <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>Where are you going?</div>
           </div>
           <span style={{ color:'rgba(255,255,255,0.3)' }}>›</span>
         </div>
@@ -471,101 +523,143 @@ function CustomerDash({ go, user, setUser }) {
 }
 
 // ── PIN PICKUP ────────────────────────────────────────────────────────────────
-function PinPickup({ go }) {
-  const [address, setAddress] = useState('Caledonia Rd, Mandeville, Manchester');
+function PinPickup({ go, setPickupData }) {
+  const [pinPos,   setPinPos]   = useState(MANCHESTER_CENTER);
+  const [address,  setAddress]  = useState('Manchester, Jamaica');
+  const [loading,  setLoading]  = useState(false);
+
+  const handleMapClick = useCallback(async (e) => {
+    const lat = e.latLng.lat();
+    const lng = e.latLng.lng();
+    setPinPos({ lat, lng });
+    setLoading(true);
+    const addr = await geocodeLatLng(lat, lng);
+    setAddress(addr);
+    setLoading(false);
+  }, []);
+
+  const handleConfirm = () => {
+    setPickupData({ coords:pinPos, address });
+    go('pin-dropoff');
+  };
+
   return (
     <div style={{ ...s.content, background:'#0f1923' }}>
       <TopBar title="Pin Pickup Location" onBack={() => go('customer-dash')}/>
-      <div style={{ height:280, background:'#1a2744', position:'relative', overflow:'hidden' }}>
-        <svg width="100%" height="100%" viewBox="0 0 400 280" preserveAspectRatio="xMidYMid slice">
-          <rect width="400" height="280" fill="#1a2744"/>
-          <line x1="0" y1="90" x2="400" y2="90" stroke="rgba(255,255,255,0.12)" strokeWidth="4"/>
-          <line x1="0" y1="160" x2="400" y2="160" stroke="rgba(255,255,255,0.1)" strokeWidth="3"/>
-          <line x1="100" y1="0" x2="100" y2="280" stroke="rgba(255,255,255,0.1)" strokeWidth="3"/>
-          <line x1="220" y1="0" x2="220" y2="280" stroke="rgba(255,255,255,0.1)" strokeWidth="3"/>
-          <text x="55" y="76" fill="rgba(255,255,255,0.3)" fontSize="10">Caledonia Rd</text>
-          <text x="228" y="146" fill="rgba(255,255,255,0.3)" fontSize="10">Ward Ave</text>
-        </svg>
-        <div style={{ position:'absolute', left:'50%', top:'44%', transform:'translate(-50%,-100%)', display:'flex', flexDirection:'column', alignItems:'center' }}>
-          <div style={{ width:36, height:36, borderRadius:'50% 50% 50% 0', transform:'rotate(-45deg)', background:GREEN, display:'flex', alignItems:'center', justifyContent:'center' }}>
-            <span style={{ transform:'rotate(45deg)', fontSize:16 }}>📍</span>
-          </div>
-          <div style={{ width:2, height:14, background:'rgba(0,0,0,0.4)' }}/>
-        </div>
-        <div style={{ position:'absolute', top:8, left:'50%', transform:'translateX(-50%)', background:'rgba(26,26,46,0.85)', borderRadius:20, padding:'3px 12px', fontSize:10, color:YELLOW, whiteSpace:'nowrap' }}>📍 Manchester, Jamaica</div>
-        <div style={{ position:'absolute', bottom:10, left:'50%', transform:'translateX(-50%)', background:'rgba(0,0,0,0.6)', color:WHITE, fontSize:11, padding:'3px 12px', borderRadius:20, whiteSpace:'nowrap' }}>Drag map to move pin</div>
-      </div>
+      <VilleMap height={300} center={MANCHESTER_CENTER} zoom={14} onClick={handleMapClick}
+        markers={[{ position:pinPos, title:'Pickup' }]}/>
       <div style={{ padding:16 }}>
+        <div style={{ background:'rgba(26,158,90,0.1)', border:'0.5px solid rgba(26,158,90,0.3)', borderRadius:8, padding:'8px 12px', marginBottom:12, fontSize:12, color:'#9fe1cb' }}>
+          📍 Tap anywhere on the map to pin your exact pickup location
+        </div>
         <label style={s.lbl}>Pinned address</label>
-        <input style={s.inp} value={address} onChange={e => setAddress(e.target.value)}/>
-        <p style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginBottom:16 }}>ℹ️ You can also type an address to search</p>
-        <button style={s.btnY} onClick={() => go('pin-dropoff')}>Confirm Pickup</button>
+        <input style={s.inp} value={loading ? 'Getting address...' : address} onChange={e => setAddress(e.target.value)}/>
+        <button style={s.btnY} onClick={handleConfirm}>Confirm Pickup</button>
       </div>
     </div>
   );
 }
 
 // ── PIN DROPOFF ───────────────────────────────────────────────────────────────
-function PinDropoff({ go }) {
+function PinDropoff({ go, pickupData, setDropoffData }) {
+  const [pinPos,  setPinPos]  = useState({ lat:18.02, lng:-77.48 });
+  const [address, setAddress] = useState('');
+  const [loading, setLoading] = useState(false);
   const suggestions = ['Manchester Market, Mandeville','Spaldings, Manchester','Christiana, Manchester','Porus, Manchester'];
+
+  const handleMapClick = useCallback(async (e) => {
+    const lat = e.latLng.lat();
+    const lng = e.latLng.lng();
+    setPinPos({ lat, lng });
+    setLoading(true);
+    const addr = await geocodeLatLng(lat, lng);
+    setAddress(addr);
+    setLoading(false);
+  }, []);
+
+  const handleConfirm = () => {
+    if (!address) return;
+    setDropoffData({ coords:pinPos, address });
+    go('vehicle-select');
+  };
+
+  const markers = [];
+  if (pickupData?.coords) markers.push({ position:pickupData.coords, title:'Pickup' });
+  if (address) markers.push({ position:pinPos, title:'Drop-off' });
+
   return (
     <div style={{ ...s.content, background:'#0f1923' }}>
-      <TopBar title="Pin Drop-off Location" onBack={() => go('customer-dash')}/>
-      <div style={{ height:220, background:'#1a2744', position:'relative', overflow:'hidden' }}>
-        <svg width="100%" height="100%" viewBox="0 0 400 220" preserveAspectRatio="xMidYMid slice">
-          <rect width="400" height="220" fill="#1a2744"/>
-          <line x1="0" y1="90" x2="400" y2="90" stroke="rgba(255,255,255,0.12)" strokeWidth="4"/>
-          <line x1="0" y1="150" x2="400" y2="150" stroke="rgba(255,255,255,0.1)" strokeWidth="3"/>
-          <line x1="130" y1="0" x2="130" y2="220" stroke="rgba(255,255,255,0.1)" strokeWidth="3"/>
-          <line x1="260" y1="0" x2="260" y2="220" stroke="rgba(255,255,255,0.1)" strokeWidth="3"/>
-        </svg>
-        <div style={{ position:'absolute', left:'62%', top:'40%', transform:'translate(-50%,-100%)', display:'flex', flexDirection:'column', alignItems:'center' }}>
-          <div style={{ width:36, height:36, borderRadius:'50% 50% 50% 0', transform:'rotate(-45deg)', background:YELLOW, display:'flex', alignItems:'center', justifyContent:'center' }}>
-            <span style={{ transform:'rotate(45deg)', fontSize:16 }}>🏁</span>
-          </div>
-          <div style={{ width:2, height:14, background:'rgba(0,0,0,0.3)' }}/>
-        </div>
-        <div style={{ position:'absolute', bottom:10, left:'50%', transform:'translateX(-50%)', background:'rgba(0,0,0,0.6)', color:WHITE, fontSize:11, padding:'3px 12px', borderRadius:20, whiteSpace:'nowrap' }}>Drag map to set drop-off</div>
-      </div>
+      <TopBar title="Pin Drop-off Location" onBack={() => go('pin-pickup')}/>
+      <VilleMap height={260} center={MANCHESTER_CENTER} zoom={12} onClick={handleMapClick} markers={markers}/>
       <div style={{ padding:16 }}>
-        <input style={s.inp} placeholder="🔍 Search drop-off address..."/>
+        <div style={{ background:'rgba(232,180,0,0.08)', border:'0.5px solid rgba(232,180,0,0.25)', borderRadius:8, padding:'8px 12px', marginBottom:12, fontSize:12, color:'rgba(232,180,0,0.9)' }}>
+          🏁 Tap the map or choose a location below
+        </div>
+        {address && (
+          <div style={{ marginBottom:12 }}>
+            <label style={s.lbl}>Pinned address</label>
+            <input style={s.inp} value={loading ? 'Getting address...' : address} onChange={e => setAddress(e.target.value)}/>
+          </div>
+        )}
         <div style={{ background:'rgba(255,255,255,0.04)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:12, overflow:'hidden', marginBottom:14 }}>
           {suggestions.map((sug,i) => (
-            <div key={i} onClick={() => go('vehicle-select')} style={{ padding:'11px 14px', fontSize:13, color:'rgba(255,255,255,0.8)', borderBottom:i<suggestions.length-1?'0.5px solid rgba(255,255,255,0.08)':'none', cursor:'pointer' }}>
+            <div key={i} onClick={() => { setAddress(sug); setDropoffData({ coords:pinPos, address:sug }); go('vehicle-select'); }}
+              style={{ padding:'11px 14px', fontSize:13, color:'rgba(255,255,255,0.8)', borderBottom:i<suggestions.length-1?'0.5px solid rgba(255,255,255,0.08)':'none', cursor:'pointer' }}>
               📍 {sug}
             </div>
           ))}
         </div>
-        <button style={s.btnY} onClick={() => go('vehicle-select')}>Confirm Drop-off</button>
+        <button style={{ ...s.btnY, opacity:!address?0.5:1 }} onClick={handleConfirm} disabled={!address}>Confirm Drop-off</button>
       </div>
     </div>
   );
 }
 
 // ── VEHICLE SELECT ────────────────────────────────────────────────────────────
-function VehicleSelect({ go, user, setBookingId }) {
-  const [sel, setSel]     = useState(0);
+function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
+  const [sel,     setSel]     = useState(0);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error,   setError]   = useState('');
+  const [dist,    setDist]    = useState(8.2);
+  const [directions, setDirections] = useState(null);
 
   const vehicles = [
-    { name:'VilleRide', eta:'4 min away',    price:750,  base:300, rate:55, icon:'🚗' },
-    { name:'VilleXL',   eta:'7 min · up to 6', price:1200, base:400, rate:98, icon:'🚙' },
-    { name:'VilleMoto', eta:'2 min away',    price:500,  base:200, rate:37, icon:'🏍️' },
+    { name:'VilleRide', eta:'4 min away',      price:0, base:300, rate:55,  icon:'🚗' },
+    { name:'VilleXL',   eta:'7 min · up to 6', price:0, base:400, rate:98,  icon:'🚙' },
+    { name:'VilleMoto', eta:'2 min away',       price:0, base:200, rate:37,  icon:'🏍️' },
   ];
-  const v = vehicles[sel];
+
+  const calcPrice = (v) => Math.round(v.base + dist * v.rate);
+
+  useEffect(() => {
+    if (pickupData?.coords && dropoffData?.coords) {
+      getDirections(pickupData.coords, dropoffData.coords).then(result => {
+        if (result) {
+          setDirections(result);
+          const meters = result.routes[0].legs[0].distance.value;
+          setDist(parseFloat((meters/1000).toFixed(1)));
+        }
+      });
+    }
+  }, [pickupData, dropoffData]);
+
+  const markers = [];
+  if (pickupData?.coords && !directions)  markers.push({ position:pickupData.coords,  title:'Pickup' });
+  if (dropoffData?.coords && !directions) markers.push({ position:dropoffData.coords, title:'Drop-off' });
 
   const handleBook = async () => {
     setLoading(true); setError('');
     try {
+      const v = vehicles[sel];
+      const price = calcPrice(v);
       const ref = await addDoc(collection(db,'bookings'), {
         customerId:   user.uid,
         customerName: user.name,
-        pickup:       { address:'Caledonia Rd, Mandeville', lat:18.0416, lng:-77.5036 },
-        dropoff:      { address:'Christiana, Manchester',   lat:18.0200, lng:-77.4800 },
+        pickup:       { address: pickupData?.address||'Manchester, Jamaica', lat: pickupData?.coords?.lat||MANCHESTER_CENTER.lat, lng: pickupData?.coords?.lng||MANCHESTER_CENTER.lng },
+        dropoff:      { address: dropoffData?.address||'Destination', lat: dropoffData?.coords?.lat||18.02, lng: dropoffData?.coords?.lng||-77.48 },
         vehicleType:  v.name,
-        fare:         v.price,
-        distanceKm:   8.2,
+        fare:         price,
+        distanceKm:   dist,
         status:       'searching',
         createdAt:    serverTimestamp(),
       });
@@ -575,22 +669,16 @@ function VehicleSelect({ go, user, setBookingId }) {
     setLoading(false);
   };
 
+  const v = vehicles[sel];
+
   return (
     <div style={{ ...s.content, background:'#0f1923' }}>
-      <TopBar title="Choose Ride" onBack={() => go('customer-dash')}/>
-      <div style={{ height:140, background:'#1a2744', position:'relative', overflow:'hidden' }}>
-        <svg width="100%" height="100%" viewBox="0 0 400 140" preserveAspectRatio="xMidYMid slice">
-          <rect width="400" height="140" fill="#1a2744"/>
-          <line x1="0" y1="70" x2="400" y2="70" stroke="rgba(255,255,255,0.12)" strokeWidth="4"/>
-          <line x1="200" y1="0" x2="200" y2="140" stroke="rgba(255,255,255,0.1)" strokeWidth="3"/>
-          <circle cx="110" cy="50" r="7" fill={GREEN} opacity="0.9"/>
-          <circle cx="290" cy="90" r="7" fill={YELLOW} opacity="0.9"/>
-          <line x1="117" y1="53" x2="283" y2="87" stroke={YELLOW} strokeWidth="2" opacity="0.4" strokeDasharray="6,4"/>
-        </svg>
-      </div>
+      <TopBar title="Choose Ride" onBack={() => go('pin-dropoff')}/>
+      <VilleMap height={160} center={pickupData?.coords||MANCHESTER_CENTER} zoom={12} markers={markers} directions={directions}/>
       <div style={{ padding:14 }}>
         <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.5)', marginBottom:10 }}>
-          <span>Caledonia Rd → Christiana</span><span>~8.2 km</span>
+          <span>📍 {pickupData?.address?.split(',')[0]||'Pickup'} → {dropoffData?.address?.split(',')[0]||'Destination'}</span>
+          <span>{dist} km</span>
         </div>
         {error && <div style={s.errBox}>⚠️ {error}</div>}
         {vehicles.map((veh,i) => (
@@ -600,17 +688,17 @@ function VehicleSelect({ go, user, setBookingId }) {
               <div style={{ fontSize:14, fontWeight:500, color:WHITE }}>{veh.name}</div>
               <div style={{ fontSize:11, color:'rgba(255,255,255,0.45)' }}>{veh.eta}</div>
             </div>
-            <div style={{ fontSize:15, fontWeight:500, color:WHITE }}>J${veh.price.toLocaleString()}</div>
+            <div style={{ fontSize:15, fontWeight:500, color:WHITE }}>J${calcPrice(veh).toLocaleString()}</div>
           </div>
         ))}
         <div style={{ background:DARK, borderRadius:12, padding:14, margin:'10px 0' }}>
           <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:6 }}><span>Base fare</span><span>J${v.base}</span></div>
-          <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:6 }}><span>Distance (8.2 km × J${v.rate})</span><span>J${Math.round(8.2*v.rate)}</span></div>
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:6 }}><span>Distance ({dist} km × J${v.rate})</span><span>J${Math.round(dist*v.rate)}</span></div>
           <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:6 }}><span>Service fee</span><span>J$0</span></div>
-          <div style={{ display:'flex', justifyContent:'space-between', fontSize:15, fontWeight:500, color:YELLOW, borderTop:'0.5px solid rgba(255,255,255,0.12)', paddingTop:8, marginTop:4 }}><span>Total</span><span>J${v.price.toLocaleString()}</span></div>
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:15, fontWeight:500, color:YELLOW, borderTop:'0.5px solid rgba(255,255,255,0.12)', paddingTop:8, marginTop:4 }}><span>Total</span><span>J${calcPrice(v).toLocaleString()}</span></div>
         </div>
         <button style={{ ...s.btnY, opacity:loading?0.7:1 }} onClick={handleBook} disabled={loading}>
-          {loading?'Creating booking...`:`Book Ride — J$${v.price.toLocaleString()}`}
+          {loading ? 'Creating booking...' : `Book Ride — J$${calcPrice(v).toLocaleString()}`}
         </button>
       </div>
     </div>
@@ -640,19 +728,13 @@ function BookingConfirm({ go, bookingId }) {
               <div style={{ width:40, height:40, borderRadius:'50%', background:DARK, display:'flex', alignItems:'center', justifyContent:'center', fontSize:20 }}>🚗</div>
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:14, fontWeight:500, color:WHITE }}>{booking.vehicleType}</div>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)' }}>Booking #{bookingId?.slice(-6).toUpperCase()}</div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)' }}>ID: #{bookingId?.slice(-6).toUpperCase()}</div>
               </div>
               <div style={{ fontSize:16, fontWeight:500, color:GREEN }}>J${booking.fare?.toLocaleString()}</div>
             </div>
             <div style={{ borderTop:'0.5px solid rgba(255,255,255,0.1)', paddingTop:12 }}>
-              <div style={{ display:'flex', gap:8, marginBottom:8, alignItems:'flex-start' }}>
-                <div style={{ width:9, height:9, borderRadius:'50%', background:GREEN, marginTop:3, flexShrink:0 }}/>
-                <div style={{ fontSize:13, color:'rgba(255,255,255,0.8)' }}>{booking.pickup?.address}</div>
-              </div>
-              <div style={{ display:'flex', gap:8, alignItems:'flex-start' }}>
-                <div style={{ width:9, height:9, borderRadius:'50%', background:YELLOW, marginTop:3, flexShrink:0 }}/>
-                <div style={{ fontSize:13, color:'rgba(255,255,255,0.8)' }}>{booking.dropoff?.address}</div>
-              </div>
+              <div style={{ display:'flex', gap:8, marginBottom:8 }}><div style={{ width:9, height:9, borderRadius:'50%', background:GREEN, marginTop:3, flexShrink:0 }}/><div style={{ fontSize:13, color:'rgba(255,255,255,0.8)' }}>{booking.pickup?.address}</div></div>
+              <div style={{ display:'flex', gap:8 }}><div style={{ width:9, height:9, borderRadius:'50%', background:YELLOW, marginTop:3, flexShrink:0 }}/><div style={{ fontSize:13, color:'rgba(255,255,255,0.8)' }}>{booking.dropoff?.address}</div></div>
             </div>
             <div style={{ marginTop:12, padding:'8px 12px', background:'rgba(26,158,90,0.1)', borderRadius:8, fontSize:12, color:'#9fe1cb' }}>
               ✅ Booking saved — drivers are being notified
@@ -668,7 +750,7 @@ function BookingConfirm({ go, bookingId }) {
           ))}
         </div>
         <button style={s.btnY} onClick={() => go('live-ride')}>Go to Live Tracking</button>
-        <button style={s.btnO} onClick={() => go('customer-dash')}>Cancel</button>
+        <button style={s.btnO} onClick={() => go('customer-dash')}>Back to Dashboard</button>
       </div>
     </div>
   );
@@ -686,37 +768,29 @@ function LiveRide({ go, bookingId }) {
     return () => unsub();
   }, [bookingId]);
 
-  const statusLabel = booking?.status === 'active' ? '🟢 Driver on the way' : booking?.status === 'completed' ? '✅ Ride completed' : '🔍 Finding your driver...';
+  const pickupCoords  = booking?.pickup  ? { lat:booking.pickup.lat,  lng:booking.pickup.lng  } : MANCHESTER_CENTER;
+  const dropoffCoords = booking?.dropoff ? { lat:booking.dropoff.lat, lng:booking.dropoff.lng } : null;
+  const markers = [{ position:pickupCoords, title:'Pickup' }];
+  if (dropoffCoords) markers.push({ position:dropoffCoords, title:'Drop-off' });
+
+  const statusLabel = booking?.status==='active' ? '🟢 Driver on the way' : booking?.status==='completed' ? '✅ Ride completed' : '🔍 Finding your driver...';
 
   return (
     <div style={{ ...s.content, background:'#0f1923' }}>
-      <div style={{ height:220, background:'#1a2744', position:'relative', overflow:'hidden' }}>
-        <svg width="100%" height="100%" viewBox="0 0 400 220" preserveAspectRatio="xMidYMid slice">
-          <rect width="400" height="220" fill="#1a2744"/>
-          <line x1="0" y1="110" x2="400" y2="110" stroke="rgba(255,255,255,0.12)" strokeWidth="4"/>
-          <line x1="200" y1="0" x2="200" y2="220" stroke="rgba(255,255,255,0.1)" strokeWidth="3"/>
-          <circle cx="110" cy="70" r="8" fill={GREEN} opacity="0.9"/>
-          <circle cx="110" cy="70" r="4" fill={WHITE}/>
-          <circle cx="280" cy="130" r="8" fill={YELLOW} opacity="0.9"/>
-          <circle cx="280" cy="130" r="4" fill={DARK}/>
-          <circle cx="160" cy="95" r="7" fill={DARK} stroke={YELLOW} strokeWidth="2"/>
-        </svg>
-        <div style={{ position:'absolute', bottom:10, left:'50%', transform:'translateX(-50%)', background:'rgba(26,26,46,0.9)', borderRadius:20, padding:'5px 16px', fontSize:12, color:YELLOW, whiteSpace:'nowrap', fontWeight:500 }}>
-          {statusLabel}
-        </div>
+      <VilleMap height={240} center={pickupCoords} zoom={14} markers={markers}/>
+      <div style={{ background:'rgba(26,26,46,0.95)', padding:'8px 16px', textAlign:'center', fontSize:13, color:YELLOW, fontWeight:500 }}>
+        {statusLabel}
       </div>
       <div style={{ padding:14 }}>
         {booking?.driverId ? (
           <div style={{ display:'flex', alignItems:'center', gap:10, background:'rgba(255,255,255,0.05)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:12, padding:12, marginBottom:12 }}>
             <div style={{ width:42, height:42, borderRadius:'50%', background:DARK, display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>👤</div>
             <div style={{ flex:1 }}>
-              <div style={{ fontSize:14, fontWeight:500, color:WHITE }}>Driver assigned</div>
+              <div style={{ fontSize:14, fontWeight:500, color:WHITE }}>{booking.driverName||'Your driver'}</div>
               <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)' }}>On the way to your location</div>
               <div style={{ fontSize:11, color:YELLOW }}>★ 4.8</div>
             </div>
-            <div style={{ display:'flex', gap:8 }}>
-              <div style={{ width:36, height:36, borderRadius:'50%', background:GREEN, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontSize:16 }}>📞</div>
-            </div>
+            <div style={{ width:36, height:36, borderRadius:'50%', background:GREEN, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontSize:16 }}>📞</div>
           </div>
         ) : (
           <div style={{ background:'rgba(232,180,0,0.08)', border:'1px solid rgba(232,180,0,0.3)', borderRadius:12, padding:14, marginBottom:12, textAlign:'center' }}>
@@ -741,9 +815,9 @@ function LiveRide({ go, bookingId }) {
   );
 }
 
-// ── DRIVER DASHBOARD (REAL-TIME BOOKINGS) ─────────────────────────────────────
+// ── DRIVER DASHBOARD ──────────────────────────────────────────────────────────
 function DriverDash({ go, user, setUser }) {
-  const [rides, setRides]   = useState([]);
+  const [rides,   setRides]   = useState([]);
   const [loading, setLoading] = useState(true);
   const handleLogout = async () => { await signOut(auth); setUser(null); go('splash'); };
 
@@ -758,12 +832,7 @@ function DriverDash({ go, user, setUser }) {
 
   const acceptRide = async (rideId) => {
     try {
-      await updateDoc(doc(db,'bookings',rideId), {
-        driverId:   user.uid,
-        driverName: user.name,
-        status:     'active',
-        acceptedAt: serverTimestamp(),
-      });
+      await updateDoc(doc(db,'bookings',rideId), { driverId:user.uid, driverName:user.name, status:'active', acceptedAt:serverTimestamp() });
       go('driver-active');
     } catch(err) { console.error(err); }
   };
@@ -786,18 +855,22 @@ function DriverDash({ go, user, setUser }) {
           <span style={{ background:YELLOW, borderRadius:20, padding:'2px 10px', fontSize:12, fontWeight:500, color:DARK }}>J$3,450</span>
         </div>
       </div>
+
+      {/* Real map showing Manchester */}
+      <VilleMap height={180} center={MANCHESTER_CENTER} zoom={12}/>
+
       <div style={{ padding:14 }}>
         {loading ? (
-          <div style={{ textAlign:'center', padding:40, color:'rgba(255,255,255,0.4)' }}>Loading rides...</div>
+          <div style={{ textAlign:'center', padding:30, color:'rgba(255,255,255,0.4)' }}>Loading rides...</div>
         ) : rides.length === 0 ? (
-          <div style={{ textAlign:'center', padding:40 }}>
+          <div style={{ textAlign:'center', padding:30 }}>
             <div style={{ fontSize:40, marginBottom:12 }}>🚕</div>
             <div style={{ color:'rgba(255,255,255,0.5)', fontSize:14 }}>No ride requests right now</div>
-            <div style={{ color:'rgba(255,255,255,0.3)', fontSize:12, marginTop:6 }}>New bookings will appear here instantly</div>
+            <div style={{ color:'rgba(255,255,255,0.3)', fontSize:12, marginTop:6 }}>New bookings appear here instantly</div>
           </div>
         ) : (
           <>
-            <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginBottom:12 }}>{rides.length} ride request{rides.length!==1?'s':''} near you in Manchester</div>
+            <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginBottom:12 }}>{rides.length} ride request{rides.length!==1?'s':''} in Manchester</div>
             {rides.map(r => (
               <div key={r.id} style={{ border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:12, padding:14, marginBottom:10, background:'rgba(255,255,255,0.03)' }}>
                 <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
@@ -839,28 +912,21 @@ function DriverActive({ go, user }) {
     go('driver-dash');
   };
 
+  const pickupCoords  = booking?.pickup  ? { lat:booking.pickup.lat,  lng:booking.pickup.lng  } : MANCHESTER_CENTER;
+  const dropoffCoords = booking?.dropoff ? { lat:booking.dropoff.lat, lng:booking.dropoff.lng } : null;
+  const markers = [{ position:pickupCoords, title:'Pickup' }];
+  if (dropoffCoords) markers.push({ position:dropoffCoords, title:'Drop-off' });
+
   return (
     <div style={{ ...s.content, background:'#0f1923' }}>
       <TopBar title="Active Ride" onBack={() => go('driver-dash')}/>
-      <div style={{ height:180, background:'#1a2744', position:'relative', overflow:'hidden' }}>
-        <svg width="100%" height="100%" viewBox="0 0 400 180" preserveAspectRatio="xMidYMid slice">
-          <rect width="400" height="180" fill="#1a2744"/>
-          <line x1="0" y1="90" x2="400" y2="90" stroke="rgba(255,255,255,0.12)" strokeWidth="4"/>
-          <line x1="200" y1="0" x2="200" y2="180" stroke="rgba(255,255,255,0.1)" strokeWidth="3"/>
-          <circle cx="130" cy="60" r="8" fill={GREEN} opacity="0.9"/>
-          <circle cx="280" cy="110" r="8" fill={YELLOW} opacity="0.9"/>
-          <circle cx="160" cy="75" r="7" fill={DARK} stroke={YELLOW} strokeWidth="2"/>
-        </svg>
-      </div>
+      <VilleMap height={200} center={pickupCoords} zoom={14} markers={markers}/>
       <div style={{ padding:14 }}>
         {booking ? (
           <>
             <div style={{ background:'rgba(232,180,0,0.1)', border:'1.5px solid rgba(232,180,0,0.4)', borderRadius:12, padding:14, marginBottom:12 }}>
               <div style={{ fontSize:13, fontWeight:500, color:YELLOW, marginBottom:8 }}>Pick up passenger</div>
-              <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-                <div style={{ width:9, height:9, borderRadius:'50%', background:GREEN }}/>
-                <div style={{ fontSize:13, color:WHITE }}>{booking.pickup?.address}</div>
-              </div>
+              <div style={{ display:'flex', gap:8, alignItems:'center' }}><div style={{ width:9, height:9, borderRadius:'50%', background:GREEN }}/><div style={{ fontSize:13, color:WHITE }}>{booking.pickup?.address}</div></div>
             </div>
             <div style={{ background:'rgba(255,255,255,0.05)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:12, padding:14, marginBottom:12 }}>
               <div style={{ fontSize:13, fontWeight:500, color:WHITE, marginBottom:8 }}>Passenger</div>
@@ -900,13 +966,15 @@ function LoadingScreen() {
 }
 
 // ── APP ───────────────────────────────────────────────────────────────────────
-const MAP_BG = new Set(['splash','role','customer-signup','customer-login','otp','driver-signup','driver-pending','driver-login']);
+const MAP_BG_SCREENS = new Set(['splash','role','customer-signup','customer-login','otp','driver-signup','driver-pending','driver-login']);
 
 export default function App() {
-  const [screen,    setScreen]    = useState('splash');
-  const [user,      setUser]      = useState(null);
-  const [bookingId, setBookingId] = useState(null);
-  const [loading,   setLoading]   = useState(true);
+  const [screen,      setScreen]      = useState('splash');
+  const [user,        setUser]        = useState(null);
+  const [bookingId,   setBookingId]   = useState(null);
+  const [pickupData,  setPickupData]  = useState(null);
+  const [dropoffData, setDropoffData] = useState(null);
+  const [loading,     setLoading]     = useState(true);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (fu) => {
@@ -919,10 +987,8 @@ export default function App() {
           setScreen('customer-dash');
         } else if (dSnap.exists()) {
           const d = dSnap.data();
-          if (d.status==='approved') {
-            setUser({ uid:fu.uid, name:d.name, email:fu.email, role:'driver' });
-            setScreen('driver-dash');
-          } else { setScreen('driver-pending'); }
+          if (d.status==='approved') { setUser({ uid:fu.uid, name:d.name, email:fu.email, role:'driver' }); setScreen('driver-dash'); }
+          else setScreen('driver-pending');
         }
       }
       setLoading(false);
@@ -932,7 +998,8 @@ export default function App() {
 
   if (loading) return <LoadingScreen/>;
 
-  const props = { go:setScreen, user, setUser, bookingId, setBookingId };
+  const props = { go:setScreen, user, setUser, bookingId, setBookingId, pickupData, setPickupData, dropoffData, setDropoffData };
+
   const screens = {
     splash:           <Splash {...props}/>,
     role:             <RoleSelect {...props}/>,
@@ -954,7 +1021,7 @@ export default function App() {
 
   return (
     <div style={s.screen}>
-      {MAP_BG.has(screen) && <MapBg/>}
+      {MAP_BG_SCREENS.has(screen) && <MapBg/>}
       {screens[screen]||<Splash {...props}/>}
     </div>
   );
