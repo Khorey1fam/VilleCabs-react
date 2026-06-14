@@ -698,7 +698,7 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
           <div style={{ display:'flex', justifyContent:'space-between', fontSize:15, fontWeight:500, color:YELLOW, borderTop:'0.5px solid rgba(255,255,255,0.12)', paddingTop:8, marginTop:4 }}><span>Total</span><span>J${calcPrice(v).toLocaleString()}</span></div>
         </div>
         <button style={{ ...s.btnY, opacity:loading?0.7:1 }} onClick={handleBook} disabled={loading}>
-          {loading ? 'Creating booking...' : `Book Ride — J$${calcPrice(v).toLocaleString()}`}
+          {loading ? 'Creating booking...' : 'Book Ride — J$' + calcPrice(v).toLocaleString()}
         </button>
       </div>
     </div>
