@@ -1,46 +1,63 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { initializeApp } from 'firebase/app';
+import {
+  getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
+  signInWithPopup, GoogleAuthProvider, sendEmailVerification,
+  onAuthStateChanged, signOut
+} from 'firebase/auth';
+import { getFirestore, doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 
+// ── Firebase init ─────────────────────────────────────────────────────────────
+const firebaseConfig = {
+  apiKey:            process.env.REACT_APP_FIREBASE_API_KEY,
+  authDomain:        process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
+  projectId:         process.env.REACT_APP_FIREBASE_PROJECT_ID,
+  storageBucket:     process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
+  appId:             process.env.REACT_APP_FIREBASE_APP_ID,
+};
+const app            = initializeApp(firebaseConfig);
+const auth           = getAuth(app);
+const db             = getFirestore(app);
+const googleProvider = new GoogleAuthProvider();
+
+// ── Theme ─────────────────────────────────────────────────────────────────────
 const YELLOW = '#e8b400';
-const DARK = '#1a1a2e';
-const GREEN = '#1a9e5a';
-const WHITE = '#ffffff';
+const DARK   = '#1a1a2e';
+const GREEN  = '#1a9e5a';
+const WHITE  = '#ffffff';
+const RED    = '#e24b4a';
 
-const styles = {
-  screen: { minHeight: '100vh', fontFamily: "'Segoe UI', sans-serif", background: DARK, color: WHITE },
-  mapBg: {
-    position: 'fixed', inset: 0, zIndex: 0,
-    background: DARK,
-  },
-  overlay: {
-    position: 'fixed', inset: 0, zIndex: 1,
-    background: 'rgba(15,25,50,0.72)',
-    backdropFilter: 'blur(4px)',
-  },
-  content: { position: 'relative', zIndex: 2, minHeight: '100vh' },
-  center: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '0 24px' },
-  card: { background: 'rgba(255,255,255,0.06)', border: '0.5px solid rgba(255,255,255,0.15)', borderRadius: 20, padding: '28px 24px', width: '100%', maxWidth: 380 },
-  btnYellow: { width: '100%', padding: '14px 20px', background: YELLOW, color: DARK, border: 'none', borderRadius: 12, fontSize: 15, fontWeight: 700, cursor: 'pointer', marginBottom: 10 },
-  btnOutline: { width: '100%', padding: '14px 20px', background: 'transparent', color: WHITE, border: '1.5px solid rgba(255,255,255,0.35)', borderRadius: 12, fontSize: 15, fontWeight: 500, cursor: 'pointer', marginBottom: 10 },
-  btnDark: { width: '100%', padding: '14px 20px', background: DARK, color: WHITE, border: 'none', borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: 'pointer', marginBottom: 10 },
-  btnGreen: { width: '100%', padding: '14px 20px', background: GREEN, color: WHITE, border: 'none', borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: 'pointer', marginBottom: 10 },
-  input: { width: '100%', padding: '12px 14px', background: 'rgba(255,255,255,0.08)', border: '0.5px solid rgba(255,255,255,0.2)', borderRadius: 10, color: WHITE, fontSize: 14, marginBottom: 12, boxSizing: 'border-box', outline: 'none' },
-  label: { fontSize: 11, color: 'rgba(255,255,255,0.55)', marginBottom: 4, display: 'block', fontWeight: 500 },
-  topBar: { background: 'rgba(26,26,46,0.95)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, borderBottom: '0.5px solid rgba(255,255,255,0.1)' },
-  backBtn: { background: 'none', border: 'none', color: YELLOW, fontSize: 22, cursor: 'pointer', padding: '2px 6px' },
-  topTitle: { color: WHITE, fontSize: 16, fontWeight: 500 },
-  link: { color: YELLOW, fontSize: 13, cursor: 'pointer', textAlign: 'center', marginTop: 8, background: 'none', border: 'none' },
-  divider: { display: 'flex', alignItems: 'center', gap: 10, margin: '8px 0 14px', color: 'rgba(255,255,255,0.3)', fontSize: 12 },
-  sectionTitle: { fontSize: 11, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10, marginTop: 4 },
+const s = {
+  screen:    { minHeight: '100vh', fontFamily: "'Segoe UI', sans-serif", background: DARK, color: WHITE },
+  mapBg:     { position: 'fixed', inset: 0, zIndex: 0, background: DARK },
+  overlay:   { position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(15,25,50,0.72)', backdropFilter: 'blur(4px)' },
+  content:   { position: 'relative', zIndex: 2, minHeight: '100vh' },
+  center:    { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '0 24px' },
+  card:      { background: 'rgba(255,255,255,0.06)', border: '0.5px solid rgba(255,255,255,0.15)', borderRadius: 20, padding: '28px 24px', width: '100%', maxWidth: 380 },
+  btnY:      { width: '100%', padding: '14px 20px', background: YELLOW, color: DARK, border: 'none', borderRadius: 12, fontSize: 15, fontWeight: 700, cursor: 'pointer', marginBottom: 10 },
+  btnO:      { width: '100%', padding: '14px 20px', background: 'transparent', color: WHITE, border: '1.5px solid rgba(255,255,255,0.35)', borderRadius: 12, fontSize: 15, fontWeight: 500, cursor: 'pointer', marginBottom: 10 },
+  btnD:      { width: '100%', padding: '14px 20px', background: DARK, color: WHITE, border: 'none', borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: 'pointer', marginBottom: 10 },
+  btnG:      { width: '100%', padding: '14px 20px', background: GREEN, color: WHITE, border: 'none', borderRadius: 12, fontSize: 15, fontWeight: 600, cursor: 'pointer', marginBottom: 10 },
+  inp:       { width: '100%', padding: '12px 14px', background: 'rgba(255,255,255,0.08)', border: '0.5px solid rgba(255,255,255,0.2)', borderRadius: 10, color: WHITE, fontSize: 14, marginBottom: 12, boxSizing: 'border-box', outline: 'none' },
+  lbl:       { fontSize: 11, color: 'rgba(255,255,255,0.55)', marginBottom: 4, display: 'block', fontWeight: 500 },
+  topBar:    { background: 'rgba(26,26,46,0.95)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, borderBottom: '0.5px solid rgba(255,255,255,0.1)' },
+  backBtn:   { background: 'none', border: 'none', color: YELLOW, fontSize: 22, cursor: 'pointer', padding: '2px 6px' },
+  topTitle:  { color: WHITE, fontSize: 16, fontWeight: 500 },
+  link:      { color: YELLOW, fontSize: 13, cursor: 'pointer', textAlign: 'center', marginTop: 8, background: 'none', border: 'none', width: '100%', display: 'block', padding: 4 },
+  divLine:   { display: 'flex', alignItems: 'center', gap: 10, margin: '8px 0 14px', color: 'rgba(255,255,255,0.3)', fontSize: 12 },
+  secTitle:  { fontSize: 11, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10, marginTop: 4 },
   uploadBox: { border: '1.5px dashed rgba(255,255,255,0.25)', borderRadius: 10, padding: 14, textAlign: 'center', cursor: 'pointer', marginBottom: 12, background: 'rgba(255,255,255,0.04)' },
-  uploadBoxDone: { border: '1.5px dashed #1a9e5a', borderRadius: 10, padding: 14, textAlign: 'center', cursor: 'pointer', marginBottom: 12, background: 'rgba(26,158,90,0.1)' },
-  badge: { display: 'inline-block', padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 500 },
-  pendingCard: { background: 'rgba(232,180,0,0.1)', border: '1.5px solid rgba(232,180,0,0.4)', borderRadius: 16, padding: 24, textAlign: 'center', marginBottom: 20 },
+  uploadOk:  { border: '1.5px dashed #1a9e5a', borderRadius: 10, padding: 14, textAlign: 'center', cursor: 'pointer', marginBottom: 12, background: 'rgba(26,158,90,0.1)' },
+  errBox:    { background: 'rgba(226,75,74,0.15)', border: '0.5px solid rgba(226,75,74,0.4)', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#f09595' },
+  successBox:{ background: 'rgba(26,158,90,0.15)', border: '0.5px solid rgba(26,158,90,0.4)', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 13, color: '#9fe1cb' },
 };
 
-function MapBackground() {
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function MapBg() {
   return (
     <>
-      <div style={styles.mapBg}>
+      <div style={s.mapBg}>
         <svg width="100%" height="100%" viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice" style={{ position: 'absolute', inset: 0 }}>
           <rect width="800" height="600" fill="#1e3a5f"/>
           <ellipse cx="200" cy="150" rx="180" ry="120" fill="#1a4a2e" opacity="0.6"/>
@@ -52,7 +69,6 @@ function MapBackground() {
           <line x1="400" y1="0" x2="400" y2="600" stroke={YELLOW} strokeWidth="4" opacity="0.35"/>
           <line x1="0" y1="150" x2="800" y2="450" stroke={YELLOW} strokeWidth="2.5" opacity="0.2"/>
           <line x1="800" y1="150" x2="0" y2="450" stroke={YELLOW} strokeWidth="2.5" opacity="0.2"/>
-          <line x1="0" y1="200" x2="800" y2="350" stroke={WHITE} strokeWidth="1.5" opacity="0.1"/>
           <line x1="200" y1="0" x2="200" y2="600" stroke={WHITE} strokeWidth="1.5" opacity="0.1"/>
           <line x1="600" y1="0" x2="600" y2="600" stroke={WHITE} strokeWidth="1.5" opacity="0.1"/>
           <circle cx="375" cy="285" r="10" fill={YELLOW} opacity="0.9"/>
@@ -63,49 +79,55 @@ function MapBackground() {
           <text x="580" y="195" textAnchor="middle" fill={WHITE} fontSize="9" opacity="0.5">Christiana</text>
         </svg>
       </div>
-      <div style={styles.overlay}/>
+      <div style={s.overlay}/>
     </>
-  );
-}
-
-function Logo({ size = 72 }) {
-  return (
-    <div style={{ width: size, height: size, borderRadius: '50%', background: YELLOW, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: size * 0.5 }}>
-      🚕
-    </div>
   );
 }
 
 function TopBar({ title, onBack }) {
   return (
-    <div style={styles.topBar}>
-      {onBack && <button style={styles.backBtn} onClick={onBack}>←</button>}
-      <span style={styles.topTitle}>{title}</span>
+    <div style={s.topBar}>
+      {onBack && <button style={s.backBtn} onClick={onBack}>←</button>}
+      <span style={s.topTitle}>{title}</span>
     </div>
   );
 }
 
-function Divider({ text = 'or' }) {
+function Divider() {
   return (
-    <div style={styles.divider}>
+    <div style={s.divLine}>
       <div style={{ flex: 1, height: '0.5px', background: 'rgba(255,255,255,0.15)' }}/>
-      <span>{text}</span>
+      <span>or</span>
       <div style={{ flex: 1, height: '0.5px', background: 'rgba(255,255,255,0.15)' }}/>
     </div>
+  );
+}
+
+function GoogleBtn({ onClick, loading }) {
+  return (
+    <button style={{ ...s.btnO, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, opacity: loading ? 0.7 : 1 }} onClick={onClick} disabled={loading}>
+      <svg width="18" height="18" viewBox="0 0 24 24">
+        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
+        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+      </svg>
+      {loading ? 'Connecting...' : 'Continue with Google'}
+    </button>
   );
 }
 
 // ── SPLASH ────────────────────────────────────────────────────────────────────
-function SplashScreen({ go }) {
+function Splash({ go }) {
   return (
-    <div style={styles.content}>
-      <div style={styles.center}>
-        <Logo size={80}/>
+    <div style={s.content}>
+      <div style={s.center}>
+        <div style={{ width: 80, height: 80, borderRadius: '50%', background: YELLOW, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', fontSize: 40 }}>🚕</div>
         <h1 style={{ fontSize: 42, fontWeight: 700, letterSpacing: 3, margin: '0 0 8px', color: WHITE }}>VilleCabs</h1>
         <p style={{ color: 'rgba(255,255,255,0.55)', fontSize: 15, margin: '0 0 48px' }}>Manchester, Jamaica's ride service</p>
         <div style={{ width: '100%', maxWidth: 320 }}>
-          <button style={styles.btnYellow} onClick={() => go('role')}>Get Started</button>
-          <button style={styles.btnOutline} onClick={() => go('driver-login')}>Driver Login</button>
+          <button style={s.btnY} onClick={() => go('role')}>Get Started</button>
+          <button style={s.btnO} onClick={() => go('driver-login')}>Driver Login</button>
         </div>
         <p style={{ color: 'rgba(255,255,255,0.25)', fontSize: 11, marginTop: 40 }}>Mandeville · Christiana · Spaldings · Porus</p>
       </div>
@@ -116,17 +138,17 @@ function SplashScreen({ go }) {
 // ── ROLE SELECT ───────────────────────────────────────────────────────────────
 function RoleSelect({ go }) {
   return (
-    <div style={styles.content}>
+    <div style={s.content}>
       <TopBar title="Join VilleCabs" onBack={() => go('splash')}/>
-      <div style={{ ...styles.center, paddingTop: 40 }}>
+      <div style={{ ...s.center, paddingTop: 40 }}>
         <p style={{ color: 'rgba(255,255,255,0.6)', marginBottom: 24, fontSize: 14 }}>How would you like to use VilleCabs?</p>
         <div style={{ width: '100%', maxWidth: 360, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div onClick={() => go('customer-signup')} style={{ ...styles.card, cursor: 'pointer', textAlign: 'center' }}>
+          <div onClick={() => go('customer-signup')} style={{ ...s.card, cursor: 'pointer', textAlign: 'center' }}>
             <div style={{ fontSize: 38, marginBottom: 10 }}>👤</div>
             <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 4 }}>Book a Ride</div>
             <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>Request rides around Manchester</div>
           </div>
-          <div onClick={() => go('driver-signup')} style={{ ...styles.card, cursor: 'pointer', textAlign: 'center' }}>
+          <div onClick={() => go('driver-signup')} style={{ ...s.card, cursor: 'pointer', textAlign: 'center' }}>
             <div style={{ fontSize: 38, marginBottom: 10 }}>🚗</div>
             <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 4 }}>Become a Driver</div>
             <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>Earn money driving in Manchester</div>
@@ -137,105 +159,315 @@ function RoleSelect({ go }) {
   );
 }
 
-// ── CUSTOMER SIGNUP ───────────────────────────────────────────────────────────
-function CustomerSignup({ go }) {
-  const [form, setForm] = useState({ name: '', phone: '', email: '', password: '' });
+// ── CUSTOMER SIGNUP (REAL FIREBASE AUTH) ──────────────────────────────────────
+function CustomerSignup({ go, setUser }) {
+  const [form, setForm]     = useState({ name: '', phone: '', email: '', password: '' });
+  const [loading, setLoading] = useState(false);
+  const [error, setError]   = useState('');
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  const handleEmailSignup = async () => {
+    setError('');
+    if (!form.name || !form.phone || !form.email || !form.password) { setError('Please fill in all fields.'); return; }
+    if (form.password.length < 6) { setError('Password must be at least 6 characters.'); return; }
+    setLoading(true);
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
+      await sendEmailVerification(cred.user);
+      await setDoc(doc(db, 'customers', cred.user.uid), {
+        name: form.name, phone: form.phone, email: form.email,
+        role: 'customer', createdAt: serverTimestamp(),
+      });
+      setUser({ uid: cred.user.uid, name: form.name, email: form.email, role: 'customer' });
+      go('otp');
+    } catch (err) {
+      setError(err.code === 'auth/email-already-in-use' ? 'This email is already registered. Please log in.' : err.message);
+    }
+    setLoading(false);
+  };
+
+  const handleGoogle = async () => {
+    setError(''); setLoading(true);
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user   = result.user;
+      const snap   = await getDoc(doc(db, 'customers', user.uid));
+      if (!snap.exists()) {
+        await setDoc(doc(db, 'customers', user.uid), {
+          name: user.displayName, email: user.email,
+          role: 'customer', createdAt: serverTimestamp(),
+        });
+      }
+      setUser({ uid: user.uid, name: user.displayName, email: user.email, role: 'customer' });
+      go('customer-dash');
+    } catch (err) { setError(err.message); }
+    setLoading(false);
+  };
+
   return (
-    <div style={styles.content}>
+    <div style={s.content}>
       <TopBar title="Create Account" onBack={() => go('role')}/>
       <div style={{ padding: '24px 20px', maxWidth: 420, margin: '0 auto' }}>
         <h2 style={{ fontSize: 20, fontWeight: 500, marginBottom: 4 }}>Welcome to VilleCabs</h2>
-        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginBottom: 24 }}>Create your rider account</p>
-
-        <button style={{ ...styles.btnOutline, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }} onClick={() => go('otp')}>
-          <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-          Continue with Google
+        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginBottom: 20 }}>Create your rider account</p>
+        {error && <div style={s.errBox}>⚠️ {error}</div>}
+        <GoogleBtn onClick={handleGoogle} loading={loading}/>
+        <Divider/>
+        <label style={s.lbl}>Full Name</label>
+        <input style={s.inp} placeholder="e.g. Kezia Brown" value={form.name} onChange={e => set('name', e.target.value)}/>
+        <label style={s.lbl}>Phone Number</label>
+        <input style={s.inp} placeholder="+1 (876) 555-0100" value={form.phone} onChange={e => set('phone', e.target.value)}/>
+        <label style={s.lbl}>Email Address</label>
+        <input style={s.inp} type="email" placeholder="you@email.com" value={form.email} onChange={e => set('email', e.target.value)}/>
+        <label style={s.lbl}>Password</label>
+        <input style={s.inp} type="password" placeholder="At least 6 characters" value={form.password} onChange={e => set('password', e.target.value)}/>
+        <button style={{ ...s.btnY, opacity: loading ? 0.7 : 1 }} onClick={handleEmailSignup} disabled={loading}>
+          {loading ? 'Creating account...' : 'Send Confirmation Code'}
         </button>
-        <Divider text="or sign up with email"/>
-        <label style={styles.label}>Full Name</label>
-        <input style={styles.input} placeholder="e.g. Kezia Brown" value={form.name} onChange={e => set('name', e.target.value)}/>
-        <label style={styles.label}>Phone Number</label>
-        <input style={styles.input} placeholder="+1 (876) 555-0100" value={form.phone} onChange={e => set('phone', e.target.value)}/>
-        <label style={styles.label}>Email Address</label>
-        <input style={styles.input} type="email" placeholder="you@email.com" value={form.email} onChange={e => set('email', e.target.value)}/>
-        <label style={styles.label}>Password</label>
-        <input style={styles.input} type="password" placeholder="Create a password" value={form.password} onChange={e => set('password', e.target.value)}/>
-        <button style={styles.btnYellow} onClick={() => go('otp')}>Send Confirmation Code</button>
-        <button style={styles.link} onClick={() => go('customer-login')}>Already have an account? Log in</button>
+        <button style={s.link} onClick={() => go('customer-login')}>Already have an account? Log in</button>
       </div>
     </div>
   );
 }
 
-// ── OTP ───────────────────────────────────────────────────────────────────────
-function OTPScreen({ go }) {
-  const [code, setCode] = useState(['', '', '', '']);
-  const update = (i, v) => {
-    const c = [...code]; c[i] = v; setCode(c);
-    if (v && i < 3) document.getElementById(`otp${i + 1}`)?.focus();
+// ── OTP SCREEN ────────────────────────────────────────────────────────────────
+function OTPScreen({ go, user }) {
+  const [resent, setResent] = useState(false);
+  const resend = async () => {
+    if (auth.currentUser) { await sendEmailVerification(auth.currentUser); setResent(true); }
   };
   return (
-    <div style={styles.content}>
+    <div style={s.content}>
       <TopBar title="Verify Email" onBack={() => go('customer-signup')}/>
-      <div style={{ ...styles.center, paddingTop: 40 }}>
+      <div style={{ ...s.center, paddingTop: 40 }}>
         <div style={{ fontSize: 56, marginBottom: 16 }}>📧</div>
         <h2 style={{ fontSize: 20, fontWeight: 500, marginBottom: 6 }}>Check your inbox</h2>
-        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginBottom: 28, textAlign: 'center' }}>We sent a 4-digit code to your email address</p>
-        <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
-          {code.map((v, i) => (
-            <input key={i} id={`otp${i}`} maxLength={1} value={v}
-              onChange={e => update(i, e.target.value)}
-              style={{ width: 56, height: 60, textAlign: 'center', fontSize: 24, fontWeight: 500, background: 'rgba(255,255,255,0.08)', border: '1.5px solid rgba(255,255,255,0.2)', borderRadius: 12, color: WHITE, outline: 'none' }}/>
-          ))}
-        </div>
-        <div style={{ width: '100%', maxWidth: 300 }}>
-          <button style={styles.btnYellow} onClick={() => go('customer-dash')}>Verify & Continue</button>
-          <button style={styles.link}>Resend code</button>
+        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginBottom: 8, textAlign: 'center' }}>
+          We sent a verification link to
+        </p>
+        <p style={{ color: YELLOW, fontSize: 14, fontWeight: 500, marginBottom: 28 }}>{user?.email || 'your email'}</p>
+        {resent && <div style={s.successBox}>✅ Verification email resent!</div>}
+        <div style={{ width: '100%', maxWidth: 320 }}>
+          <button style={s.btnY} onClick={() => go('customer-dash')}>I've verified my email →</button>
+          <button style={s.btnO} onClick={resend}>Resend verification email</button>
+          <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', textAlign: 'center', marginTop: 8 }}>Check your spam folder if you don't see it</p>
         </div>
       </div>
     </div>
   );
 }
 
-// ── CUSTOMER LOGIN ────────────────────────────────────────────────────────────
-function CustomerLogin({ go }) {
+// ── CUSTOMER LOGIN (REAL FIREBASE AUTH) ───────────────────────────────────────
+function CustomerLogin({ go, setUser }) {
+  const [email, setEmail]     = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState('');
+
+  const handleLogin = async () => {
+    setError('');
+    if (!email || !password) { setError('Please enter your email and password.'); return; }
+    setLoading(true);
+    try {
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      const snap = await getDoc(doc(db, 'customers', cred.user.uid));
+      const data = snap.exists() ? snap.data() : {};
+      setUser({ uid: cred.user.uid, name: data.name || cred.user.displayName || 'Rider', email: cred.user.email, role: 'customer' });
+      go('customer-dash');
+    } catch (err) {
+      setError(err.code === 'auth/invalid-credential' ? 'Incorrect email or password. Please try again.' : err.message);
+    }
+    setLoading(false);
+  };
+
+  const handleGoogle = async () => {
+    setError(''); setLoading(true);
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const user   = result.user;
+      const snap   = await getDoc(doc(db, 'customers', user.uid));
+      if (!snap.exists()) {
+        await setDoc(doc(db, 'customers', user.uid), { name: user.displayName, email: user.email, role: 'customer', createdAt: serverTimestamp() });
+      }
+      setUser({ uid: user.uid, name: user.displayName, email: user.email, role: 'customer' });
+      go('customer-dash');
+    } catch (err) { setError(err.message); }
+    setLoading(false);
+  };
+
   return (
-    <div style={styles.content}>
+    <div style={s.content}>
       <TopBar title="Log In" onBack={() => go('customer-signup')}/>
       <div style={{ padding: '32px 20px', maxWidth: 420, margin: '0 auto' }}>
         <h2 style={{ fontSize: 20, fontWeight: 500, marginBottom: 4 }}>Welcome back</h2>
-        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginBottom: 24 }}>Log in to book a VilleCabs ride</p>
-        <button style={{ ...styles.btnOutline, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }} onClick={() => go('customer-dash')}>
-          <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-          Continue with Google
-        </button>
+        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginBottom: 20 }}>Log in to book a VilleCabs ride</p>
+        {error && <div style={s.errBox}>⚠️ {error}</div>}
+        <GoogleBtn onClick={handleGoogle} loading={loading}/>
         <Divider/>
-        <label style={styles.label}>Email</label>
-        <input style={styles.input} type="email" placeholder="you@email.com"/>
-        <label style={styles.label}>Password</label>
-        <input style={styles.input} type="password" placeholder="Your password"/>
-        <button style={styles.btnYellow} onClick={() => go('customer-dash')}>Log In</button>
-        <button style={styles.link} onClick={() => go('customer-signup')}>Create an account</button>
+        <label style={s.lbl}>Email</label>
+        <input style={s.inp} type="email" placeholder="you@email.com" value={email} onChange={e => setEmail(e.target.value)}/>
+        <label style={s.lbl}>Password</label>
+        <input style={s.inp} type="password" placeholder="Your password" value={password} onChange={e => setPassword(e.target.value)}/>
+        <button style={{ ...s.btnY, opacity: loading ? 0.7 : 1 }} onClick={handleLogin} disabled={loading}>
+          {loading ? 'Logging in...' : 'Log In'}
+        </button>
+        <button style={s.link} onClick={() => go('customer-signup')}>Create an account</button>
+      </div>
+    </div>
+  );
+}
+
+// ── DRIVER LOGIN (REAL FIREBASE AUTH) ─────────────────────────────────────────
+function DriverLogin({ go, setUser }) {
+  const [email, setEmail]     = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState('');
+
+  const handleLogin = async () => {
+    setError('');
+    if (!email || !password) { setError('Please enter your email and password.'); return; }
+    setLoading(true);
+    try {
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      const snap = await getDoc(doc(db, 'drivers', cred.user.uid));
+      if (!snap.exists()) { setError('No driver account found. Please apply first.'); setLoading(false); return; }
+      const data = snap.data();
+      if (data.status === 'pending') { setError('Your application is still pending admin approval.'); setLoading(false); return; }
+      if (data.status === 'rejected') { setError('Your application was not approved. Please contact support.'); setLoading(false); return; }
+      setUser({ uid: cred.user.uid, name: data.name, email: cred.user.email, role: 'driver' });
+      go('driver-dash');
+    } catch (err) {
+      setError(err.code === 'auth/invalid-credential' ? 'Incorrect email or password.' : err.message);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={s.content}>
+      <TopBar title="Driver Login" onBack={() => go('splash')}/>
+      <div style={{ padding: '32px 20px', maxWidth: 420, margin: '0 auto' }}>
+        <h2 style={{ fontSize: 20, fontWeight: 500, marginBottom: 4 }}>Welcome back</h2>
+        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginBottom: 20 }}>Sign in to your VilleCabs driver account</p>
+        {error && <div style={s.errBox}>⚠️ {error}</div>}
+        <label style={s.lbl}>Email</label>
+        <input style={s.inp} type="email" placeholder="you@email.com" value={email} onChange={e => setEmail(e.target.value)}/>
+        <label style={s.lbl}>Password</label>
+        <input style={s.inp} type="password" placeholder="Your password" value={password} onChange={e => setPassword(e.target.value)}/>
+        <button style={{ ...s.btnY, opacity: loading ? 0.7 : 1 }} onClick={handleLogin} disabled={loading}>
+          {loading ? 'Logging in...' : 'Login'}
+        </button>
+        <button style={s.link} onClick={() => go('driver-signup')}>New driver? Apply here</button>
+      </div>
+    </div>
+  );
+}
+
+// ── DRIVER SIGNUP (REAL FIREBASE AUTH) ───────────────────────────────────────
+function DriverSignup({ go }) {
+  const [form, setForm] = useState({ name: '', trn: '', dob: '', phone: '', email: '', password: '', make: '', model: '', plate: '' });
+  const [docs, setDocs] = useState({ license: false, fitness: false, registration: false });
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState('');
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+  const handleSubmit = async () => {
+    setError('');
+    const required = ['name','trn','dob','phone','email','password','make','model','plate'];
+    if (required.some(k => !form[k])) { setError('Please fill in all fields.'); return; }
+    if (!docs.license || !docs.fitness || !docs.registration) { setError('Please upload all 3 documents.'); return; }
+    if (form.password.length < 6) { setError('Password must be at least 6 characters.'); return; }
+    setLoading(true);
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
+      await setDoc(doc(db, 'drivers', cred.user.uid), {
+        name: form.name, trn: form.trn, dob: form.dob,
+        phone: form.phone, email: form.email,
+        vehicleMake: form.make, vehicleModel: form.model, licensePlate: form.plate,
+        status: 'pending', role: 'driver', createdAt: serverTimestamp(),
+        docs: { license: 'pending_upload', fitness: 'pending_upload', registration: 'pending_upload' },
+      });
+      go('driver-pending');
+    } catch (err) {
+      setError(err.code === 'auth/email-already-in-use' ? 'This email is already registered.' : err.message);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={s.content}>
+      <TopBar title="Driver Registration" onBack={() => go('role')}/>
+      <div style={{ padding: '20px 20px', maxWidth: 420, margin: '0 auto' }}>
+        <h2 style={{ fontSize: 20, fontWeight: 500, marginBottom: 4 }}>Drive with VilleCabs</h2>
+        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginBottom: 16 }}>Fill in your details to apply</p>
+        {error && <div style={s.errBox}>⚠️ {error}</div>}
+        {[['name','Full Legal Name','As on your ID'],['trn','TRN','000-000-000'],['dob','Date of Birth','DD/MM/YYYY'],['phone','Phone Number','+1 (876) 555-0100'],['email','Email Address','you@email.com'],['password','Password','At least 6 characters']].map(([k,lbl,ph]) => (
+          <div key={k}><label style={s.lbl}>{lbl}</label><input style={s.inp} type={k==='password'?'password':k==='email'?'email':'text'} placeholder={ph} value={form[k]} onChange={e => set(k, e.target.value)}/></div>
+        ))}
+        <div style={{ height: '0.5px', background: 'rgba(255,255,255,0.1)', margin: '8px 0 16px' }}/>
+        {[['make','Make of Vehicle','e.g. Toyota'],['model','Model','e.g. Corolla'],['plate','License Plate Number','e.g. PP1234']].map(([k,lbl,ph]) => (
+          <div key={k}><label style={s.lbl}>{lbl}</label><input style={s.inp} placeholder={ph} value={form[k]} onChange={e => set(k, e.target.value)}/></div>
+        ))}
+        <div style={{ height: '0.5px', background: 'rgba(255,255,255,0.1)', margin: '8px 0 16px' }}/>
+        {[['license',"Driver's License"],['fitness','Vehicle Fitness Certificate'],['registration','Vehicle Registration']].map(([k,lbl]) => (
+          <div key={k} onClick={() => setDocs(p => ({ ...p, [k]: !p[k] }))} style={docs[k] ? s.uploadOk : s.uploadBox}>
+            <div style={{ fontSize: 24, marginBottom: 6 }}>{docs[k] ? '✅' : '📄'}</div>
+            <div style={{ fontSize: 12, color: docs[k] ? GREEN : 'rgba(255,255,255,0.4)' }}>{docs[k] ? `${lbl} uploaded ✓` : `Tap to upload ${lbl}`}</div>
+          </div>
+        ))}
+        <button style={{ ...s.btnY, marginTop: 8, opacity: loading ? 0.7 : 1 }} onClick={handleSubmit} disabled={loading}>
+          {loading ? 'Submitting...' : 'Submit Application'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── DRIVER PENDING ────────────────────────────────────────────────────────────
+function DriverPending({ go }) {
+  return (
+    <div style={s.content}>
+      <TopBar title="Application Submitted"/>
+      <div style={{ ...s.center, paddingTop: 20 }}>
+        <div style={{ width: '100%', maxWidth: 380 }}>
+          <div style={{ background: 'rgba(232,180,0,0.1)', border: '1.5px solid rgba(232,180,0,0.4)', borderRadius: 16, padding: 24, textAlign: 'center', marginBottom: 20 }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>⏳</div>
+            <div style={{ fontSize: 17, fontWeight: 500, marginBottom: 8 }}>Pending Admin Approval</div>
+            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', lineHeight: 1.6 }}>Our team in Manchester will review your documents and activate your account within 24–48 hours. You'll receive an SMS and email notification.</div>
+          </div>
+          <div style={{ background: 'rgba(255,255,255,0.05)', border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: 14, padding: 16, marginBottom: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>What happens next?</div>
+            {['Admin reviews your documents','Background check completed','Account activated via SMS','Start accepting rides in Manchester'].map((t, i) => (
+              <div key={i} style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 8, display: 'flex', gap: 8 }}>
+                <span style={{ color: YELLOW }}>0{i+1}</span>{t}
+              </div>
+            ))}
+          </div>
+          <button style={s.btnO} onClick={() => go('splash')}>Back to Home</button>
+        </div>
       </div>
     </div>
   );
 }
 
 // ── CUSTOMER DASHBOARD ────────────────────────────────────────────────────────
-function CustomerDash({ go }) {
+function CustomerDash({ go, user, setUser }) {
+  const handleLogout = async () => { await signOut(auth); setUser(null); go('splash'); };
   return (
-    <div style={{ ...styles.content, background: '#0f1923', minHeight: '100vh' }}>
+    <div style={{ ...s.content, background: '#0f1923', minHeight: '100vh' }}>
       <div style={{ background: DARK, padding: '16px 20px' }}>
-        <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>Good morning,</div>
-        <div style={{ color: WHITE, fontSize: 20, fontWeight: 500 }}>Kezia 👋</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>Balance:</span>
-          <span style={{ background: YELLOW, borderRadius: 20, padding: '2px 10px', fontSize: 12, fontWeight: 500, color: DARK }}>J$1,200</span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div>
+            <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>Good day,</div>
+            <div style={{ color: WHITE, fontSize: 20, fontWeight: 500 }}>{user?.name?.split(' ')[0] || 'Rider'} 👋</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>Balance:</span>
+              <span style={{ background: YELLOW, borderRadius: 20, padding: '2px 10px', fontSize: 12, fontWeight: 500, color: DARK }}>J$1,200</span>
+            </div>
+          </div>
+          <button onClick={handleLogout} style={{ background: 'none', border: '0.5px solid rgba(255,255,255,0.2)', borderRadius: 8, color: 'rgba(255,255,255,0.5)', fontSize: 11, padding: '6px 12px', cursor: 'pointer' }}>Logout</button>
         </div>
       </div>
-
-      {/* Map placeholder */}
       <div style={{ height: 200, background: '#1a2744', position: 'relative', overflow: 'hidden' }}>
         <svg width="100%" height="100%" viewBox="0 0 400 200" preserveAspectRatio="xMidYMid slice">
           <rect width="400" height="200" fill="#1a2744"/>
@@ -247,32 +479,21 @@ function CustomerDash({ go }) {
           <circle cx="270" cy="120" r="8" fill={YELLOW} opacity="0.9"/>
           <circle cx="270" cy="120" r="4" fill={DARK}/>
         </svg>
-        <div style={{ position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)', background: 'rgba(26,26,46,0.85)', borderRadius: 20, padding: '3px 12px', fontSize: 11, color: YELLOW, fontWeight: 500 }}>
-          📍 Manchester, Jamaica
-        </div>
-        <button onClick={() => go('pin-pickup')} style={{ position: 'absolute', right: 10, bottom: 10, background: YELLOW, border: 'none', borderRadius: 20, padding: '6px 14px', fontSize: 12, fontWeight: 500, color: DARK, cursor: 'pointer' }}>
-          📌 Pin location
-        </button>
+        <div style={{ position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)', background: 'rgba(26,26,46,0.85)', borderRadius: 20, padding: '3px 12px', fontSize: 11, color: YELLOW, fontWeight: 500, whiteSpace: 'nowrap' }}>📍 Manchester, Jamaica</div>
+        <button onClick={() => go('pin-pickup')} style={{ position: 'absolute', right: 10, bottom: 10, background: YELLOW, border: 'none', borderRadius: 20, padding: '6px 14px', fontSize: 12, fontWeight: 500, color: DARK, cursor: 'pointer' }}>📌 Pin location</button>
       </div>
-
       <div style={{ padding: 16 }}>
         <div onClick={() => go('pin-pickup')} style={{ background: 'rgba(255,255,255,0.06)', border: '0.5px solid rgba(255,255,255,0.12)', borderRadius: 12, padding: 12, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
           <div style={{ width: 10, height: 10, borderRadius: '50%', background: GREEN, flexShrink: 0 }}/>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13, color: WHITE }}>Pickup location</div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>Manchester, Jamaica (tap to pin exact spot)</div>
-          </div>
+          <div style={{ flex: 1 }}><div style={{ fontSize: 13, color: WHITE }}>Pickup location</div><div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>Manchester, Jamaica (tap to pin)</div></div>
           <span style={{ color: 'rgba(255,255,255,0.3)' }}>›</span>
         </div>
         <div onClick={() => go('pin-dropoff')} style={{ background: 'rgba(255,255,255,0.06)', border: '0.5px solid rgba(255,255,255,0.12)', borderRadius: 12, padding: 12, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
           <div style={{ width: 10, height: 10, borderRadius: '50%', background: YELLOW, flexShrink: 0 }}/>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13, color: WHITE }}>Drop-off location</div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>Where are you going?</div>
-          </div>
+          <div style={{ flex: 1 }}><div style={{ fontSize: 13, color: WHITE }}>Drop-off location</div><div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>Where are you going?</div></div>
           <span style={{ color: 'rgba(255,255,255,0.3)' }}>›</span>
         </div>
-        <button style={styles.btnYellow} onClick={() => go('vehicle-select')}>Find a Ride</button>
+        <button style={s.btnY} onClick={() => go('vehicle-select')}>Find a Ride</button>
       </div>
     </div>
   );
@@ -281,40 +502,33 @@ function CustomerDash({ go }) {
 // ── PIN PICKUP ────────────────────────────────────────────────────────────────
 function PinPickup({ go }) {
   return (
-    <div style={{ ...styles.content, background: '#0f1923' }}>
+    <div style={{ ...s.content, background: '#0f1923' }}>
       <TopBar title="Pin Pickup Location" onBack={() => go('customer-dash')}/>
       <div style={{ height: 280, background: '#1a2744', position: 'relative', overflow: 'hidden' }}>
         <svg width="100%" height="100%" viewBox="0 0 400 280" preserveAspectRatio="xMidYMid slice">
           <rect width="400" height="280" fill="#1a2744"/>
           <line x1="0" y1="90" x2="400" y2="90" stroke="rgba(255,255,255,0.12)" strokeWidth="4"/>
-          <line x1="0" y1="160" x2="400" y2="160" stroke="rgba(255,255,255,0.12)" strokeWidth="3"/>
-          <line x1="0" y1="220" x2="400" y2="220" stroke="rgba(255,255,255,0.08)" strokeWidth="2"/>
+          <line x1="0" y1="160" x2="400" y2="160" stroke="rgba(255,255,255,0.1)" strokeWidth="3"/>
           <line x1="100" y1="0" x2="100" y2="280" stroke="rgba(255,255,255,0.1)" strokeWidth="3"/>
           <line x1="220" y1="0" x2="220" y2="280" stroke="rgba(255,255,255,0.1)" strokeWidth="3"/>
-          <line x1="320" y1="0" x2="320" y2="280" stroke="rgba(255,255,255,0.08)" strokeWidth="2"/>
-          <text x="60" y="75" fill="rgba(255,255,255,0.3)" fontSize="10">Caledonia Rd</text>
-          <text x="230" y="145" fill="rgba(255,255,255,0.3)" fontSize="10">Ward Ave</text>
-          <text x="110" y="155" fill="rgba(255,255,255,0.3)" fontSize="10">Mandeville</text>
+          <text x="55" y="76" fill="rgba(255,255,255,0.3)" fontSize="10">Caledonia Rd</text>
+          <text x="228" y="146" fill="rgba(255,255,255,0.3)" fontSize="10">Ward Ave</text>
+          <text x="108" y="156" fill="rgba(255,255,255,0.3)" fontSize="10">Mandeville</text>
         </svg>
-        {/* Centre pin */}
-        <div style={{ position: 'absolute', left: '50%', top: '45%', transform: 'translate(-50%, -100%)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        <div style={{ position: 'absolute', left: '50%', top: '44%', transform: 'translate(-50%,-100%)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <div style={{ width: 36, height: 36, borderRadius: '50% 50% 50% 0', transform: 'rotate(-45deg)', background: GREEN, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <span style={{ transform: 'rotate(45deg)', fontSize: 16 }}>📍</span>
           </div>
           <div style={{ width: 2, height: 14, background: 'rgba(0,0,0,0.4)' }}/>
         </div>
-        <div style={{ position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)', background: 'rgba(26,26,46,0.85)', borderRadius: 20, padding: '3px 12px', fontSize: 10, color: YELLOW }}>
-          📍 Manchester, Jamaica
-        </div>
-        <div style={{ position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.6)', color: WHITE, fontSize: 11, padding: '3px 12px', borderRadius: 20, whiteSpace: 'nowrap' }}>
-          Drag map to move pin
-        </div>
+        <div style={{ position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)', background: 'rgba(26,26,46,0.85)', borderRadius: 20, padding: '3px 12px', fontSize: 10, color: YELLOW, whiteSpace: 'nowrap' }}>📍 Manchester, Jamaica</div>
+        <div style={{ position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.6)', color: WHITE, fontSize: 11, padding: '3px 12px', borderRadius: 20, whiteSpace: 'nowrap' }}>Drag map to move pin</div>
       </div>
       <div style={{ padding: 16 }}>
-        <label style={styles.label}>Pinned address</label>
-        <input style={styles.input} defaultValue="Caledonia Rd, Mandeville, Manchester"/>
+        <label style={s.lbl}>Pinned address</label>
+        <input style={s.inp} defaultValue="Caledonia Rd, Mandeville, Manchester"/>
         <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', marginBottom: 16 }}>ℹ️ You can also type an address to search</p>
-        <button style={styles.btnYellow} onClick={() => go('pin-dropoff')}>Confirm Pickup</button>
+        <button style={s.btnY} onClick={() => go('pin-dropoff')}>Confirm Pickup</button>
       </div>
     </div>
   );
@@ -322,9 +536,9 @@ function PinPickup({ go }) {
 
 // ── PIN DROPOFF ───────────────────────────────────────────────────────────────
 function PinDropoff({ go }) {
-  const suggestions = ['Manchester Market, Mandeville', 'Spaldings, Manchester', 'Christiana, Manchester', 'Porus, Manchester'];
+  const suggestions = ['Manchester Market, Mandeville','Spaldings, Manchester','Christiana, Manchester','Porus, Manchester'];
   return (
-    <div style={{ ...styles.content, background: '#0f1923' }}>
+    <div style={{ ...s.content, background: '#0f1923' }}>
       <TopBar title="Pin Drop-off Location" onBack={() => go('customer-dash')}/>
       <div style={{ height: 220, background: '#1a2744', position: 'relative', overflow: 'hidden' }}>
         <svg width="100%" height="100%" viewBox="0 0 400 220" preserveAspectRatio="xMidYMid slice">
@@ -340,20 +554,18 @@ function PinDropoff({ go }) {
           </div>
           <div style={{ width: 2, height: 14, background: 'rgba(0,0,0,0.3)' }}/>
         </div>
-        <div style={{ position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.6)', color: WHITE, fontSize: 11, padding: '3px 12px', borderRadius: 20, whiteSpace: 'nowrap' }}>
-          Drag map to set drop-off
-        </div>
+        <div style={{ position: 'absolute', bottom: 10, left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.6)', color: WHITE, fontSize: 11, padding: '3px 12px', borderRadius: 20, whiteSpace: 'nowrap' }}>Drag map to set drop-off</div>
       </div>
       <div style={{ padding: 16 }}>
-        <input style={{ ...styles.input, paddingLeft: 36 }} placeholder="Search drop-off address..."/>
+        <input style={s.inp} placeholder="🔍 Search drop-off address..."/>
         <div style={{ background: 'rgba(255,255,255,0.04)', border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: 12, overflow: 'hidden', marginBottom: 14 }}>
-          {suggestions.map((s, i) => (
-            <div key={i} onClick={() => go('vehicle-select')} style={{ padding: '11px 14px', fontSize: 13, color: 'rgba(255,255,255,0.8)', borderBottom: i < suggestions.length - 1 ? '0.5px solid rgba(255,255,255,0.08)' : 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
-              📍 {s}
+          {suggestions.map((sug, i) => (
+            <div key={i} onClick={() => go('vehicle-select')} style={{ padding: '11px 14px', fontSize: 13, color: 'rgba(255,255,255,0.8)', borderBottom: i < suggestions.length-1 ? '0.5px solid rgba(255,255,255,0.08)' : 'none', cursor: 'pointer' }}>
+              📍 {sug}
             </div>
           ))}
         </div>
-        <button style={styles.btnYellow} onClick={() => go('vehicle-select')}>Confirm Drop-off</button>
+        <button style={s.btnY} onClick={() => go('vehicle-select')}>Confirm Drop-off</button>
       </div>
     </div>
   );
@@ -361,15 +573,15 @@ function PinDropoff({ go }) {
 
 // ── VEHICLE SELECT ────────────────────────────────────────────────────────────
 function VehicleSelect({ go }) {
-  const [selected, setSelected] = useState(0);
+  const [sel, setSel] = useState(0);
   const vehicles = [
     { name: 'VilleRide', eta: '4 min away', price: 750, base: 300, rate: 55, icon: '🚗' },
-    { name: 'VilleXL', eta: '7 min · up to 6', price: 1200, base: 400, rate: 98, icon: '🚙' },
+    { name: 'VilleXL',   eta: '7 min · up to 6', price: 1200, base: 400, rate: 98, icon: '🚙' },
     { name: 'VilleMoto', eta: '2 min away', price: 500, base: 200, rate: 37, icon: '🏍️' },
   ];
-  const v = vehicles[selected];
+  const v = vehicles[sel];
   return (
-    <div style={{ ...styles.content, background: '#0f1923' }}>
+    <div style={{ ...s.content, background: '#0f1923' }}>
       <TopBar title="Choose Ride" onBack={() => go('customer-dash')}/>
       <div style={{ height: 140, background: '#1a2744', position: 'relative', overflow: 'hidden' }}>
         <svg width="100%" height="100%" viewBox="0 0 400 140" preserveAspectRatio="xMidYMid slice">
@@ -386,7 +598,7 @@ function VehicleSelect({ go }) {
           <span>Pickup → Christiana</span><span>~8.2 km</span>
         </div>
         {vehicles.map((veh, i) => (
-          <div key={i} onClick={() => setSelected(i)} style={{ border: `${i === selected ? '2px solid ' + YELLOW : '0.5px solid rgba(255,255,255,0.12)'}`, borderRadius: 12, padding: '11px 13px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', background: i === selected ? 'rgba(232,180,0,0.08)' : 'rgba(255,255,255,0.04)' }}>
+          <div key={i} onClick={() => setSel(i)} style={{ border: `${i===sel ? '2px solid '+YELLOW : '0.5px solid rgba(255,255,255,0.12)'}`, borderRadius: 12, padding: '11px 13px', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', background: i===sel ? 'rgba(232,180,0,0.08)' : 'rgba(255,255,255,0.04)' }}>
             <div style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0 }}>{veh.icon}</div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 14, fontWeight: 500, color: WHITE }}>{veh.name}</div>
@@ -397,11 +609,11 @@ function VehicleSelect({ go }) {
         ))}
         <div style={{ background: DARK, borderRadius: 12, padding: 14, margin: '10px 0' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 6 }}><span>Base fare</span><span>J${v.base}</span></div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 6 }}><span>Distance (8.2 km × J${v.rate})</span><span>J${Math.round(8.2 * v.rate)}</span></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 6 }}><span>Distance (8.2 km × J${v.rate})</span><span>J${Math.round(8.2*v.rate)}</span></div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 6 }}><span>Service fee</span><span>J$0</span></div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 15, fontWeight: 500, color: YELLOW, borderTop: '0.5px solid rgba(255,255,255,0.12)', paddingTop: 8, marginTop: 4 }}><span>Total</span><span>J${v.price.toLocaleString()}</span></div>
         </div>
-        <button style={styles.btnYellow} onClick={() => go('booking-confirm')}>Book Ride — J${v.price.toLocaleString()}</button>
+        <button style={s.btnY} onClick={() => go('booking-confirm')}>Book Ride — J${v.price.toLocaleString()}</button>
       </div>
     </div>
   );
@@ -411,40 +623,31 @@ function VehicleSelect({ go }) {
 function BookingConfirm({ go }) {
   const [payment, setPayment] = useState('cash');
   return (
-    <div style={{ ...styles.content, background: '#0f1923' }}>
+    <div style={{ ...s.content, background: '#0f1923' }}>
       <TopBar title="Confirm Booking" onBack={() => go('vehicle-select')}/>
       <div style={{ padding: 16 }}>
         <div style={{ background: 'rgba(255,255,255,0.05)', border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: 14, padding: 16, marginBottom: 14 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
             <div style={{ width: 40, height: 40, borderRadius: '50%', background: DARK, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>🚗</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, fontWeight: 500, color: WHITE }}>VilleRide</div>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Toyota Corolla · PP1234</div>
-            </div>
+            <div style={{ flex: 1 }}><div style={{ fontSize: 14, fontWeight: 500, color: WHITE }}>VilleRide</div><div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>Toyota Corolla · PP1234</div></div>
             <div style={{ fontSize: 16, fontWeight: 500, color: GREEN }}>J$750</div>
           </div>
           <div style={{ borderTop: '0.5px solid rgba(255,255,255,0.1)', paddingTop: 12 }}>
-            <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'flex-start' }}>
-              <div style={{ width: 9, height: 9, borderRadius: '50%', background: GREEN, marginTop: 3, flexShrink: 0 }}/>
-              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)' }}>Caledonia Rd, Mandeville</div>
-            </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-              <div style={{ width: 9, height: 9, borderRadius: '50%', background: YELLOW, marginTop: 3, flexShrink: 0 }}/>
-              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)' }}>Christiana, Manchester</div>
-            </div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'flex-start' }}><div style={{ width: 9, height: 9, borderRadius: '50%', background: GREEN, marginTop: 3, flexShrink: 0 }}/><div style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)' }}>Caledonia Rd, Mandeville</div></div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}><div style={{ width: 9, height: 9, borderRadius: '50%', background: YELLOW, marginTop: 3, flexShrink: 0 }}/><div style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)' }}>Christiana, Manchester</div></div>
           </div>
         </div>
-        <div style={styles.sectionTitle}>Payment method</div>
+        <div style={s.secTitle}>Payment method</div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-          {['cash', 'card'].map(p => (
-            <div key={p} onClick={() => setPayment(p)} style={{ flex: 1, border: payment === p ? `1.5px solid ${YELLOW}` : '0.5px solid rgba(255,255,255,0.15)', borderRadius: 10, padding: '10px 12px', textAlign: 'center', cursor: 'pointer', background: payment === p ? 'rgba(232,180,0,0.1)' : 'transparent', color: payment === p ? YELLOW : 'rgba(255,255,255,0.5)', fontSize: 13, fontWeight: payment === p ? 500 : 400, textTransform: 'capitalize' }}>
-              {p === 'cash' ? '💵' : '💳'} {p}
+          {['cash','card'].map(p => (
+            <div key={p} onClick={() => setPayment(p)} style={{ flex: 1, border: payment===p ? `1.5px solid ${YELLOW}` : '0.5px solid rgba(255,255,255,0.15)', borderRadius: 10, padding: '10px 12px', textAlign: 'center', cursor: 'pointer', background: payment===p ? 'rgba(232,180,0,0.1)' : 'transparent', color: payment===p ? YELLOW : 'rgba(255,255,255,0.5)', fontSize: 13, fontWeight: payment===p ? 500 : 400 }}>
+              {p==='cash'?'💵':'💳'} {p}
             </div>
           ))}
         </div>
         <p style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', textAlign: 'center', marginBottom: 20 }}>Driver will arrive in ~4 minutes</p>
-        <button style={styles.btnYellow} onClick={() => go('live-ride')}>Confirm Booking</button>
-        <button style={styles.btnOutline} onClick={() => go('customer-dash')}>Cancel</button>
+        <button style={s.btnY} onClick={() => go('live-ride')}>Confirm Booking</button>
+        <button style={s.btnO} onClick={() => go('customer-dash')}>Cancel</button>
       </div>
     </div>
   );
@@ -453,7 +656,7 @@ function BookingConfirm({ go }) {
 // ── LIVE RIDE ─────────────────────────────────────────────────────────────────
 function LiveRide({ go }) {
   return (
-    <div style={{ ...styles.content, background: '#0f1923' }}>
+    <div style={{ ...s.content, background: '#0f1923' }}>
       <div style={{ height: 220, background: '#1a2744', position: 'relative', overflow: 'hidden' }}>
         <svg width="100%" height="100%" viewBox="0 0 400 220" preserveAspectRatio="xMidYMid slice">
           <rect width="400" height="220" fill="#1a2744"/>
@@ -481,113 +684,35 @@ function LiveRide({ go }) {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
-          <div style={{ flex: 1, background: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: 10, textAlign: 'center' }}>
-            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)' }}>Arriving in</div>
-            <div style={{ fontSize: 20, fontWeight: 500, color: WHITE }}>3 min</div>
-          </div>
-          <div style={{ flex: 1, background: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: 10, textAlign: 'center' }}>
-            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)' }}>Fare</div>
-            <div style={{ fontSize: 20, fontWeight: 500, color: GREEN }}>J$750</div>
-          </div>
+          <div style={{ flex: 1, background: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: 10, textAlign: 'center' }}><div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)' }}>Arriving in</div><div style={{ fontSize: 20, fontWeight: 500, color: WHITE }}>3 min</div></div>
+          <div style={{ flex: 1, background: 'rgba(255,255,255,0.05)', borderRadius: 10, padding: 10, textAlign: 'center' }}><div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)' }}>Fare</div><div style={{ fontSize: 20, fontWeight: 500, color: GREEN }}>J$750</div></div>
         </div>
-        <button style={styles.btnOutline} onClick={() => go('customer-dash')}>Cancel Ride</button>
-      </div>
-    </div>
-  );
-}
-
-// ── DRIVER SIGNUP ─────────────────────────────────────────────────────────────
-function DriverSignup({ go }) {
-  const [docs, setDocs] = useState({ license: false, fitness: false, registration: false });
-  const toggleDoc = k => setDocs(p => ({ ...p, [k]: !p[k] }));
-  return (
-    <div style={styles.content}>
-      <TopBar title="Driver Registration" onBack={() => go('role')}/>
-      <div style={{ padding: '20px 20px', maxWidth: 420, margin: '0 auto' }}>
-        <h2 style={{ fontSize: 20, fontWeight: 500, marginBottom: 4 }}>Drive with VilleCabs</h2>
-        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginBottom: 20 }}>Fill in your details to apply</p>
-        {[['Full Legal Name', 'As on your ID'], ['TRN (Tax Registration Number)', '000-000-000'], ['Date of Birth', 'DD/MM/YYYY'], ['Phone Number', '+1 (876) 555-0100'], ['Email Address', 'you@email.com']].map(([lbl, ph]) => (
-          <div key={lbl}><label style={styles.label}>{lbl}</label><input style={styles.input} placeholder={ph}/></div>
-        ))}
-        <div style={{ height: '0.5px', background: 'rgba(255,255,255,0.1)', margin: '4px 0 16px' }}/>
-        {[['Make of Vehicle', 'e.g. Toyota'], ['Model', 'e.g. Corolla'], ['License Plate Number', 'e.g. PP1234']].map(([lbl, ph]) => (
-          <div key={lbl}><label style={styles.label}>{lbl}</label><input style={styles.input} placeholder={ph}/></div>
-        ))}
-        <div style={{ height: '0.5px', background: 'rgba(255,255,255,0.1)', margin: '4px 0 16px' }}/>
-        {[['license', "Driver's License"], ['fitness', 'Vehicle Fitness Certificate'], ['registration', 'Vehicle Registration']].map(([k, lbl]) => (
-          <div key={k} onClick={() => toggleDoc(k)} style={docs[k] ? styles.uploadBoxDone : styles.uploadBox}>
-            <div style={{ fontSize: 24, marginBottom: 6 }}>{docs[k] ? '✅' : '📄'}</div>
-            <div style={{ fontSize: 12, color: docs[k] ? GREEN : 'rgba(255,255,255,0.4)' }}>{docs[k] ? `${lbl} uploaded ✓` : `Tap to upload ${lbl}`}</div>
-          </div>
-        ))}
-        <button style={{ ...styles.btnYellow, marginTop: 8 }} onClick={() => go('driver-pending')}>Submit Application</button>
-      </div>
-    </div>
-  );
-}
-
-// ── DRIVER PENDING ────────────────────────────────────────────────────────────
-function DriverPending({ go }) {
-  return (
-    <div style={styles.content}>
-      <TopBar title="Application Submitted"/>
-      <div style={{ ...styles.center, paddingTop: 20 }}>
-        <div style={{ width: '100%', maxWidth: 380 }}>
-          <div style={styles.pendingCard}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>⏳</div>
-            <div style={{ fontSize: 17, fontWeight: 500, marginBottom: 8 }}>Pending Admin Approval</div>
-            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', lineHeight: 1.6 }}>Our team in Manchester will review your documents and activate your account within 24–48 hours. You'll receive an SMS and email notification.</div>
-          </div>
-          <div style={{ background: 'rgba(255,255,255,0.05)', border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: 14, padding: 16, marginBottom: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>What happens next?</div>
-            {['Admin reviews your documents', 'Background check completed', 'Account activated via SMS', 'Start accepting rides in Manchester'].map((s, i) => (
-              <div key={i} style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 8, display: 'flex', gap: 8 }}>
-                <span style={{ color: YELLOW }}>0{i + 1}</span> {s}
-              </div>
-            ))}
-          </div>
-          <button style={styles.btnOutline} onClick={() => go('splash')}>Back to Home</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── DRIVER LOGIN ──────────────────────────────────────────────────────────────
-function DriverLogin({ go }) {
-  return (
-    <div style={styles.content}>
-      <TopBar title="Driver Login" onBack={() => go('splash')}/>
-      <div style={{ padding: '32px 20px', maxWidth: 420, margin: '0 auto' }}>
-        <h2 style={{ fontSize: 20, fontWeight: 500, marginBottom: 4 }}>Welcome back</h2>
-        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 13, marginBottom: 24 }}>Sign in to your VilleCabs driver account</p>
-        <label style={styles.label}>Email or Phone</label>
-        <input style={styles.input} placeholder="Your email or phone number"/>
-        <label style={styles.label}>Password</label>
-        <input style={styles.input} type="password" placeholder="Your password"/>
-        <button style={styles.btnYellow} onClick={() => go('driver-dash')}>Login</button>
-        <button style={styles.link} onClick={() => go('driver-signup')}>New driver? Apply here</button>
+        <button style={s.btnO} onClick={() => go('customer-dash')}>Cancel Ride</button>
       </div>
     </div>
   );
 }
 
 // ── DRIVER DASHBOARD ──────────────────────────────────────────────────────────
-function DriverDash({ go }) {
+function DriverDash({ go, user, setUser }) {
+  const handleLogout = async () => { await signOut(auth); setUser(null); go('splash'); };
   const rides = [
     { name: 'Kezia B.', from: 'Caledonia Rd', to: 'Christiana', km: '8.2', price: 750, eta: '4 min' },
     { name: 'Marcus T.', from: 'Ward Ave', to: 'Market', km: '4.1', price: 500, eta: '7 min' },
     { name: 'Paula G.', from: 'Spaldings', to: 'Mandeville', km: '12.4', price: 1100, eta: '9 min' },
   ];
   return (
-    <div style={{ ...styles.content, background: '#0f1923' }}>
+    <div style={{ ...s.content, background: '#0f1923', minHeight: '100vh' }}>
       <div style={{ background: DARK, padding: '14px 18px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>Online as driver</div>
-            <div style={{ color: WHITE, fontSize: 18, fontWeight: 500 }}>Desmond Reid</div>
+            <div style={{ color: WHITE, fontSize: 18, fontWeight: 500 }}>{user?.name || 'Driver'}</div>
           </div>
-          <div style={{ background: GREEN, borderRadius: 20, padding: '5px 14px', fontSize: 12, color: WHITE, fontWeight: 500 }}>● Online</div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div style={{ background: GREEN, borderRadius: 20, padding: '5px 14px', fontSize: 12, color: WHITE, fontWeight: 500 }}>● Online</div>
+            <button onClick={handleLogout} style={{ background: 'none', border: '0.5px solid rgba(255,255,255,0.2)', borderRadius: 8, color: 'rgba(255,255,255,0.5)', fontSize: 11, padding: '6px 10px', cursor: 'pointer' }}>Out</button>
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
           <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>Today's earnings:</span>
@@ -615,10 +740,10 @@ function DriverDash({ go }) {
   );
 }
 
-// ── DRIVER ACTIVE RIDE ────────────────────────────────────────────────────────
+// ── DRIVER ACTIVE ─────────────────────────────────────────────────────────────
 function DriverActive({ go }) {
   return (
-    <div style={{ ...styles.content, background: '#0f1923' }}>
+    <div style={{ ...s.content, background: '#0f1923' }}>
       <TopBar title="Active Ride" onBack={() => go('driver-dash')}/>
       <div style={{ height: 180, background: '#1a2744', position: 'relative', overflow: 'hidden' }}>
         <svg width="100%" height="100%" viewBox="0 0 400 180" preserveAspectRatio="xMidYMid slice">
@@ -633,19 +758,13 @@ function DriverActive({ go }) {
       <div style={{ padding: 14 }}>
         <div style={{ background: 'rgba(232,180,0,0.1)', border: `1.5px solid rgba(232,180,0,0.4)`, borderRadius: 12, padding: 14, marginBottom: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 500, color: YELLOW, marginBottom: 8 }}>Pick up passenger</div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <div style={{ width: 9, height: 9, borderRadius: '50%', background: GREEN }}/>
-            <div style={{ fontSize: 13, color: WHITE }}>Caledonia Rd, Mandeville</div>
-          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}><div style={{ width: 9, height: 9, borderRadius: '50%', background: GREEN }}/><div style={{ fontSize: 13, color: WHITE }}>Caledonia Rd, Mandeville</div></div>
         </div>
         <div style={{ background: 'rgba(255,255,255,0.05)', border: '0.5px solid rgba(255,255,255,0.1)', borderRadius: 12, padding: 14, marginBottom: 12 }}>
           <div style={{ fontSize: 13, fontWeight: 500, color: WHITE, marginBottom: 8 }}>Passenger</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ width: 36, height: 36, borderRadius: '50%', background: DARK, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>👤</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 500, color: WHITE }}>Kezia B.</div>
-              <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>★ 4.9 rider</div>
-            </div>
+            <div style={{ flex: 1 }}><div style={{ fontSize: 13, fontWeight: 500, color: WHITE }}>Kezia B.</div><div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>★ 4.9 rider</div></div>
             <div style={{ width: 32, height: 32, borderRadius: '50%', background: GREEN, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 15 }}>📞</div>
           </div>
         </div>
@@ -654,40 +773,81 @@ function DriverActive({ go }) {
           <div style={{ fontSize: 13, color: WHITE, flex: 1 }}>Christiana, Manchester · 8.2 km</div>
           <div style={{ fontSize: 14, fontWeight: 500, color: GREEN }}>J$750</div>
         </div>
-        <button style={styles.btnGreen} onClick={() => go('driver-dash')}>Complete Ride</button>
+        <button style={s.btnG} onClick={() => go('driver-dash')}>Complete Ride</button>
       </div>
     </div>
   );
 }
 
+// ── LOADING SCREEN ────────────────────────────────────────────────────────────
+function LoadingScreen() {
+  return (
+    <div style={{ ...s.screen, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 16 }}>
+      <div style={{ fontSize: 48 }}>🚕</div>
+      <div style={{ color: YELLOW, fontSize: 16, fontWeight: 500 }}>VilleCabs</div>
+      <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 13 }}>Loading...</div>
+    </div>
+  );
+}
+
 // ── APP ROUTER ────────────────────────────────────────────────────────────────
-const SCREENS = {
-  splash: SplashScreen,
-  role: RoleSelect,
-  'customer-signup': CustomerSignup,
-  'customer-login': CustomerLogin,
-  otp: OTPScreen,
-  'customer-dash': CustomerDash,
-  'pin-pickup': PinPickup,
-  'pin-dropoff': PinDropoff,
-  'vehicle-select': VehicleSelect,
-  'booking-confirm': BookingConfirm,
-  'live-ride': LiveRide,
-  'driver-signup': DriverSignup,
-  'driver-pending': DriverPending,
-  'driver-login': DriverLogin,
-  'driver-dash': DriverDash,
-  'driver-active': DriverActive,
-};
+const MAP_BG_SCREENS = new Set(['splash','role','customer-signup','customer-login','otp','driver-signup','driver-pending','driver-login']);
 
 export default function App() {
   const [screen, setScreen] = useState('splash');
-  const Screen = SCREENS[screen] || SplashScreen;
-  const needsMapBg = ['splash', 'role', 'customer-signup', 'customer-login', 'otp', 'driver-signup', 'driver-pending', 'driver-login'].includes(screen);
+  const [user, setUser]     = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        const customerSnap = await getDoc(doc(db, 'customers', firebaseUser.uid));
+        const driverSnap   = await getDoc(doc(db, 'drivers',   firebaseUser.uid));
+        if (customerSnap.exists()) {
+          const data = customerSnap.data();
+          setUser({ uid: firebaseUser.uid, name: data.name || firebaseUser.displayName, email: firebaseUser.email, role: 'customer' });
+          setScreen('customer-dash');
+        } else if (driverSnap.exists()) {
+          const data = driverSnap.data();
+          if (data.status === 'approved') {
+            setUser({ uid: firebaseUser.uid, name: data.name, email: firebaseUser.email, role: 'driver' });
+            setScreen('driver-dash');
+          } else {
+            setScreen('driver-pending');
+          }
+        }
+      }
+      setLoading(false);
+    });
+    return () => unsub();
+  }, []);
+
+  if (loading) return <LoadingScreen/>;
+
+  const props = { go: setScreen, user, setUser };
+  const screens = {
+    splash:          <Splash {...props}/>,
+    role:            <RoleSelect {...props}/>,
+    'customer-signup': <CustomerSignup {...props}/>,
+    'customer-login':  <CustomerLogin {...props}/>,
+    otp:             <OTPScreen {...props}/>,
+    'customer-dash': <CustomerDash {...props}/>,
+    'pin-pickup':    <PinPickup {...props}/>,
+    'pin-dropoff':   <PinDropoff {...props}/>,
+    'vehicle-select':<VehicleSelect {...props}/>,
+    'booking-confirm':<BookingConfirm {...props}/>,
+    'live-ride':     <LiveRide {...props}/>,
+    'driver-signup': <DriverSignup {...props}/>,
+    'driver-pending':<DriverPending {...props}/>,
+    'driver-login':  <DriverLogin {...props}/>,
+    'driver-dash':   <DriverDash {...props}/>,
+    'driver-active': <DriverActive {...props}/>,
+  };
+
   return (
-    <div style={styles.screen}>
-      {needsMapBg && <MapBackground/>}
-      <Screen go={setScreen}/>
+    <div style={s.screen}>
+      {MAP_BG_SCREENS.has(screen) && <MapBg/>}
+      {screens[screen] || <Splash {...props}/>}
     </div>
   );
 }
