@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VilleCabs Admin</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',sans-serif;background:#0f1015;color:#fff;min-height:100vh}
+.topbar{background:#1a1a2e;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;border-bottom:0.5px solid rgba(255,255,255,0.1)}
+.logo{font-size:18px;font-weight:600;display:flex;align-items:center;gap:10px}
+.badge{background:#e8b400;border-radius:8px;padding:4px 10px;font-size:12px;color:#1a1a2e;font-weight:700}
+.layout{display:flex;min-height:calc(100vh - 53px)}
+.sidebar{width:200px;background:#1a1a2e;padding:20px 0;flex-shrink:0;border-right:0.5px solid rgba(255,255,255,0.08)}
+.nav-item{padding:12px 20px;font-size:14px;cursor:pointer;color:rgba(255,255,255,0.6);display:flex;align-items:center;gap:10px;border-left:3px solid transparent}
+.nav-item.active{color:#fff;font-weight:500;border-left:3px solid #e8b400;background:rgba(232,180,0,0.08)}
+.main{flex:1;padding:24px;overflow-y:auto}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+.stat{background:#1a1f2e;border:0.5px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px 20px}
+.stat-label{font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:6px}
+.stat-val{font-size:26px;font-weight:500}
+.stat-sub{font-size:11px;color:rgba(255,255,255,0.35);margin-top:4px}
+.card{background:#1a1f2e;border:0.5px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px 20px;margin-bottom:14px}
+.badge-pill{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:500}
+.btn-approve{background:#1a9e5a;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:500;cursor:pointer;margin-right:8px}
+.btn-reject{background:rgba(226,75,74,0.15);color:#f09595;border:0.5px solid rgba(226,75,74,0.4);border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer}
+.btn-suspend{background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.5);border:0.5px solid rgba(255,255,255,0.15);border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer}
+.filter-bar{display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap}
+.filter-btn{padding:7px 16px;border-radius:20px;font-size:13px;border:0.5px solid rgba(255,255,255,0.15);background:rgba(255,255,255,0.05);color:rgba(255,255,255,0.6);cursor:pointer}
+.filter-btn.active{background:#e8b400;color:#1a1a2e;font-weight:600;border-color:#e8b400}
+.table{background:#1a1f2e;border:0.5px solid rgba(255,255,255,0.08);border-radius:12px;overflow:hidden}
+.table-head{display:grid;grid-template-columns:1fr 1fr 1fr 90px 90px;padding:10px 16px;background:rgba(255,255,255,0.04);font-size:11px;color:rgba(255,255,255,0.4);font-weight:500;text-transform:uppercase;letter-spacing:0.5px}
+.table-row{display:grid;grid-template-columns:1fr 1fr 1fr 90px 90px;padding:12px 16px;border-top:0.5px solid rgba(255,255,255,0.06);font-size:13px;align-items:center}
+.driver-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}
+.driver-cell{background:rgba(255,255,255,0.04);border-radius:8px;padding:8px 10px}
+.driver-cell-label{font-size:10px;color:rgba(255,255,255,0.35);margin-bottom:2px}
+.driver-cell-val{font-size:12px;color:#fff}
+.doc-pill{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;margin-right:6px;margin-bottom:6px}
+input,select{width:100%;padding:11px 14px;background:rgba(255,255,255,0.06);border:0.5px solid rgba(255,255,255,0.15);border-radius:10px;color:#fff;font-size:14px;margin-bottom:12px;outline:none}
+.err{background:rgba(226,75,74,0.15);border:0.5px solid rgba(226,75,74,0.4);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#f09595}
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center}
+.login-card{width:380px;background:#1a1a2e;border:0.5px solid rgba(255,255,255,0.1);border-radius:20px;padding:32px}
+#loading{display:none;text-align:center;padding:40px;color:rgba(255,255,255,0.4)}
+.section{display:none}
+.section.active{display:block}
+.logout-btn{background:none;border:0.5px solid rgba(255,255,255,0.2);border-radius:8px;color:rgba(255,255,255,0.5);font-size:12px;padding:6px 14px;cursor:pointer;width:auto;margin-bottom:0}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="login-screen" class="login-wrap">
+  <div class="login-card">
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="font-size:40px;margin-bottom:10px">🚕</div>
+      <div style="font-size:22px;font-weight:700;letter-spacing:2px">VilleCabs</div>
+      <div style="font-size:13px;color:rgba(255,255,255,0.4);margin-top:4px">Admin Panel</div>
+    </div>
+    <div id="login-err" class="err" style="display:none"></div>
+    <label style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:4px;display:block">Admin Email</label>
+    <input type="email" id="admin-email" placeholder="admin@villecabs.com">
+    <label style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:4px;display:block">Password</label>
+    <input type="password" id="admin-pass" placeholder="Admin password">
+    <button onclick="adminLogin()" style="width:100%;padding:14px;background:#e8b400;color:#1a1a2e;border:none;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;margin-top:4px">Sign In</button>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="main-app" style="display:none">
+  <div class="topbar">
+    <div class="logo">🚕 VilleCabs <span class="badge">ADMIN</span></div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <span id="admin-email-display" style="font-size:13px;color:rgba(255,255,255,0.5)"></span>
+      <button class="logout-btn" onclick="adminLogout()">Logout</button>
+    </div>
+  </div>
+  <div class="layout">
+    <div class="sidebar">
+      <div style="padding:12px 20px;font-size:11px;color:rgba(255,255,255,0.3);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">Menu</div>
+      <div class="nav-item active" onclick="showTab('overview',this)">📊 Overview</div>
+      <div class="nav-item" onclick="showTab('drivers',this)">🚗 Drivers</div>
+      <div class="nav-item" onclick="showTab('rides',this)">🚕 Rides</div>
+      <div style="margin:20px;height:0.5px;background:rgba(255,255,255,0.08)"></div>
+      <div style="padding:0 20px;font-size:12px;color:rgba(255,255,255,0.3);line-height:1.6">VilleCabs Admin<br>Manchester, Jamaica</div>
+    </div>
+    <div class="main">
+
+      <!-- OVERVIEW -->
+      <div id="tab-overview" class="section active">
+        <div style="font-size:20px;font-weight:500;margin-bottom:20px">📊 Dashboard Overview</div>
+        <div class="stat-grid">
+          <div class="stat"><div class="stat-label">Pending applications</div><div class="stat-val" id="stat-pending" style="color:#e8b400">0</div><div class="stat-sub">awaiting review</div></div>
+          <div class="stat"><div class="stat-label">Active drivers</div><div class="stat-val" id="stat-drivers" style="color:#1a9e5a">0</div><div class="stat-sub">approved</div></div>
+          <div class="stat"><div class="stat-label">Total rides</div><div class="stat-val" id="stat-rides">0</div><div class="stat-sub">all time</div></div>
+          <div class="stat"><div class="stat-label">Total revenue</div><div class="stat-val" id="stat-revenue" style="color:#e8b400">J$0</div><div class="stat-sub">platform earnings</div></div>
+        </div>
+        <div class="stat-grid" style="grid-template-columns:repeat(3,1fr)">
+          <div class="stat"><div class="stat-label">Active rides now</div><div class="stat-val" id="stat-active" style="color:#1a9e5a">0</div><div class="stat-sub">in progress</div></div>
+          <div class="stat"><div class="stat-label">Registered customers</div><div class="stat-val" id="stat-customers">0</div><div class="stat-sub">signed up</div></div>
+          <div class="stat"><div class="stat-label">Platform fee</div><div class="stat-val">15%</div><div class="stat-sub">per ride</div></div>
+        </div>
+      </div>
+
+      <!-- DRIVERS -->
+      <div id="tab-drivers" class="section">
+        <div style="font-size:20px;font-weight:500;margin-bottom:20px">🚗 Driver Management</div>
+        <div class="filter-bar">
+          <button class="filter-btn active" onclick="filterDrivers('pending',this)">Pending</button>
+          <button class="filter-btn" onclick="filterDrivers('approved',this)">Approved</button>
+          <button class="filter-btn" onclick="filterDrivers('rejected',this)">Rejected</button>
+          <button class="filter-btn" onclick="filterDrivers('all',this)">All drivers</button>
+        </div>
+        <div id="drivers-list"><div style="text-align:center;padding:40px;color:rgba(255,255,255,0.4)">Loading drivers...</div></div>
+      </div>
+
+      <!-- RIDES -->
+      <div id="tab-rides" class="section">
+        <div style="font-size:20px;font-weight:500;margin-bottom:20px">🚕 Ride Management</div>
+        <div class="stat-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:20px">
+          <div class="stat"><div class="stat-label">Total rides</div><div class="stat-val" id="rides-total">0</div></div>
+          <div class="stat"><div class="stat-label">Total revenue</div><div class="stat-val" id="rides-revenue" style="color:#e8b400">J$0</div></div>
+          <div class="stat"><div class="stat-label">Active now</div><div class="stat-val" id="rides-active" style="color:#1a9e5a">0</div></div>
+        </div>
+        <div class="filter-bar">
+          <button class="filter-btn active" onclick="filterRides('all',this)">All rides</button>
+          <button class="filter-btn" onclick="filterRides('searching',this)">Searching</button>
+          <button class="filter-btn" onclick="filterRides('active',this)">Active</button>
+          <button class="filter-btn" onclick="filterRides('completed',this)">Completed</button>
+        </div>
+        <div class="table">
+          <div class="table-head"><span>Customer</span><span>Route</span><span>Driver</span><span>Fare</span><span>Status</span></div>
+          <div id="rides-list"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyBVqEGP2thMlrwv381IJWjDasgfbY0qUi8",
+authDomain: "villecabs.firebaseapp.com",
+projectId: "villecabs",
+storageBucket: "villecabs.firebasestorage.app",
+messagingSenderId: "889842675525",
+appId: "1:889842675525:web:793b190fa0c06e0bb2d82c""
+};
+
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db   = firebase.firestore();
+
+let driversFilter = 'pending';
+let ridesFilter   = 'all';
+let unsubDrivers, unsubRides;
+
+auth.onAuthStateChanged(user => {
+  if (user) {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('main-app').style.display = 'block';
+    document.getElementById('admin-email-display').textContent = user.email;
+    loadOverview();
+    loadDrivers();
+    loadRides();
+  } else {
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('main-app').style.display = 'none';
+  }
+});
+
+function adminLogin() {
+  const email = document.getElementById('admin-email').value;
+  const pass  = document.getElementById('admin-pass').value;
+  const err   = document.getElementById('login-err');
+  err.style.display = 'none';
+  auth.signInWithEmailAndPassword(email, pass)
+    .catch(e => { err.textContent = '⚠️ Incorrect email or password.'; err.style.display = 'block'; });
+}
+
+function adminLogout() { auth.signOut(); }
+
+function showTab(name, el) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  el.classList.add('active');
+}
+
+function statusBadge(status) {
+  const map = {
+    pending:   ['rgba(232,180,0,0.15)',  '#e8b400',              'Pending'  ],
+    approved:  ['rgba(26,158,90,0.15)',  '#1a9e5a',              'Approved' ],
+    rejected:  ['rgba(226,75,74,0.12)', '#f09595',              'Rejected' ],
+    suspended: ['rgba(255,255,255,0.08)','rgba(255,255,255,0.5)','Suspended'],
+    searching: ['rgba(232,180,0,0.15)',  '#e8b400',              'Searching'],
+    active:    ['rgba(26,158,90,0.15)',  '#1a9e5a',              'Active'   ],
+    completed: ['rgba(255,255,255,0.08)','rgba(255,255,255,0.5)','Completed'],
+    cancelled: ['rgba(226,75,74,0.12)', '#f09595',              'Cancelled'],
+  };
+  const m = map[status] || map.pending;
+  return `<span class="badge-pill" style="background:${m[0]};color:${m[1]}">${m[2]}</span>`;
+}
+
+function loadOverview() {
+  db.collection('drivers').onSnapshot(snap => {
+    document.getElementById('stat-pending').textContent = snap.docs.filter(d => d.data().status==='pending').length;
+    document.getElementById('stat-drivers').textContent = snap.docs.filter(d => d.data().status==='approved').length;
+  });
+  db.collection('bookings').onSnapshot(snap => {
+    const rides   = snap.docs.map(d => d.data());
+    const revenue = rides.reduce((s,r) => s+(r.fare||0), 0);
+    document.getElementById('stat-rides').textContent   = rides.length;
+    document.getElementById('stat-revenue').textContent = 'J$' + revenue.toLocaleString();
+    document.getElementById('stat-active').textContent  = rides.filter(r => r.status==='active').length;
+  });
+  db.collection('customers').onSnapshot(snap => {
+    document.getElementById('stat-customers').textContent = snap.size;
+  });
+}
+
+function filterDrivers(status, btn) {
+  driversFilter = status;
+  document.querySelectorAll('#tab-drivers .filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  loadDrivers();
+}
+
+function loadDrivers() {
+  if (unsubDrivers) unsubDrivers();
+  let q = driversFilter === 'all'
+    ? db.collection('drivers').orderBy('createdAt','desc')
+    : db.collection('drivers').where('status','==',driversFilter).orderBy('createdAt','desc');
+  unsubDrivers = q.onSnapshot(snap => {
+    const el = document.getElementById('drivers-list');
+    if (snap.empty) { el.innerHTML = '<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.4)">No ' + driversFilter + ' drivers</div>'; return; }
+    el.innerHTML = snap.docs.map(d => {
+      const dr = d.data();
+      const id = d.id;
+      const docStatus = type => dr.docs && dr.docs[type] && dr.docs[type] !== 'pending_upload'
+        ? `<span class="doc-pill" style="background:rgba(26,158,90,0.15);color:#9fe1cb">✓ ${type}</span>`
+        : `<span class="doc-pill" style="background:rgba(226,75,74,0.12);color:#f09595">⚠ ${type}</span>`;
+      const actions = dr.status === 'pending'
+        ? `<button class="btn-approve" onclick="approveDriver('${id}')">✓ Approve</button><button class="btn-reject" onclick="rejectDriver('${id}')">✗ Reject</button>`
+        : dr.status === 'approved'
+        ? `<button class="btn-suspend" onclick="suspendDriver('${id}')">Suspend driver</button>`
+        : `<button class="btn-approve" onclick="approveDriver('${id}')">Re-activate</button>`;
+      return `<div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:44px;height:44px;border-radius:50%;background:rgba(232,180,0,0.15);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">👤</div>
+            <div>
+              <div style="font-size:15px;font-weight:500">${dr.name||'--'}</div>
+              <div style="font-size:12px;color:rgba(255,255,255,0.45)">${dr.email||'--'} · ${dr.phone||'--'}</div>
+            </div>
+          </div>
+          ${statusBadge(dr.status)}
+        </div>
+        <div class="driver-grid">
+          <div class="driver-cell"><div class="driver-cell-label">TRN</div><div class="driver-cell-val">${dr.trn||'--'}</div></div>
+          <div class="driver-cell"><div class="driver-cell-label">Date of birth</div><div class="driver-cell-val">${dr.dob||'--'}</div></div>
+          <div class="driver-cell"><div class="driver-cell-label">Vehicle</div><div class="driver-cell-val">${(dr.vehicleMake||'')+' '+(dr.vehicleModel||'')}</div></div>
+          <div class="driver-cell"><div class="driver-cell-label">Plate</div><div class="driver-cell-val">${dr.licensePlate||'--'}</div></div>
+          <div class="driver-cell"><div class="driver-cell-label">Status</div><div class="driver-cell-val" style="text-transform:capitalize">${dr.status||'--'}</div></div>
+          <div class="driver-cell"><div class="driver-cell-label">Trips</div><div class="driver-cell-val">${dr.totalTrips||0}</div></div>
+        </div>
+        <div style="margin-bottom:12px">${docStatus('license')}${docStatus('fitness')}${docStatus('registration')}</div>
+        <div>${actions}</div>
+      </div>`;
+    }).join('');
+  });
+}
+
+function approveDriver(id) {
+  db.collection('drivers').doc(id).update({ status:'approved', approvedAt:firebase.firestore.FieldValue.serverTimestamp() });
+}
+function rejectDriver(id) {
+  const reason = prompt('Rejection reason (optional):') || '';
+  db.collection('drivers').doc(id).update({ status:'rejected', rejectionReason:reason, rejectedAt:firebase.firestore.FieldValue.serverTimestamp() });
+}
+function suspendDriver(id) {
+  if (confirm('Suspend this driver?')) db.collection('drivers').doc(id).update({ status:'suspended' });
+}
+
+function filterRides(status, btn) {
+  ridesFilter = status;
+  document.querySelectorAll('#tab-rides .filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  loadRides();
+}
+
+function loadRides() {
+  if (unsubRides) unsubRides();
+  let q = ridesFilter === 'all'
+    ? db.collection('bookings').orderBy('createdAt','desc')
+    : db.collection('bookings').where('status','==',ridesFilter).orderBy('createdAt','desc');
+  unsubRides = q.onSnapshot(snap => {
+    const rides   = snap.docs.map(d => d.data());
+    const revenue = rides.reduce((s,r) => s+(r.fare||0), 0);
+    document.getElementById('rides-total').textContent   = rides.length;
+    document.getElementById('rides-revenue').textContent = 'J$' + revenue.toLocaleString();
+    document.getElementById('rides-active').textContent  = rides.filter(r => r.status==='active').length;
+    const el = document.getElementById('rides-list');
+    if (snap.empty) { el.innerHTML = '<div style="text-align:center;padding:40px;color:rgba(255,255,255,0.4)">No rides found</div>'; return; }
+    el.innerHTML = snap.docs.map(d => {
+      const r = d.data();
+      return `<div class="table-row">
+        <span style="color:#fff">${r.customerName||'--'}</span>
+        <span style="color:rgba(255,255,255,0.55);font-size:12px">${(r.pickup?.address||'--').split(',')[0]} → ${(r.dropoff?.address||'--').split(',')[0]}</span>
+        <span style="color:rgba(255,255,255,0.55);font-size:12px">${r.driverName||'Unassigned'}</span>
+        <span style="color:#1a9e5a;font-weight:500">J$${(r.fare||0).toLocaleString()}</span>
+        <span>${statusBadge(r.status)}</span>
+      </div>`;
+    }).join('');
+  });
+}
+</script>
+</body>
+</html>
