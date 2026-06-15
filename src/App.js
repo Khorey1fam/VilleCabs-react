@@ -475,7 +475,22 @@ function DriverSignup({ go }) {
             <div style={{ fontSize:12, color:docs[k]?GREEN:'rgba(255,255,255,0.4)' }}>{docs[k]?`${lbl} uploaded ✓`:`Tap to upload ${lbl}`}</div>
           </div>
         ))}
-        <button style={{ ...s.btnY, marginTop:8, opacity:loading?0.7:1 }} onClick={handleSubmit} disabled={loading}>{loading?'Submitting...':'Submit Application'}</button>
+      {(!docs.license||!docs.fitness||!docs.registration) && (
+  <div style={{ background:'rgba(226,75,74,0.1)', border:'0.5px solid rgba(226,75,74,0.3)', borderRadius:8, padding:'8px 12px', marginBottom:8, fontSize:12, color:'#f09595' }}>
+    ⚠️ Please upload all 3 documents to continue
+  </div>
+)}
+{Object.values(form).some(v => !v) && (
+  <div style={{ background:'rgba(226,75,74,0.1)', border:'0.5px solid rgba(226,75,74,0.3)', borderRadius:8, padding:'8px 12px', marginBottom:8, fontSize:12, color:'#f09595' }}>
+    ⚠️ Please fill in all fields above to continue
+  </div>
+)}
+<button
+  style={{ ...s.btnY, marginTop:8, opacity:(loading||Object.values(form).some(v=>!v)||!docs.license||!docs.fitness||!docs.registration)?0.4:1 }}
+  onClick={handleSubmit}
+  disabled={loading||Object.values(form).some(v=>!v)||!docs.license||!docs.fitness||!docs.registration}>
+  {loading?'Submitting...':'Submit Application'}
+</button>
       </div>
     </div>
   );
