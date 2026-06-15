@@ -1249,10 +1249,12 @@ function BookingConfirm({ go, bookingId }) {
 
 // ── LIVE RIDE ─────────────────────────────────────────────────────────────────
 function LiveRide({ go, bookingId }) {
-  const [booking, setBooking] = useState(null);
-  const [rating,  setRating]  = useState(0);
-  const [rated,   setRated]   = useState(false);
+  const [booking,    setBooking]    = useState(null);
+  const [driverInfo, setDriverInfo] = useState(null);
+  const [rating,     setRating]     = useState(0);
+  const [rated,      setRated]      = useState(false);
 
+  // Watch booking in real time
   useEffect(() => {
     if (!bookingId) return;
     const unsub = onSnapshot(doc(db,'bookings',bookingId), snap => {
@@ -1260,6 +1262,14 @@ function LiveRide({ go, bookingId }) {
     });
     return () => unsub();
   }, [bookingId]);
+
+  // Load driver profile when driver is assigned
+  useEffect(() => {
+    if (!booking?.driverId) return;
+    getDoc(doc(db,'drivers',booking.driverId)).then(snap => {
+      if (snap.exists()) setDriverInfo(snap.data());
+    });
+  }, [booking?.driverId]);
 
   const submitRating = async () => {
     if (!rating || !bookingId) return;
@@ -1269,9 +1279,9 @@ function LiveRide({ go, bookingId }) {
         const driverRef  = doc(db,'drivers',booking.driverId);
         const driverSnap = await getDoc(driverRef);
         if (driverSnap.exists()) {
-          const d        = driverSnap.data();
-          const prevTotal= (d.ratingTotal||0) + rating;
-          const prevCount= (d.ratingCount||0) + 1;
+          const d = driverSnap.data();
+          const prevTotal = (d.ratingTotal||0) + rating;
+          const prevCount = (d.ratingCount||0) + 1;
           await updateDoc(driverRef, { ratingTotal:prevTotal, ratingCount:prevCount, rating:Math.round((prevTotal/prevCount)*10)/10 });
         }
       }
@@ -1279,12 +1289,9 @@ function LiveRide({ go, bookingId }) {
     } catch(err) { console.error(err); setRated(true); }
   };
 
-  const pickupCoords  = booking?.pickup       ? { lat:booking.pickup.lat,          lng:booking.pickup.lng          } : MANCHESTER_CENTER;
-  const dropoffCoords = booking?.dropoff       ? { lat:booking.dropoff.lat,         lng:booking.dropoff.lng         } : null;
-  const driverCoords  = booking?.driverLocation? { lat:booking.driverLocation.lat,  lng:booking.driverLocation.lng  } : null;
-
-  const markers = [{ position:pickupCoords, title:'Pickup' }];
-  if (dropoffCoords) markers.push({ position:dropoffCoords, title:'Drop-off' });
+  const pickupCoords  = booking?.pickup        ? { lat:booking.pickup.lat,         lng:booking.pickup.lng         } : MANCHESTER_CENTER;
+  const dropoffCoords = booking?.dropoff        ? { lat:booking.dropoff.lat,        lng:booking.dropoff.lng        } : null;
+  const driverCoords  = booking?.driverLocation ? { lat:booking.driverLocation.lat, lng:booking.driverLocation.lng } : null;
 
   // ── Completed screen ──
   if (booking?.status === 'completed') {
@@ -1322,59 +1329,113 @@ function LiveRide({ go, bookingId }) {
   // ── Live tracking screen ──
   return (
     <div style={{ ...s.content, background:'#0f1923' }}>
-      {/* Map showing driver location in real time */}
-      <VilleMap height={260} center={driverCoords||pickupCoords} zoom={15} markers={markers}>
-        {driverCoords && (
-          <Marker position={driverCoords} title="Driver location"
-            icon={{ url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="14" fill="#e8b400" stroke="white" stroke-width="3"/><text x="18" y="23" text-anchor="middle" font-size="16">🚗</text></svg>'), scaledSize:{width:36,height:36} }}/>
-        )}
-      </VilleMap>
 
-      <div style={{ background:'rgba(26,26,46,0.95)', padding:'8px 16px', textAlign:'center', fontSize:13, color:YELLOW, fontWeight:500 }}>
-        {booking?.status==='active'
-          ? driverCoords ? '📍 Driver location updating live' : '🟢 Driver on the way'
-          : '🔍 Finding your driver...'}
+      {/* Map — centers on driver if available, otherwise pickup */}
+      <div style={{ position:'relative' }}>
+        <VilleMap height={240} center={driverCoords||pickupCoords} zoom={15}>
+          {/* Pickup pin */}
+          <Marker position={pickupCoords} title="Pickup"
+            icon={{ url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><circle cx="14" cy="14" r="11" fill="#1a9e5a" stroke="white" stroke-width="2.5"/></svg>'), scaledSize:{width:28,height:28} }}/>
+          {/* Dropoff pin */}
+          {dropoffCoords && (
+            <Marker position={dropoffCoords} title="Drop-off"
+              icon={{ url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><circle cx="14" cy="14" r="11" fill="#e8b400" stroke="white" stroke-width="2.5"/></svg>'), scaledSize:{width:28,height:28} }}/>
+          )}
+          {/* Driver car icon — updates live */}
+          {driverCoords && (
+            <Marker position={driverCoords} title="Your driver"
+              icon={{ url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="#1a1a2e" stroke="#e8b400" stroke-width="3"/><text x="22" y="29" text-anchor="middle" font-size="20">🚗</text></svg>'), scaledSize:{width:44,height:44} }}/>
+          )}
+        </VilleMap>
+
+        {/* Status bar over map */}
+        <div style={{ position:'absolute', bottom:0, left:0, right:0, background:'rgba(26,26,46,0.9)', padding:'7px 14px', textAlign:'center', fontSize:12, color:YELLOW, fontWeight:500 }}>
+          {booking?.status==='active'
+            ? driverCoords ? '📍 Tracking driver live on map' : '🟢 Driver accepted — heading to you'
+            : '🔍 Finding your driver...'}
+        </div>
       </div>
 
-      <div style={{ padding:14 }}>
+      <div style={{ padding:14, overflowY:'auto' }}>
         {booking?.driverId ? (
-          <div style={{ display:'flex', alignItems:'center', gap:10, background:'rgba(255,255,255,0.05)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:12, padding:12, marginBottom:12 }}>
-            <div style={{ width:42, height:42, borderRadius:'50%', background:DARK, display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>👤</div>
-            <div style={{ flex:1 }}>
-              <div style={{ fontSize:14, fontWeight:500, color:WHITE }}>{booking.driverName||'Your driver'}</div>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)' }}>
-                {driverCoords ? '📍 Live location active' : 'On the way to your location'}
+          <>
+            {/* Driver safety card */}
+            <div style={{ background:'rgba(255,255,255,0.05)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:14, padding:14, marginBottom:12 }}>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.5, marginBottom:10, fontWeight:500 }}>
+                🛡️ Driver & Vehicle Info — for your safety
               </div>
-              <div style={{ fontSize:11, color:YELLOW }}>★ 4.8</div>
+              <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
+                <div style={{ width:46, height:46, borderRadius:'50%', background:'rgba(232,180,0,0.15)', border:'1.5px solid rgba(232,180,0,0.3)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, flexShrink:0 }}>👤</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:15, fontWeight:500, color:WHITE }}>{booking.driverName||'--'}</div>
+                  <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', marginTop:2 }}>
+                    {driverInfo?.rating ? `⭐ ${driverInfo.rating.toFixed(1)} · ${driverInfo.ratingCount||0} reviews` : booking?.driverRating ? `⭐ ${booking.driverRating.toFixed(1)}` : '⭐ New driver'}
+                  </div>
+                </div>
+                <div style={{ display:'flex', gap:8 }}>
+                  <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, cursor:'pointer' }}>
+                    <div style={{ width:38, height:38, borderRadius:'50%', background:GREEN, display:'flex', alignItems:'center', justifyContent:'center', fontSize:17 }}>📞</div>
+                    <span style={{ fontSize:9, color:'rgba(255,255,255,0.4)' }}>Call</span>
+                  </div>
+                  <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, cursor:'pointer' }} onClick={() => go('chat')}>
+                    <div style={{ width:38, height:38, borderRadius:'50%', background:'rgba(232,180,0,0.15)', border:'1px solid #e8b400', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17 }}>💬</div>
+                    <span style={{ fontSize:9, color:YELLOW }}>Chat</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Vehicle details */}
+              <div style={{ borderTop:'0.5px solid rgba(255,255,255,0.08)', paddingTop:12 }}>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                  <div style={{ background:'rgba(255,255,255,0.04)', borderRadius:10, padding:'10px 12px' }}>
+                    <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', marginBottom:3 }}>Make & Model</div>
+                    <div style={{ fontSize:13, fontWeight:500, color:WHITE }}>
+                      {driverInfo ? `${driverInfo.vehicleMake||''} ${driverInfo.vehicleModel||''}`.trim() : booking?.vehicleMake ? `${booking.vehicleMake} ${booking.vehicleModel||''}`.trim() : '...'}
+                    </div>
+                  </div>
+                  <div style={{ background:'rgba(255,255,255,0.04)', borderRadius:10, padding:'10px 12px' }}>
+                    <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', marginBottom:3 }}>License Plate</div>
+                    <div style={{ fontSize:15, fontWeight:700, color:YELLOW, letterSpacing:1 }}>
+                      {driverInfo?.licensePlate || booking?.licensePlate || '...'}
+                    </div>
+                  </div>
+                  <div style={{ background:'rgba(255,255,255,0.04)', borderRadius:10, padding:'10px 12px' }}>
+                    <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', marginBottom:3 }}>Vehicle Type</div>
+                    <div style={{ fontSize:13, fontWeight:500, color:WHITE }}>{booking.vehicleType||'--'}</div>
+                  </div>
+                  <div style={{ background:'rgba(255,255,255,0.04)', borderRadius:10, padding:'10px 12px' }}>
+                    <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', marginBottom:3 }}>Status</div>
+                    <div style={{ fontSize:13, fontWeight:500, color:GREEN }}>
+                      {driverCoords ? '📍 Live' : '🟢 Active'}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div style={{ display:'flex', gap:8 }}>
-              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, cursor:'pointer' }}>
-                <div style={{ width:40, height:40, borderRadius:'50%', background:GREEN, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>📞</div>
-                <span style={{ fontSize:9, color:'rgba(255,255,255,0.45)' }}>Call</span>
+
+            {/* Fare & status */}
+            <div style={{ display:'flex', gap:10, marginBottom:12 }}>
+              <div style={{ flex:1, background:'rgba(255,255,255,0.05)', borderRadius:10, padding:10, textAlign:'center' }}>
+                <div style={{ fontSize:10, color:'rgba(255,255,255,0.45)' }}>Status</div>
+                <div style={{ fontSize:13, fontWeight:500, color:WHITE, textTransform:'capitalize' }}>{booking?.status||'searching'}</div>
               </div>
-              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, cursor:'pointer' }} onClick={() => go('chat')}>
-                <div style={{ width:40, height:40, borderRadius:'50%', background:'rgba(232,180,0,0.2)', border:'1.5px solid #e8b400', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>💬</div>
-                <span style={{ fontSize:9, color:YELLOW }}>Chat</span>
+              <div style={{ flex:1, background:'rgba(255,255,255,0.05)', borderRadius:10, padding:10, textAlign:'center' }}>
+                <div style={{ fontSize:10, color:'rgba(255,255,255,0.45)' }}>Fare</div>
+                <div style={{ fontSize:13, fontWeight:500, color:GREEN }}>J${booking?.fare?.toLocaleString()||'--'}</div>
+              </div>
+              <div style={{ flex:1, background:'rgba(255,255,255,0.05)', borderRadius:10, padding:10, textAlign:'center' }}>
+                <div style={{ fontSize:10, color:'rgba(255,255,255,0.45)' }}>Payment</div>
+                <div style={{ fontSize:11, fontWeight:500, color:YELLOW, textTransform:'capitalize' }}>{booking?.paymentMethod||'cash'}</div>
               </div>
             </div>
-          </div>
+          </>
         ) : (
-          <div style={{ background:'rgba(232,180,0,0.08)', border:'1px solid rgba(232,180,0,0.3)', borderRadius:12, padding:14, marginBottom:12, textAlign:'center' }}>
-            <div style={{ fontSize:28, marginBottom:6 }}>🔍</div>
-            <div style={{ fontSize:14, fontWeight:500, color:YELLOW }}>Finding your driver...</div>
-            <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', marginTop:4 }}>Drivers in Manchester are being notified</div>
+          <div style={{ background:'rgba(232,180,0,0.08)', border:'1px solid rgba(232,180,0,0.3)', borderRadius:12, padding:20, marginBottom:12, textAlign:'center' }}>
+            <div style={{ fontSize:32, marginBottom:8 }}>🔍</div>
+            <div style={{ fontSize:15, fontWeight:500, color:YELLOW, marginBottom:4 }}>Finding your driver...</div>
+            <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)' }}>Drivers in Manchester are being notified</div>
           </div>
         )}
-        <div style={{ display:'flex', gap:10, marginBottom:14 }}>
-          <div style={{ flex:1, background:'rgba(255,255,255,0.05)', borderRadius:10, padding:10, textAlign:'center' }}>
-            <div style={{ fontSize:10, color:'rgba(255,255,255,0.45)' }}>Status</div>
-            <div style={{ fontSize:14, fontWeight:500, color:WHITE, textTransform:'capitalize' }}>{booking?.status||'searching'}</div>
-          </div>
-          <div style={{ flex:1, background:'rgba(255,255,255,0.05)', borderRadius:10, padding:10, textAlign:'center' }}>
-            <div style={{ fontSize:10, color:'rgba(255,255,255,0.45)' }}>Fare</div>
-            <div style={{ fontSize:14, fontWeight:500, color:GREEN }}>J${booking?.fare?.toLocaleString()||'--'}</div>
-          </div>
-        </div>
         <button style={s.btnO} onClick={() => go('customer-dash')}>Back to Dashboard</button>
       </div>
     </div>
@@ -1449,7 +1510,19 @@ function DriverDash({ go, user, setUser, setBookingId }) {
 
   const acceptRide = async (rideId) => {
     try {
-      await updateDoc(doc(db,'bookings',rideId), { driverId:user.uid, driverName:user.name, status:'active', acceptedAt:serverTimestamp() });
+      // Fetch driver vehicle info to save on booking for customer safety
+      const dSnap = await getDoc(doc(db,'drivers',user.uid));
+      const dData = dSnap.exists() ? dSnap.data() : {};
+      await updateDoc(doc(db,'bookings',rideId), {
+        driverId:     user.uid,
+        driverName:   user.name,
+        vehicleMake:  dData.vehicleMake  || '',
+        vehicleModel: dData.vehicleModel || '',
+        licensePlate: dData.licensePlate || '',
+        driverRating: dData.rating       || null,
+        status:       'active',
+        acceptedAt:   serverTimestamp(),
+      });
       setBookingId(rideId);
       go('driver-active');
     } catch(err) { console.error(err); }
