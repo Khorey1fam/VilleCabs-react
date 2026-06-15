@@ -1082,7 +1082,6 @@ function BookingConfirm({ go, bookingId }) {
   const fmtCard   = v => v.replace(/\D/g,'').slice(0,16).replace(/(\d{4})/g,'$1 ').trim();
   const jmdToUsd  = (jmd) => ((jmd || 0) / 157).toFixed(2); // 157 JMD = 1 USD approx
   const fmtExpiry = v => { const d=v.replace(/\D/g,'').slice(0,4); return d.length>2?d.slice(0,2)+'/'+d.slice(2):d; };
-  const jmdToUsd = (jmd) => ((jmd || 0) / 157).toFixed(2);
 
   const handleConfirm = async () => {
     if (payment === 'cash') {
