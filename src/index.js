@@ -10,7 +10,7 @@ root.render(
   <BrowserRouter>
     <Routes>
       <Route path="/admin" element={<AdminPanel/>}/>
-      <Route path="/*" element={<App/>}/>
+      <Route path="/*"     element={<App/>}/>
     </Routes>
   </BrowserRouter>
 );
