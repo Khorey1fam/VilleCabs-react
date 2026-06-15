@@ -874,8 +874,14 @@ function LiveRide({ go, bookingId }) {
               <div style={{ fontSize:11, color:YELLOW }}>★ 4.8</div>
             </div>
             <div style={{ display:'flex', gap:8 }}>
-              <div style={{ width:36, height:36, borderRadius:'50%', background:GREEN, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontSize:16 }}>📞</div>
-              <div onClick={() => go('chat')} style={{ width:36, height:36, borderRadius:'50%', background:'rgba(232,180,0,0.15)', border:'1px solid rgba(232,180,0,0.4)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontSize:16 }}>💬</div>
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, cursor:'pointer' }}>
+                <div style={{ width:40, height:40, borderRadius:'50%', background:GREEN, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>📞</div>
+                <span style={{ fontSize:9, color:'rgba(255,255,255,0.45)' }}>Call</span>
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, cursor:'pointer' }} onClick={() => go('chat')}>
+                <div style={{ width:40, height:40, borderRadius:'50%', background:'rgba(232,180,0,0.2)', border:'1.5px solid #e8b400', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>💬</div>
+                <span style={{ fontSize:9, color:'#e8b400' }}>Chat</span>
+              </div>
             </div>
           </div>
         ) : (
@@ -902,7 +908,7 @@ function LiveRide({ go, bookingId }) {
 }
 
 // ── DRIVER DASHBOARD ──────────────────────────────────────────────────────────
-function DriverDash({ go, user, setUser }) {
+function DriverDash({ go, user, setUser, setBookingId }) {
   const [rides,       setRides]       = useState([]);
   const [driverTab,   setDriverTab]   = useState('rides');
   const [notifStatus, setNotifStatus] = useState("idle");
@@ -970,6 +976,7 @@ function DriverDash({ go, user, setUser }) {
   const acceptRide = async (rideId) => {
     try {
       await updateDoc(doc(db,'bookings',rideId), { driverId:user.uid, driverName:user.name, status:'active', acceptedAt:serverTimestamp() });
+      setBookingId(rideId);
       go('driver-active');
     } catch(err) { console.error(err); }
   };
@@ -1119,7 +1126,7 @@ function DriverDash({ go, user, setUser }) {
 }
 
 // ── DRIVER ACTIVE ─────────────────────────────────────────────────────────────
-function DriverActive({ go, user }) {
+function DriverActive({ go, user, bookingId }) {
   const [booking, setBooking] = useState(null);
 
   useEffect(() => {
@@ -1162,8 +1169,14 @@ function DriverActive({ go, user }) {
                   <div style={{ fontSize:11, color:'rgba(255,255,255,0.45)' }}>Verified rider</div>
                 </div>
                 <div style={{ display:'flex', gap:8 }}>
-                <div style={{ width:32, height:32, borderRadius:'50%', background:GREEN, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontSize:15 }}>📞</div>
-                <div onClick={() => go('chat')} style={{ width:32, height:32, borderRadius:'50%', background:'rgba(232,180,0,0.15)', border:'1px solid rgba(232,180,0,0.4)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontSize:15 }}>💬</div>
+                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, cursor:'pointer' }}>
+                  <div style={{ width:40, height:40, borderRadius:'50%', background:GREEN, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>📞</div>
+                  <span style={{ fontSize:9, color:'rgba(255,255,255,0.45)' }}>Call</span>
+                </div>
+                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, cursor:'pointer' }} onClick={() => go('chat')}>
+                  <div style={{ width:40, height:40, borderRadius:'50%', background:'rgba(232,180,0,0.2)', border:'1.5px solid #e8b400', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>💬</div>
+                  <span style={{ fontSize:9, color:'#e8b400' }}>Chat</span>
+                </div>
               </div>
               </div>
             </div>
@@ -1368,7 +1381,7 @@ function ChatScreen({ go, user, bookingId }) {
 
   // Load booking info
   useEffect(() => {
-    if (!bookingId) return;
+    if (!bookingId) { console.warn('ChatScreen: no bookingId'); return; }
     const unsub = onSnapshot(doc(db,'bookings',bookingId), snap => {
       if (snap.exists()) setBooking({ id:snap.id, ...snap.data() });
     });
@@ -1379,11 +1392,13 @@ function ChatScreen({ go, user, bookingId }) {
   useEffect(() => {
     if (!bookingId) return;
     const q = query(
-      collection(db,'bookings',bookingId,'messages'),
-      orderBy('createdAt','asc')
+      collection(db,'bookings',bookingId,'messages')
     );
     const unsub = onSnapshot(q, snap => {
-      setMessages(snap.docs.map(d => ({ id:d.id, ...d.data() })));
+      const msgs = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+      // Sort client-side to avoid needing a Firestore composite index
+      msgs.sort((a,b) => (a.createdAt?.toMillis?.()??0) - (b.createdAt?.toMillis?.()??0));
+      setMessages(msgs);
     });
     return () => unsub();
   }, [bookingId]);
