@@ -1159,7 +1159,11 @@ function BookingConfirm({ go, bookingId }) {
 
   const handleConfirm = async () => {
     if (payment === 'cash') {
-      await updateDoc(doc(db,'bookings',bookingId), { paymentMethod:'cash', paymentStatus:'pending_cash' });
+      try {
+        if (bookingId) {
+          await updateDoc(doc(db,'bookings',bookingId), { paymentMethod:'cash', paymentStatus:'pending_cash' });
+        }
+      } catch(err) { console.error('Update booking error:', err); }
       go('live-ride');
     } else {
       setStep('card-form');
@@ -1727,7 +1731,6 @@ function LiveRide({ go, bookingId, user }) {
           </div>
         )}
         <SOSButton booking={booking} user={user}/>
-        <SOSButton booking={booking} user={user}/>
         <button style={s.btnO} onClick={() => go('customer-dash')}>Back to Dashboard</button>
       </div>
     </div>
@@ -2089,7 +2092,6 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
               <div style={{ fontSize:13, color:'#fff', flex:1 }}>{booking.dropoff?.address}</div>
               <div style={{ fontSize:14, fontWeight:500, color:'#1a9e5a' }}>J${booking.fare?.toLocaleString()}</div>
             </div>
-            <SOSButton booking={booking} user={user}/>
             <SOSButton booking={booking} user={user}/>
             <button style={s.btnG} onClick={completeRide}>Complete Ride ✓</button>
           </>
