@@ -873,7 +873,10 @@ function LiveRide({ go, bookingId }) {
               <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)' }}>On the way to your location</div>
               <div style={{ fontSize:11, color:YELLOW }}>★ 4.8</div>
             </div>
-            <div style={{ width:36, height:36, borderRadius:'50%', background:GREEN, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontSize:16 }}>📞</div>
+            <div style={{ display:'flex', gap:8 }}>
+              <div style={{ width:36, height:36, borderRadius:'50%', background:GREEN, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontSize:16 }}>📞</div>
+              <div onClick={() => go('chat')} style={{ width:36, height:36, borderRadius:'50%', background:'rgba(232,180,0,0.15)', border:'1px solid rgba(232,180,0,0.4)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontSize:16 }}>💬</div>
+            </div>
           </div>
         ) : (
           <div style={{ background:'rgba(232,180,0,0.08)', border:'1px solid rgba(232,180,0,0.3)', borderRadius:12, padding:14, marginBottom:12, textAlign:'center' }}>
@@ -1158,7 +1161,10 @@ function DriverActive({ go, user }) {
                   <div style={{ fontSize:13, fontWeight:500, color:WHITE }}>{booking.customerName}</div>
                   <div style={{ fontSize:11, color:'rgba(255,255,255,0.45)' }}>Verified rider</div>
                 </div>
+                <div style={{ display:'flex', gap:8 }}>
                 <div style={{ width:32, height:32, borderRadius:'50%', background:GREEN, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontSize:15 }}>📞</div>
+                <div onClick={() => go('chat')} style={{ width:32, height:32, borderRadius:'50%', background:'rgba(232,180,0,0.15)', border:'1px solid rgba(232,180,0,0.4)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontSize:15 }}>💬</div>
+              </div>
               </div>
             </div>
             <div style={{ display:'flex', gap:8, alignItems:'center', background:'rgba(255,255,255,0.05)', borderRadius:10, padding:12, marginBottom:14 }}>
@@ -1352,6 +1358,148 @@ function DriverSettings({ go, user, setUser }) {
   );
 }
 
+// ── CHAT SCREEN ──────────────────────────────────────────────────────────────
+function ChatScreen({ go, user, bookingId }) {
+  const [messages,  setMessages]  = useState([]);
+  const [text,      setText]      = useState('');
+  const [booking,   setBooking]   = useState(null);
+  const [sending,   setSending]   = useState(false);
+  const bottomRef = useRef(null);
+
+  // Load booking info
+  useEffect(() => {
+    if (!bookingId) return;
+    const unsub = onSnapshot(doc(db,'bookings',bookingId), snap => {
+      if (snap.exists()) setBooking({ id:snap.id, ...snap.data() });
+    });
+    return () => unsub();
+  }, [bookingId]);
+
+  // Load messages in real time
+  useEffect(() => {
+    if (!bookingId) return;
+    const q = query(
+      collection(db,'bookings',bookingId,'messages'),
+      orderBy('createdAt','asc')
+    );
+    const unsub = onSnapshot(q, snap => {
+      setMessages(snap.docs.map(d => ({ id:d.id, ...d.data() })));
+    });
+    return () => unsub();
+  }, [bookingId]);
+
+  // Auto scroll to bottom when new message arrives
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior:'smooth' });
+  }, [messages]);
+
+  const sendMessage = async () => {
+    const trimmed = text.trim();
+    if (!trimmed || !bookingId || !user) return;
+    setSending(true);
+    setText('');
+    try {
+      await addDoc(collection(db,'bookings',bookingId,'messages'), {
+        text:      trimmed,
+        senderId:  user.uid,
+        senderName:user.name,
+        senderRole:user.role,
+        createdAt: serverTimestamp(),
+        read:      false,
+      });
+    } catch(err) { console.error(err); setText(trimmed); }
+    setSending(false);
+  };
+
+  const isMe = (msg) => msg.senderId === user?.uid;
+
+  const formatTime = (ts) => {
+    if (!ts?.toDate) return '';
+    const d = ts.toDate();
+    return d.toLocaleTimeString('en-JM', { hour:'2-digit', minute:'2-digit' });
+  };
+
+  const otherName = user?.role === 'customer'
+    ? (booking?.driverName || 'Driver')
+    : (booking?.customerName || 'Customer');
+
+  const goBack = () => user?.role === 'driver' ? go('driver-active') : go('live-ride');
+
+  return (
+    <div style={{ ...s.content, background:'#0f1923', display:'flex', flexDirection:'column', height:'100vh' }}>
+      {/* Header */}
+      <div style={{ background:DARK, padding:'12px 16px', display:'flex', alignItems:'center', gap:12, flexShrink:0, borderBottom:'0.5px solid rgba(255,255,255,0.1)' }}>
+        <button style={s.backBtn} onClick={goBack}>←</button>
+        <div style={{ width:38, height:38, borderRadius:'50%', background:'rgba(232,180,0,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>
+          {user?.role === 'customer' ? '🚗' : '👤'}
+        </div>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:14, fontWeight:500, color:WHITE }}>{otherName}</div>
+          <div style={{ fontSize:11, color:'rgba(255,255,255,0.45)' }}>
+            {booking?.status === 'active' ? '🟢 Ride in progress' : '✅ Ride completed'}
+          </div>
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div style={{ flex:1, overflowY:'auto', padding:'14px 14px 8px' }}>
+        {messages.length === 0 && (
+          <div style={{ textAlign:'center', padding:'40px 20px', color:'rgba(255,255,255,0.3)' }}>
+            <div style={{ fontSize:32, marginBottom:10 }}>💬</div>
+            <div style={{ fontSize:14 }}>No messages yet</div>
+            <div style={{ fontSize:12, marginTop:6 }}>Send a message to {otherName}</div>
+          </div>
+        )}
+        {messages.map((msg, i) => {
+          const mine = isMe(msg);
+          return (
+            <div key={msg.id||i} style={{ display:'flex', justifyContent:mine?'flex-end':'flex-start', marginBottom:10 }}>
+              {!mine && (
+                <div style={{ width:28, height:28, borderRadius:'50%', background:'rgba(232,180,0,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, marginRight:8, flexShrink:0, alignSelf:'flex-end' }}>
+                  {user?.role === 'customer' ? '🚗' : '👤'}
+                </div>
+              )}
+              <div style={{ maxWidth:'72%' }}>
+                <div style={{
+                  background: mine ? '#e8b400' : 'rgba(255,255,255,0.1)',
+                  color:      mine ? '#1a1a2e' : WHITE,
+                  padding:    '10px 14px',
+                  borderRadius: mine ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                  fontSize:   14,
+                  lineHeight: 1.4,
+                }}>
+                  {msg.text}
+                </div>
+                <div style={{ fontSize:10, color:'rgba(255,255,255,0.3)', marginTop:4, textAlign:mine?'right':'left' }}>
+                  {formatTime(msg.createdAt)}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        <div ref={bottomRef}/>
+      </div>
+
+      {/* Input bar */}
+      <div style={{ background:DARK, padding:'10px 14px', display:'flex', gap:10, alignItems:'center', flexShrink:0, borderTop:'0.5px solid rgba(255,255,255,0.1)' }}>
+        <input
+          value={text}
+          onChange={e => setText(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+          placeholder="Type a message..."
+          style={{ flex:1, padding:'11px 14px', background:'rgba(255,255,255,0.08)', border:'0.5px solid rgba(255,255,255,0.15)', borderRadius:24, color:WHITE, fontSize:14, outline:'none' }}
+        />
+        <button
+          onClick={sendMessage}
+          disabled={!text.trim() || sending}
+          style={{ width:42, height:42, borderRadius:'50%', background:text.trim()?'#e8b400':'rgba(255,255,255,0.1)', border:'none', cursor:text.trim()?'pointer':'default', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0, transition:'background 0.2s' }}>
+          {sending ? '⏳' : '➤'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── LOADING ───────────────────────────────────────────────────────────────────
 function LoadingScreen() {
   return (
@@ -1417,6 +1565,7 @@ export default function App() {
     'driver-active':  <DriverActive {...props}/>,
     'driver-profile': <DriverProfile {...props}/>,
     'driver-settings':<DriverSettings {...props}/>,
+    'chat':           <ChatScreen {...props}/>,
   };
 
   return (
