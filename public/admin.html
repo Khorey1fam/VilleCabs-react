@@ -127,6 +127,12 @@ body{font-family:'Segoe UI',sans-serif;background:#0f1015;color:#fff;min-height:
         </div>
       </div>
 
+      <!-- SOS ALERTS TAB -->
+      <div id="tab-sos" class="tab">
+        <div style="font-size:20px;font-weight:500;margin-bottom:20px">🆘 SOS Alerts</div>
+        <div id="sos-list"><div class="empty">Loading...</div></div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -196,6 +202,7 @@ auth.onAuthStateChanged(function(user) {
     loadOverview();
     loadDrivers();
     loadRides();
+    loadSOS();
   } else {
     document.getElementById('login-wrap').classList.remove('hide');
     document.getElementById('app').classList.add('hide');
@@ -307,6 +314,43 @@ function loadDrivers() {
         +'</div>';
     }).join('');
   });
+}
+
+function loadSOS() {
+  db.collection('sos_alerts').orderBy('createdAt', 'desc').onSnapshot(function(snap) {
+    var el = document.getElementById('sos-list');
+    if (snap.empty) { el.innerHTML = '<div class="empty">No SOS alerts — all clear ✅</div>'; return; }
+    el.innerHTML = snap.docs.map(function(d) {
+      var s = d.data();
+      var time = s.createdAt ? new Date(s.createdAt.seconds * 1000).toLocaleString() : '--';
+      return '<div class="card" style="border:1.5px solid rgba(226,75,74,0.5);background:rgba(226,75,74,0.08)">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'
+        + '<div style="display:flex;align-items:center;gap:10px">'
+        + '<div style="font-size:28px">🆘</div>'
+        + '<div><div style="font-size:15px;font-weight:500;color:#f09595">SOS ALERT</div>'
+        + '<div style="font-size:12px;color:rgba(255,255,255,0.45)">' + time + '</div></div></div>'
+        + '<span class="pill" style="background:rgba(226,75,74,0.2);color:#f09595">' + (s.status||'ACTIVE') + '</span></div>'
+        + '<div class="dgrid">'
+        + '<div class="dcell"><div class="dcell-l">Sent by</div><div class="dcell-v" style="color:#f09595">' + (s.userName||'--') + ' (' + (s.userRole||'--') + ')</div></div>'
+        + '<div class="dcell"><div class="dcell-l">Driver</div><div class="dcell-v">' + (s.driverName||'--') + '</div></div>'
+        + '<div class="dcell"><div class="dcell-l">Customer</div><div class="dcell-v">' + (s.customerName||'--') + '</div></div>'
+        + '<div class="dcell"><div class="dcell-l">Vehicle</div><div class="dcell-v">' + (s.vehicleMake||'') + ' ' + (s.vehicleModel||'') + '</div></div>'
+        + '<div class="dcell"><div class="dcell-l">License Plate</div><div class="dcell-v" style="color:#e8b400">' + (s.licensePlate||'--') + '</div></div>'
+        + '<div class="dcell"><div class="dcell-l">Booking ID</div><div class="dcell-v">' + ((s.bookingId||'--').slice(-6).toUpperCase()) + '</div></div>'
+        + '</div>'
+        + '<div style="margin-bottom:10px"><div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:4px">PICKUP</div>'
+        + '<div style="font-size:13px;color:#fff">' + (s.pickup||'--') + '</div></div>'
+        + '<div style="margin-bottom:12px"><div style="font-size:11px;color:rgba(255,255,255,0.4);margin-bottom:4px">DROPOFF</div>'
+        + '<div style="font-size:13px;color:#fff">' + (s.dropoff||'--') + '</div></div>'
+        + (s.mapsLink ? '<a href="' + s.mapsLink + '" target="_blank" style="display:inline-block;background:rgba(26,158,90,0.2);border:0.5px solid rgba(26,158,90,0.4);color:#9fe1cb;padding:8px 14px;border-radius:8px;font-size:13px;text-decoration:none;margin-right:8px">📍 View on Google Maps</a>' : '')
+        + '<button onclick="resolveSOS('' + d.id + '')" style="background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.5);border:0.5px solid rgba(255,255,255,0.15);border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer">✓ Mark Resolved</button>'
+        + '</div>';
+    }).join('');
+  });
+}
+
+function resolveSOS(id) {
+  db.collection('sos_alerts').doc(id).update({ status: 'RESOLVED', resolvedAt: firebase.firestore.FieldValue.serverTimestamp() });
 }
 
 function loadRides() {

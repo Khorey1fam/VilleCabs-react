@@ -1398,6 +1398,143 @@ function BookingConfirm({ go, bookingId }) {
   );
 }
 
+// ── SOS BUTTON ───────────────────────────────────────────────────────────────
+function SOSButton({ booking, user }) {
+  const [pressed,    setPressed]    = useState(false);
+  const [countdown,  setCountdown]  = useState(5);
+  const [sent,       setSent]       = useState(false);
+  const [holding,    setHolding]    = useState(false);
+  const timerRef    = useRef(null);
+  const countRef    = useRef(null);
+
+  const startHold = () => {
+    if (sent) return;
+    setHolding(true);
+    setCountdown(5);
+    setPressed(true);
+    countRef.current = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(countRef.current);
+          sendSOS();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const cancelHold = () => {
+    if (sent) return;
+    setHolding(false);
+    setPressed(false);
+    setCountdown(5);
+    clearInterval(countRef.current);
+  };
+
+  const sendSOS = async () => {
+    setHolding(false);
+    setSent(true);
+    try {
+      // Get current location
+      let lat = booking?.pickup?.lat || 18.0416;
+      let lng = booking?.pickup?.lng || -77.5036;
+      if (navigator.geolocation) {
+        await new Promise(resolve => {
+          navigator.geolocation.getCurrentPosition(
+            pos => { lat = pos.coords.latitude; lng = pos.coords.longitude; resolve(); },
+            () => resolve(),
+            { timeout: 3000 }
+          );
+        });
+      }
+
+      const mapsLink = `https://maps.google.com/?q=${lat},${lng}`;
+      const sosData  = {
+        userId:       user?.uid,
+        userName:     user?.name || 'Unknown',
+        userRole:     user?.role || 'customer',
+        bookingId:    booking?.id,
+        driverName:   booking?.driverName || 'Unknown driver',
+        customerName: booking?.customerName || 'Unknown customer',
+        vehicleMake:  booking?.vehicleMake || '',
+        vehicleModel: booking?.vehicleModel || '',
+        licensePlate: booking?.licensePlate || '',
+        pickup:       booking?.pickup?.address || 'Unknown',
+        dropoff:      booking?.dropoff?.address || 'Unknown',
+        lat, lng, mapsLink,
+        status:       'ACTIVE',
+        createdAt:    serverTimestamp(),
+      };
+
+      // Save SOS to Firestore
+      await addDoc(collection(db,'sos_alerts'), sosData);
+
+      // Update booking with SOS flag
+      if (booking?.id) {
+        await updateDoc(doc(db,'bookings',booking.id), {
+          sosTriggered: true,
+          sosAt:        serverTimestamp(),
+          sosBy:        user?.role,
+        });
+      }
+    } catch(err) { console.error('SOS error:', err); }
+  };
+
+  useEffect(() => () => clearInterval(countRef.current), []);
+
+  if (sent) {
+    return (
+      <div style={{ background:'rgba(226,75,74,0.2)', border:'1.5px solid rgba(226,75,74,0.6)', borderRadius:12, padding:'12px 16px', marginBottom:12, display:'flex', alignItems:'center', gap:10 }}>
+        <div style={{ fontSize:24 }}>🚨</div>
+        <div>
+          <div style={{ fontSize:13, fontWeight:500, color:'#f09595' }}>SOS Alert Sent!</div>
+          <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Emergency services and admin have been notified with your location</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ marginBottom:12 }}>
+      <div
+        onMouseDown={startHold}
+        onMouseUp={cancelHold}
+        onMouseLeave={cancelHold}
+        onTouchStart={startHold}
+        onTouchEnd={cancelHold}
+        style={{
+          background: holding ? 'rgba(226,75,74,0.4)' : 'rgba(226,75,74,0.15)',
+          border: `2px solid ${holding ? '#e24b4a' : 'rgba(226,75,74,0.5)'}`,
+          borderRadius:12,
+          padding:'14px 16px',
+          display:'flex',
+          alignItems:'center',
+          gap:12,
+          cursor:'pointer',
+          userSelect:'none',
+          transition:'all 0.2s',
+        }}
+      >
+        <div style={{ fontSize:28 }}>🆘</div>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:14, fontWeight:700, color:'#f09595' }}>
+            {holding ? `Sending SOS in ${countdown}s...` : 'SOS Emergency'}
+          </div>
+          <div style={{ fontSize:11, color:'rgba(255,255,255,0.45)', marginTop:2 }}>
+            {holding ? 'Release to cancel' : 'Hold for 5 seconds to send emergency alert'}
+          </div>
+        </div>
+        {holding && (
+          <div style={{ width:36, height:36, borderRadius:'50%', border:'3px solid #e24b4a', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, fontWeight:700, color:'#f09595' }}>
+            {countdown}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── LIVE RIDE ─────────────────────────────────────────────────────────────────
 function LiveRide({ go, bookingId }) {
   const [booking,    setBooking]    = useState(null);
@@ -1587,6 +1724,8 @@ function LiveRide({ go, bookingId }) {
             <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)' }}>Drivers in Manchester are being notified</div>
           </div>
         )}
+        <SOSButton booking={booking} user={null}/>
+        <SOSButton booking={booking} user={user}/>
         <button style={s.btnO} onClick={() => go('customer-dash')}>Back to Dashboard</button>
       </div>
     </div>
@@ -1948,6 +2087,8 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
               <div style={{ fontSize:13, color:'#fff', flex:1 }}>{booking.dropoff?.address}</div>
               <div style={{ fontSize:14, fontWeight:500, color:'#1a9e5a' }}>J${booking.fare?.toLocaleString()}</div>
             </div>
+            <SOSButton booking={booking} user={user}/>
+            <SOSButton booking={booking} user={user}/>
             <button style={s.btnG} onClick={completeRide}>Complete Ride ✓</button>
           </>
         ) : (
