@@ -583,8 +583,8 @@ function CustomerDash({ go, user, setUser }) {
             });
           }
         }
-      } else if (completed && prevStatusRef.current === 'active') {
-        // Ride just completed — clear everything
+      } else if (completed && (prevStatusRef.current === 'active' || prevStatusRef.current === 'arrived')) {
+        // Ride just completed — clear ALL notifications regardless of previous state
         prevStatusRef.current = 'completed';
         setActiveRide(null);
         setNotification(null);
@@ -594,9 +594,10 @@ function CustomerDash({ go, user, setUser }) {
             icon: '/villecabs-logo.png',
           });
         }
-      } else if (!active) {
+      } else if (!active && !completed) {
         setActiveRide(null);
-        if (prevStatusRef.current === 'completed') prevStatusRef.current = null;
+        setNotification(null);
+        if (prevStatusRef.current !== null) prevStatusRef.current = null;
       }
     });
     return () => unsub();
