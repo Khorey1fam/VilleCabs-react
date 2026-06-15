@@ -1,8 +1,8 @@
 // VilleCabs v2.1 - hamburger menu + contained map
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider, sendEmailVerification, onAuthStateChanged, signOut } from 'firebase/auth';
-import { getFirestore, doc, setDoc, getDoc, addDoc, collection, onSnapshot, updateDoc, query, where, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, getDoc, addDoc, collection, onSnapshot, updateDoc, query, where, orderBy, serverTimestamp, getDocs } from 'firebase/firestore';
 import { GoogleMap, useJsApiLoader, Marker } from '@react-google-maps/api';
 
 const firebaseConfig = {
@@ -17,6 +17,10 @@ const app            = initializeApp(firebaseConfig);
 const auth           = getAuth(app);
 const db             = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
+let messaging = null;
+try { messaging = getMessaging(app); } catch(e) { console.warn('Messaging not available'); }
+const functions_            = getFunctions(app);
+const updateDriverLocationFn = httpsCallable(functions_, 'updateDriverLocation');
 
 const YELLOW = '#e8b400';
 const DARK   = '#1a1a2e';
