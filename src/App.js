@@ -566,6 +566,21 @@ function CustomerDash({ go, user, setUser }) {
             });
           }
         }
+        // Notify if driver just arrived
+        if (active.driverArrived && prevStatusRef.current !== 'arrived') {
+          prevStatusRef.current = 'arrived';
+          setNotification({
+            type:        'driver_arrived',
+            driverName:  active.driverName || 'Your driver',
+            licensePlate:active.licensePlate || '',
+          });
+          if (Notification.permission === 'granted') {
+            new Notification('📍 Driver has arrived!', {
+              body: `${active.driverName||'Your driver'} is at your pickup location. Please come outside!`,
+              icon: '/villecabs-logo.png',
+            });
+          }
+        }
       } else if (completed && prevStatusRef.current === 'active') {
         // Ride just completed — clear everything
         prevStatusRef.current = 'completed';
@@ -637,8 +652,24 @@ function CustomerDash({ go, user, setUser }) {
                 {notification.licensePlate && <div style={{ fontSize:11, color:YELLOW, marginTop:2 }}>🔑 {notification.vehicleMake} {notification.vehicleModel} · {notification.licensePlate}</div>}
               </div>
               <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-                <button onClick={() => { go('live-ride'); }} style={{ background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:500 }}>Track →</button>
+                <button onClick={() => go('live-ride')} style={{ background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:500 }}>Track →</button>
                 <button onClick={() => setNotification(null)} style={{ background:'rgba(255,255,255,0.08)', color:'rgba(255,255,255,0.5)', border:'none', borderRadius:8, padding:'6px 12px', fontSize:11, cursor:'pointer' }}>Dismiss</button>
+              </div>
+            </div>
+          )}
+
+          {/* Driver arrived notification banner */}
+          {notification?.type === 'driver_arrived' && (
+            <div style={{ background:'rgba(232,180,0,0.15)', border:'1.5px solid rgba(232,180,0,0.6)', margin:'10px 14px 0', borderRadius:12, padding:14, display:'flex', alignItems:'center', gap:10 }}>
+              <div style={{ fontSize:28, flexShrink:0 }}>📍</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:14, fontWeight:500, color:YELLOW }}>Driver has arrived!</div>
+                <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{notification.driverName} is at your pickup location</div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Please come outside 🚶</div>
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                <button onClick={() => go('live-ride')} style={{ background:YELLOW, color:DARK, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:700 }}>View →</button>
+                <button onClick={() => setNotification(null)} style={{ background:'rgba(255,255,255,0.08)', color:'rgba(255,255,255,0.5)', border:'none', borderRadius:8, padding:'6px 12px', fontSize:11, cursor:'pointer' }}>OK</button>
               </div>
             </div>
           )}
@@ -667,11 +698,13 @@ function CustomerDash({ go, user, setUser }) {
                 {notification.licensePlate && <div style={{ fontSize:11, color:YELLOW, marginTop:2 }}>🔑 {notification.vehicleMake} {notification.vehicleModel} · {notification.licensePlate}</div>}
               </div>
               <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-                <button onClick={() => { go('live-ride'); }} style={{ background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:500 }}>Track →</button>
+                <button onClick={() => go('live-ride')} style={{ background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:500 }}>Track →</button>
                 <button onClick={() => setNotification(null)} style={{ background:'rgba(255,255,255,0.08)', color:'rgba(255,255,255,0.5)', border:'none', borderRadius:8, padding:'6px 12px', fontSize:11, cursor:'pointer' }}>Dismiss</button>
               </div>
             </div>
           )}
+
+          {/* Driver arrived notification banner */}
 
           {/* Active ride banner - shows if ride is in progress */}
           {activeRide && !notification && (
@@ -2067,6 +2100,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
 function DriverActive({ go, user, bookingId, setBookingId }) {
   const [booking,       setBooking]       = useState(null);
   const [locationStatus,setLocationStatus]= useState('idle');
+  const [arrived,       setArrived]       = useState(false);
   const [sosSent,       setSosSent]       = useState(false);
   const [sosHolding,    setSosHolding]    = useState(false);
   const [sosCount,      setSosCount]      = useState(5);
@@ -2151,6 +2185,28 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     } catch(err) { console.error('SOS error:', err); }
   };
 
+  const notifyArrived = async () => {
+    if (!booking?.id) return;
+    setArrived(true);
+    try {
+      // Update booking with arrived status
+      await updateDoc(doc(db,'bookings',booking.id), {
+        driverArrived:   true,
+        arrivedAt:       serverTimestamp(),
+      });
+      // Save arrival notification to Firestore for customer to pick up
+      await addDoc(collection(db,'notifications'), {
+        type:        'driver_arrived',
+        customerId:  booking.customerId,
+        bookingId:   booking.id,
+        driverName:  user?.name || 'Your driver',
+        message:     `${user?.name || 'Your driver'} has arrived at your pickup location!`,
+        read:        false,
+        createdAt:   serverTimestamp(),
+      });
+    } catch(err) { console.error('Arrived notification error:', err); }
+  };
+
   const completeRide = async () => {
     if (!booking?.id) return;
     if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
@@ -2184,6 +2240,23 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
               <div style={{ fontSize:13, fontWeight:500, color:YELLOW, marginBottom:8 }}>Pick up passenger</div>
               <div style={{ display:'flex', gap:8, alignItems:'center' }}><div style={{ width:9, height:9, borderRadius:'50%', background:GREEN }}/><div style={{ fontSize:13, color:WHITE }}>{booking.pickup?.address}</div></div>
             </div>
+
+            {/* I Have Arrived button */}
+            {!arrived ? (
+              <button onClick={notifyArrived}
+                style={{ width:'100%', padding:'13px', background:'rgba(26,158,90,0.2)', border:'1.5px solid rgba(26,158,90,0.6)', borderRadius:12, color:GREEN, fontSize:14, fontWeight:600, cursor:'pointer', marginBottom:12, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+                📍 I Have Arrived at Pickup
+              </button>
+            ) : (
+              <div style={{ background:'rgba(26,158,90,0.15)', border:'1.5px solid rgba(26,158,90,0.4)', borderRadius:12, padding:'12px 16px', marginBottom:12, display:'flex', alignItems:'center', gap:10 }}>
+                <div style={{ fontSize:22 }}>✅</div>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:500, color:GREEN }}>Customer notified!</div>
+                  <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Passenger knows you have arrived</div>
+                </div>
+              </div>
+            )}
+
             <div style={{ background:'rgba(15,20,40,0.65)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:12, padding:14, marginBottom:12 }}>
               <div style={{ fontSize:13, fontWeight:500, color:WHITE, marginBottom:8 }}>Passenger</div>
               <div style={{ display:'flex', alignItems:'center', gap:10 }}>
