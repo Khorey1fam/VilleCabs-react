@@ -534,39 +534,52 @@ function CustomerDash({ go, user, setUser }) {
     return () => unsub();
   }, [user]);
 
-  // Watch for active bookings and notify customer when driver accepts
+  // Watch ALL customer bookings to track status changes
   useEffect(() => {
     if (!user?.uid) return;
     const q = query(
       collection(db,'bookings'),
-      where('customerId','==',user.uid),
-      where('status','==','active')
+      where('customerId','==',user.uid)
     );
     const unsub = onSnapshot(q, snap => {
-      if (!snap.empty) {
-        const ride = { id:snap.docs[0].id, ...snap.docs[0].data() };
-        setActiveRide(ride);
-        // Notify if status just changed to active
+      const rides = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+      const active    = rides.find(r => r.status === 'active');
+      const completed = rides.find(r => r.status === 'completed' &&
+        (Date.now()/1000 - (r.completedAt?.seconds||0)) < 300); // completed in last 5 min
+
+      if (active) {
+        setActiveRide(active);
+        // Notify if just became active
         if (prevStatusRef.current !== 'active') {
           prevStatusRef.current = 'active';
           setNotification({
-            type: 'driver_accepted',
-            driverName:   ride.driverName   || 'Your driver',
-            vehicleMake:  ride.vehicleMake  || '',
-            vehicleModel: ride.vehicleModel || '',
-            licensePlate: ride.licensePlate || '',
+            type:         'driver_accepted',
+            driverName:   active.driverName   || 'Your driver',
+            vehicleMake:  active.vehicleMake  || '',
+            vehicleModel: active.vehicleModel || '',
+            licensePlate: active.licensePlate || '',
           });
-          // Browser notification
           if (Notification.permission === 'granted') {
             new Notification('🚗 Driver found!', {
-              body: `${ride.driverName || 'Your driver'} is on the way in a ${ride.vehicleMake || ''} ${ride.vehicleModel || ''} · ${ride.licensePlate || ''}`,
+              body: `${active.driverName||'Your driver'} is on the way · ${active.licensePlate||''}`,
               icon: '/villecabs-logo.png',
             });
           }
         }
-      } else {
+      } else if (completed && prevStatusRef.current === 'active') {
+        // Ride just completed — clear everything
+        prevStatusRef.current = 'completed';
         setActiveRide(null);
-        prevStatusRef.current = null;
+        setNotification(null);
+        if (Notification.permission === 'granted') {
+          new Notification('✅ Ride completed!', {
+            body: `Your ride with ${completed.driverName||'your driver'} is complete. Rate your driver!`,
+            icon: '/villecabs-logo.png',
+          });
+        }
+      } else if (!active) {
+        setActiveRide(null);
+        if (prevStatusRef.current === 'completed') prevStatusRef.current = null;
       }
     });
     return () => unsub();
