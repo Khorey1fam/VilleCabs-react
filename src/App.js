@@ -25,8 +25,7 @@ const app            = initializeApp(firebaseConfig);
 const auth           = getAuth(app);
 const db             = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
-let messaging = null;
-try { messaging = getMessaging(app); } catch(e) {}
+const messaging     = getMessaging(app);
 const functions_     = getFunctions(app);
 const createPaymentIntentFn   = httpsCallable(functions_, 'createPaymentIntent');
 const updateDriverLocationFn  = httpsCallable(functions_, 'updateDriverLocation');
@@ -660,59 +659,18 @@ function CustomerDash({ go, user, setUser }) {
   return (
     <div style={{ ...s.content, background:'transparent', minHeight:'100vh', display:'flex', flexDirection:'column' }}>
 
-{/* Hamburger top bar */}
-      <div style={{ background:'rgba(10,15,35,0.88)', padding:'12px 16px', backdropFilter:'blur(10px)', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'0.5px solid rgba(255,255,255,0.08)' }}>
-        <button onClick={() => setMenuOpen(true)} style={{ background:'none', border:'none', cursor:'pointer', padding:4, display:'flex', flexDirection:'column', gap:5 }}>
-          <div style={{ width:24, height:2.5, background:WHITE, borderRadius:2 }}/>
-          <div style={{ width:18, height:2.5, background:WHITE, borderRadius:2 }}/>
-          <div style={{ width:24, height:2.5, background:WHITE, borderRadius:2 }}/>
-        </button>
-        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-          <img src="/villecabs-logo.png" alt="V" style={{ width:30, height:30, borderRadius:'50%', objectFit:'cover' }}/>
-          <span style={{ color:WHITE, fontSize:15, fontWeight:600 }}>VilleCabs</span>
-        </div>
-        <div style={{ display:'flex', gap:6, alignItems:'center' }}>
-          {activeRide && <div onClick={() => go('live-ride')} style={{ background:GREEN, borderRadius:20, padding:'4px 10px', fontSize:11, color:WHITE, cursor:'pointer' }}>🚕 Live</div>}
-          <span style={{ background:YELLOW, borderRadius:20, padding:'3px 10px', fontSize:11, fontWeight:500, color:DARK }}>{history.length}</span>
-        </div>
-      </div>
-
-      {/* Side drawer */}
-      {menuOpen && (
-        <div style={{ position:'fixed', inset:0, zIndex:100 }}>
-          <div onClick={() => setMenuOpen(false)} style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.6)' }}/>
-          <div style={{ position:'absolute', left:0, top:0, bottom:0, width:270, background:'rgba(10,15,35,0.98)', borderRight:'0.5px solid rgba(255,255,255,0.1)', display:'flex', flexDirection:'column' }}>
-            <div style={{ padding:'20px 16px', borderBottom:'0.5px solid rgba(255,255,255,0.08)' }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
-                <img src="/villecabs-logo.png" alt="V" style={{ width:44, height:44, borderRadius:'50%', objectFit:'cover' }}/>
-                <button onClick={() => setMenuOpen(false)} style={{ background:'rgba(255,255,255,0.08)', border:'none', color:WHITE, width:30, height:30, borderRadius:'50%', cursor:'pointer', fontSize:15 }}>✕</button>
-              </div>
-              <div style={{ fontSize:15, fontWeight:500, color:WHITE }}>{user?.name}</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', marginTop:2 }}>{user?.email}</div>
-            </div>
-            <div style={{ flex:1, padding:'8px 0' }}>
-              {[['🚕','Book a Ride',()=>{setTab('book');setMenuOpen(false);}],['📋','Ride History',()=>{setTab('history');setMenuOpen(false);}],['👤','My Profile',()=>{go('customer-profile');setMenuOpen(false);}],['⚙️','Settings',()=>{go('customer-settings');setMenuOpen(false);}]].map(([icon,label,action],i) => (
-                <div key={i} onClick={action} style={{ padding:'13px 16px', display:'flex', alignItems:'center', gap:12, cursor:'pointer' }}>
-                  <span style={{ fontSize:20 }}>{icon}</span>
-                  <span style={{ fontSize:14, color:WHITE }}>{label}</span>
-                </div>
-              ))}
-              {activeRide && (
-                <div onClick={() => { go('live-ride'); setMenuOpen(false); }} style={{ padding:'13px 16px', display:'flex', alignItems:'center', gap:12, cursor:'pointer', background:'rgba(26,158,90,0.1)' }}>
-                  <span style={{ fontSize:20 }}>📍</span>
-                  <div>
-                    <div style={{ fontSize:14, color:GREEN, fontWeight:500 }}>Track Live Ride</div>
-                    <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>{activeRide.driverName||'Driver assigned'}</div>
-                  </div>
-                </div>
-              )}
-            </div>
-            <div style={{ padding:16, borderTop:'0.5px solid rgba(255,255,255,0.08)' }}>
-              <button onClick={handleLogout} style={{ width:'100%', padding:11, background:'rgba(226,75,74,0.12)', border:'0.5px solid rgba(226,75,74,0.3)', borderRadius:10, color:'#f09595', fontSize:13, cursor:'pointer' }}>🚪 Log Out</button>
-            </div>
+      {/* Header */}
+      <div style={{ background:'rgba(10,15,35,0.85)', padding:'14px 18px', backdropFilter:'blur(10px)', flexShrink:0 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div>
+            <div style={{ color:'rgba(255,255,255,0.6)', fontSize:12 }}>Good day,</div>
+            <div style={{ color:WHITE, fontSize:18, fontWeight:500 }}>{user?.name?.split(' ')[0]||'Rider'} 👋</div>
+          </div>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <span style={{ background:YELLOW, borderRadius:20, padding:'3px 10px', fontSize:11, fontWeight:500, color:DARK }}>{history.length} rides</span>
           </div>
         </div>
-      )}
+      </div>
 
       {/* BOOK TAB */}
       {tab === 'book' && (
@@ -1025,9 +983,7 @@ function CustomerSettings({ go, user, setUser }) {
     setLoadingDeact(false);
   };
 
-const [menuOpen, setMenuOpen] = useState(false);
-  
-const handleLogout = async () => { await signOut(auth); setUser(null); go('splash'); };
+  const handleLogout = async () => { await signOut(auth); setUser(null); go('splash'); };
 
   return (
     <div style={{ ...s.content, background:'transparent' }}>
