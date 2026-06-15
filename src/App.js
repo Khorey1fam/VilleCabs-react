@@ -1060,16 +1060,17 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
 
 // ── BOOKING CONFIRM ──────────────────────────────────────────────────────────
 function BookingConfirm({ go, bookingId }) {
-  const [booking,    setBooking]    = useState(null);
-  const [payment,    setPayment]    = useState('cash');
-  const [step,       setStep]       = useState('select');
-  const [cardName,   setCardName]   = useState('');
-  const [cardNumber, setCardNumber] = useState('');
-  const [cardExpiry, setCardExpiry] = useState('');
-  const [cardCVV,    setCardCVV]    = useState('');
-  const [processing, setProcessing] = useState(false);
-  const [cardError,  setCardError]  = useState('');
-  const [cardPaid,   setCardPaid]   = useState(false);
+  const [booking,   setBooking]   = useState(null);
+  const [payment,   setPayment]   = useState('cash');
+  const [step,      setStep]      = useState('select'); // 'select' | 'card-form'
+  const [processing,setProcessing]= useState(false);
+  const [cardError, setCardError] = useState('');
+  const [cardPaid,  setCardPaid]  = useState(false);
+  const [stripe,    setStripe]    = useState(null);
+  const [elements,  setElements]  = useState(null);
+  const cardElementRef = useRef(null);
+  const stripeKey = process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY;
+  const jmdToUsd  = (jmd) => ((jmd || 0) / 157).toFixed(2);
 
   useEffect(() => {
     if (!bookingId) return;
@@ -1079,9 +1080,35 @@ function BookingConfirm({ go, bookingId }) {
     return () => unsub();
   }, [bookingId]);
 
-  const fmtCard   = v => v.replace(/\D/g,'').slice(0,16).replace(/(\d{4})/g,'$1 ').trim();
-  const jmdToUsd  = (jmd) => ((jmd || 0) / 157).toFixed(2); // 157 JMD = 1 USD approx
-  const fmtExpiry = v => { const d=v.replace(/\D/g,'').slice(0,4); return d.length>2?d.slice(0,2)+'/'+d.slice(2):d; };
+  // Load Stripe Elements when card form is shown
+  useEffect(() => {
+    if (step !== 'card-form' || !stripeKey || !stripeKey.startsWith('pk_')) return;
+    const loadStripeElements = async () => {
+      const { loadStripe } = await import('@stripe/stripe-js');
+      const stripeInstance  = await loadStripe(stripeKey);
+      const elementsInstance= stripeInstance.elements();
+      const cardElement     = elementsInstance.create('card', {
+        style: {
+          base: {
+            color:           '#ffffff',
+            fontSize:        '16px',
+            fontFamily:      'Segoe UI, sans-serif',
+            '::placeholder': { color: 'rgba(255,255,255,0.4)' },
+          },
+          invalid: { color: '#f09595' },
+        },
+      });
+      // Mount after a short delay to ensure the DOM element is ready
+      setTimeout(() => {
+        if (cardElementRef.current) {
+          cardElement.mount(cardElementRef.current);
+          setStripe(stripeInstance);
+          setElements(elementsInstance);
+        }
+      }, 300);
+    };
+    loadStripeElements();
+  }, [step, stripeKey]);
 
   const handleConfirm = async () => {
     if (payment === 'cash') {
@@ -1094,48 +1121,46 @@ function BookingConfirm({ go, bookingId }) {
 
   const handleCardPay = async () => {
     setCardError('');
-    if (!cardName)                                { setCardError('Please enter the cardholder name.'); return; }
-    if (cardNumber.replace(/\s/g,'').length < 16) { setCardError('Please enter a valid 16-digit card number.'); return; }
-    if (cardExpiry.length < 5)                    { setCardError('Please enter a valid expiry date (MM/YY).'); return; }
-    if (cardCVV.length < 3)                       { setCardError('Please enter a valid CVV.'); return; }
     setProcessing(true);
     try {
-      const stripeKey  = process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY;
       const backendUrl = 'https://villecabs-backend.onrender.com';
 
-      if (stripeKey && stripeKey !== 'undefined' && stripeKey.startsWith('pk_')) {
-        // ── Real Stripe via Render backend ───────────────────────────────────
-        const { loadStripe } = await import('@stripe/stripe-js');
-        const stripe = await loadStripe(stripeKey);
-        // Create payment intent
+      if (stripeKey && stripeKey.startsWith('pk_') && stripe && elements) {
+        // ── Real Stripe Elements payment ─────────────────────────────────────
+        // Step 1: Create payment intent on backend
         const res  = await fetch(`${backendUrl}/create-payment-intent`, {
-          method: 'POST', headers: { 'Content-Type':'application/json' },
-          body: JSON.stringify({ bookingId, amount: booking.fare, currency: 'jmd' }),
+          method:  'POST',
+          headers: { 'Content-Type':'application/json' },
+          body:    JSON.stringify({ bookingId, amount: booking.fare, currency: 'jmd' }),
         });
         const data = await res.json();
         if (data.error) { setCardError(data.error); setProcessing(false); return; }
-        // Confirm card payment (charged in USD equivalent)
-        const [expMonth, expYear] = cardExpiry.split('/');
+
+        // Step 2: Confirm payment using Stripe Elements card
+        const cardElement = elements.getElement('card');
         const { error, paymentIntent } = await stripe.confirmCardPayment(data.clientSecret, {
-          payment_method: {
-            card: { number: cardNumber.replace(/\s/g,''), exp_month: parseInt(expMonth), exp_year: parseInt('20'+expYear), cvc: cardCVV },
-            billing_details: { name: cardName },
-          },
+          payment_method: { card: cardElement },
         });
+
         if (error) { setCardError(error.message); setProcessing(false); return; }
+
         if (paymentIntent.status === 'succeeded') {
           await updateDoc(doc(db,'bookings',bookingId), {
-            paymentMethod: 'card', paymentStatus: 'paid',
-            cardLast4: cardNumber.replace(/\s/g,'').slice(-4), paidAt: serverTimestamp(),
+            paymentMethod: 'card',
+            paymentStatus: 'paid',
+            chargedUsd:    data.amountUsd,
+            paidAt:        serverTimestamp(),
           });
           setCardPaid(true);
         }
+
       } else {
         // ── Demo mode ────────────────────────────────────────────────────────
         await new Promise(r => setTimeout(r, 2000));
         await updateDoc(doc(db,'bookings',bookingId), {
-          paymentMethod: 'card', paymentStatus: 'demo_paid',
-          cardLast4: cardNumber.replace(/\s/g,'').slice(-4), paidAt: serverTimestamp(),
+          paymentMethod: 'card',
+          paymentStatus: 'demo_paid',
+          paidAt:        serverTimestamp(),
         });
         setCardPaid(true);
       }
@@ -1143,7 +1168,7 @@ function BookingConfirm({ go, bookingId }) {
     setProcessing(false);
   };
 
-  // ── Payment success screen ────────────────────────────────────────────────
+  // ── Payment success ───────────────────────────────────────────────────────
   if (cardPaid) {
     return (
       <div style={{ ...s.content, background:'#0f1923', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'100vh', padding:24 }}>
@@ -1152,12 +1177,12 @@ function BookingConfirm({ go, bookingId }) {
         <p style={{ fontSize:14, color:'rgba(255,255,255,0.5)', marginBottom:6 }}>J${booking?.fare?.toLocaleString()} (≈ ${jmdToUsd(booking?.fare)} USD) charged to your card</p>
         <div style={{ background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:12, padding:14, marginBottom:28, width:'100%', maxWidth:320 }}>
           <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:6 }}>
-            <span style={{ color:'rgba(255,255,255,0.5)' }}>Card</span>
-            <span style={{ color:WHITE }}>•••• {booking?.cardLast4||'****'}</span>
+            <span style={{ color:'rgba(255,255,255,0.5)' }}>Amount (JMD)</span>
+            <span style={{ color:WHITE }}>J${booking?.fare?.toLocaleString()}</span>
           </div>
           <div style={{ display:'flex', justifyContent:'space-between', fontSize:13 }}>
-            <span style={{ color:'rgba(255,255,255,0.5)' }}>Amount</span>
-            <span style={{ color:GREEN, fontWeight:500 }}>J${booking?.fare?.toLocaleString()}</span>
+            <span style={{ color:'rgba(255,255,255,0.5)' }}>Charged (USD)</span>
+            <span style={{ color:GREEN, fontWeight:500 }}>≈ ${jmdToUsd(booking?.fare)} USD</span>
           </div>
         </div>
         <button style={{ ...s.btnY, maxWidth:320 }} onClick={() => go('live-ride')}>Track your ride →</button>
@@ -1165,7 +1190,7 @@ function BookingConfirm({ go, bookingId }) {
     );
   }
 
-  // ── Card form screen ──────────────────────────────────────────────────────
+  // ── Card form with Stripe Elements ───────────────────────────────────────
   if (step === 'card-form') {
     return (
       <div style={{ ...s.content, background:'#0f1923' }}>
@@ -1174,20 +1199,20 @@ function BookingConfirm({ go, bookingId }) {
 
           {/* Amount banner */}
           <div style={{ background:'rgba(232,180,0,0.08)', border:'0.5px solid rgba(232,180,0,0.25)', borderRadius:12, padding:14, marginBottom:16 }}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
               <span style={{ fontSize:13, color:'rgba(255,255,255,0.7)' }}>Amount to charge</span>
               <span style={{ fontSize:20, fontWeight:700, color:YELLOW }}>J${booking?.fare?.toLocaleString()}</span>
             </div>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
               <span style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>Charged to your card in USD</span>
-              <span style={{ fontSize:13, fontWeight:500, color:'rgba(255,255,255,0.6)' }}>≈ ${jmdToUsd(booking?.fare)} USD</span>
+              <span style={{ fontSize:12, color:'rgba(255,255,255,0.5)' }}>≈ ${jmdToUsd(booking?.fare)} USD</span>
             </div>
           </div>
 
           {/* Mode banner */}
-          {(!process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY || process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY === 'undefined') ? (
+          {(!stripeKey || !stripeKey.startsWith('pk_')) ? (
             <div style={{ background:'rgba(232,180,0,0.08)', border:'0.5px solid rgba(232,180,0,0.2)', borderRadius:10, padding:'10px 14px', marginBottom:14, fontSize:12, color:'rgba(232,180,0,0.8)' }}>
-              ⚠️ Demo mode — no real charge. Add REACT_APP_STRIPE_PUBLISHABLE_KEY to Vercel to enable live Stripe payments.
+              ⚠️ Demo mode — no real charge. Add REACT_APP_STRIPE_PUBLISHABLE_KEY to Vercel to enable live payments.
             </div>
           ) : (
             <div style={{ background:'rgba(26,158,90,0.08)', border:'0.5px solid rgba(26,158,90,0.2)', borderRadius:10, padding:'10px 14px', marginBottom:14, fontSize:12, color:'#9fe1cb' }}>
@@ -1195,7 +1220,7 @@ function BookingConfirm({ go, bookingId }) {
             </div>
           )}
 
-          {/* Card form */}
+          {/* Stripe Elements card input OR demo form */}
           <div style={{ background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:16, marginBottom:14 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
               <div style={{ fontSize:14, fontWeight:500, color:WHITE }}>Card Details</div>
@@ -1208,31 +1233,27 @@ function BookingConfirm({ go, bookingId }) {
 
             {cardError && <div style={s.errBox}>⚠️ {cardError}</div>}
 
-            <label style={s.lbl}>Cardholder Name</label>
-            <input style={s.inp} placeholder="Name on card" value={cardName}
-              onChange={e => setCardName(e.target.value)}/>
-
-            <label style={s.lbl}>Card Number</label>
-            <input style={{ ...s.inp, letterSpacing:2, fontFamily:'monospace' }}
-              placeholder="0000 0000 0000 0000" value={cardNumber}
-              onChange={e => setCardNumber(fmtCard(e.target.value))} maxLength={19}/>
-
-            <div style={{ display:'flex', gap:12 }}>
-              <div style={{ flex:1 }}>
-                <label style={s.lbl}>Expiry Date</label>
-                <input style={s.inp} placeholder="MM/YY" value={cardExpiry}
-                  onChange={e => setCardExpiry(fmtExpiry(e.target.value))} maxLength={5}/>
+            {stripeKey && stripeKey.startsWith('pk_') ? (
+              // Real Stripe Elements input
+              <div>
+                <label style={s.lbl}>Card details</label>
+                <div ref={cardElementRef} style={{ background:'rgba(255,255,255,0.08)', border:'0.5px solid rgba(255,255,255,0.2)', borderRadius:10, padding:'14px 14px', marginBottom:14, minHeight:44 }}/>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.3)', marginTop:4, display:'flex', alignItems:'center', gap:4 }}>
+                  🔒 256-bit SSL encrypted · Powered by Stripe
+                </div>
               </div>
-              <div style={{ flex:1 }}>
-                <label style={s.lbl}>CVV</label>
-                <input style={s.inp} placeholder="123" type="password" value={cardCVV}
-                  onChange={e => setCardCVV(e.target.value.replace(/\D/g,'').slice(0,4))} maxLength={4}/>
+            ) : (
+              // Demo mode inputs
+              <div>
+                <label style={s.lbl}>Card Number (demo)</label>
+                <input style={{ ...s.inp, letterSpacing:2 }} placeholder="4242 4242 4242 4242" defaultValue="4242 4242 4242 4242"/>
+                <div style={{ display:'flex', gap:12 }}>
+                  <div style={{ flex:1 }}><label style={s.lbl}>Expiry</label><input style={s.inp} placeholder="12/28" defaultValue="12/28"/></div>
+                  <div style={{ flex:1 }}><label style={s.lbl}>CVV</label><input style={s.inp} placeholder="123" defaultValue="123"/></div>
+                </div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.3)', marginTop:4 }}>⚠️ Demo mode — no real charge will be made</div>
               </div>
-            </div>
-
-            <div style={{ fontSize:11, color:'rgba(255,255,255,0.3)', marginTop:4, display:'flex', alignItems:'center', gap:4 }}>
-              🔒 256-bit SSL encrypted · Powered by Stripe
-            </div>
+            )}
           </div>
 
           {/* Fare summary */}
@@ -1241,19 +1262,17 @@ function BookingConfirm({ go, bookingId }) {
               <span>Ride fare</span><span>J${booking?.fare?.toLocaleString()}</span>
             </div>
             <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:'rgba(255,255,255,0.6)', marginBottom:6 }}>
-              <span>Card processing fee</span><span>J$0</span>
+              <span>Processing fee</span><span>J$0</span>
             </div>
-            <div style={{ borderTop:'0.5px solid rgba(255,255,255,0.12)', paddingTop:8, marginTop:4 }}>
-              <div style={{ display:'flex', justifyContent:'space-between', fontSize:16, fontWeight:500, color:YELLOW, marginBottom:4 }}>
-                <span>Total (JMD)</span><span>J${booking?.fare?.toLocaleString()}</span>
-              </div>
-              <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.4)' }}>
-                <span>Charged to card (USD)</span><span>≈ ${jmdToUsd(booking?.fare)} USD</span>
-              </div>
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:15, fontWeight:500, color:YELLOW, borderTop:'0.5px solid rgba(255,255,255,0.12)', paddingTop:8, marginTop:4 }}>
+              <span>Total (JMD)</span><span>J${booking?.fare?.toLocaleString()}</span>
+            </div>
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.4)', marginTop:4 }}>
+              <span>Charged to card (USD)</span><span>≈ ${jmdToUsd(booking?.fare)} USD</span>
             </div>
           </div>
 
-          <button style={{ ...s.btnY, opacity:processing?0.7:1, fontSize:16 }}
+          <button style={{ ...s.btnY, opacity:processing?0.7:1, fontSize:15 }}
             onClick={handleCardPay} disabled={processing}>
             {processing ? '⏳ Processing payment...' : `Pay J$${booking?.fare?.toLocaleString()} (≈ $${jmdToUsd(booking?.fare)} USD)`}
           </button>
@@ -1265,13 +1284,11 @@ function BookingConfirm({ go, bookingId }) {
     );
   }
 
-  // ── Payment method selection screen ──────────────────────────────────────
+  // ── Payment method selection ──────────────────────────────────────────────
   return (
     <div style={{ ...s.content, background:'#0f1923' }}>
       <TopBar title="Confirm Booking" onBack={() => go('vehicle-select')}/>
       <div style={{ padding:16 }}>
-
-        {/* Booking summary */}
         {booking && (
           <div style={{ background:'rgba(255,255,255,0.05)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:14, padding:16, marginBottom:16 }}>
             <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
@@ -1298,7 +1315,6 @@ function BookingConfirm({ go, bookingId }) {
           </div>
         )}
 
-        {/* Payment selector */}
         <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:1, marginBottom:12 }}>Choose payment method</div>
         <div style={{ display:'flex', gap:10, marginBottom:16 }}>
           <div onClick={() => setPayment('cash')}
@@ -1322,7 +1338,7 @@ function BookingConfirm({ go, bookingId }) {
         )}
         {payment === 'card' && (
           <div style={{ background:'rgba(232,180,0,0.08)', border:'0.5px solid rgba(232,180,0,0.2)', borderRadius:12, padding:14, marginBottom:16, fontSize:13, color:'rgba(255,255,255,0.65)', lineHeight:1.6 }}>
-            💳 You will enter your card details securely to pay <strong style={{ color:YELLOW }}>J${booking?.fare?.toLocaleString()}</strong>.
+            💳 You will enter your card details to pay <strong style={{ color:YELLOW }}>J${booking?.fare?.toLocaleString()}</strong> (≈ ${jmdToUsd(booking?.fare)} USD) securely via Stripe.
           </div>
         )}
 
