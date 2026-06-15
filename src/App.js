@@ -1080,7 +1080,9 @@ function BookingConfirm({ go, bookingId }) {
   }, [bookingId]);
 
   const fmtCard   = v => v.replace(/\D/g,'').slice(0,16).replace(/(\d{4})/g,'$1 ').trim();
+  const jmdToUsd  = (jmd) => ((jmd || 0) / 157).toFixed(2); // 157 JMD = 1 USD approx
   const fmtExpiry = v => { const d=v.replace(/\D/g,'').slice(0,4); return d.length>2?d.slice(0,2)+'/'+d.slice(2):d; };
+  const jmdToUsd = (jmd) => ((jmd || 0) / 157).toFixed(2);
 
   const handleConfirm = async () => {
     if (payment === 'cash') {
@@ -1113,7 +1115,7 @@ function BookingConfirm({ go, bookingId }) {
         });
         const data = await res.json();
         if (data.error) { setCardError(data.error); setProcessing(false); return; }
-        // Confirm card payment
+        // Confirm card payment (charged in USD equivalent)
         const [expMonth, expYear] = cardExpiry.split('/');
         const { error, paymentIntent } = await stripe.confirmCardPayment(data.clientSecret, {
           payment_method: {
@@ -1148,7 +1150,7 @@ function BookingConfirm({ go, bookingId }) {
       <div style={{ ...s.content, background:'#0f1923', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'100vh', padding:24 }}>
         <div style={{ fontSize:72, marginBottom:16 }}>✅</div>
         <h2 style={{ fontSize:22, fontWeight:500, color:WHITE, marginBottom:8 }}>Payment successful!</h2>
-        <p style={{ fontSize:14, color:'rgba(255,255,255,0.5)', marginBottom:6 }}>J${booking?.fare?.toLocaleString()} charged to your card</p>
+        <p style={{ fontSize:14, color:'rgba(255,255,255,0.5)', marginBottom:6 }}>J${booking?.fare?.toLocaleString()} (≈ ${jmdToUsd(booking?.fare)} USD) charged to your card</p>
         <div style={{ background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:12, padding:14, marginBottom:28, width:'100%', maxWidth:320 }}>
           <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:6 }}>
             <span style={{ color:'rgba(255,255,255,0.5)' }}>Card</span>
@@ -1172,9 +1174,15 @@ function BookingConfirm({ go, bookingId }) {
         <div style={{ padding:16, maxWidth:420, margin:'0 auto' }}>
 
           {/* Amount banner */}
-          <div style={{ background:'rgba(232,180,0,0.08)', border:'0.5px solid rgba(232,180,0,0.25)', borderRadius:12, padding:14, marginBottom:16, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-            <span style={{ fontSize:13, color:'rgba(255,255,255,0.7)' }}>Amount to charge</span>
-            <span style={{ fontSize:20, fontWeight:700, color:YELLOW }}>J${booking?.fare?.toLocaleString()}</span>
+          <div style={{ background:'rgba(232,180,0,0.08)', border:'0.5px solid rgba(232,180,0,0.25)', borderRadius:12, padding:14, marginBottom:16 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+              <span style={{ fontSize:13, color:'rgba(255,255,255,0.7)' }}>Amount to charge</span>
+              <span style={{ fontSize:20, fontWeight:700, color:YELLOW }}>J${booking?.fare?.toLocaleString()}</span>
+            </div>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <span style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>Charged to your card in USD</span>
+              <span style={{ fontSize:13, fontWeight:500, color:'rgba(255,255,255,0.6)' }}>≈ ${jmdToUsd(booking?.fare)} USD</span>
+            </div>
           </div>
 
           {/* Mode banner */}
@@ -1236,14 +1244,19 @@ function BookingConfirm({ go, bookingId }) {
             <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:'rgba(255,255,255,0.6)', marginBottom:6 }}>
               <span>Card processing fee</span><span>J$0</span>
             </div>
-            <div style={{ display:'flex', justifyContent:'space-between', fontSize:16, fontWeight:500, color:YELLOW, borderTop:'0.5px solid rgba(255,255,255,0.12)', paddingTop:8, marginTop:4 }}>
-              <span>Total charge</span><span>J${booking?.fare?.toLocaleString()}</span>
+            <div style={{ borderTop:'0.5px solid rgba(255,255,255,0.12)', paddingTop:8, marginTop:4 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', fontSize:16, fontWeight:500, color:YELLOW, marginBottom:4 }}>
+                <span>Total (JMD)</span><span>J${booking?.fare?.toLocaleString()}</span>
+              </div>
+              <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.4)' }}>
+                <span>Charged to card (USD)</span><span>≈ ${jmdToUsd(booking?.fare)} USD</span>
+              </div>
             </div>
           </div>
 
           <button style={{ ...s.btnY, opacity:processing?0.7:1, fontSize:16 }}
             onClick={handleCardPay} disabled={processing}>
-            {processing ? '⏳ Processing payment...' : `Pay J$${booking?.fare?.toLocaleString()}`}
+            {processing ? '⏳ Processing payment...' : `Pay J$${booking?.fare?.toLocaleString()} (≈ $${jmdToUsd(booking?.fare)} USD)`}
           </button>
           <button style={s.btnO} onClick={() => { setStep('select'); setCardError(''); }}>
             ← Change payment method
