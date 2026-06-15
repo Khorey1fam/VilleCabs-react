@@ -1126,7 +1126,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
 }
 
 // ── DRIVER ACTIVE ─────────────────────────────────────────────────────────────
-function DriverActive({ go, user, bookingId }) {
+function DriverActive({ go, user, bookingId, setBookingId }) {
   const [booking, setBooking] = useState(null);
 
   useEffect(() => {
@@ -1173,7 +1173,7 @@ function DriverActive({ go, user, bookingId }) {
                   <div style={{ width:40, height:40, borderRadius:'50%', background:GREEN, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>📞</div>
                   <span style={{ fontSize:9, color:'rgba(255,255,255,0.45)' }}>Call</span>
                 </div>
-                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, cursor:'pointer' }} onClick={() => go('chat')}>
+                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, cursor:'pointer' }} onClick={() => { if(booking?.id) { setBookingId(booking.id); go('chat'); } }}>
                   <div style={{ width:40, height:40, borderRadius:'50%', background:'rgba(232,180,0,0.2)', border:'1.5px solid #e8b400', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>💬</div>
                   <span style={{ fontSize:9, color:'#e8b400' }}>Chat</span>
                 </div>
@@ -1410,19 +1410,26 @@ function ChatScreen({ go, user, bookingId }) {
 
   const sendMessage = async () => {
     const trimmed = text.trim();
-    if (!trimmed || !bookingId || !user) return;
+    if (!trimmed) return;
+    if (!bookingId) { alert('Chat error: no booking ID. Please go back and try again.'); return; }
+    if (!user) { alert('Chat error: not logged in.'); return; }
     setSending(true);
+    const saved = text;
     setText('');
     try {
       await addDoc(collection(db,'bookings',bookingId,'messages'), {
         text:      trimmed,
         senderId:  user.uid,
-        senderName:user.name,
-        senderRole:user.role,
+        senderName:user.name || 'Unknown',
+        senderRole:user.role || 'customer',
         createdAt: serverTimestamp(),
         read:      false,
       });
-    } catch(err) { console.error(err); setText(trimmed); }
+    } catch(err) {
+      console.error('Chat send error:', err);
+      alert('Failed to send: ' + err.message);
+      setText(saved);
+    }
     setSending(false);
   };
 
@@ -1453,6 +1460,7 @@ function ChatScreen({ go, user, bookingId }) {
           <div style={{ fontSize:11, color:'rgba(255,255,255,0.45)' }}>
             {booking?.status === 'active' ? '🟢 Ride in progress' : '✅ Ride completed'}
           </div>
+          {!bookingId && <div style={{ fontSize:10, color:'#f09595' }}>⚠ No booking ID — go back and retry</div>}
         </div>
       </div>
 
