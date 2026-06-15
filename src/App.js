@@ -1122,7 +1122,12 @@ function BookingConfirm({ go, bookingId }) {
   useEffect(() => {
     if (!bookingId) return;
     const unsub = onSnapshot(doc(db,'bookings',bookingId), snap => {
-      if (snap.exists()) setBooking({ id:snap.id, ...snap.data() });
+      if (snap.exists()) {
+        const data = { id:snap.id, ...snap.data() };
+        setBooking(data);
+      }
+    }, err => {
+      console.error('LiveRide listener error:', err);
     });
     return () => unsub();
   }, [bookingId]);
@@ -1416,7 +1421,12 @@ function LiveRide({ go, bookingId, user }) {
   useEffect(() => {
     if (!bookingId) return;
     const unsub = onSnapshot(doc(db,'bookings',bookingId), snap => {
-      if (snap.exists()) setBooking({ id:snap.id, ...snap.data() });
+      if (snap.exists()) {
+        const data = { id:snap.id, ...snap.data() };
+        setBooking(data);
+      }
+    }, err => {
+      console.error('LiveRide listener error:', err);
     });
     return () => unsub();
   }, [bookingId]);
@@ -1427,6 +1437,15 @@ function LiveRide({ go, bookingId, user }) {
       if (snap.exists()) setDriverInfo(snap.data());
     });
   }, [booking?.driverId]);
+
+  // Force completed screen when booking status changes to completed
+  const [forceUpdate, setForceUpdate] = useState(0);
+  useEffect(() => {
+    if (booking?.status === 'completed') {
+      setForceUpdate(n => n + 1);
+    }
+  }, [booking?.status]);
+
 
   useEffect(() => () => { if (sosRef.current) clearInterval(sosRef.current); }, []);
 
@@ -1634,6 +1653,15 @@ function LiveRide({ go, bookingId, user }) {
             <div style={{ fontSize:32, marginBottom:8 }}>🔍</div>
             <div style={{ fontSize:15, fontWeight:500, color:YELLOW, marginBottom:4 }}>Finding your driver...</div>
             <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)' }}>Drivers in Manchester are being notified</div>
+          </div>
+        )}
+
+        {/* Manual refresh if ride shows completed */}
+        {booking?.status === 'completed' && (
+          <div style={{ background:'rgba(26,158,90,0.15)', border:'0.5px solid rgba(26,158,90,0.4)', borderRadius:12, padding:14, marginBottom:12, textAlign:'center' }}>
+            <div style={{ fontSize:24, marginBottom:6 }}>✅</div>
+            <div style={{ fontSize:14, fontWeight:500, color:GREEN, marginBottom:8 }}>Ride completed!</div>
+            <button style={s.btnY} onClick={() => setBooking(prev => ({ ...prev }))}>View Receipt & Rate Driver</button>
           </div>
         )}
 
