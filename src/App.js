@@ -900,9 +900,11 @@ function LiveRide({ go, bookingId }) {
 
 // ── DRIVER DASHBOARD ──────────────────────────────────────────────────────────
 function DriverDash({ go, user, setUser }) {
-  const [rides,   setRides]   = useState([]);
+  const [rides,       setRides]       = useState([]);
+  const [driverTab,   setDriverTab]   = useState('rides');
   const [notifStatus, setNotifStatus] = useState("idle");
-  const [loading, setLoading] = useState(true);
+  const [loading,     setLoading]     = useState(true);
+  const [earnings,    setEarnings]    = useState({ today:0, week:0, month:0, total:0, todayRides:0, weekRides:0, monthRides:0, totalRides:0, history:[] });
   const handleLogout = async () => { await signOut(auth); setUser(null); go('splash'); };
 
   useEffect(() => {
@@ -913,6 +915,37 @@ function DriverDash({ go, user, setUser }) {
     });
     return () => unsub();
   }, []);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    const q = query(collection(db,'bookings'), where('driverId','==',user.uid));
+    const unsub = onSnapshot(q, snap => {
+      const completed = snap.docs.map(d => ({ id:d.id, ...d.data() })).filter(b => b.status === 'completed');
+      const now   = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const week  = new Date(today); week.setDate(today.getDate() - 7);
+      const month = new Date(today); month.setDate(today.getDate() - 30);
+      const inRange = (b, from) => b.completedAt?.toDate ? b.completedAt.toDate() >= from : false;
+      const todayRides  = completed.filter(b => inRange(b, today));
+      const weekRides   = completed.filter(b => inRange(b, week));
+      const monthRides  = completed.filter(b => inRange(b, month));
+      const sum = arr => arr.reduce((s,b) => s + (b.fare||0), 0);
+      // Driver gets 85% after 15% platform fee
+      const driverCut = n => Math.round(n * 0.85);
+      setEarnings({
+        today:      driverCut(sum(todayRides)),
+        week:       driverCut(sum(weekRides)),
+        month:      driverCut(sum(monthRides)),
+        total:      driverCut(sum(completed)),
+        todayRides: todayRides.length,
+        weekRides:  weekRides.length,
+        monthRides: monthRides.length,
+        totalRides: completed.length,
+        history:    completed.sort((a,b) => (b.completedAt?.toDate?.()?.getTime()||0) - (a.completedAt?.toDate?.()?.getTime()||0)).slice(0,20),
+      });
+    });
+    return () => unsub();
+  }, [user]);
 
   const requestNotifPermission = async () => {
     setNotifStatus("requesting");
@@ -957,9 +990,9 @@ function DriverDash({ go, user, setUser }) {
         </div>
       </div>
 
-      {/* Real map showing Manchester */}
+      {/* Rides tab */}
+      {driverTab === 'rides' && <>
       <VilleMap height={160} center={MANCHESTER_CENTER} zoom={12}/>
-
       <div style={{ padding:14 }}>
         {notifStatus === "idle" && (
           <div onClick={requestNotifPermission} style={{ background:"rgba(232,180,0,0.1)", border:"1px solid rgba(232,180,0,0.3)", borderRadius:10, padding:"10px 14px", marginBottom:12, display:"flex", alignItems:"center", gap:10, cursor:"pointer", fontSize:13 }}>
@@ -1006,17 +1039,77 @@ function DriverDash({ go, user, setUser }) {
           </>
         )}
       </div>
+      </>}
+
+      {/* Earnings tab */}
+      {driverTab === 'earnings' && (
+        <div style={{ padding:16, overflowY:'auto' }}>
+          {/* Summary stats */}
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
+            <div style={{ background:'rgba(232,180,0,0.1)', border:'0.5px solid rgba(232,180,0,0.3)', borderRadius:12, padding:14, textAlign:'center' }}>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginBottom:4 }}>Today</div>
+              <div style={{ fontSize:22, fontWeight:500, color:'#e8b400' }}>J${earnings.today.toLocaleString()}</div>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:4 }}>{earnings.todayRides} ride{earnings.todayRides!==1?'s':''}</div>
+            </div>
+            <div style={{ background:'rgba(26,158,90,0.1)', border:'0.5px solid rgba(26,158,90,0.3)', borderRadius:12, padding:14, textAlign:'center' }}>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginBottom:4 }}>This week</div>
+              <div style={{ fontSize:22, fontWeight:500, color:'#1a9e5a' }}>J${earnings.week.toLocaleString()}</div>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:4 }}>{earnings.weekRides} ride{earnings.weekRides!==1?'s':''}</div>
+            </div>
+            <div style={{ background:'rgba(255,255,255,0.05)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:12, padding:14, textAlign:'center' }}>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginBottom:4 }}>This month</div>
+              <div style={{ fontSize:22, fontWeight:500, color:'#fff' }}>J${earnings.month.toLocaleString()}</div>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:4 }}>{earnings.monthRides} ride{earnings.monthRides!==1?'s':''}</div>
+            </div>
+            <div style={{ background:'rgba(255,255,255,0.05)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:12, padding:14, textAlign:'center' }}>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginBottom:4 }}>All time</div>
+              <div style={{ fontSize:22, fontWeight:500, color:'#fff' }}>J${earnings.total.toLocaleString()}</div>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:4 }}>{earnings.totalRides} ride{earnings.totalRides!==1?'s':''}</div>
+            </div>
+          </div>
+
+          {/* Platform fee note */}
+          <div style={{ background:'rgba(255,255,255,0.04)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:10, padding:'10px 14px', marginBottom:16, fontSize:12, color:'rgba(255,255,255,0.45)', display:'flex', alignItems:'center', gap:8 }}>
+            ℹ️ Earnings shown after 15% VilleCabs platform fee
+          </div>
+
+          {/* Ride history */}
+          <div style={{ fontSize:13, fontWeight:500, color:'rgba(255,255,255,0.6)', marginBottom:10, textTransform:'uppercase', letterSpacing:0.5, fontSize:11 }}>Recent completed rides</div>
+          {earnings.history.length === 0 ? (
+            <div style={{ textAlign:'center', padding:30, color:'rgba(255,255,255,0.3)' }}>
+              <div style={{ fontSize:32, marginBottom:10 }}>💰</div>
+              <div>No completed rides yet</div>
+              <div style={{ fontSize:12, marginTop:6 }}>Accept rides to start earning</div>
+            </div>
+          ) : earnings.history.map((ride, i) => (
+            <div key={ride.id||i} style={{ background:'rgba(255,255,255,0.04)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, padding:'12px 14px', marginBottom:8, display:'flex', alignItems:'center', gap:10 }}>
+              <div style={{ width:38, height:38, borderRadius:'50%', background:'rgba(26,158,90,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, flexShrink:0 }}>✅</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:13, color:'#fff', fontWeight:500 }}>{ride.customerName||'Customer'}</div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.45)', marginTop:2 }}>
+                  {(ride.pickup?.address||'').split(',')[0]} → {(ride.dropoff?.address||'').split(',')[0]}
+                </div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.3)', marginTop:2 }}>
+                  {ride.completedAt?.toDate?.()?.toLocaleDateString('en-JM', { day:'numeric', month:'short', year:'numeric' }) || '--'}
+                </div>
+              </div>
+              <div style={{ textAlign:'right' }}>
+                <div style={{ fontSize:15, fontWeight:500, color:'#1a9e5a' }}>J${Math.round((ride.fare||0)*0.85).toLocaleString()}</div>
+                <div style={{ fontSize:10, color:'rgba(255,255,255,0.3)', marginTop:2 }}>{ride.distanceKm||'--'} km</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Bottom tab bar */}
       <div style={{ position:'sticky', bottom:0, background:'#1a1a2e', borderTop:'0.5px solid rgba(255,255,255,0.1)', display:'flex', zIndex:10 }}>
-        <div style={{ flex:1, padding:'12px 0', textAlign:'center', fontSize:11, color:'#e8b400', cursor:'pointer', borderTop:'2px solid #e8b400' }}>
-          <div style={{ fontSize:20, marginBottom:2 }}>🚕</div>Rides
-        </div>
-        <div style={{ flex:1, padding:'12px 0', textAlign:'center', fontSize:11, color:'rgba(255,255,255,0.5)', cursor:'pointer' }} onClick={() => go('driver-profile')}>
-          <div style={{ fontSize:20, marginBottom:2 }}>👤</div>Profile
-        </div>
-        <div style={{ flex:1, padding:'12px 0', textAlign:'center', fontSize:11, color:'rgba(255,255,255,0.5)', cursor:'pointer' }} onClick={() => go('driver-settings')}>
-          <div style={{ fontSize:20, marginBottom:2 }}>⚙️</div>Settings
-        </div>
+        {[['rides','🚕','Rides'],['earnings','💰','Earnings'],['profile','👤','Profile'],['settings','⚙️','Settings']].map(([tab,icon,label]) => (
+          <div key={tab} onClick={() => tab==='profile' ? go('driver-profile') : tab==='settings' ? go('driver-settings') : setDriverTab(tab)}
+            style={{ flex:1, padding:'10px 0', textAlign:'center', fontSize:10, cursor:'pointer', color:driverTab===tab?'#e8b400':'rgba(255,255,255,0.45)', borderTop:driverTab===tab?'2px solid #e8b400':'2px solid transparent' }}>
+            <div style={{ fontSize:18, marginBottom:2 }}>{icon}</div>{label}
+          </div>
+        ))}
       </div>
     </div>
   );
