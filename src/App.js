@@ -1093,63 +1093,52 @@ function BookingConfirm({ go, bookingId }) {
 
   const handleCardPay = async () => {
     setCardError('');
-    if (!cardName)                               { setCardError('Please enter the cardholder name.'); return; }
-    if (cardNumber.replace(/\s/g,'').length < 16){ setCardError('Please enter a valid 16-digit card number.'); return; }
-    if (cardExpiry.length < 5)                   { setCardError('Please enter a valid expiry date (MM/YY).'); return; }
-    if (cardCVV.length < 3)                      { setCardError('Please enter a valid CVV.'); return; }
-
+    if (!cardName)                                { setCardError('Please enter the cardholder name.'); return; }
+    if (cardNumber.replace(/\s/g,'').length < 16) { setCardError('Please enter a valid 16-digit card number.'); return; }
+    if (cardExpiry.length < 5)                    { setCardError('Please enter a valid expiry date (MM/YY).'); return; }
+    if (cardCVV.length < 3)                       { setCardError('Please enter a valid CVV.'); return; }
     setProcessing(true);
     try {
-      const stripeKey = process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY;
+      const stripeKey  = process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY;
+      const backendUrl = 'https://villecabs-backend.onrender.com';
 
       if (stripeKey && stripeKey !== 'undefined' && stripeKey.startsWith('pk_')) {
-        // ── Real Stripe payment ──────────────────────────────────────────────
+        // ── Real Stripe via Render backend ───────────────────────────────────
         const { loadStripe } = await import('@stripe/stripe-js');
         const stripe = await loadStripe(stripeKey);
-
-        // Parse expiry
+        // Create payment intent
+        const res  = await fetch(`${backendUrl}/create-payment-intent`, {
+          method: 'POST', headers: { 'Content-Type':'application/json' },
+          body: JSON.stringify({ bookingId, amount: booking.fare, currency: 'jmd' }),
+        });
+        const data = await res.json();
+        if (data.error) { setCardError(data.error); setProcessing(false); return; }
+        // Confirm card payment
         const [expMonth, expYear] = cardExpiry.split('/');
-
-        // Create payment method directly in browser
-        const { error: pmError, paymentMethod } = await stripe.createPaymentMethod({
-          type: 'card',
-          card: {
-            number:    cardNumber.replace(/\s/g,''),
-            exp_month: parseInt(expMonth),
-            exp_year:  parseInt('20' + expYear),
-            cvc:       cardCVV,
+        const { error, paymentIntent } = await stripe.confirmCardPayment(data.clientSecret, {
+          payment_method: {
+            card: { number: cardNumber.replace(/\s/g,''), exp_month: parseInt(expMonth), exp_year: parseInt('20'+expYear), cvc: cardCVV },
+            billing_details: { name: cardName },
           },
-          billing_details: { name: cardName },
         });
-
-        if (pmError) { setCardError(pmError.message); setProcessing(false); return; }
-
-        // Save payment method ID and mark as paid
-        // Note: for full charge you need a backend — this saves intent for later charging
-        await updateDoc(doc(db,'bookings',bookingId), {
-          paymentMethod:   'card',
-          paymentStatus:   'authorized',
-          stripePaymentMethodId: paymentMethod.id,
-          cardLast4:       paymentMethod.card?.last4 || '****',
-          cardBrand:       paymentMethod.card?.brand || 'card',
-          paidAt:          serverTimestamp(),
-        });
-        setCardPaid(true);
-
+        if (error) { setCardError(error.message); setProcessing(false); return; }
+        if (paymentIntent.status === 'succeeded') {
+          await updateDoc(doc(db,'bookings',bookingId), {
+            paymentMethod: 'card', paymentStatus: 'paid',
+            cardLast4: cardNumber.replace(/\s/g,'').slice(-4), paidAt: serverTimestamp(),
+          });
+          setCardPaid(true);
+        }
       } else {
         // ── Demo mode ────────────────────────────────────────────────────────
         await new Promise(r => setTimeout(r, 2000));
         await updateDoc(doc(db,'bookings',bookingId), {
-          paymentMethod: 'card',
-          paymentStatus: 'demo_paid',
-          cardLast4:     cardNumber.replace(/\s/g,'').slice(-4),
-          paidAt:        serverTimestamp(),
+          paymentMethod: 'card', paymentStatus: 'demo_paid',
+          cardLast4: cardNumber.replace(/\s/g,'').slice(-4), paidAt: serverTimestamp(),
         });
         setCardPaid(true);
       }
-    } catch(err) {
-      setCardError('Payment failed: ' + err.message);
-    }
+    } catch(err) { setCardError('Payment failed: ' + err.message); }
     setProcessing(false);
   };
 
@@ -1191,7 +1180,7 @@ function BookingConfirm({ go, bookingId }) {
           {/* Mode banner */}
           {(!process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY || process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY === 'undefined') ? (
             <div style={{ background:'rgba(232,180,0,0.08)', border:'0.5px solid rgba(232,180,0,0.2)', borderRadius:10, padding:'10px 14px', marginBottom:14, fontSize:12, color:'rgba(232,180,0,0.8)' }}>
-              ⚠️ Demo mode — no real charge. Add REACT_APP_STRIPE_PUBLISHABLE_KEY to Vercel to enable live payments.
+              ⚠️ Demo mode — no real charge. Add REACT_APP_STRIPE_PUBLISHABLE_KEY to Vercel to enable live Stripe payments.
             </div>
           ) : (
             <div style={{ background:'rgba(26,158,90,0.08)', border:'0.5px solid rgba(26,158,90,0.2)', borderRadius:10, padding:'10px 14px', marginBottom:14, fontSize:12, color:'#9fe1cb' }}>
