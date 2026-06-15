@@ -1362,16 +1362,12 @@ function BookingConfirm({ go, bookingId }) {
   }, [step, stripeKey]);
 
   const handleConfirm = async () => {
-    if (payment === 'cash') {
-      try {
-        if (bookingId) {
-          await updateDoc(doc(db,'bookings',bookingId), { paymentMethod:'cash', paymentStatus:'pending_cash' });
-        }
-      } catch(err) { console.error('Update booking error:', err); }
-      go('live-ride');
-    } else {
-      setStep('card-form');
-    }
+    try {
+      if (bookingId) {
+        await updateDoc(doc(db,'bookings',bookingId), { paymentMethod:'cash', paymentStatus:'pending_cash' });
+      }
+    } catch(err) { console.error('Update booking error:', err); }
+    go('live-ride');
   };
 
   const handleCardPay = async () => {
@@ -1541,9 +1537,11 @@ function BookingConfirm({ go, bookingId }) {
 
   // ── Payment method selection ──────────────────────────────────────────────
   return (
-    <div style={{ ...s.content, background:'transparent' }}>
+    <div style={{ ...s.content }}>
       <TopBar title="Confirm Booking" onBack={() => go('vehicle-select')}/>
       <div style={{ padding:16 }}>
+
+        {/* Booking summary */}
         {booking && (
           <div style={{ background:'rgba(15,20,40,0.65)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:14, padding:16, marginBottom:16 }}>
             <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
@@ -1570,41 +1568,39 @@ function BookingConfirm({ go, bookingId }) {
           </div>
         )}
 
-        <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:1, marginBottom:12 }}>Choose payment method</div>
-        <div style={{ display:'flex', gap:10, marginBottom:16 }}>
-          <div onClick={() => setPayment('cash')}
-            style={{ flex:1, border:payment==='cash'?`2px solid ${YELLOW}`:'0.5px solid rgba(255,255,255,0.12)', borderRadius:14, padding:'16px 12px', textAlign:'center', cursor:'pointer', background:payment==='cash'?'rgba(232,180,0,0.1)':'rgba(255,255,255,0.04)' }}>
-            <div style={{ fontSize:28, marginBottom:6 }}>💵</div>
-            <div style={{ fontSize:13, fontWeight:500, color:payment==='cash'?YELLOW:WHITE }}>Cash</div>
-            <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:4 }}>Pay driver directly</div>
+        <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:1, marginBottom:12 }}>Payment method</div>
+
+        {/* Cash - active */}
+        <div style={{ border:`2px solid ${YELLOW}`, borderRadius:14, padding:'16px 14px', marginBottom:10, display:'flex', alignItems:'center', gap:14, background:'rgba(232,180,0,0.1)' }}>
+          <div style={{ fontSize:32 }}>💵</div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:14, fontWeight:500, color:YELLOW }}>Cash</div>
+            <div style={{ fontSize:12, color:'rgba(255,255,255,0.6)', marginTop:2 }}>Pay your driver directly on arrival</div>
           </div>
-          <div onClick={() => setPayment('card')}
-            style={{ flex:1, border:payment==='card'?`2px solid ${YELLOW}`:'0.5px solid rgba(255,255,255,0.12)', borderRadius:14, padding:'16px 12px', textAlign:'center', cursor:'pointer', background:payment==='card'?'rgba(232,180,0,0.1)':'rgba(255,255,255,0.04)' }}>
-            <div style={{ fontSize:28, marginBottom:6 }}>💳</div>
-            <div style={{ fontSize:13, fontWeight:500, color:payment==='card'?YELLOW:WHITE }}>Card</div>
-            <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:4 }}>Pay securely online</div>
-          </div>
+          <div style={{ width:22, height:22, borderRadius:'50%', background:YELLOW, display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, color:DARK, fontWeight:700 }}>✓</div>
         </div>
 
-        {payment === 'cash' && (
-          <div style={{ background:'rgba(15,20,40,0.6)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, padding:14, marginBottom:16, fontSize:13, color:'rgba(255,255,255,0.65)', lineHeight:1.6 }}>
-            💵 You will pay <strong style={{ color:WHITE }}>J${booking?.fare?.toLocaleString()}</strong> in cash to your driver at the destination.
+        {/* Card - coming soon */}
+        <div style={{ border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:14, padding:'16px 14px', marginBottom:20, display:'flex', alignItems:'center', gap:14, background:'rgba(255,255,255,0.03)', opacity:0.55 }}>
+          <div style={{ fontSize:32 }}>💳</div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:14, fontWeight:500, color:'rgba(255,255,255,0.5)' }}>Card Payment</div>
+            <div style={{ fontSize:12, color:'rgba(255,255,255,0.35)', marginTop:2 }}>Coming soon</div>
           </div>
-        )}
-        {payment === 'card' && (
-          <div style={{ background:'rgba(232,180,0,0.08)', border:'0.5px solid rgba(232,180,0,0.2)', borderRadius:12, padding:14, marginBottom:16, fontSize:13, color:'rgba(255,255,255,0.65)', lineHeight:1.6 }}>
-            💳 You will enter your card details to pay <strong style={{ color:YELLOW }}>J${booking?.fare?.toLocaleString()}</strong> (≈ ${jmdToUsd(booking?.fare)} USD) securely via Stripe.
-          </div>
-        )}
+          <div style={{ background:'rgba(255,255,255,0.08)', borderRadius:20, padding:'3px 12px', fontSize:11, color:'rgba(255,255,255,0.4)', fontWeight:500 }}>Soon</div>
+        </div>
 
-        <button style={s.btnY} onClick={handleConfirm}>
-          Confirm {payment === 'card' ? '— Enter Card Details →' : '— Pay Cash'}
-        </button>
+        <div style={{ background:'rgba(255,255,255,0.04)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, padding:14, marginBottom:16, fontSize:13, color:'rgba(255,255,255,0.65)', lineHeight:1.6 }}>
+          💵 You will pay <strong style={{ color:WHITE }}>J${booking?.fare?.toLocaleString()}</strong> in cash directly to your driver when you arrive at your destination.
+        </div>
+
+        <button style={s.btnY} onClick={handleConfirm}>Confirm — Pay Cash</button>
         <button style={s.btnO} onClick={() => go('customer-dash')}>Cancel</button>
       </div>
     </div>
   );
 }
+
 
 // ── LIVE RIDE ─────────────────────────────────────────────────────────────────
 function LiveRide({ go, bookingId, user }) {
