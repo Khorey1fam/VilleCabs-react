@@ -1404,8 +1404,10 @@ function SOSButton({ booking, user }) {
   const [countdown,  setCountdown]  = useState(5);
   const [sent,       setSent]       = useState(false);
   const [holding,    setHolding]    = useState(false);
-  const timerRef    = useRef(null);
   const countRef    = useRef(null);
+  // Safe null check after all hooks
+  if (!booking) return null;
+
 
   const startHold = () => {
     if (sent) return;
@@ -1536,7 +1538,7 @@ function SOSButton({ booking, user }) {
 }
 
 // ── LIVE RIDE ─────────────────────────────────────────────────────────────────
-function LiveRide({ go, bookingId }) {
+function LiveRide({ go, bookingId, user }) {
   const [booking,    setBooking]    = useState(null);
   const [driverInfo, setDriverInfo] = useState(null);
   const [rating,     setRating]     = useState(0);
@@ -1724,7 +1726,7 @@ function LiveRide({ go, bookingId }) {
             <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)' }}>Drivers in Manchester are being notified</div>
           </div>
         )}
-        <SOSButton booking={booking} user={null}/>
+        <SOSButton booking={booking} user={user}/>
         <SOSButton booking={booking} user={user}/>
         <button style={s.btnO} onClick={() => go('customer-dash')}>Back to Dashboard</button>
       </div>
