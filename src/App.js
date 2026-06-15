@@ -136,18 +136,24 @@ function geocodeLatLng(lat, lng) {
   return new Promise((resolve) => {
     const geocoder = new window.google.maps.Geocoder();
     geocoder.geocode({ location:{ lat, lng } }, (results, status) => {
-      if (status === 'OK' && results[0]) resolve(results[0].formatted_address);
-      else resolve(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
-    });
-  });
-}
-
-function getDirections(origin, destination) {
-  return new Promise((resolve) => {
-    const service = new window.google.maps.DirectionsService();
-    service.route({ origin, destination, travelMode: window.google.maps.TravelMode.DRIVING }, (result, status) => {
-      if (status === 'OK') resolve(result);
-      else resolve(null);
+      if (status === 'OK' && results.length > 0) {
+        // Skip Plus Code results, find a readable address
+        const best = results.find(r =>
+          !r.formatted_address.includes('+') &&
+          r.formatted_address.toLowerCase().includes('manchester')
+        ) || results.find(r =>
+          !r.formatted_address.includes('+')
+        ) || results[0];
+        // Build a clean short address
+        const components = best.address_components;
+        const street   = components.find(c => c.types.includes('route'))?.long_name;
+        const area     = components.find(c => c.types.includes('sublocality') || c.types.includes('locality'))?.long_name;
+        const parish   = components.find(c => c.types.includes('administrative_area_level_1'))?.long_name;
+        const parts = [street, area, parish].filter(Boolean);
+        resolve(parts.length > 0 ? parts.join(', ') : best.formatted_address);
+      } else {
+        resolve(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+      }
     });
   });
 }
