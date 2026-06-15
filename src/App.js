@@ -1503,9 +1503,24 @@ function LiveRide({ go, bookingId, user }) {
     } catch(err) { console.error(err); setRated(true); }
   };
 
-  const pickupCoords  = booking?.pickup        ? { lat:booking.pickup.lat,         lng:booking.pickup.lng         } : MANCHESTER_CENTER;
-  const dropoffCoords = booking?.dropoff        ? { lat:booking.dropoff.lat,        lng:booking.dropoff.lng        } : null;
+  // Safe defaults - never crash even if booking is null
+  const pickupCoords  = booking?.pickup?.lat    ? { lat:booking.pickup.lat,         lng:booking.pickup.lng         } : MANCHESTER_CENTER;
+  const dropoffCoords = booking?.dropoff?.lat   ? { lat:booking.dropoff.lat,        lng:booking.dropoff.lng        } : null;
   const driverCoords  = booking?.driverLocation ? { lat:booking.driverLocation.lat, lng:booking.driverLocation.lng } : null;
+
+  // ── Loading screen ──
+  if (!booking) {
+    return (
+      <div style={{ ...s.content, display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh' }}>
+        <div style={{ textAlign:'center' }}>
+          <div style={{ fontSize:48, marginBottom:16 }}>🚕</div>
+          <div style={{ color:YELLOW, fontSize:16, fontWeight:500, marginBottom:8 }}>Finding your driver...</div>
+          <div style={{ color:'rgba(255,255,255,0.4)', fontSize:13 }}>Setting up your ride</div>
+          <button style={{ ...s.btnO, marginTop:24 }} onClick={() => go('customer-dash')}>Back to Dashboard</button>
+        </div>
+      </div>
+    );
+  }
 
   // ── Completed screen ──
   if (booking?.status === 'completed') {
