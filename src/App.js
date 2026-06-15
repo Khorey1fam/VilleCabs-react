@@ -510,47 +510,174 @@ function DriverPending({ go }) {
 
 // ── CUSTOMER DASHBOARD ────────────────────────────────────────────────────────
 function CustomerDash({ go, user, setUser }) {
+  const [tab,      setTab]      = useState('book');
+  const [history,  setHistory]  = useState([]);
+  const [loadingH, setLoadingH] = useState(true);
   const handleLogout = async () => { await signOut(auth); setUser(null); go('splash'); };
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    const q = query(
+      collection(db,'bookings'),
+      where('customerId','==',user.uid),
+      where('status','==','completed')
+    );
+    const unsub = onSnapshot(q, snap => {
+      const rides = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+      rides.sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+      setHistory(rides);
+      setLoadingH(false);
+    });
+    return () => unsub();
+  }, [user]);
+
+  const totalSpent = history.reduce((s,r) => s+(r.fare||0), 0);
+
   return (
-    <div style={{ ...s.content, background:'#0f1923', minHeight:'100vh' }}>
-      <div style={{ background:DARK, padding:'16px 20px' }}>
+    <div style={{ ...s.content, background:'#0f1923', minHeight:'100vh', display:'flex', flexDirection:'column' }}>
+      {/* Header */}
+      <div style={{ background:DARK, padding:'16px 20px', flexShrink:0 }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
           <div>
             <div style={{ color:'rgba(255,255,255,0.6)', fontSize:13 }}>Good day,</div>
             <div style={{ color:WHITE, fontSize:20, fontWeight:500 }}>{user?.name?.split(' ')[0]||'Rider'} 👋</div>
             <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:6 }}>
-              <span style={{ fontSize:12, color:'rgba(255,255,255,0.5)' }}>Balance:</span>
-              <span style={{ background:YELLOW, borderRadius:20, padding:'2px 10px', fontSize:12, fontWeight:500, color:DARK }}>J$1,200</span>
+              <span style={{ fontSize:12, color:'rgba(255,255,255,0.5)' }}>Total rides:</span>
+              <span style={{ background:YELLOW, borderRadius:20, padding:'2px 10px', fontSize:12, fontWeight:500, color:DARK }}>{history.length}</span>
             </div>
           </div>
           <button onClick={handleLogout} style={{ background:'none', border:'0.5px solid rgba(255,255,255,0.2)', borderRadius:8, color:'rgba(255,255,255,0.5)', fontSize:11, padding:'6px 12px', cursor:'pointer' }}>Logout</button>
         </div>
       </div>
 
-      {/* Real Google Map of Manchester Jamaica */}
-      <VilleMap height={220} center={MANCHESTER_CENTER} zoom={13}>
-        <Marker position={MANCHESTER_CENTER} title="Manchester, Jamaica"/>
-      </VilleMap>
-
-      <div style={{ padding:16 }}>
-        <div onClick={() => go('pin-pickup')} style={{ background:'rgba(255,255,255,0.06)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:12, padding:12, marginBottom:10, display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
-          <div style={{ width:10, height:10, borderRadius:'50%', background:GREEN, flexShrink:0 }}/>
-          <div style={{ flex:1 }}>
-            <div style={{ fontSize:13, color:WHITE }}>Pickup location</div>
-            <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>Manchester, Jamaica (tap to pin)</div>
-          </div>
-          <span style={{ color:'rgba(255,255,255,0.3)' }}>›</span>
+      {/* Tab bar */}
+      <div style={{ display:'flex', background:'rgba(26,26,46,0.98)', borderBottom:'0.5px solid rgba(255,255,255,0.08)', flexShrink:0 }}>
+        <div onClick={() => setTab('book')} style={{ flex:1, padding:'11px 0', textAlign:'center', fontSize:12, cursor:'pointer', color:tab==='book'?YELLOW:'rgba(255,255,255,0.45)', borderBottom:tab==='book'?`2px solid ${YELLOW}`:'2px solid transparent', fontWeight:tab==='book'?500:400 }}>
+          🚕 Book Ride
         </div>
-        <div onClick={() => go('pin-dropoff')} style={{ background:'rgba(255,255,255,0.06)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:12, padding:12, marginBottom:16, display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
-          <div style={{ width:10, height:10, borderRadius:'50%', background:YELLOW, flexShrink:0 }}/>
-          <div style={{ flex:1 }}>
-            <div style={{ fontSize:13, color:WHITE }}>Drop-off location</div>
-            <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>Where are you going?</div>
-          </div>
-          <span style={{ color:'rgba(255,255,255,0.3)' }}>›</span>
+        <div onClick={() => setTab('history')} style={{ flex:1, padding:'11px 0', textAlign:'center', fontSize:12, cursor:'pointer', color:tab==='history'?YELLOW:'rgba(255,255,255,0.45)', borderBottom:tab==='history'?`2px solid ${YELLOW}`:'2px solid transparent', fontWeight:tab==='history'?500:400 }}>
+          📋 Ride History {history.length > 0 && <span style={{ background:YELLOW, color:DARK, borderRadius:20, padding:'1px 6px', fontSize:10, marginLeft:4, fontWeight:700 }}>{history.length}</span>}
         </div>
-        <button style={s.btnY} onClick={() => go('vehicle-select')}>Find a Ride</button>
       </div>
+
+      {/* Book tab */}
+      {tab === 'book' && (
+        <div style={{ flex:1, display:'flex', flexDirection:'column' }}>
+          <VilleMap height={220} center={MANCHESTER_CENTER} zoom={13}>
+            <Marker position={MANCHESTER_CENTER} title="Manchester, Jamaica"/>
+          </VilleMap>
+          <div style={{ padding:16 }}>
+            <div onClick={() => go('pin-pickup')} style={{ background:'rgba(255,255,255,0.06)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:12, padding:12, marginBottom:10, display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
+              <div style={{ width:10, height:10, borderRadius:'50%', background:GREEN, flexShrink:0 }}/>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:13, color:WHITE }}>Pickup location</div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>Manchester, Jamaica (tap to pin)</div>
+              </div>
+              <span style={{ color:'rgba(255,255,255,0.3)' }}>›</span>
+            </div>
+            <div onClick={() => go('pin-dropoff')} style={{ background:'rgba(255,255,255,0.06)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:12, padding:12, marginBottom:16, display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
+              <div style={{ width:10, height:10, borderRadius:'50%', background:YELLOW, flexShrink:0 }}/>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:13, color:WHITE }}>Drop-off location</div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>Where are you going?</div>
+              </div>
+              <span style={{ color:'rgba(255,255,255,0.3)' }}>›</span>
+            </div>
+            <button style={s.btnY} onClick={() => go('vehicle-select')}>Find a Ride</button>
+          </div>
+        </div>
+      )}
+
+      {/* History tab */}
+      {tab === 'history' && (
+        <div style={{ flex:1, overflowY:'auto', padding:16 }}>
+
+          {/* Summary cards */}
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
+            <div style={{ background:'rgba(232,180,0,0.1)', border:'0.5px solid rgba(232,180,0,0.25)', borderRadius:12, padding:14, textAlign:'center' }}>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginBottom:4 }}>Total rides</div>
+              <div style={{ fontSize:26, fontWeight:500, color:YELLOW }}>{history.length}</div>
+            </div>
+            <div style={{ background:'rgba(26,158,90,0.1)', border:'0.5px solid rgba(26,158,90,0.25)', borderRadius:12, padding:14, textAlign:'center' }}>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginBottom:4 }}>Total spent</div>
+              <div style={{ fontSize:22, fontWeight:500, color:GREEN }}>J${totalSpent.toLocaleString()}</div>
+            </div>
+          </div>
+
+          {/* Ride list */}
+          {loadingH ? (
+            <div style={{ textAlign:'center', padding:40, color:'rgba(255,255,255,0.4)' }}>
+              <div style={{ fontSize:32, marginBottom:10 }}>⏳</div>
+              Loading your rides...
+            </div>
+          ) : history.length === 0 ? (
+            <div style={{ textAlign:'center', padding:40, color:'rgba(255,255,255,0.4)' }}>
+              <div style={{ fontSize:40, marginBottom:12 }}>🚕</div>
+              <div style={{ fontSize:15, marginBottom:6 }}>No rides yet</div>
+              <div style={{ fontSize:13 }}>Your completed rides will appear here</div>
+              <button style={{ ...s.btnY, marginTop:20, maxWidth:200 }} onClick={() => setTab('book')}>Book your first ride</button>
+            </div>
+          ) : history.map((ride, i) => {
+            const date = ride.completedAt?.seconds
+              ? new Date(ride.completedAt.seconds * 1000).toLocaleDateString('en-JM', { day:'numeric', month:'short', year:'numeric' })
+              : ride.createdAt?.seconds
+              ? new Date(ride.createdAt.seconds * 1000).toLocaleDateString('en-JM', { day:'numeric', month:'short', year:'numeric' })
+              : '--';
+            const time = ride.completedAt?.seconds
+              ? new Date(ride.completedAt.seconds * 1000).toLocaleTimeString('en-JM', { hour:'2-digit', minute:'2-digit' })
+              : '';
+            const from = (ride.pickup?.address  || '--').split(',')[0];
+            const to   = (ride.dropoff?.address || '--').split(',')[0];
+            return (
+              <div key={ride.id} style={{ background:'rgba(255,255,255,0.04)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:14, marginBottom:10 }}>
+                {/* Date + fare row */}
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+                  <div>
+                    <div style={{ fontSize:13, fontWeight:500, color:WHITE }}>{date}</div>
+                    <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>{time}</div>
+                  </div>
+                  <div style={{ textAlign:'right' }}>
+                    <div style={{ fontSize:16, fontWeight:500, color:GREEN }}>J${(ride.fare||0).toLocaleString()}</div>
+                    <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)' }}>{ride.vehicleType||'VilleRide'}</div>
+                  </div>
+                </div>
+
+                {/* Route */}
+                <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:10 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                    <div style={{ width:8, height:8, borderRadius:'50%', background:GREEN, flexShrink:0 }}/>
+                    <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)' }}>{from}</div>
+                  </div>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, paddingLeft:3 }}>
+                    <div style={{ width:2, height:12, background:'rgba(255,255,255,0.15)', marginLeft:3 }}/>
+                  </div>
+                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                    <div style={{ width:8, height:8, borderRadius:'50%', background:YELLOW, flexShrink:0 }}/>
+                    <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)' }}>{to}</div>
+                  </div>
+                </div>
+
+                {/* Driver + distance */}
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'0.5px solid rgba(255,255,255,0.07)', paddingTop:8 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                    <span style={{ fontSize:14 }}>👤</span>
+                    <span style={{ fontSize:12, color:'rgba(255,255,255,0.5)' }}>{ride.driverName||'VilleCabs driver'}</span>
+                  </div>
+                  <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                    {ride.distanceKm && <span style={{ fontSize:11, color:'rgba(255,255,255,0.35)' }}>{ride.distanceKm} km</span>}
+                    {ride.customerRating && (
+                      <span style={{ fontSize:11, color:YELLOW }}>
+                        {'⭐'.repeat(ride.customerRating)}
+                      </span>
+                    )}
+                    <span style={{ background:'rgba(26,158,90,0.15)', color:GREEN, borderRadius:20, padding:'2px 8px', fontSize:10, fontWeight:500 }}>Completed</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
