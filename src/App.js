@@ -136,24 +136,49 @@ function geocodeLatLng(lat, lng) {
   return new Promise((resolve) => {
     const geocoder = new window.google.maps.Geocoder();
     geocoder.geocode({ location:{ lat, lng } }, (results, status) => {
-      if (status === 'OK' && results.length > 0) {
-        // Skip Plus Code results, find a readable address
-        const best = results.find(r =>
-          !r.formatted_address.includes('+') &&
-          r.formatted_address.toLowerCase().includes('manchester')
-        ) || results.find(r =>
-          !r.formatted_address.includes('+')
-        ) || results[0];
-        // Build a clean short address
-        const components = best.address_components;
-        const street   = components.find(c => c.types.includes('route'))?.long_name;
-        const area     = components.find(c => c.types.includes('sublocality') || c.types.includes('locality'))?.long_name;
-        const parish   = components.find(c => c.types.includes('administrative_area_level_1'))?.long_name;
-        const parts = [street, area, parish].filter(Boolean);
-        resolve(parts.length > 0 ? parts.join(', ') : best.formatted_address);
+      if (status === 'OK' && results && results.length > 0) {
+        // Try to find result with a street/road name
+        const withStreet = results.find(r => {
+          const c = r.address_components || [];
+          return c.some(x => x.types.includes('route') || x.types.includes('street_address'));
+        });
+        const best = withStreet || results.find(r => !r.formatted_address.includes('+')) || results[0];
+        const components = best.address_components || [];
+        const streetNumber = components.find(c => c.types.includes('street_number'))?.long_name || '';
+        const street       = components.find(c => c.types.includes('route'))?.long_name || '';
+        const neighborhood = components.find(c => c.types.includes('neighborhood') || c.types.includes('sublocality_level_1'))?.long_name || '';
+        const locality     = components.find(c => c.types.includes('locality') || c.types.includes('postal_town'))?.long_name || '';
+        const parish       = components.find(c => c.types.includes('administrative_area_level_1'))?.long_name || '';
+        // Build address prioritizing street name
+        let address = '';
+        if (street) {
+          address = streetNumber ? `${streetNumber} ${street}` : street;
+          if (locality) address += `, ${locality}`;
+          else if (neighborhood) address += `, ${neighborhood}`;
+          if (parish && parish !== locality) address += `, ${parish}`;
+        } else if (neighborhood) {
+          address = locality ? `${neighborhood}, ${locality}` : neighborhood;
+          if (parish) address += `, ${parish}`;
+        } else if (locality) {
+          address = parish ? `${locality}, ${parish}` : locality;
+        } else {
+          // fallback — clean up plus codes from the formatted address
+          address = best.formatted_address.replace(/^[A-Z0-9+]+\s/, '').trim();
+        }
+        resolve(address || best.formatted_address);
       } else {
-        resolve(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+        resolve(`Near ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
       }
+    });
+  });
+}
+
+function getDirections(origin, destination) {
+  return new Promise((resolve) => {
+    const service = new window.google.maps.DirectionsService();
+    service.route({ origin, destination, travelMode: window.google.maps.TravelMode.DRIVING }, (result, status) => {
+      if (status === 'OK') resolve(result);
+      else resolve(null);
     });
   });
 }
@@ -932,13 +957,6 @@ function DriverDash({ go, user, setUser }) {
         </div>
       </div>
 
-      {/* Bottom nav menu */}
-      <div style={{ background:'rgba(26,26,46,0.98)', borderBottom:'0.5px solid rgba(255,255,255,0.08)', display:'flex' }}>
-        <div style={{ flex:1, padding:'10px 0', textAlign:'center', fontSize:11, color:YELLOW, cursor:'pointer', borderBottom:'2px solid '+YELLOW }}>🚕 Rides</div>
-        <div style={{ flex:1, padding:'10px 0', textAlign:'center', fontSize:11, color:'rgba(255,255,255,0.5)', cursor:'pointer' }} onClick={() => go('driver-profile')}>👤 Profile</div>
-        <div style={{ flex:1, padding:'10px 0', textAlign:'center', fontSize:11, color:'rgba(255,255,255,0.5)', cursor:'pointer' }} onClick={() => go('driver-settings')}>⚙️ Settings</div>
-      </div>
-
       {/* Real map showing Manchester */}
       <VilleMap height={160} center={MANCHESTER_CENTER} zoom={12}/>
 
@@ -987,6 +1005,19 @@ function DriverDash({ go, user, setUser }) {
             ))}
           </>
         )}
+      </div>
+    </div>
+      {/* Bottom tab bar */}
+      <div style={{ position:'sticky', bottom:0, background:'#1a1a2e', borderTop:'0.5px solid rgba(255,255,255,0.1)', display:'flex', zIndex:10 }}>
+        <div style={{ flex:1, padding:'12px 0', textAlign:'center', fontSize:11, color:'#e8b400', cursor:'pointer', borderTop:'2px solid #e8b400' }}>
+          <div style={{ fontSize:20, marginBottom:2 }}>🚕</div>Rides
+        </div>
+        <div style={{ flex:1, padding:'12px 0', textAlign:'center', fontSize:11, color:'rgba(255,255,255,0.5)', cursor:'pointer' }} onClick={() => go('driver-profile')}>
+          <div style={{ fontSize:20, marginBottom:2 }}>👤</div>Profile
+        </div>
+        <div style={{ flex:1, padding:'12px 0', textAlign:'center', fontSize:11, color:'rgba(255,255,255,0.5)', cursor:'pointer' }} onClick={() => go('driver-settings')}>
+          <div style={{ fontSize:20, marginBottom:2 }}>⚙️</div>Settings
+        </div>
       </div>
     </div>
   );
