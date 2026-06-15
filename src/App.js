@@ -543,9 +543,11 @@ function CustomerDash({ go, user, setUser }) {
     );
     const unsub = onSnapshot(q, snap => {
       const rides = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+      // Sort by most recent first
+      rides.sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
       const active    = rides.find(r => r.status === 'active');
       const completed = rides.find(r => r.status === 'completed' &&
-        (Date.now()/1000 - (r.completedAt?.seconds||0)) < 300); // completed in last 5 min
+        (Date.now()/1000 - (r.completedAt?.seconds||0)) < 300);
 
       if (active) {
         setActiveRide(active);
@@ -606,6 +608,30 @@ function CustomerDash({ go, user, setUser }) {
       Notification.requestPermission();
     }
   }, []);
+
+  // Watch active booking directly for driverArrived field
+  useEffect(() => {
+    if (!activeRide?.id) return;
+    const unsub = onSnapshot(doc(db,'bookings',activeRide.id), snap => {
+      if (!snap.exists()) return;
+      const data = snap.data();
+      if (data.driverArrived && prevStatusRef.current === 'active') {
+        prevStatusRef.current = 'arrived';
+        setNotification({
+          type:        'driver_arrived',
+          driverName:  data.driverName  || 'Your driver',
+          licensePlate:data.licensePlate || '',
+        });
+        if (Notification.permission === 'granted') {
+          new Notification('📍 Driver has arrived!', {
+            body: `${data.driverName||'Your driver'} is at your pickup location. Please come outside!`,
+            icon: '/villecabs-logo.png',
+          });
+        }
+      }
+    });
+    return () => unsub();
+  }, [activeRide?.id]);
 
   const totalSpent = history.reduce((s,r) => s+(r.fare||0), 0);
 
@@ -2122,22 +2148,33 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
 
   useEffect(() => {
     if (!booking?.id || !user?.uid) return;
-    if (!navigator.geolocation) return;
-    setLocationStatus('tracking');
-    watchRef.current = navigator.geolocation.watchPosition(
-      async (pos) => {
-        const { latitude: lat, longitude: lng } = pos.coords;
-        try {
-          await updateDriverLocationFn({ lat, lng, bookingId: booking.id });
-        } catch(err) {
-          try {
-            await updateDoc(doc(db,'bookings',booking.id), { driverLocation:{ lat, lng, updatedAt:serverTimestamp() } });
-            await updateDoc(doc(db,'drivers',user.uid), { currentLocation:{ lat, lng, updatedAt:serverTimestamp() } });
-          } catch(e) { console.error(e); }
-        }
+    if (!navigator.geolocation) { setLocationStatus('denied'); return; }
+    // Request permission first then start watching
+    navigator.geolocation.getCurrentPosition(
+      () => {
+        // Permission granted - start watching
+        setLocationStatus('tracking');
+        watchRef.current = navigator.geolocation.watchPosition(
+          async (pos) => {
+            const { latitude: lat, longitude: lng } = pos.coords;
+            try {
+              await updateDriverLocationFn({ lat, lng, bookingId: booking.id });
+            } catch(err) {
+              try {
+                await updateDoc(doc(db,'bookings',booking.id), { driverLocation:{ lat, lng, updatedAt:serverTimestamp() } });
+                await updateDoc(doc(db,'drivers',user.uid), { currentLocation:{ lat, lng, updatedAt:serverTimestamp() } });
+              } catch(e) { console.error(e); }
+            }
+          },
+          (err) => setLocationStatus(err.code===1?'denied':'idle'),
+          { enableHighAccuracy:false, maximumAge:10000, timeout:15000 }
+        );
       },
-      (err) => setLocationStatus(err.code===1?'denied':'idle'),
-      { enableHighAccuracy:true, maximumAge:5000, timeout:10000 }
+      (err) => {
+        console.warn('Location permission denied:', err);
+        setLocationStatus('denied');
+      },
+      { enableHighAccuracy:false, timeout:10000 }
     );
     return () => { if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current); };
   }, [booking?.id, user?.uid]);
@@ -2225,7 +2262,10 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     <div style={{ ...s.content }}>
       <TopBar title="Active Ride" onBack={() => go('driver-dash')}/>
       <div style={{ background:locationStatus==='tracking'?'rgba(26,158,90,0.15)':'rgba(226,75,74,0.1)', padding:'6px 16px', fontSize:11, color:locationStatus==='tracking'?'#9fe1cb':'#f09595', display:'flex', alignItems:'center', gap:6 }}>
-        {locationStatus==='tracking'?'📍 Sharing live location with passenger':locationStatus==='denied'?'⚠️ Location access denied':'📍 Getting location...'}
+        {locationStatus==='tracking' ? '📍 Sharing live location with passenger' :
+         locationStatus==='denied' ? (
+           <span>⚠️ Location denied — <span style={{textDecoration:'underline',cursor:'pointer'}} onClick={() => alert('To enable location:\n\n1. Click the 🔒 lock icon in your browser address bar\n2. Set Location to Allow\n3. Refresh the page')}>tap here to fix</span></span>
+         ) : '📍 Getting your location...'}
       </div>
       <VilleMap height={200} center={driverCoords||pickupCoords} zoom={14} markers={markers}>
         {driverCoords && (
