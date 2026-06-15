@@ -510,9 +510,12 @@ function DriverPending({ go }) {
 
 // ── CUSTOMER DASHBOARD ────────────────────────────────────────────────────────
 function CustomerDash({ go, user, setUser }) {
-  const [tab,      setTab]      = useState('book');
-  const [history,  setHistory]  = useState([]);
-  const [loadingH, setLoadingH] = useState(true);
+  const [tab,        setTab]        = useState('book');
+  const [history,    setHistory]    = useState([]);
+  const [loadingH,   setLoadingH]   = useState(true);
+  const [activeRide, setActiveRide] = useState(null);
+  const [notification, setNotification] = useState(null);
+  const prevStatusRef = useRef(null);
   const handleLogout = async () => { await signOut(auth); setUser(null); go('splash'); };
 
   useEffect(() => {
@@ -530,6 +533,51 @@ function CustomerDash({ go, user, setUser }) {
     }, () => setLoadingH(false));
     return () => unsub();
   }, [user]);
+
+  // Watch for active bookings and notify customer when driver accepts
+  useEffect(() => {
+    if (!user?.uid) return;
+    const q = query(
+      collection(db,'bookings'),
+      where('customerId','==',user.uid),
+      where('status','==','active')
+    );
+    const unsub = onSnapshot(q, snap => {
+      if (!snap.empty) {
+        const ride = { id:snap.docs[0].id, ...snap.docs[0].data() };
+        setActiveRide(ride);
+        // Notify if status just changed to active
+        if (prevStatusRef.current !== 'active') {
+          prevStatusRef.current = 'active';
+          setNotification({
+            type: 'driver_accepted',
+            driverName:   ride.driverName   || 'Your driver',
+            vehicleMake:  ride.vehicleMake  || '',
+            vehicleModel: ride.vehicleModel || '',
+            licensePlate: ride.licensePlate || '',
+          });
+          // Browser notification
+          if (Notification.permission === 'granted') {
+            new Notification('🚗 Driver found!', {
+              body: `${ride.driverName || 'Your driver'} is on the way in a ${ride.vehicleMake || ''} ${ride.vehicleModel || ''} · ${ride.licensePlate || ''}`,
+              icon: '/villecabs-logo.png',
+            });
+          }
+        }
+      } else {
+        setActiveRide(null);
+        prevStatusRef.current = null;
+      }
+    });
+    return () => unsub();
+  }, [user]);
+
+  // Request notification permission on mount
+  useEffect(() => {
+    if (Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
 
   const totalSpent = history.reduce((s,r) => s+(r.fare||0), 0);
 
@@ -565,7 +613,65 @@ function CustomerDash({ go, user, setUser }) {
       {/* BOOK TAB */}
       {tab === 'book' && (
         <div style={{ flex:1, display:'flex', flexDirection:'column' }}>
+
+          {/* Driver accepted notification banner */}
+          {notification?.type === 'driver_accepted' && (
+            <div style={{ background:'rgba(26,158,90,0.15)', border:'1.5px solid rgba(26,158,90,0.5)', margin:'10px 14px 0', borderRadius:12, padding:14, display:'flex', alignItems:'center', gap:10 }}>
+              <div style={{ fontSize:28, flexShrink:0 }}>🚗</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:14, fontWeight:500, color:GREEN }}>Driver found!</div>
+                <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{notification.driverName} is on the way</div>
+                {notification.licensePlate && <div style={{ fontSize:11, color:YELLOW, marginTop:2 }}>🔑 {notification.vehicleMake} {notification.vehicleModel} · {notification.licensePlate}</div>}
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                <button onClick={() => { go('live-ride'); }} style={{ background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:500 }}>Track →</button>
+                <button onClick={() => setNotification(null)} style={{ background:'rgba(255,255,255,0.08)', color:'rgba(255,255,255,0.5)', border:'none', borderRadius:8, padding:'6px 12px', fontSize:11, cursor:'pointer' }}>Dismiss</button>
+              </div>
+            </div>
+          )}
+
+          {/* Active ride banner */}
+          {activeRide && !notification && (
+            <div style={{ background:'rgba(232,180,0,0.1)', border:'0.5px solid rgba(232,180,0,0.3)', margin:'10px 14px 0', borderRadius:12, padding:12, display:'flex', alignItems:'center', gap:10, cursor:'pointer' }} onClick={() => go('live-ride')}>
+              <div style={{ fontSize:22 }}>🚕</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:13, fontWeight:500, color:YELLOW }}>Ride in progress</div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Driver: {activeRide.driverName||'Assigned'} · Tap to track</div>
+              </div>
+              <span style={{ color:YELLOW, fontSize:18 }}>›</span>
+            </div>
+          )}
+
           <VilleMap height={210} center={MANCHESTER_CENTER} zoom={13}>
+
+          {/* Driver accepted notification banner */}
+          {notification?.type === 'driver_accepted' && (
+            <div style={{ background:'rgba(26,158,90,0.15)', border:'1.5px solid rgba(26,158,90,0.5)', margin:'10px 14px 0', borderRadius:12, padding:14, display:'flex', alignItems:'center', gap:10 }}>
+              <div style={{ fontSize:28, flexShrink:0 }}>🚗</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:14, fontWeight:500, color:GREEN }}>Driver found!</div>
+                <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{notification.driverName} is on the way</div>
+                {notification.licensePlate && <div style={{ fontSize:11, color:YELLOW, marginTop:2 }}>🔑 {notification.vehicleMake} {notification.vehicleModel} · {notification.licensePlate}</div>}
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                <button onClick={() => { go('live-ride'); }} style={{ background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:500 }}>Track →</button>
+                <button onClick={() => setNotification(null)} style={{ background:'rgba(255,255,255,0.08)', color:'rgba(255,255,255,0.5)', border:'none', borderRadius:8, padding:'6px 12px', fontSize:11, cursor:'pointer' }}>Dismiss</button>
+              </div>
+            </div>
+          )}
+
+          {/* Active ride banner - shows if ride is in progress */}
+          {activeRide && !notification && (
+            <div style={{ background:'rgba(232,180,0,0.1)', border:'0.5px solid rgba(232,180,0,0.3)', margin:'10px 14px 0', borderRadius:12, padding:12, display:'flex', alignItems:'center', gap:10, cursor:'pointer' }} onClick={() => go('live-ride')}>
+              <div style={{ fontSize:22 }}>🚕</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:13, fontWeight:500, color:YELLOW }}>Ride in progress</div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Driver: {activeRide.driverName||'Assigned'} · Tap to track</div>
+              </div>
+              <span style={{ color:YELLOW, fontSize:18 }}>›</span>
+            </div>
+          )}
+
             <Marker position={MANCHESTER_CENTER} title="Manchester, Jamaica"/>
           </VilleMap>
           <div style={{ padding:16 }}>
