@@ -323,7 +323,7 @@ function OTPScreen({ go, user }) {
         <p style={{ color:YELLOW, fontSize:14, fontWeight:500, marginBottom:28 }}>{user?.email||'your email'}</p>
         {resent && <div style={s.successBox}>✅ Verification email resent!</div>}
         <div style={{ width:'100%', maxWidth:320 }}>
-          <button style={s.btnY} onClick={() => go('customer-dash')}>I've verified my email →</button>
+          <button style={s.btnY} onClick={async () => { await auth.currentUser?.reload(); const isVerified = auth.currentUser?.emailVerified; if (isVerified) { go(user?.role==='driver'?'driver-dash':'customer-dash'); } else { setResent(false); alert('Email not verified yet. Please check your inbox and click the verification link first.'); } }}>I've verified my email →</button>
           <button style={s.btnO} onClick={resend}>Resend verification email</button>
         </div>
       </div>
@@ -551,8 +551,8 @@ function CustomerDash({ go, user, setUser }) {
 
       if (active) {
         setActiveRide(active);
-        // Notify if just became active
-        if (prevStatusRef.current !== 'active') {
+        // Show driver accepted notification
+        if (prevStatusRef.current !== 'active' && prevStatusRef.current !== 'arrived') {
           prevStatusRef.current = 'active';
           setNotification({
             type:         'driver_accepted',
@@ -568,12 +568,12 @@ function CustomerDash({ go, user, setUser }) {
             });
           }
         }
-        // Notify if driver just arrived
+        // Show driver arrived notification - check driverArrived field
         if (active.driverArrived && prevStatusRef.current !== 'arrived') {
           prevStatusRef.current = 'arrived';
           setNotification({
             type:        'driver_arrived',
-            driverName:  active.driverName || 'Your driver',
+            driverName:  active.driverName  || 'Your driver',
             licensePlate:active.licensePlate || '',
           });
           if (Notification.permission === 'granted') {
@@ -616,7 +616,8 @@ function CustomerDash({ go, user, setUser }) {
     const unsub = onSnapshot(doc(db,'bookings',activeRide.id), snap => {
       if (!snap.exists()) return;
       const data = snap.data();
-      if (data.driverArrived && prevStatusRef.current === 'active') {
+      // Fire arrived notification regardless of prevStatusRef
+      if (data.driverArrived && prevStatusRef.current !== 'arrived') {
         prevStatusRef.current = 'arrived';
         setNotification({
           type:        'driver_arrived',
@@ -629,6 +630,12 @@ function CustomerDash({ go, user, setUser }) {
             icon: '/villecabs-logo.png',
           });
         }
+      }
+      // Clear if ride completed
+      if (data.status === 'completed') {
+        setNotification(null);
+        setActiveRide(null);
+        prevStatusRef.current = 'completed';
       }
     });
     return () => unsub();
@@ -1320,10 +1327,40 @@ function BookingConfirm({ go, bookingId }) {
 
   useEffect(() => {
     if (!bookingId) return;
+    let prevStatus = null;
     const unsub = onSnapshot(doc(db,'bookings',bookingId), snap => {
       if (snap.exists()) {
         const data = { id:snap.id, ...snap.data() };
         setBooking(data);
+        // Browser notification when driver accepts
+        if (data.status === 'active' && prevStatus !== 'active') {
+          if (Notification.permission === 'granted') {
+            new Notification('🚗 Driver found!', {
+              body: `${data.driverName||'Your driver'} is on the way in a ${data.vehicleMake||''} ${data.vehicleModel||''} · ${data.licensePlate||''}`,
+              icon: '/villecabs-logo.png',
+            });
+          } else if (Notification.permission === 'default') {
+            Notification.requestPermission().then(perm => {
+              if (perm === 'granted') {
+                new Notification('🚗 Driver found!', {
+                  body: `${data.driverName||'Your driver'} is on the way!`,
+                  icon: '/villecabs-logo.png',
+                });
+              }
+            });
+          }
+        }
+        // Browser notification when driver arrives
+        if (data.driverArrived && prevStatus !== 'arrived') {
+          prevStatus = 'arrived';
+          if (Notification.permission === 'granted') {
+            new Notification('📍 Driver has arrived!', {
+              body: `${data.driverName||'Your driver'} is at your pickup location. Please come outside!`,
+              icon: '/villecabs-logo.png',
+            });
+          }
+        }
+        prevStatus = data.status;
       }
     }, err => {
       console.error('LiveRide listener error:', err);
@@ -1615,10 +1652,40 @@ function LiveRide({ go, bookingId, user }) {
 
   useEffect(() => {
     if (!bookingId) return;
+    let prevStatus = null;
     const unsub = onSnapshot(doc(db,'bookings',bookingId), snap => {
       if (snap.exists()) {
         const data = { id:snap.id, ...snap.data() };
         setBooking(data);
+        // Browser notification when driver accepts
+        if (data.status === 'active' && prevStatus !== 'active') {
+          if (Notification.permission === 'granted') {
+            new Notification('🚗 Driver found!', {
+              body: `${data.driverName||'Your driver'} is on the way in a ${data.vehicleMake||''} ${data.vehicleModel||''} · ${data.licensePlate||''}`,
+              icon: '/villecabs-logo.png',
+            });
+          } else if (Notification.permission === 'default') {
+            Notification.requestPermission().then(perm => {
+              if (perm === 'granted') {
+                new Notification('🚗 Driver found!', {
+                  body: `${data.driverName||'Your driver'} is on the way!`,
+                  icon: '/villecabs-logo.png',
+                });
+              }
+            });
+          }
+        }
+        // Browser notification when driver arrives
+        if (data.driverArrived && prevStatus !== 'arrived') {
+          prevStatus = 'arrived';
+          if (Notification.permission === 'granted') {
+            new Notification('📍 Driver has arrived!', {
+              body: `${data.driverName||'Your driver'} is at your pickup location. Please come outside!`,
+              icon: '/villecabs-logo.png',
+            });
+          }
+        }
+        prevStatus = data.status;
       }
     }, err => {
       console.error('LiveRide listener error:', err);
@@ -1848,6 +1915,30 @@ function LiveRide({ go, bookingId, user }) {
             <div style={{ fontSize:32, marginBottom:8 }}>🔍</div>
             <div style={{ fontSize:15, fontWeight:500, color:YELLOW, marginBottom:4 }}>Finding your driver...</div>
             <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)' }}>Drivers in Manchester are being notified</div>
+          </div>
+        )}
+
+        {/* Driver arrived in-screen alert */}
+        {booking?.driverArrived && booking?.status === 'active' && (
+          <div style={{ background:'rgba(232,180,0,0.15)', border:'2px solid rgba(232,180,0,0.7)', borderRadius:12, padding:14, marginBottom:12, display:'flex', alignItems:'center', gap:12 }}>
+            <div style={{ fontSize:28 }}>📍</div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:14, fontWeight:700, color:YELLOW }}>Driver has arrived!</div>
+              <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{booking.driverName} is at your pickup location</div>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Please come outside 🚶</div>
+            </div>
+          </div>
+        )}
+
+        {/* Driver arrived in-screen alert */}
+        {booking?.driverArrived && booking?.status === 'active' && (
+          <div style={{ background:'rgba(232,180,0,0.15)', border:'2px solid rgba(232,180,0,0.7)', borderRadius:12, padding:14, marginBottom:12, display:'flex', alignItems:'center', gap:12 }}>
+            <div style={{ fontSize:28 }}>📍</div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:14, fontWeight:700, color:YELLOW }}>Driver has arrived!</div>
+              <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{booking.driverName} is at your pickup location</div>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Please come outside 🚶</div>
+            </div>
           </div>
         )}
 
@@ -2757,12 +2848,28 @@ export default function App() {
         const dSnap = await getDoc(doc(db,'drivers',fu.uid));
         if (cSnap.exists()) {
           const d = cSnap.data();
-          setUser({ uid:fu.uid, name:d.name||fu.displayName, email:fu.email, role:'customer' });
-          setScreen('customer-dash');
+          // Check email verified (skip for Google login which is auto-verified)
+          if (!fu.emailVerified && fu.providerData[0]?.providerId === 'password') {
+            setUser({ uid:fu.uid, name:d.name||fu.displayName, email:fu.email, role:'customer' });
+            setScreen('otp');
+          } else {
+            setUser({ uid:fu.uid, name:d.name||fu.displayName, email:fu.email, role:'customer' });
+            setScreen('customer-dash');
+          }
         } else if (dSnap.exists()) {
           const d = dSnap.data();
-          if (d.status==='approved') { setUser({ uid:fu.uid, name:d.name, email:fu.email, role:'driver' }); setScreen('driver-dash'); }
-          else setScreen('driver-pending');
+          if (d.status==='approved') {
+            // Check email verified for drivers too
+            if (!fu.emailVerified && fu.providerData[0]?.providerId === 'password') {
+              setUser({ uid:fu.uid, name:d.name, email:fu.email, role:'driver' });
+              setScreen('otp');
+            } else {
+              setUser({ uid:fu.uid, name:d.name, email:fu.email, role:'driver' });
+              setScreen('driver-dash');
+            }
+          } else {
+            setScreen('driver-pending');
+          }
         }
       }
       setLoading(false);
