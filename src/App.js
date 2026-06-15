@@ -903,7 +903,14 @@ function PinDropoff({ go, pickupData, setDropoffData }) {
   const [pinPos,  setPinPos]  = useState({ lat:18.02, lng:-77.48 });
   const [address, setAddress] = useState('');
   const [loading, setLoading] = useState(false);
-  const suggestions = ['Manchester Market, Mandeville','Spaldings, Manchester','Christiana, Manchester','Porus, Manchester'];
+  const suggestions = [
+    { address:'Manchester Market, Mandeville', coords:{ lat:18.0416, lng:-77.5036 } },
+    { address:'Spaldings, Manchester',          coords:{ lat:18.1102, lng:-77.4608 } },
+    { address:'Christiana, Manchester',         coords:{ lat:18.1667, lng:-77.5000 } },
+    { address:'Porus, Manchester',              coords:{ lat:18.0167, lng:-77.4167 } },
+    { address:'Mandeville Hospital',            coords:{ lat:18.0452, lng:-77.5082 } },
+    { address:'Caledonia Road, Mandeville',     coords:{ lat:18.0380, lng:-77.5120 } },
+  ];
 
   const handleMapClick = useCallback(async (e) => {
     const lat = e.latLng.lat();
@@ -941,9 +948,9 @@ function PinDropoff({ go, pickupData, setDropoffData }) {
         )}
         <div style={{ background:'rgba(15,20,40,0.6)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:12, overflow:'hidden', marginBottom:14 }}>
           {suggestions.map((sug,i) => (
-            <div key={i} onClick={() => { setAddress(sug); setDropoffData({ coords:pinPos, address:sug }); go('vehicle-select'); }}
+            <div key={i} onClick={() => { setAddress(sug.address); setDropoffData({ coords:sug.coords, address:sug.address }); go('vehicle-select'); }}
               style={{ padding:'11px 14px', fontSize:13, color:'rgba(255,255,255,0.8)', borderBottom:i<suggestions.length-1?'0.5px solid rgba(255,255,255,0.08)':'none', cursor:'pointer' }}>
-              📍 {sug}
+              📍 {sug.address}
             </div>
           ))}
         </div>
@@ -995,8 +1002,21 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
     return { base: BASE_FARE, extra, extraMeters: Math.round(extraMeters), per100m };
   };
 
+  // Haversine formula for straight-line distance fallback
+  const haversine = (p1, p2) => {
+    const R = 6371;
+    const dLat = (p2.lat - p1.lat) * Math.PI / 180;
+    const dLng = (p2.lng - p1.lng) * Math.PI / 180;
+    const a = Math.sin(dLat/2)**2 + Math.cos(p1.lat*Math.PI/180) * Math.cos(p2.lat*Math.PI/180) * Math.sin(dLng/2)**2;
+    return parseFloat((R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))).toFixed(1));
+  };
+
   useEffect(() => {
     if (pickupData?.coords && dropoffData?.coords) {
+      // Set Haversine distance immediately so fares show right away
+      const straight = haversine(pickupData.coords, dropoffData.coords);
+      setDist(straight);
+      // Then get real road distance from Google Directions
       getDirections(pickupData.coords, dropoffData.coords).then(result => {
         if (result) {
           setDirections(result);
