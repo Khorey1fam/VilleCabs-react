@@ -25,7 +25,8 @@ const app            = initializeApp(firebaseConfig);
 const auth           = getAuth(app);
 const db             = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
-const messaging     = getMessaging(app);
+let messaging = null;
+try { messaging = getMessaging(app); } catch(e) { console.warn('Messaging unavailable'); }
 const functions_     = getFunctions(app);
 const createPaymentIntentFn   = httpsCallable(functions_, 'createPaymentIntent');
 const updateDriverLocationFn  = httpsCallable(functions_, 'updateDriverLocation');
@@ -227,6 +228,7 @@ function Splash({ go }) {
           <button style={s.btnO} onClick={() => go('driver-login')}>Driver Login</button>
         </div>
         <p style={{ color:'rgba(255,255,255,0.25)', fontSize:11, marginTop:40 }}>Mandeville · Christiana · Spaldings · Porus</p>
+        <p style={{ color:'rgba(255,255,255,0.18)', fontSize:10, marginTop:8 }}>Beta Version 2026</p>
       </div>
     </div>
   );
