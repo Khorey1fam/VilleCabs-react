@@ -1402,153 +1402,17 @@ function BookingConfirm({ go, bookingId }) {
   );
 }
 
-// ── SOS BUTTON ───────────────────────────────────────────────────────────────
-function SOSButton({ booking, user }) {
-  const [pressed,    setPressed]    = useState(false);
-  const [countdown,  setCountdown]  = useState(5);
-  const [sent,       setSent]       = useState(false);
-  const [holding,    setHolding]    = useState(false);
-  const countRef    = useRef(null);
-  // Safe null check after all hooks
-  if (!booking) return null;
-
-
-  const startHold = () => {
-    if (sent) return;
-    setHolding(true);
-    setCountdown(5);
-    setPressed(true);
-    countRef.current = setInterval(() => {
-      setCountdown(prev => {
-        if (prev <= 1) {
-          clearInterval(countRef.current);
-          sendSOS();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-  };
-
-  const cancelHold = () => {
-    if (sent) return;
-    setHolding(false);
-    setPressed(false);
-    setCountdown(5);
-    clearInterval(countRef.current);
-  };
-
-  const sendSOS = async () => {
-    setHolding(false);
-    setSent(true);
-    try {
-      // Get current location
-      let lat = booking?.pickup?.lat || 18.0416;
-      let lng = booking?.pickup?.lng || -77.5036;
-      if (navigator.geolocation) {
-        await new Promise(resolve => {
-          navigator.geolocation.getCurrentPosition(
-            pos => { lat = pos.coords.latitude; lng = pos.coords.longitude; resolve(); },
-            () => resolve(),
-            { timeout: 3000 }
-          );
-        });
-      }
-
-      const mapsLink = `https://maps.google.com/?q=${lat},${lng}`;
-      const sosData  = {
-        userId:       user?.uid,
-        userName:     user?.name || 'Unknown',
-        userRole:     user?.role || 'customer',
-        bookingId:    booking?.id,
-        driverName:   booking?.driverName || 'Unknown driver',
-        customerName: booking?.customerName || 'Unknown customer',
-        vehicleMake:  booking?.vehicleMake || '',
-        vehicleModel: booking?.vehicleModel || '',
-        licensePlate: booking?.licensePlate || '',
-        pickup:       booking?.pickup?.address || 'Unknown',
-        dropoff:      booking?.dropoff?.address || 'Unknown',
-        lat, lng, mapsLink,
-        status:       'ACTIVE',
-        createdAt:    serverTimestamp(),
-      };
-
-      // Save SOS to Firestore
-      await addDoc(collection(db,'sos_alerts'), sosData);
-
-      // Update booking with SOS flag
-      if (booking?.id) {
-        await updateDoc(doc(db,'bookings',booking.id), {
-          sosTriggered: true,
-          sosAt:        serverTimestamp(),
-          sosBy:        user?.role,
-        });
-      }
-    } catch(err) { console.error('SOS error:', err); }
-  };
-
-  useEffect(() => () => clearInterval(countRef.current), []);
-
-  if (sent) {
-    return (
-      <div style={{ background:'rgba(226,75,74,0.2)', border:'1.5px solid rgba(226,75,74,0.6)', borderRadius:12, padding:'12px 16px', marginBottom:12, display:'flex', alignItems:'center', gap:10 }}>
-        <div style={{ fontSize:24 }}>🚨</div>
-        <div>
-          <div style={{ fontSize:13, fontWeight:500, color:'#f09595' }}>SOS Alert Sent!</div>
-          <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Emergency services and admin have been notified with your location</div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ marginBottom:12 }}>
-      <div
-        onMouseDown={startHold}
-        onMouseUp={cancelHold}
-        onMouseLeave={cancelHold}
-        onTouchStart={startHold}
-        onTouchEnd={cancelHold}
-        style={{
-          background: holding ? 'rgba(226,75,74,0.4)' : 'rgba(226,75,74,0.15)',
-          border: `2px solid ${holding ? '#e24b4a' : 'rgba(226,75,74,0.5)'}`,
-          borderRadius:12,
-          padding:'14px 16px',
-          display:'flex',
-          alignItems:'center',
-          gap:12,
-          cursor:'pointer',
-          userSelect:'none',
-          transition:'all 0.2s',
-        }}
-      >
-        <div style={{ fontSize:28 }}>🆘</div>
-        <div style={{ flex:1 }}>
-          <div style={{ fontSize:14, fontWeight:700, color:'#f09595' }}>
-            {holding ? `Sending SOS in ${countdown}s...` : 'SOS Emergency'}
-          </div>
-          <div style={{ fontSize:11, color:'rgba(255,255,255,0.45)', marginTop:2 }}>
-            {holding ? 'Release to cancel' : 'Hold for 5 seconds to send emergency alert'}
-          </div>
-        </div>
-        {holding && (
-          <div style={{ width:36, height:36, borderRadius:'50%', border:'3px solid #e24b4a', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, fontWeight:700, color:'#f09595' }}>
-            {countdown}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ── LIVE RIDE ─────────────────────────────────────────────────────────────────
 function LiveRide({ go, bookingId, user }) {
-  const [booking,    setBooking]    = useState(null);
-  const [driverInfo, setDriverInfo] = useState(null);
-  const [rating,     setRating]     = useState(0);
-  const [rated,      setRated]      = useState(false);
+  const [booking,   setBooking]   = useState(null);
+  const [rating,    setRating]    = useState(0);
+  const [rated,     setRated]     = useState(false);
+  const [driverInfo,setDriverInfo]= useState(null);
+  const [sosSent,   setSosSent]   = useState(false);
+  const [sosHolding,setSosHolding]= useState(false);
+  const [sosCount,  setSosCount]  = useState(5);
+  const sosRef = useRef(null);
 
-  // Watch booking in real time
   useEffect(() => {
     if (!bookingId) return;
     const unsub = onSnapshot(doc(db,'bookings',bookingId), snap => {
@@ -1557,13 +1421,69 @@ function LiveRide({ go, bookingId, user }) {
     return () => unsub();
   }, [bookingId]);
 
-  // Load driver profile when driver is assigned
   useEffect(() => {
     if (!booking?.driverId) return;
     getDoc(doc(db,'drivers',booking.driverId)).then(snap => {
       if (snap.exists()) setDriverInfo(snap.data());
     });
   }, [booking?.driverId]);
+
+  useEffect(() => () => { if (sosRef.current) clearInterval(sosRef.current); }, []);
+
+  const startSOS = () => {
+    if (sosSent) return;
+    setSosHolding(true);
+    setSosCount(5);
+    sosRef.current = setInterval(() => {
+      setSosCount(prev => {
+        if (prev <= 1) {
+          clearInterval(sosRef.current);
+          triggerSOS();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const cancelSOS = () => {
+    if (sosSent) return;
+    setSosHolding(false);
+    setSosCount(5);
+    clearInterval(sosRef.current);
+  };
+
+  const triggerSOS = async () => {
+    setSosHolding(false);
+    setSosSent(true);
+    try {
+      let lat = booking?.pickup?.lat || 18.0416;
+      let lng = booking?.pickup?.lng || -77.5036;
+      if (navigator.geolocation) {
+        await new Promise(res => navigator.geolocation.getCurrentPosition(
+          p => { lat = p.coords.latitude; lng = p.coords.longitude; res(); },
+          () => res(), { timeout: 3000 }
+        ));
+      }
+      await addDoc(collection(db,'sos_alerts'), {
+        userId:       user?.uid || '',
+        userName:     user?.name || 'Customer',
+        userRole:     'customer',
+        bookingId:    bookingId,
+        driverName:   booking?.driverName || '--',
+        customerName: booking?.customerName || '--',
+        vehicleMake:  booking?.vehicleMake || '',
+        vehicleModel: booking?.vehicleModel || '',
+        licensePlate: booking?.licensePlate || '',
+        pickup:       booking?.pickup?.address || '--',
+        dropoff:      booking?.dropoff?.address || '--',
+        lat, lng,
+        mapsLink:     `https://maps.google.com/?q=${lat},${lng}`,
+        status:       'ACTIVE',
+        createdAt:    serverTimestamp(),
+      });
+    } catch(err) { console.error('SOS error:', err); }
+  };
 
   const submitRating = async () => {
     if (!rating || !bookingId) return;
@@ -1590,7 +1510,7 @@ function LiveRide({ go, bookingId, user }) {
   // ── Completed screen ──
   if (booking?.status === 'completed') {
     return (
-      <div style={{ ...s.content, background:'transparent', minHeight:'100vh' }}>
+      <div style={{ ...s.content, minHeight:'100vh' }}>
         <div style={{ padding:24, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'100vh' }}>
           <div style={{ fontSize:64, marginBottom:16 }}>✅</div>
           <h2 style={{ fontSize:22, fontWeight:500, color:WHITE, marginBottom:8 }}>Ride completed!</h2>
@@ -1622,48 +1542,37 @@ function LiveRide({ go, bookingId, user }) {
 
   // ── Live tracking screen ──
   return (
-    <div style={{ ...s.content, background:'transparent' }}>
-
-      {/* Map — centers on driver if available, otherwise pickup */}
+    <div style={{ ...s.content }}>
       <div style={{ position:'relative' }}>
         <VilleMap height={240} center={driverCoords||pickupCoords} zoom={15}>
-          {/* Pickup pin */}
           <Marker position={pickupCoords} title="Pickup"
             icon={{ url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><circle cx="14" cy="14" r="11" fill="#1a9e5a" stroke="white" stroke-width="2.5"/></svg>'), scaledSize:{width:28,height:28} }}/>
-          {/* Dropoff pin */}
           {dropoffCoords && (
             <Marker position={dropoffCoords} title="Drop-off"
               icon={{ url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><circle cx="14" cy="14" r="11" fill="#e8b400" stroke="white" stroke-width="2.5"/></svg>'), scaledSize:{width:28,height:28} }}/>
           )}
-          {/* Driver car icon — updates live */}
           {driverCoords && (
             <Marker position={driverCoords} title="Your driver"
               icon={{ url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="#1a1a2e" stroke="#e8b400" stroke-width="3"/><text x="22" y="29" text-anchor="middle" font-size="20">🚗</text></svg>'), scaledSize:{width:44,height:44} }}/>
           )}
         </VilleMap>
-
-        {/* Status bar over map */}
-        <div style={{ position:'absolute', bottom:0, left:0, right:0, background:'rgba(26,26,46,0.9)', padding:'7px 14px', textAlign:'center', fontSize:12, color:YELLOW, fontWeight:500 }}>
-          {booking?.status==='active'
-            ? driverCoords ? '📍 Tracking driver live on map' : '🟢 Driver accepted — heading to you'
-            : '🔍 Finding your driver...'}
+        <div style={{ position:'absolute', bottom:0, left:0, right:0, background:'rgba(10,15,35,0.88)', backdropFilter:'blur(8px)', padding:'7px 14px', textAlign:'center', fontSize:12, color:YELLOW, fontWeight:500 }}>
+          {booking?.status==='active' ? driverCoords ? '📍 Tracking driver live on map' : '🟢 Driver accepted — heading to you' : '🔍 Finding your driver...'}
         </div>
       </div>
 
-      <div style={{ padding:14, overflowY:'auto' }}>
+      <div style={{ padding:14 }}>
         {booking?.driverId ? (
           <>
             {/* Driver safety card */}
             <div style={{ background:'rgba(15,20,40,0.65)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:14, padding:14, marginBottom:12 }}>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.5, marginBottom:10, fontWeight:500 }}>
-                🛡️ Driver & Vehicle Info — for your safety
-              </div>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.5, marginBottom:10, fontWeight:500 }}>🛡️ Driver & Vehicle Info</div>
               <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
                 <div style={{ width:46, height:46, borderRadius:'50%', background:'rgba(232,180,0,0.15)', border:'1.5px solid rgba(232,180,0,0.3)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, flexShrink:0 }}>👤</div>
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:15, fontWeight:500, color:WHITE }}>{booking.driverName||'--'}</div>
                   <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', marginTop:2 }}>
-                    {driverInfo?.rating ? `⭐ ${driverInfo.rating.toFixed(1)} · ${driverInfo.ratingCount||0} reviews` : booking?.driverRating ? `⭐ ${booking.driverRating.toFixed(1)}` : '⭐ New driver'}
+                    {driverInfo?.rating ? `⭐ ${driverInfo.rating.toFixed(1)} · ${driverInfo.ratingCount||0} reviews` : '⭐ New driver'}
                   </div>
                 </div>
                 <div style={{ display:'flex', gap:8 }}>
@@ -1672,42 +1581,24 @@ function LiveRide({ go, bookingId, user }) {
                     <span style={{ fontSize:9, color:'rgba(255,255,255,0.4)' }}>Call</span>
                   </div>
                   <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, cursor:'pointer' }} onClick={() => go('chat')}>
-                    <div style={{ width:38, height:38, borderRadius:'50%', background:'rgba(232,180,0,0.15)', border:'1px solid #e8b400', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17 }}>💬</div>
+                    <div style={{ width:38, height:38, borderRadius:'50%', background:'rgba(232,180,0,0.2)', border:'1px solid #e8b400', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17 }}>💬</div>
                     <span style={{ fontSize:9, color:YELLOW }}>Chat</span>
                   </div>
                 </div>
               </div>
-
-              {/* Vehicle details */}
-              <div style={{ borderTop:'0.5px solid rgba(255,255,255,0.08)', paddingTop:12 }}>
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-                  <div style={{ background:'rgba(15,20,40,0.6)', borderRadius:10, padding:'10px 12px' }}>
-                    <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', marginBottom:3 }}>Make & Model</div>
-                    <div style={{ fontSize:13, fontWeight:500, color:WHITE }}>
-                      {driverInfo ? `${driverInfo.vehicleMake||''} ${driverInfo.vehicleModel||''}`.trim() : booking?.vehicleMake ? `${booking.vehicleMake} ${booking.vehicleModel||''}`.trim() : '...'}
-                    </div>
-                  </div>
-                  <div style={{ background:'rgba(15,20,40,0.6)', borderRadius:10, padding:'10px 12px' }}>
-                    <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', marginBottom:3 }}>License Plate</div>
-                    <div style={{ fontSize:15, fontWeight:700, color:YELLOW, letterSpacing:1 }}>
-                      {driverInfo?.licensePlate || booking?.licensePlate || '...'}
-                    </div>
-                  </div>
-                  <div style={{ background:'rgba(15,20,40,0.6)', borderRadius:10, padding:'10px 12px' }}>
-                    <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', marginBottom:3 }}>Vehicle Type</div>
-                    <div style={{ fontSize:13, fontWeight:500, color:WHITE }}>{booking.vehicleType||'--'}</div>
-                  </div>
-                  <div style={{ background:'rgba(15,20,40,0.6)', borderRadius:10, padding:'10px 12px' }}>
-                    <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', marginBottom:3 }}>Status</div>
-                    <div style={{ fontSize:13, fontWeight:500, color:GREEN }}>
-                      {driverCoords ? '📍 Live' : '🟢 Active'}
-                    </div>
-                  </div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                <div style={{ background:'rgba(255,255,255,0.04)', borderRadius:10, padding:'10px 12px' }}>
+                  <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', marginBottom:3 }}>Make & Model</div>
+                  <div style={{ fontSize:13, fontWeight:500, color:WHITE }}>{booking.vehicleMake ? `${booking.vehicleMake} ${booking.vehicleModel||''}` : '--'}</div>
+                </div>
+                <div style={{ background:'rgba(255,255,255,0.04)', borderRadius:10, padding:'10px 12px' }}>
+                  <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', marginBottom:3 }}>License Plate</div>
+                  <div style={{ fontSize:15, fontWeight:700, color:YELLOW, letterSpacing:1 }}>{booking.licensePlate||'--'}</div>
                 </div>
               </div>
             </div>
 
-            {/* Fare & status */}
+            {/* Fare + status */}
             <div style={{ display:'flex', gap:10, marginBottom:12 }}>
               <div style={{ flex:1, background:'rgba(15,20,40,0.65)', borderRadius:10, padding:10, textAlign:'center' }}>
                 <div style={{ fontSize:10, color:'rgba(255,255,255,0.45)' }}>Status</div>
@@ -1730,7 +1621,30 @@ function LiveRide({ go, bookingId, user }) {
             <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)' }}>Drivers in Manchester are being notified</div>
           </div>
         )}
-        <SOSButton booking={booking} user={user}/>
+
+        {/* SOS Button */}
+        {sosSent ? (
+          <div style={{ background:'rgba(226,75,74,0.2)', border:'1.5px solid rgba(226,75,74,0.5)', borderRadius:12, padding:'12px 16px', marginBottom:12, display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{ fontSize:24 }}>🚨</div>
+            <div>
+              <div style={{ fontSize:13, fontWeight:500, color:'#f09595' }}>SOS Alert Sent!</div>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Admin notified with your location</div>
+            </div>
+          </div>
+        ) : (
+          <div
+            onMouseDown={startSOS} onMouseUp={cancelSOS} onMouseLeave={cancelSOS}
+            onTouchStart={startSOS} onTouchEnd={cancelSOS}
+            style={{ background:sosHolding?'rgba(226,75,74,0.35)':'rgba(226,75,74,0.12)', border:`1.5px solid ${sosHolding?'#e24b4a':'rgba(226,75,74,0.4)'}`, borderRadius:12, padding:'12px 16px', display:'flex', alignItems:'center', gap:12, cursor:'pointer', marginBottom:12, userSelect:'none' }}>
+            <div style={{ fontSize:26 }}>🆘</div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:13, fontWeight:700, color:'#f09595' }}>{sosHolding ? `Sending SOS in ${sosCount}s...` : 'SOS Emergency'}</div>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:2 }}>{sosHolding ? 'Release to cancel' : 'Hold 5 seconds to send emergency alert'}</div>
+            </div>
+            {sosHolding && <div style={{ width:34, height:34, borderRadius:'50%', border:'3px solid #e24b4a', display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, fontWeight:700, color:'#f09595' }}>{sosCount}</div>}
+          </div>
+        )}
+
         <button style={s.btnO} onClick={() => go('customer-dash')}>Back to Dashboard</button>
       </div>
     </div>
@@ -1970,8 +1884,12 @@ function DriverDash({ go, user, setUser, setBookingId }) {
 // ── DRIVER ACTIVE ─────────────────────────────────────────────────────────────
 function DriverActive({ go, user, bookingId, setBookingId }) {
   const [booking,       setBooking]       = useState(null);
-  const [locationStatus,setLocationStatus] = useState('idle'); // idle | tracking | denied
+  const [locationStatus,setLocationStatus]= useState('idle');
+  const [sosSent,       setSosSent]       = useState(false);
+  const [sosHolding,    setSosHolding]    = useState(false);
+  const [sosCount,      setSosCount]      = useState(5);
   const watchRef = useRef(null);
+  const sosRef   = useRef(null);
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -1986,113 +1904,153 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     return () => unsub();
   }, [user]);
 
-  // Start GPS location tracking when ride is active
   useEffect(() => {
     if (!booking?.id || !user?.uid) return;
     if (!navigator.geolocation) return;
-
     setLocationStatus('tracking');
     watchRef.current = navigator.geolocation.watchPosition(
       async (pos) => {
         const { latitude: lat, longitude: lng } = pos.coords;
         try {
-          // Update location via Cloud Function
           await updateDriverLocationFn({ lat, lng, bookingId: booking.id });
         } catch(err) {
-          // Fallback: update Firestore directly
           try {
-            await updateDoc(doc(db,'bookings',booking.id), {
-              driverLocation: { lat, lng, updatedAt: serverTimestamp() }
-            });
-            await updateDoc(doc(db,'drivers',user.uid), {
-              currentLocation: { lat, lng, updatedAt: serverTimestamp() }
-            });
+            await updateDoc(doc(db,'bookings',booking.id), { driverLocation:{ lat, lng, updatedAt:serverTimestamp() } });
+            await updateDoc(doc(db,'drivers',user.uid), { currentLocation:{ lat, lng, updatedAt:serverTimestamp() } });
           } catch(e) { console.error(e); }
         }
       },
-      (err) => {
-        console.warn('Location error:', err);
-        setLocationStatus(err.code === 1 ? 'denied' : 'idle');
-      },
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+      (err) => setLocationStatus(err.code===1?'denied':'idle'),
+      { enableHighAccuracy:true, maximumAge:5000, timeout:10000 }
     );
-
-    return () => {
-      if (watchRef.current !== null) {
-        navigator.geolocation.clearWatch(watchRef.current);
-      }
-    };
+    return () => { if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current); };
   }, [booking?.id, user?.uid]);
+
+  useEffect(() => () => { clearInterval(sosRef.current); }, []);
+
+  const startSOS = () => {
+    if (sosSent) return;
+    setSosHolding(true); setSosCount(5);
+    sosRef.current = setInterval(() => {
+      setSosCount(prev => {
+        if (prev <= 1) { clearInterval(sosRef.current); triggerSOS(); return 0; }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const cancelSOS = () => {
+    if (sosSent) return;
+    setSosHolding(false); setSosCount(5);
+    clearInterval(sosRef.current);
+  };
+
+  const triggerSOS = async () => {
+    setSosHolding(false); setSosSent(true);
+    try {
+      let lat = booking?.pickup?.lat || 18.0416;
+      let lng = booking?.pickup?.lng || -77.5036;
+      if (navigator.geolocation) {
+        await new Promise(res => navigator.geolocation.getCurrentPosition(
+          p => { lat = p.coords.latitude; lng = p.coords.longitude; res(); },
+          () => res(), { timeout:3000 }
+        ));
+      }
+      await addDoc(collection(db,'sos_alerts'), {
+        userId: user?.uid, userName: user?.name||'Driver', userRole:'driver',
+        bookingId: booking?.id, driverName: user?.name||'--',
+        customerName: booking?.customerName||'--',
+        vehicleMake: booking?.vehicleMake||'', vehicleModel: booking?.vehicleModel||'',
+        licensePlate: booking?.licensePlate||'',
+        pickup: booking?.pickup?.address||'--', dropoff: booking?.dropoff?.address||'--',
+        lat, lng, mapsLink:`https://maps.google.com/?q=${lat},${lng}`,
+        status:'ACTIVE', createdAt:serverTimestamp(),
+      });
+    } catch(err) { console.error('SOS error:', err); }
+  };
 
   const completeRide = async () => {
     if (!booking?.id) return;
-    // Stop location tracking
     if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
     await updateDoc(doc(db,'bookings',booking.id), { status:'completed', completedAt:serverTimestamp() });
-    // Clear driver location
     try { await updateDoc(doc(db,'drivers',user.uid), { isOnline:false, currentLocation:null }); } catch(e) {}
     go('driver-dash');
   };
 
-  const pickupCoords  = booking?.pickup  ? { lat:booking.pickup.lat,  lng:booking.pickup.lng  } : MANCHESTER_CENTER;
-  const dropoffCoords = booking?.dropoff ? { lat:booking.dropoff.lat, lng:booking.dropoff.lng } : null;
-  const driverCoords  = booking?.driverLocation ? { lat:booking.driverLocation.lat, lng:booking.driverLocation.lng } : null;
-
+  const pickupCoords  = booking?.pickup       ? { lat:booking.pickup.lat,         lng:booking.pickup.lng         } : MANCHESTER_CENTER;
+  const dropoffCoords = booking?.dropoff       ? { lat:booking.dropoff.lat,        lng:booking.dropoff.lng        } : null;
+  const driverCoords  = booking?.driverLocation? { lat:booking.driverLocation.lat, lng:booking.driverLocation.lng } : null;
   const markers = [{ position:pickupCoords, title:'Pickup' }];
   if (dropoffCoords) markers.push({ position:dropoffCoords, title:'Drop-off' });
 
   return (
-    <div style={{ ...s.content, background:'transparent' }}>
+    <div style={{ ...s.content }}>
       <TopBar title="Active Ride" onBack={() => go('driver-dash')}/>
-
-      {/* Location tracking status */}
-      <div style={{ background: locationStatus==='tracking' ? 'rgba(26,158,90,0.15)' : locationStatus==='denied' ? 'rgba(226,75,74,0.15)' : 'rgba(255,255,255,0.05)', padding:'6px 16px', fontSize:11, color: locationStatus==='tracking' ? '#9fe1cb' : locationStatus==='denied' ? '#f09595' : 'rgba(255,255,255,0.4)', display:'flex', alignItems:'center', gap:6 }}>
-        {locationStatus==='tracking' ? '📍 Sharing your live location with passenger' : locationStatus==='denied' ? '⚠️ Location access denied — passenger cannot see you on map' : '📍 Getting your location...'}
+      <div style={{ background:locationStatus==='tracking'?'rgba(26,158,90,0.15)':'rgba(226,75,74,0.1)', padding:'6px 16px', fontSize:11, color:locationStatus==='tracking'?'#9fe1cb':'#f09595', display:'flex', alignItems:'center', gap:6 }}>
+        {locationStatus==='tracking'?'📍 Sharing live location with passenger':locationStatus==='denied'?'⚠️ Location access denied':'📍 Getting location...'}
       </div>
-
       <VilleMap height={200} center={driverCoords||pickupCoords} zoom={14} markers={markers}>
         {driverCoords && (
           <Marker position={driverCoords} title="Your location"
-            icon={{ url:'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><circle cx="16" cy="16" r="12" fill="#e8b400" stroke="white" stroke-width="3"/><text x="16" y="21" text-anchor="middle" font-size="14">🚗</text></svg>'), scaledSize: { width:32, height:32 } }}/>
+            icon={{ url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="#e8b400" stroke="white" stroke-width="3"/><text x="18" y="24" text-anchor="middle" font-size="16">🚗</text></svg>'), scaledSize:{width:36,height:36} }}/>
         )}
       </VilleMap>
-
       <div style={{ padding:14 }}>
         {booking ? (
           <>
             <div style={{ background:'rgba(232,180,0,0.1)', border:'1.5px solid rgba(232,180,0,0.4)', borderRadius:12, padding:14, marginBottom:12 }}>
-              <div style={{ fontSize:13, fontWeight:500, color:'#e8b400', marginBottom:8 }}>Pick up passenger</div>
-              <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-                <div style={{ width:9, height:9, borderRadius:'50%', background:'#1a9e5a' }}/>
-                <div style={{ fontSize:13, color:'#fff' }}>{booking.pickup?.address}</div>
-              </div>
+              <div style={{ fontSize:13, fontWeight:500, color:YELLOW, marginBottom:8 }}>Pick up passenger</div>
+              <div style={{ display:'flex', gap:8, alignItems:'center' }}><div style={{ width:9, height:9, borderRadius:'50%', background:GREEN }}/><div style={{ fontSize:13, color:WHITE }}>{booking.pickup?.address}</div></div>
             </div>
             <div style={{ background:'rgba(15,20,40,0.65)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:12, padding:14, marginBottom:12 }}>
-              <div style={{ fontSize:13, fontWeight:500, color:'#fff', marginBottom:8 }}>Passenger</div>
+              <div style={{ fontSize:13, fontWeight:500, color:WHITE, marginBottom:8 }}>Passenger</div>
               <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                <div style={{ width:36, height:36, borderRadius:'50%', background:'#1a1a2e', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>👤</div>
+                <div style={{ width:36, height:36, borderRadius:'50%', background:DARK, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>👤</div>
                 <div style={{ flex:1 }}>
-                  <div style={{ fontSize:13, fontWeight:500, color:'#fff' }}>{booking.customerName}</div>
+                  <div style={{ fontSize:13, fontWeight:500, color:WHITE }}>{booking.customerName}</div>
                   <div style={{ fontSize:11, color:'rgba(255,255,255,0.45)' }}>Verified rider</div>
                 </div>
                 <div style={{ display:'flex', gap:8 }}>
                   <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, cursor:'pointer' }}>
-                    <div style={{ width:40, height:40, borderRadius:'50%', background:'#1a9e5a', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>📞</div>
+                    <div style={{ width:40, height:40, borderRadius:'50%', background:GREEN, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>📞</div>
                     <span style={{ fontSize:9, color:'rgba(255,255,255,0.45)' }}>Call</span>
                   </div>
                   <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, cursor:'pointer' }} onClick={() => { setBookingId(booking?.id||bookingId); go('chat'); }}>
                     <div style={{ width:40, height:40, borderRadius:'50%', background:'rgba(232,180,0,0.2)', border:'1.5px solid #e8b400', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>💬</div>
-                    <span style={{ fontSize:9, color:'#e8b400' }}>Chat</span>
+                    <span style={{ fontSize:9, color:YELLOW }}>Chat</span>
                   </div>
                 </div>
               </div>
             </div>
             <div style={{ display:'flex', gap:8, alignItems:'center', background:'rgba(15,20,40,0.65)', borderRadius:10, padding:12, marginBottom:14 }}>
-              <div style={{ width:9, height:9, borderRadius:'50%', background:'#e8b400' }}/>
-              <div style={{ fontSize:13, color:'#fff', flex:1 }}>{booking.dropoff?.address}</div>
-              <div style={{ fontSize:14, fontWeight:500, color:'#1a9e5a' }}>J${booking.fare?.toLocaleString()}</div>
+              <div style={{ width:9, height:9, borderRadius:'50%', background:YELLOW }}/>
+              <div style={{ fontSize:13, color:WHITE, flex:1 }}>{booking.dropoff?.address}</div>
+              <div style={{ fontSize:14, fontWeight:500, color:GREEN }}>J${booking.fare?.toLocaleString()}</div>
             </div>
-            <SOSButton booking={booking} user={user}/>
+
+            {/* SOS Button */}
+            {sosSent ? (
+              <div style={{ background:'rgba(226,75,74,0.2)', border:'1.5px solid rgba(226,75,74,0.5)', borderRadius:12, padding:'12px 16px', marginBottom:12, display:'flex', alignItems:'center', gap:10 }}>
+                <div style={{ fontSize:24 }}>🚨</div>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:500, color:'#f09595' }}>SOS Alert Sent!</div>
+                  <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Admin notified with your location</div>
+                </div>
+              </div>
+            ) : (
+              <div
+                onMouseDown={startSOS} onMouseUp={cancelSOS} onMouseLeave={cancelSOS}
+                onTouchStart={startSOS} onTouchEnd={cancelSOS}
+                style={{ background:sosHolding?'rgba(226,75,74,0.35)':'rgba(226,75,74,0.12)', border:`1.5px solid ${sosHolding?'#e24b4a':'rgba(226,75,74,0.4)'}`, borderRadius:12, padding:'12px 16px', display:'flex', alignItems:'center', gap:12, cursor:'pointer', marginBottom:14, userSelect:'none' }}>
+                <div style={{ fontSize:26 }}>🆘</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:'#f09595' }}>{sosHolding?`Sending SOS in ${sosCount}s...`:'SOS Emergency'}</div>
+                  <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:2 }}>{sosHolding?'Release to cancel':'Hold 5 seconds to send emergency alert'}</div>
+                </div>
+                {sosHolding && <div style={{ width:34, height:34, borderRadius:'50%', border:'3px solid #e24b4a', display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, fontWeight:700, color:'#f09595' }}>{sosCount}</div>}
+              </div>
+            )}
+
             <button style={s.btnG} onClick={completeRide}>Complete Ride ✓</button>
           </>
         ) : (
