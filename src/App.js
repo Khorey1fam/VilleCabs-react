@@ -222,9 +222,11 @@ function Splash({ go }) {
   return (
     <div style={s.content}>
       <div style={s.center}>
-        <div style={{ width:80, height:80, borderRadius:'50%', background:YELLOW, display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 16px', fontSize:40 }}>🚕</div>
-        <h1 style={{ fontSize:42, fontWeight:700, letterSpacing:3, margin:'0 0 8px', color:WHITE }}>VilleCabs</h1>
-        <p style={{ color:'rgba(255,255,255,0.55)', fontSize:15, margin:'0 0 48px' }}>Manchester, Jamaica's ride service</p>
+        <div style={{ margin:'0 auto 20px', width:140, height:140 }}>
+          <img src="/villecabs-logo.png" alt="VilleCabs Logo"
+            style={{ width:140, height:140, borderRadius:'50%', objectFit:'cover', border:'3px solid rgba(255,255,255,0.15)' }}/>
+        </div>
+        <p style={{ color:'rgba(255,255,255,0.55)', fontSize:15, margin:'0 0 48px', textAlign:'center' }}>Mandeville, Manchester Taxi Service</p>
         <div style={{ width:'100%', maxWidth:320 }}>
           <button style={s.btnY} onClick={() => go('role')}>Get Started</button>
           <button style={s.btnO} onClick={() => go('driver-login')}>Driver Login</button>
