@@ -1133,7 +1133,12 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     if (!user?.uid) return;
     const q = query(collection(db,'bookings'), where('driverId','==',user.uid), where('status','==','active'));
     const unsub = onSnapshot(q, snap => {
-      if (!snap.empty) setBooking({ id:snap.docs[0].id, ...snap.docs[0].data() });
+      if (!snap.empty) {
+        const b = { id:snap.docs[0].id, ...snap.docs[0].data() };
+        setBooking(b);
+        // Always keep global bookingId in sync so chat works
+        if (b.id) setBookingId(b.id);
+      }
     });
     return () => unsub();
   }, [user]);
@@ -1173,7 +1178,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
                   <div style={{ width:40, height:40, borderRadius:'50%', background:GREEN, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>📞</div>
                   <span style={{ fontSize:9, color:'rgba(255,255,255,0.45)' }}>Call</span>
                 </div>
-                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, cursor:'pointer' }} onClick={() => { if(booking?.id) { setBookingId(booking.id); go('chat'); } }}>
+                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, cursor:'pointer' }} onClick={() => { setBookingId(booking?.id || bookingId); go('chat'); }}>
                   <div style={{ width:40, height:40, borderRadius:'50%', background:'rgba(232,180,0,0.2)', border:'1.5px solid #e8b400', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>💬</div>
                   <span style={{ fontSize:9, color:'#e8b400' }}>Chat</span>
                 </div>
@@ -1372,129 +1377,132 @@ function DriverSettings({ go, user, setUser }) {
 }
 
 // ── CHAT SCREEN ──────────────────────────────────────────────────────────────
-function ChatScreen({ go, user, bookingId }) {
-  const [messages,  setMessages]  = useState([]);
-  const [text,      setText]      = useState('');
-  const [booking,   setBooking]   = useState(null);
-  const [sending,   setSending]   = useState(false);
+function ChatScreen({ go, user, bookingId, setBookingId }) {
+  const [messages, setMessages] = useState([]);
+  const [text,     setText]     = useState('');
+  const [sending,  setSending]  = useState(false);
+  const [error,    setError]    = useState('');
+  const [chatBookingId, setChatBookingId] = useState(bookingId);
   const bottomRef = useRef(null);
 
-  // Load booking info
-  useEffect(() => {
-    if (!bookingId) { console.warn('ChatScreen: no bookingId'); return; }
-    const unsub = onSnapshot(doc(db,'bookings',bookingId), snap => {
-      if (snap.exists()) setBooking({ id:snap.id, ...snap.data() });
-    });
-    return () => unsub();
-  }, [bookingId]);
+  // If bookingId changes externally sync it
+  useEffect(() => { if (bookingId) setChatBookingId(bookingId); }, [bookingId]);
 
-  // Load messages in real time
+  // Load messages real-time — no index needed, sort client side
   useEffect(() => {
-    if (!bookingId) return;
-    const q = query(
-      collection(db,'bookings',bookingId,'messages')
-    );
-    const unsub = onSnapshot(q, snap => {
+    if (!chatBookingId) return;
+    const colRef = collection(db, 'bookings', chatBookingId, 'messages');
+    const unsub = onSnapshot(colRef, snap => {
       const msgs = snap.docs.map(d => ({ id:d.id, ...d.data() }));
-      // Sort client-side to avoid needing a Firestore composite index
-      msgs.sort((a,b) => (a.createdAt?.toMillis?.()??0) - (b.createdAt?.toMillis?.()??0));
+      msgs.sort((a,b) => {
+        const ta = a.createdAt?.seconds ?? 0;
+        const tb = b.createdAt?.seconds ?? 0;
+        return ta - tb;
+      });
       setMessages(msgs);
+    }, err => {
+      setError('Could not load messages: ' + err.message);
     });
     return () => unsub();
-  }, [bookingId]);
+  }, [chatBookingId]);
 
-  // Auto scroll to bottom when new message arrives
+  // Scroll to bottom on new message
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior:'smooth' });
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const sendMessage = async () => {
+  const send = async () => {
     const trimmed = text.trim();
-    if (!trimmed) return;
-    if (!bookingId) { alert('Chat error: no booking ID. Please go back and try again.'); return; }
-    if (!user) { alert('Chat error: not logged in.'); return; }
+    if (!trimmed || sending) return;
+    if (!chatBookingId) { setError('No booking found. Go back and try again.'); return; }
     setSending(true);
-    const saved = text;
     setText('');
+    setError('');
     try {
-      await addDoc(collection(db,'bookings',bookingId,'messages'), {
-        text:      trimmed,
-        senderId:  user.uid,
-        senderName:user.name || 'Unknown',
-        senderRole:user.role || 'customer',
-        createdAt: serverTimestamp(),
-        read:      false,
+      const colRef = collection(db, 'bookings', chatBookingId, 'messages');
+      await addDoc(colRef, {
+        text:       trimmed,
+        senderId:   user.uid,
+        senderName: user.name || 'User',
+        senderRole: user.role || 'customer',
+        createdAt:  serverTimestamp(),
       });
     } catch(err) {
-      console.error('Chat send error:', err);
-      alert('Failed to send: ' + err.message);
-      setText(saved);
+      setError('Send failed: ' + err.message);
+      setText(trimmed);
     }
     setSending(false);
   };
 
-  const isMe = (msg) => msg.senderId === user?.uid;
-
-  const formatTime = (ts) => {
-    if (!ts?.toDate) return '';
-    const d = ts.toDate();
-    return d.toLocaleTimeString('en-JM', { hour:'2-digit', minute:'2-digit' });
+  const goBack = () => user?.role === 'driver' ? go('driver-active') : go('live-ride');
+  const mine   = (msg) => msg.senderId === user?.uid;
+  const fmtTime = (ts) => {
+    if (!ts?.seconds) return '';
+    return new Date(ts.seconds * 1000).toLocaleTimeString('en-JM', { hour:'2-digit', minute:'2-digit' });
   };
 
-  const otherName = user?.role === 'customer'
-    ? (booking?.driverName || 'Driver')
-    : (booking?.customerName || 'Customer');
-
-  const goBack = () => user?.role === 'driver' ? go('driver-active') : go('live-ride');
-
   return (
-    <div style={{ ...s.content, background:'#0f1923', display:'flex', flexDirection:'column', height:'100vh' }}>
+    <div style={{ ...s.content, background:'#0f1923', display:'flex', flexDirection:'column', height:'100vh', maxHeight:'100vh', overflow:'hidden' }}>
+
       {/* Header */}
       <div style={{ background:DARK, padding:'12px 16px', display:'flex', alignItems:'center', gap:12, flexShrink:0, borderBottom:'0.5px solid rgba(255,255,255,0.1)' }}>
         <button style={s.backBtn} onClick={goBack}>←</button>
-        <div style={{ width:38, height:38, borderRadius:'50%', background:'rgba(232,180,0,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>
+        <div style={{ width:38, height:38, borderRadius:'50%', background:'rgba(232,180,0,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>
           {user?.role === 'customer' ? '🚗' : '👤'}
         </div>
         <div style={{ flex:1 }}>
-          <div style={{ fontSize:14, fontWeight:500, color:WHITE }}>{otherName}</div>
-          <div style={{ fontSize:11, color:'rgba(255,255,255,0.45)' }}>
-            {booking?.status === 'active' ? '🟢 Ride in progress' : '✅ Ride completed'}
+          <div style={{ fontSize:14, fontWeight:500, color:WHITE }}>
+            {user?.role === 'customer' ? 'Your Driver' : 'Passenger'}
           </div>
-          {!bookingId && <div style={{ fontSize:10, color:'#f09595' }}>⚠ No booking ID — go back and retry</div>}
+          <div style={{ fontSize:11, color:'rgba(255,255,255,0.45)' }}>🟢 Ride in progress</div>
         </div>
+      </div>
+
+      {/* Error banner */}
+      {error && (
+        <div style={{ background:'rgba(226,75,74,0.2)', padding:'8px 16px', fontSize:12, color:'#f09595', flexShrink:0 }}>
+          ⚠️ {error}
+          {!chatBookingId && <span style={{ display:'block', marginTop:4 }}>Booking ID missing — go back and tap Chat again</span>}
+        </div>
+      )}
+
+      {/* Debug info — remove after testing */}
+      <div style={{ background:'rgba(255,255,255,0.03)', padding:'4px 16px', fontSize:10, color:'rgba(255,255,255,0.2)', flexShrink:0 }}>
+        Booking: {chatBookingId || 'NONE'} · User: {user?.uid?.slice(-6)||'?'} · Role: {user?.role||'?'}
       </div>
 
       {/* Messages */}
       <div style={{ flex:1, overflowY:'auto', padding:'14px 14px 8px' }}>
-        {messages.length === 0 && (
+        {messages.length === 0 && !error && (
           <div style={{ textAlign:'center', padding:'40px 20px', color:'rgba(255,255,255,0.3)' }}>
-            <div style={{ fontSize:32, marginBottom:10 }}>💬</div>
+            <div style={{ fontSize:36, marginBottom:10 }}>💬</div>
             <div style={{ fontSize:14 }}>No messages yet</div>
-            <div style={{ fontSize:12, marginTop:6 }}>Send a message to {otherName}</div>
+            <div style={{ fontSize:12, marginTop:6, color:'rgba(255,255,255,0.2)' }}>Say hello!</div>
           </div>
         )}
         {messages.map((msg, i) => {
-          const mine = isMe(msg);
+          const isMe = mine(msg);
           return (
-            <div key={msg.id||i} style={{ display:'flex', justifyContent:mine?'flex-end':'flex-start', marginBottom:10 }}>
-              {!mine && (
-                <div style={{ width:28, height:28, borderRadius:'50%', background:'rgba(232,180,0,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, marginRight:8, flexShrink:0, alignSelf:'flex-end' }}>
+            <div key={msg.id || i} style={{ display:'flex', justifyContent:isMe?'flex-end':'flex-start', marginBottom:10, alignItems:'flex-end', gap:8 }}>
+              {!isMe && (
+                <div style={{ width:28, height:28, borderRadius:'50%', background:'rgba(232,180,0,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, flexShrink:0 }}>
                   {user?.role === 'customer' ? '🚗' : '👤'}
                 </div>
               )}
               <div style={{ maxWidth:'72%' }}>
                 <div style={{
-                  background: mine ? '#e8b400' : 'rgba(255,255,255,0.1)',
-                  color:      mine ? '#1a1a2e' : WHITE,
-                  padding:    '10px 14px',
-                  borderRadius: mine ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                  fontSize:   14,
-                  lineHeight: 1.4,
+                  background:   isMe ? '#e8b400' : 'rgba(255,255,255,0.1)',
+                  color:        isMe ? '#1a1a2e' : WHITE,
+                  padding:      '10px 14px',
+                  borderRadius: isMe ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+                  fontSize:     14,
+                  lineHeight:   1.4,
+                  wordBreak:    'break-word',
                 }}>
                   {msg.text}
                 </div>
-                <div style={{ fontSize:10, color:'rgba(255,255,255,0.3)', marginTop:4, textAlign:mine?'right':'left' }}>
-                  {formatTime(msg.createdAt)}
+                <div style={{ fontSize:10, color:'rgba(255,255,255,0.3)', marginTop:3, textAlign:isMe?'right':'left' }}>
+                  {fmtTime(msg.createdAt)}
                 </div>
               </div>
             </div>
@@ -1503,19 +1511,19 @@ function ChatScreen({ go, user, bookingId }) {
         <div ref={bottomRef}/>
       </div>
 
-      {/* Input bar */}
-      <div style={{ background:DARK, padding:'10px 14px', display:'flex', gap:10, alignItems:'center', flexShrink:0, borderTop:'0.5px solid rgba(255,255,255,0.1)' }}>
+      {/* Input */}
+      <div style={{ background:'#1a1a2e', padding:'10px 14px', display:'flex', gap:10, alignItems:'center', flexShrink:0, borderTop:'0.5px solid rgba(255,255,255,0.1)' }}>
         <input
           value={text}
           onChange={e => setText(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+          onKeyDown={e => { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
           placeholder="Type a message..."
-          style={{ flex:1, padding:'11px 14px', background:'rgba(255,255,255,0.08)', border:'0.5px solid rgba(255,255,255,0.15)', borderRadius:24, color:WHITE, fontSize:14, outline:'none' }}
+          style={{ flex:1, padding:'11px 16px', background:'rgba(255,255,255,0.08)', border:'0.5px solid rgba(255,255,255,0.15)', borderRadius:24, color:WHITE, fontSize:14, outline:'none' }}
         />
         <button
-          onClick={sendMessage}
+          onClick={send}
           disabled={!text.trim() || sending}
-          style={{ width:42, height:42, borderRadius:'50%', background:text.trim()?'#e8b400':'rgba(255,255,255,0.1)', border:'none', cursor:text.trim()?'pointer':'default', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0, transition:'background 0.2s' }}>
+          style={{ width:44, height:44, borderRadius:'50%', background:text.trim()?'#e8b400':'rgba(255,255,255,0.08)', border:'none', cursor:text.trim()?'pointer':'default', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>
           {sending ? '⏳' : '➤'}
         </button>
       </div>
@@ -1523,7 +1531,6 @@ function ChatScreen({ go, user, bookingId }) {
   );
 }
 
-// ── LOADING ───────────────────────────────────────────────────────────────────
 function LoadingScreen() {
   return (
     <div style={{ ...s.screen, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:16 }}>
