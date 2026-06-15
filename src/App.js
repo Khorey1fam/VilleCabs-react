@@ -973,7 +973,7 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
   // Vehicle multipliers: VilleRide x1.0, VilleXL x1.3, VilleMoto x0.7
   const BASE_FARE    = 751;   // J$ flat rate for first 1km
   const BASE_KM      = 1.0;   // km included in base fare
-  const RATE_PER_100M= 4;     // J$ per 100m beyond base km
+  const RATE_PER_100M= 9;     // J$ per 100m beyond base km
 
   const calcPrice = (v) => {
     let fare = BASE_FARE;
@@ -1077,7 +1077,7 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
             </div>
           ) : (
             <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:6 }}>
-              <span>{fareBreakdown(v).per100m} × 100m beyond 1km (J$4 each)</span>
+              <span>{fareBreakdown(v).per100m} × 100m beyond 1km (J$9 each)</span>
               <span>+J${fareBreakdown(v).extra.toLocaleString()}</span>
             </div>
           )}
