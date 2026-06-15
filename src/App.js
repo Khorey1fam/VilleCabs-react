@@ -965,12 +965,38 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
   const [directions, setDirections] = useState(null);
 
   const vehicles = [
-    { name:'VilleRide', eta:'4 min away',      price:0, base:300, rate:55,  icon:'🚗' },
-    { name:'VilleXL',   eta:'7 min · up to 6', price:0, base:400, rate:98,  icon:'🚙' },
-    { name:'VilleMoto', eta:'2 min away',       price:0, base:200, rate:37,  icon:'🏍️' },
+    { name:'VilleRide', eta:'4 min away',      icon:'🚗', multiplier:1.0 },
+    { name:'VilleXL',   eta:'7 min · up to 6', icon:'🚙', multiplier:1.3 },
+    { name:'VilleMoto', eta:'2 min away',       icon:'🏍️', multiplier:0.7 },
   ];
 
-  const calcPrice = (v) => Math.round(v.base + dist * v.rate);
+  // ── VilleCabs Fare Formula ──────────────────────────────────────────────────
+  // Base fare: J$751 covers the first 1km (flat rate within 1km radius)
+  // Beyond 1km: J$200 added per every 100m extra
+  // Vehicle multipliers: VilleRide x1.0, VilleXL x1.3, VilleMoto x0.7
+  const BASE_FARE    = 751;   // J$ flat rate for first 1km
+  const BASE_KM      = 1.0;   // km included in base fare
+  const RATE_PER_100M= 200;   // J$ per 100m beyond base km
+
+  const calcPrice = (v) => {
+    let fare = BASE_FARE;
+    if (dist > BASE_KM) {
+      const extraMeters = (dist - BASE_KM) * 1000; // meters beyond 1km
+      const per100m     = Math.ceil(extraMeters / 100); // how many 100m chunks
+      fare += per100m * RATE_PER_100M;
+    }
+    return Math.round(fare * v.multiplier);
+  };
+
+  const fareBreakdown = (v) => {
+    if (dist <= BASE_KM) {
+      return { base: BASE_FARE, extra: 0, extraMeters: 0, per100m: 0 };
+    }
+    const extraMeters = (dist - BASE_KM) * 1000;
+    const per100m     = Math.ceil(extraMeters / 100);
+    const extra       = per100m * RATE_PER_100M;
+    return { base: BASE_FARE, extra, extraMeters: Math.round(extraMeters), per100m };
+  };
 
   useEffect(() => {
     if (pickupData?.coords && dropoffData?.coords) {
@@ -1045,10 +1071,34 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
           </div>
         ))}
         <div style={{ background:DARK, borderRadius:12, padding:14, margin:'10px 0' }}>
-          <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:6 }}><span>Base fare</span><span>J${v.base}</span></div>
-          <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:6 }}><span>Distance ({dist} km × J${v.rate})</span><span>J${Math.round(dist*v.rate)}</span></div>
-          <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:6 }}><span>Service fee</span><span>J$0</span></div>
-          <div style={{ display:'flex', justifyContent:'space-between', fontSize:15, fontWeight:500, color:YELLOW, borderTop:'0.5px solid rgba(255,255,255,0.12)', paddingTop:8, marginTop:4 }}><span>Total</span><span>J${calcPrice(v).toLocaleString()}</span></div>
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:6 }}>
+            <span>Base fare (first 1km)</span><span>J$751</span>
+          </div>
+          {dist <= 1 ? (
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(26,158,90,0.9)', marginBottom:6 }}>
+              <span>✓ Within 1km radius — flat rate</span><span>+J$0</span>
+            </div>
+          ) : (
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:6 }}>
+              <span>{fareBreakdown(v).per100m} × 100m beyond 1km (J$200 each)</span>
+              <span>+J${fareBreakdown(v).extra.toLocaleString()}</span>
+            </div>
+          )}
+          {v.multiplier !== 1 && (
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:6 }}>
+              <span>{v.name === 'VilleXL' ? 'VilleXL premium (+30%)' : 'VilleMoto discount (-30%)'}</span>
+              <span>{v.name === 'VilleXL' ? '+' : '-'}J${Math.abs(Math.round(calcPrice({...v, multiplier:1}) * Math.abs(v.multiplier - 1))).toLocaleString()}</span>
+            </div>
+          )}
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:6 }}>
+            <span>Service fee</span><span>J$0</span>
+          </div>
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:15, fontWeight:500, color:YELLOW, borderTop:'0.5px solid rgba(255,255,255,0.12)', paddingTop:8, marginTop:4 }}>
+            <span>Total</span><span>J${calcPrice(v).toLocaleString()}</span>
+          </div>
+          <div style={{ fontSize:10, color:'rgba(255,255,255,0.3)', marginTop:6, textAlign:'center' }}>
+            {dist <= 1 ? `📍 ${dist}km — flat rate zone` : `📍 ${dist}km · ${Math.round((dist-1)*1000)}m beyond 1km base zone`}
+          </div>
         </div>
         <button style={{ ...s.btnY, opacity:loading?0.7:1 }} onClick={handleBook} disabled={loading}>
           {loading ? 'Creating booking...' : 'Book Ride — J$' + calcPrice(v).toLocaleString()}
