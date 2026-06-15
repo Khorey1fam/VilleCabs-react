@@ -527,43 +527,45 @@ function CustomerDash({ go, user, setUser }) {
       rides.sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
       setHistory(rides);
       setLoadingH(false);
-    });
+    }, () => setLoadingH(false));
     return () => unsub();
   }, [user]);
 
   const totalSpent = history.reduce((s,r) => s+(r.fare||0), 0);
 
+  const TabBar = () => (
+    <div style={{ display:'flex', background:'#1a1a2e', borderTop:'0.5px solid rgba(255,255,255,0.08)', position:'sticky', bottom:0, zIndex:10 }}>
+      {[['book','🚕','Book'],['history','📋','History'],['profile','👤','Profile'],['settings','⚙️','Settings']].map(([t,icon,label]) => (
+        <div key={t} onClick={() => t==='profile'?go('customer-profile'):t==='settings'?go('customer-settings'):setTab(t)}
+          style={{ flex:1, padding:'10px 0', textAlign:'center', fontSize:10, cursor:'pointer',
+            color:tab===t?YELLOW:'rgba(255,255,255,0.45)',
+            borderTop:tab===t?`2px solid ${YELLOW}`:'2px solid transparent' }}>
+          <div style={{ fontSize:20, marginBottom:2 }}>{icon}</div>{label}
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <div style={{ ...s.content, background:'#0f1923', minHeight:'100vh', display:'flex', flexDirection:'column' }}>
+
       {/* Header */}
-      <div style={{ background:DARK, padding:'16px 20px', flexShrink:0 }}>
-        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
+      <div style={{ background:DARK, padding:'14px 18px', flexShrink:0 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <div>
-            <div style={{ color:'rgba(255,255,255,0.6)', fontSize:13 }}>Good day,</div>
-            <div style={{ color:WHITE, fontSize:20, fontWeight:500 }}>{user?.name?.split(' ')[0]||'Rider'} 👋</div>
-            <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:6 }}>
-              <span style={{ fontSize:12, color:'rgba(255,255,255,0.5)' }}>Total rides:</span>
-              <span style={{ background:YELLOW, borderRadius:20, padding:'2px 10px', fontSize:12, fontWeight:500, color:DARK }}>{history.length}</span>
-            </div>
+            <div style={{ color:'rgba(255,255,255,0.6)', fontSize:12 }}>Good day,</div>
+            <div style={{ color:WHITE, fontSize:18, fontWeight:500 }}>{user?.name?.split(' ')[0]||'Rider'} 👋</div>
           </div>
-          <button onClick={handleLogout} style={{ background:'none', border:'0.5px solid rgba(255,255,255,0.2)', borderRadius:8, color:'rgba(255,255,255,0.5)', fontSize:11, padding:'6px 12px', cursor:'pointer' }}>Logout</button>
+          <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+            <span style={{ background:YELLOW, borderRadius:20, padding:'3px 10px', fontSize:11, fontWeight:500, color:DARK }}>{history.length} rides</span>
+          </div>
         </div>
       </div>
 
-      {/* Tab bar */}
-      <div style={{ display:'flex', background:'rgba(26,26,46,0.98)', borderBottom:'0.5px solid rgba(255,255,255,0.08)', flexShrink:0 }}>
-        <div onClick={() => setTab('book')} style={{ flex:1, padding:'11px 0', textAlign:'center', fontSize:12, cursor:'pointer', color:tab==='book'?YELLOW:'rgba(255,255,255,0.45)', borderBottom:tab==='book'?`2px solid ${YELLOW}`:'2px solid transparent', fontWeight:tab==='book'?500:400 }}>
-          🚕 Book Ride
-        </div>
-        <div onClick={() => setTab('history')} style={{ flex:1, padding:'11px 0', textAlign:'center', fontSize:12, cursor:'pointer', color:tab==='history'?YELLOW:'rgba(255,255,255,0.45)', borderBottom:tab==='history'?`2px solid ${YELLOW}`:'2px solid transparent', fontWeight:tab==='history'?500:400 }}>
-          📋 Ride History {history.length > 0 && <span style={{ background:YELLOW, color:DARK, borderRadius:20, padding:'1px 6px', fontSize:10, marginLeft:4, fontWeight:700 }}>{history.length}</span>}
-        </div>
-      </div>
-
-      {/* Book tab */}
+      {/* BOOK TAB */}
       {tab === 'book' && (
         <div style={{ flex:1, display:'flex', flexDirection:'column' }}>
-          <VilleMap height={220} center={MANCHESTER_CENTER} zoom={13}>
+          <VilleMap height={210} center={MANCHESTER_CENTER} zoom={13}>
             <Marker position={MANCHESTER_CENTER} title="Manchester, Jamaica"/>
           </VilleMap>
           <div style={{ padding:16 }}>
@@ -585,99 +587,275 @@ function CustomerDash({ go, user, setUser }) {
             </div>
             <button style={s.btnY} onClick={() => go('vehicle-select')}>Find a Ride</button>
           </div>
+          <TabBar/>
         </div>
       )}
 
-      {/* History tab */}
+      {/* HISTORY TAB */}
       {tab === 'history' && (
-        <div style={{ flex:1, overflowY:'auto', padding:16 }}>
-
-          {/* Summary cards */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
-            <div style={{ background:'rgba(232,180,0,0.1)', border:'0.5px solid rgba(232,180,0,0.25)', borderRadius:12, padding:14, textAlign:'center' }}>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginBottom:4 }}>Total rides</div>
-              <div style={{ fontSize:26, fontWeight:500, color:YELLOW }}>{history.length}</div>
-            </div>
-            <div style={{ background:'rgba(26,158,90,0.1)', border:'0.5px solid rgba(26,158,90,0.25)', borderRadius:12, padding:14, textAlign:'center' }}>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginBottom:4 }}>Total spent</div>
-              <div style={{ fontSize:22, fontWeight:500, color:GREEN }}>J${totalSpent.toLocaleString()}</div>
-            </div>
-          </div>
-
-          {/* Ride list */}
-          {loadingH ? (
-            <div style={{ textAlign:'center', padding:40, color:'rgba(255,255,255,0.4)' }}>
-              <div style={{ fontSize:32, marginBottom:10 }}>⏳</div>
-              Loading your rides...
-            </div>
-          ) : history.length === 0 ? (
-            <div style={{ textAlign:'center', padding:40, color:'rgba(255,255,255,0.4)' }}>
-              <div style={{ fontSize:40, marginBottom:12 }}>🚕</div>
-              <div style={{ fontSize:15, marginBottom:6 }}>No rides yet</div>
-              <div style={{ fontSize:13 }}>Your completed rides will appear here</div>
-              <button style={{ ...s.btnY, marginTop:20, maxWidth:200 }} onClick={() => setTab('book')}>Book your first ride</button>
-            </div>
-          ) : history.map((ride, i) => {
-            const date = ride.completedAt?.seconds
-              ? new Date(ride.completedAt.seconds * 1000).toLocaleDateString('en-JM', { day:'numeric', month:'short', year:'numeric' })
-              : ride.createdAt?.seconds
-              ? new Date(ride.createdAt.seconds * 1000).toLocaleDateString('en-JM', { day:'numeric', month:'short', year:'numeric' })
-              : '--';
-            const time = ride.completedAt?.seconds
-              ? new Date(ride.completedAt.seconds * 1000).toLocaleTimeString('en-JM', { hour:'2-digit', minute:'2-digit' })
-              : '';
-            const from = (ride.pickup?.address  || '--').split(',')[0];
-            const to   = (ride.dropoff?.address || '--').split(',')[0];
-            return (
-              <div key={ride.id} style={{ background:'rgba(255,255,255,0.04)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:14, marginBottom:10 }}>
-                {/* Date + fare row */}
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-                  <div>
-                    <div style={{ fontSize:13, fontWeight:500, color:WHITE }}>{date}</div>
-                    <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>{time}</div>
-                  </div>
-                  <div style={{ textAlign:'right' }}>
-                    <div style={{ fontSize:16, fontWeight:500, color:GREEN }}>J${(ride.fare||0).toLocaleString()}</div>
-                    <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)' }}>{ride.vehicleType||'VilleRide'}</div>
-                  </div>
-                </div>
-
-                {/* Route */}
-                <div style={{ display:'flex', flexDirection:'column', gap:6, marginBottom:10 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                    <div style={{ width:8, height:8, borderRadius:'50%', background:GREEN, flexShrink:0 }}/>
-                    <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)' }}>{from}</div>
-                  </div>
-                  <div style={{ display:'flex', alignItems:'center', gap:8, paddingLeft:3 }}>
-                    <div style={{ width:2, height:12, background:'rgba(255,255,255,0.15)', marginLeft:3 }}/>
-                  </div>
-                  <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                    <div style={{ width:8, height:8, borderRadius:'50%', background:YELLOW, flexShrink:0 }}/>
-                    <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)' }}>{to}</div>
-                  </div>
-                </div>
-
-                {/* Driver + distance */}
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'0.5px solid rgba(255,255,255,0.07)', paddingTop:8 }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                    <span style={{ fontSize:14 }}>👤</span>
-                    <span style={{ fontSize:12, color:'rgba(255,255,255,0.5)' }}>{ride.driverName||'VilleCabs driver'}</span>
-                  </div>
-                  <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-                    {ride.distanceKm && <span style={{ fontSize:11, color:'rgba(255,255,255,0.35)' }}>{ride.distanceKm} km</span>}
-                    {ride.customerRating && (
-                      <span style={{ fontSize:11, color:YELLOW }}>
-                        {'⭐'.repeat(ride.customerRating)}
-                      </span>
-                    )}
-                    <span style={{ background:'rgba(26,158,90,0.15)', color:GREEN, borderRadius:20, padding:'2px 8px', fontSize:10, fontWeight:500 }}>Completed</span>
-                  </div>
-                </div>
+        <div style={{ flex:1, display:'flex', flexDirection:'column' }}>
+          <div style={{ flex:1, overflowY:'auto', padding:16 }}>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
+              <div style={{ background:'rgba(232,180,0,0.1)', border:'0.5px solid rgba(232,180,0,0.25)', borderRadius:12, padding:14, textAlign:'center' }}>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginBottom:4 }}>Total rides</div>
+                <div style={{ fontSize:26, fontWeight:500, color:YELLOW }}>{history.length}</div>
               </div>
-            );
-          })}
+              <div style={{ background:'rgba(26,158,90,0.1)', border:'0.5px solid rgba(26,158,90,0.25)', borderRadius:12, padding:14, textAlign:'center' }}>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginBottom:4 }}>Total spent</div>
+                <div style={{ fontSize:22, fontWeight:500, color:GREEN }}>J${totalSpent.toLocaleString()}</div>
+              </div>
+            </div>
+
+            {loadingH ? (
+              <div style={{ textAlign:'center', padding:40, color:'rgba(255,255,255,0.4)' }}>
+                <div style={{ fontSize:32, marginBottom:10 }}>⏳</div>Loading rides...
+              </div>
+            ) : history.length === 0 ? (
+              <div style={{ textAlign:'center', padding:40, color:'rgba(255,255,255,0.4)' }}>
+                <div style={{ fontSize:40, marginBottom:12 }}>🚕</div>
+                <div style={{ fontSize:15, marginBottom:6 }}>No rides yet</div>
+                <div style={{ fontSize:13 }}>Your completed rides will appear here</div>
+                <button style={{ ...s.btnY, marginTop:20 }} onClick={() => setTab('book')}>Book your first ride</button>
+              </div>
+            ) : history.map((ride,i) => {
+              const date = ride.completedAt?.seconds
+                ? new Date(ride.completedAt.seconds*1000).toLocaleDateString('en-JM',{day:'numeric',month:'short',year:'numeric'})
+                : ride.createdAt?.seconds
+                ? new Date(ride.createdAt.seconds*1000).toLocaleDateString('en-JM',{day:'numeric',month:'short',year:'numeric'})
+                : '--';
+              const time = ride.completedAt?.seconds
+                ? new Date(ride.completedAt.seconds*1000).toLocaleTimeString('en-JM',{hour:'2-digit',minute:'2-digit'}) : '';
+              const from = (ride.pickup?.address||'--').split(',')[0];
+              const to   = (ride.dropoff?.address||'--').split(',')[0];
+              return (
+                <div key={ride.id} style={{ background:'rgba(255,255,255,0.04)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:14, marginBottom:10 }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+                    <div>
+                      <div style={{ fontSize:13, fontWeight:500, color:WHITE }}>{date}</div>
+                      <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>{time}</div>
+                    </div>
+                    <div style={{ textAlign:'right' }}>
+                      <div style={{ fontSize:16, fontWeight:500, color:GREEN }}>J${(ride.fare||0).toLocaleString()}</div>
+                      <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)' }}>{ride.vehicleType||'VilleRide'}</div>
+                    </div>
+                  </div>
+                  <div style={{ marginBottom:10 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+                      <div style={{ width:8, height:8, borderRadius:'50%', background:GREEN, flexShrink:0 }}/>
+                      <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)' }}>{from}</div>
+                    </div>
+                    <div style={{ width:2, height:10, background:'rgba(255,255,255,0.15)', marginLeft:3, marginBottom:4 }}/>
+                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                      <div style={{ width:8, height:8, borderRadius:'50%', background:YELLOW, flexShrink:0 }}/>
+                      <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)' }}>{to}</div>
+                    </div>
+                  </div>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'0.5px solid rgba(255,255,255,0.07)', paddingTop:8 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                      <span style={{ fontSize:13 }}>👤</span>
+                      <span style={{ fontSize:12, color:'rgba(255,255,255,0.5)' }}>{ride.driverName||'VilleCabs driver'}</span>
+                    </div>
+                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                      {ride.distanceKm && <span style={{ fontSize:11, color:'rgba(255,255,255,0.35)' }}>{ride.distanceKm} km</span>}
+                      {ride.customerRating && <span style={{ fontSize:11, color:YELLOW }}>{'⭐'.repeat(ride.customerRating)}</span>}
+                      <span style={{ background:'rgba(26,158,90,0.15)', color:GREEN, borderRadius:20, padding:'2px 8px', fontSize:10, fontWeight:500 }}>✓ Done</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <TabBar/>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── CUSTOMER PROFILE ──────────────────────────────────────────────────────────
+function CustomerProfile({ go, user, setUser }) {
+  const [form,    setForm]    = useState({ name:user?.name||'', phone:'' });
+  const [loading, setLoading] = useState(false);
+  const [msg,     setMsg]     = useState('');
+  const [error,   setError]   = useState('');
+  const set = (k,v) => setForm(p => ({ ...p, [k]:v }));
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    getDoc(doc(db,'customers',user.uid)).then(snap => {
+      if (snap.exists()) {
+        const d = snap.data();
+        setForm({ name:d.name||'', phone:d.phone||'' });
+      }
+    });
+  }, [user]);
+
+  const handleSave = async () => {
+    setError(''); setMsg(''); setLoading(true);
+    try {
+      await updateDoc(doc(db,'customers',user.uid), { name:form.name, phone:form.phone });
+      setUser(prev => ({ ...prev, name:form.name }));
+      setMsg('Profile updated successfully!');
+    } catch(err) { setError('Failed to update profile. Try again.'); }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ ...s.content, background:'#0f1923' }}>
+      <TopBar title="My Profile" onBack={() => go('customer-dash')}/>
+      <div style={{ padding:20, maxWidth:420, margin:'0 auto' }}>
+
+        {/* Avatar */}
+        <div style={{ textAlign:'center', marginBottom:24 }}>
+          <div style={{ width:76, height:76, borderRadius:'50%', background:'rgba(232,180,0,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:34, margin:'0 auto 10px' }}>👤</div>
+          <div style={{ fontSize:16, fontWeight:500, color:WHITE }}>{user?.name}</div>
+          <div style={{ fontSize:12, color:'rgba(255,255,255,0.45)', marginTop:2 }}>{user?.email}</div>
+          <div style={{ display:'inline-block', marginTop:6, background:'rgba(26,158,90,0.15)', color:GREEN, borderRadius:20, padding:'3px 12px', fontSize:11, fontWeight:500 }}>✓ Verified Rider</div>
+        </div>
+
+        {msg   && <div style={s.successBox}>{msg}</div>}
+        {error && <div style={s.errBox}>{error}</div>}
+
+        <label style={s.lbl}>Full Name</label>
+        <input style={s.inp} value={form.name} onChange={e => set('name',e.target.value)} placeholder="Your full name"/>
+
+        <label style={s.lbl}>Phone Number</label>
+        <input style={s.inp} value={form.phone} onChange={e => set('phone',e.target.value)} placeholder="+1 (876) 555-0100"/>
+
+        <label style={s.lbl}>Email Address</label>
+        <input style={{ ...s.inp, opacity:0.5 }} value={user?.email||''} disabled/>
+        <p style={{ fontSize:11, color:'rgba(255,255,255,0.35)', marginBottom:16 }}>To change your email go to Settings</p>
+
+        <button style={{ ...s.btnY, opacity:loading?0.7:1 }} onClick={handleSave} disabled={loading}>
+          {loading ? 'Saving...' : 'Save Changes'}
+        </button>
+        <button style={s.btnO} onClick={() => go('customer-settings')}>Go to Settings</button>
+      </div>
+    </div>
+  );
+}
+
+// ── CUSTOMER SETTINGS ─────────────────────────────────────────────────────────
+function CustomerSettings({ go, user, setUser }) {
+  const [newPassword,     setNewPassword]     = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [newEmail,        setNewEmail]        = useState('');
+  const [loadingPass,     setLoadingPass]     = useState(false);
+  const [loadingEmail,    setLoadingEmail]    = useState(false);
+  const [loadingDeact,    setLoadingDeact]    = useState(false);
+  const [msgPass,         setMsgPass]         = useState('');
+  const [msgEmail,        setMsgEmail]        = useState('');
+  const [errPass,         setErrPass]         = useState('');
+  const [errEmail,        setErrEmail]        = useState('');
+
+  const handlePasswordChange = async () => {
+    setErrPass(''); setMsgPass('');
+    if (!newPassword || !confirmPassword) { setErrPass('Please fill in both fields.'); return; }
+    if (newPassword.length < 6) { setErrPass('Password must be at least 6 characters.'); return; }
+    if (newPassword !== confirmPassword) { setErrPass('Passwords do not match.'); return; }
+    setLoadingPass(true);
+    try {
+      const { updatePassword } = await import('firebase/auth');
+      await updatePassword(auth.currentUser, newPassword);
+      setMsgPass('Password updated successfully!');
+      setNewPassword(''); setConfirmPassword('');
+    } catch(err) {
+      if (err.code === 'auth/requires-recent-login') setErrPass('Please log out and log back in before changing your password.');
+      else setErrPass(err.message);
+    }
+    setLoadingPass(false);
+  };
+
+  const handleEmailChange = async () => {
+    setErrEmail(''); setMsgEmail('');
+    if (!newEmail) { setErrEmail('Please enter a new email address.'); return; }
+    setLoadingEmail(true);
+    try {
+      const { updateEmail, sendEmailVerification } = await import('firebase/auth');
+      await updateEmail(auth.currentUser, newEmail);
+      await sendEmailVerification(auth.currentUser);
+      await updateDoc(doc(db,'customers',user.uid), { email:newEmail });
+      setUser(prev => ({ ...prev, email:newEmail }));
+      setMsgEmail('Email updated! Please verify your new email address.');
+      setNewEmail('');
+    } catch(err) {
+      if (err.code === 'auth/requires-recent-login') setErrEmail('Please log out and log back in before changing your email.');
+      else setErrEmail(err.message);
+    }
+    setLoadingEmail(false);
+  };
+
+  const handleDeactivate = async () => {
+    if (!window.confirm('Are you sure you want to deactivate your account?')) return;
+    setLoadingDeact(true);
+    try {
+      await updateDoc(doc(db,'customers',user.uid), { status:'deactivated', deactivatedAt:serverTimestamp() });
+      await signOut(auth);
+      setUser(null);
+      go('splash');
+    } catch(err) { alert('Error: ' + err.message); }
+    setLoadingDeact(false);
+  };
+
+  const handleLogout = async () => { await signOut(auth); setUser(null); go('splash'); };
+
+  return (
+    <div style={{ ...s.content, background:'#0f1923' }}>
+      <TopBar title="Settings" onBack={() => go('customer-dash')}/>
+      <div style={{ padding:20, maxWidth:420, margin:'0 auto' }}>
+
+        {/* Change Password */}
+        <div style={{ background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:16, marginBottom:14 }}>
+          <div style={{ fontSize:15, fontWeight:500, color:WHITE, marginBottom:14 }}>🔒 Change Password</div>
+          {errPass && <div style={s.errBox}>{errPass}</div>}
+          {msgPass && <div style={s.successBox}>{msgPass}</div>}
+          <label style={s.lbl}>New Password</label>
+          <input style={s.inp} type="password" placeholder="At least 6 characters" value={newPassword} onChange={e => setNewPassword(e.target.value)}/>
+          <label style={s.lbl}>Confirm New Password</label>
+          <input style={s.inp} type="password" placeholder="Repeat new password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)}/>
+          <button style={{ ...s.btnY, opacity:loadingPass?0.7:1 }} onClick={handlePasswordChange} disabled={loadingPass}>
+            {loadingPass ? 'Updating...' : 'Update Password'}
+          </button>
+        </div>
+
+        {/* Change Email */}
+        <div style={{ background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:16, marginBottom:14 }}>
+          <div style={{ fontSize:15, fontWeight:500, color:WHITE, marginBottom:4 }}>✉️ Change Email</div>
+          <div style={{ fontSize:12, color:'rgba(255,255,255,0.4)', marginBottom:14 }}>Current: {user?.email}</div>
+          {errEmail && <div style={s.errBox}>{errEmail}</div>}
+          {msgEmail && <div style={s.successBox}>{msgEmail}</div>}
+          <label style={s.lbl}>New Email Address</label>
+          <input style={s.inp} type="email" placeholder="new@email.com" value={newEmail} onChange={e => setNewEmail(e.target.value)}/>
+          <button style={{ ...s.btnY, opacity:loadingEmail?0.7:1 }} onClick={handleEmailChange} disabled={loadingEmail}>
+            {loadingEmail ? 'Updating...' : 'Update Email'}
+          </button>
+        </div>
+
+        {/* Notifications */}
+        <div style={{ background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:16, marginBottom:14 }}>
+          <div style={{ fontSize:15, fontWeight:500, color:WHITE, marginBottom:12 }}>🔔 Notifications</div>
+          <div style={{ fontSize:13, color:'rgba(255,255,255,0.5)' }}>You will receive updates when your driver accepts your ride and when the ride is completed.</div>
+        </div>
+
+        {/* Logout */}
+        <div style={{ background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:16, marginBottom:14 }}>
+          <div style={{ fontSize:15, fontWeight:500, color:WHITE, marginBottom:12 }}>🚪 Logout</div>
+          <button style={s.btnO} onClick={handleLogout}>Log out of VilleCabs</button>
+        </div>
+
+        {/* Deactivate */}
+        <div style={{ background:'rgba(226,75,74,0.08)', border:'0.5px solid rgba(226,75,74,0.2)', borderRadius:14, padding:16 }}>
+          <div style={{ fontSize:15, fontWeight:500, color:'#f09595', marginBottom:6 }}>⚠️ Deactivate Account</div>
+          <div style={{ fontSize:12, color:'rgba(255,255,255,0.4)', marginBottom:14, lineHeight:1.6 }}>
+            Deactivating your account will remove your access to VilleCabs. Contact support to reactivate.
+          </div>
+          <button onClick={handleDeactivate} disabled={loadingDeact}
+            style={{ width:'100%', padding:'12px', background:'rgba(226,75,74,0.15)', color:'#f09595', border:'0.5px solid rgba(226,75,74,0.4)', borderRadius:12, fontSize:14, cursor:'pointer', opacity:loadingDeact?0.7:1 }}>
+            {loadingDeact ? 'Deactivating...' : 'Deactivate My Account'}
+          </button>
+        </div>
+
+      </div>
     </div>
   );
 }
@@ -1723,6 +1901,8 @@ export default function App() {
     'driver-profile': <DriverProfile {...props}/>,
     'driver-settings':<DriverSettings {...props}/>,
     'chat':           <ChatScreen {...props}/>,
+    'customer-profile': <CustomerProfile {...props}/>,
+    'customer-settings':<CustomerSettings {...props}/>,
   };
 
   return (
