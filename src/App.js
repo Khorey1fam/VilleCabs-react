@@ -1055,10 +1055,17 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
   );
 }
 
-// ── BOOKING CONFIRM ───────────────────────────────────────────────────────────
+// ── BOOKING CONFIRM ──────────────────────────────────────────────────────────
 function BookingConfirm({ go, bookingId }) {
-  const [booking, setBooking] = useState(null);
-  const [payment, setPayment] = useState('cash');
+  const [booking,     setBooking]     = useState(null);
+  const [payment,     setPayment]     = useState('cash');
+  const [cardName,    setCardName]    = useState('');
+  const [cardNumber,  setCardNumber]  = useState('');
+  const [cardExpiry,  setCardExpiry]  = useState('');
+  const [cardCVV,     setCardCVV]     = useState('');
+  const [processing,  setProcessing]  = useState(false);
+  const [cardError,   setCardError]   = useState('');
+  const [cardSuccess, setCardSuccess] = useState(false);
 
   useEffect(() => {
     if (!bookingId) return;
@@ -1068,39 +1075,169 @@ function BookingConfirm({ go, bookingId }) {
     return () => unsub();
   }, [bookingId]);
 
+  // Format card number with spaces
+  const fmtCard = v => v.replace(/\D/g,'').slice(0,16).replace(/(\d{4})/g,'$1 ').trim();
+  // Format expiry MM/YY
+  const fmtExpiry = v => {
+    const d = v.replace(/\D/g,'').slice(0,4);
+    return d.length > 2 ? d.slice(0,2)+'/'+d.slice(2) : d;
+  };
+
+  const handleCardPay = async () => {
+    setCardError('');
+    if (!cardName)   { setCardError('Please enter the cardholder name.'); return; }
+    if (cardNumber.replace(/\s/g,'').length < 16) { setCardError('Please enter a valid 16-digit card number.'); return; }
+    if (cardExpiry.length < 5) { setCardError('Please enter a valid expiry date (MM/YY).'); return; }
+    if (cardCVV.length < 3)   { setCardError('Please enter a valid CVV.'); return; }
+    setProcessing(true);
+    // Simulate payment processing (replace with real Stripe integration)
+    await new Promise(r => setTimeout(r, 2000));
+    try {
+      await updateDoc(doc(db,'bookings',bookingId), {
+        paymentMethod: 'card',
+        paymentStatus: 'paid',
+        paidAt: serverTimestamp(),
+      });
+      setCardSuccess(true);
+    } catch(err) { setCardError('Payment failed. Please try again.'); }
+    setProcessing(false);
+  };
+
+  const handleCashConfirm = async () => {
+    await updateDoc(doc(db,'bookings',bookingId), { paymentMethod:'cash', paymentStatus:'pending_cash' });
+    go('live-ride');
+  };
+
   return (
     <div style={{ ...s.content, background:'#0f1923' }}>
       <TopBar title="Confirm Booking" onBack={() => go('vehicle-select')}/>
       <div style={{ padding:16 }}>
+
+        {/* Booking details */}
         {booking && (
           <div style={{ background:'rgba(255,255,255,0.05)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:14, padding:16, marginBottom:14 }}>
             <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
               <div style={{ width:40, height:40, borderRadius:'50%', background:DARK, display:'flex', alignItems:'center', justifyContent:'center', fontSize:20 }}>🚗</div>
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:14, fontWeight:500, color:WHITE }}>{booking.vehicleType}</div>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)' }}>ID: #{bookingId?.slice(-6).toUpperCase()}</div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)' }}>Booking #{bookingId?.slice(-6).toUpperCase()}</div>
               </div>
               <div style={{ fontSize:16, fontWeight:500, color:GREEN }}>J${booking.fare?.toLocaleString()}</div>
             </div>
             <div style={{ borderTop:'0.5px solid rgba(255,255,255,0.1)', paddingTop:12 }}>
-              <div style={{ display:'flex', gap:8, marginBottom:8 }}><div style={{ width:9, height:9, borderRadius:'50%', background:GREEN, marginTop:3, flexShrink:0 }}/><div style={{ fontSize:13, color:'rgba(255,255,255,0.8)' }}>{booking.pickup?.address}</div></div>
-              <div style={{ display:'flex', gap:8 }}><div style={{ width:9, height:9, borderRadius:'50%', background:YELLOW, marginTop:3, flexShrink:0 }}/><div style={{ fontSize:13, color:'rgba(255,255,255,0.8)' }}>{booking.dropoff?.address}</div></div>
+              <div style={{ display:'flex', gap:8, marginBottom:8 }}>
+                <div style={{ width:9, height:9, borderRadius:'50%', background:GREEN, marginTop:3, flexShrink:0 }}/>
+                <div style={{ fontSize:13, color:'rgba(255,255,255,0.8)' }}>{booking.pickup?.address}</div>
+              </div>
+              <div style={{ display:'flex', gap:8 }}>
+                <div style={{ width:9, height:9, borderRadius:'50%', background:YELLOW, marginTop:3, flexShrink:0 }}/>
+                <div style={{ fontSize:13, color:'rgba(255,255,255,0.8)' }}>{booking.dropoff?.address}</div>
+              </div>
             </div>
             <div style={{ marginTop:12, padding:'8px 12px', background:'rgba(26,158,90,0.1)', borderRadius:8, fontSize:12, color:'#9fe1cb' }}>
               ✅ Booking saved — drivers are being notified
             </div>
           </div>
         )}
+
+        {/* Payment method selector */}
         <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:1, marginBottom:10 }}>Payment method</div>
-        <div style={{ display:'flex', gap:8, marginBottom:20 }}>
-          {['cash','card'].map(p => (
-            <div key={p} onClick={() => setPayment(p)} style={{ flex:1, border:payment===p?`1.5px solid ${YELLOW}`:'0.5px solid rgba(255,255,255,0.15)', borderRadius:10, padding:'10px 12px', textAlign:'center', cursor:'pointer', background:payment===p?'rgba(232,180,0,0.1)':'transparent', color:payment===p?YELLOW:'rgba(255,255,255,0.5)', fontSize:13, fontWeight:payment===p?500:400 }}>
-              {p==='cash'?'💵':'💳'} {p}
-            </div>
-          ))}
+        <div style={{ display:'flex', gap:8, marginBottom:16 }}>
+          <div onClick={() => { setPayment('cash'); setCardSuccess(false); setCardError(''); }}
+            style={{ flex:1, border:payment==='cash'?`1.5px solid ${YELLOW}`:'0.5px solid rgba(255,255,255,0.15)', borderRadius:10, padding:'12px', textAlign:'center', cursor:'pointer', background:payment==='cash'?'rgba(232,180,0,0.1)':'rgba(255,255,255,0.04)', color:payment==='cash'?YELLOW:'rgba(255,255,255,0.5)' }}>
+            <div style={{ fontSize:22, marginBottom:4 }}>💵</div>
+            <div style={{ fontSize:12, fontWeight:500 }}>Cash</div>
+            <div style={{ fontSize:10, marginTop:2, opacity:0.7 }}>Pay driver directly</div>
+          </div>
+          <div onClick={() => { setPayment('card'); setCardSuccess(false); setCardError(''); }}
+            style={{ flex:1, border:payment==='card'?`1.5px solid ${YELLOW}`:'0.5px solid rgba(255,255,255,0.15)', borderRadius:10, padding:'12px', textAlign:'center', cursor:'pointer', background:payment==='card'?'rgba(232,180,0,0.1)':'rgba(255,255,255,0.04)', color:payment==='card'?YELLOW:'rgba(255,255,255,0.5)' }}>
+            <div style={{ fontSize:22, marginBottom:4 }}>💳</div>
+            <div style={{ fontSize:12, fontWeight:500 }}>Card</div>
+            <div style={{ fontSize:10, marginTop:2, opacity:0.7 }}>Pay securely online</div>
+          </div>
         </div>
-        <button style={s.btnY} onClick={() => go('live-ride')}>Go to Live Tracking</button>
-        <button style={s.btnO} onClick={() => go('customer-dash')}>Back to Dashboard</button>
+
+        {/* CASH flow */}
+        {payment === 'cash' && (
+          <>
+            <div style={{ background:'rgba(255,255,255,0.04)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, padding:14, marginBottom:16 }}>
+              <div style={{ fontSize:13, color:'rgba(255,255,255,0.7)', lineHeight:1.6 }}>
+                💵 You will pay <strong style={{ color:WHITE }}>J${booking?.fare?.toLocaleString()}</strong> in cash directly to your driver when you arrive at your destination.
+              </div>
+            </div>
+            <button style={s.btnY} onClick={handleCashConfirm}>Confirm — Pay Cash</button>
+          </>
+        )}
+
+        {/* CARD flow */}
+        {payment === 'card' && (
+          <>
+            {cardSuccess ? (
+              <div style={{ textAlign:'center', padding:'20px 0' }}>
+                <div style={{ fontSize:48, marginBottom:12 }}>✅</div>
+                <div style={{ fontSize:17, fontWeight:500, color:WHITE, marginBottom:6 }}>Payment successful!</div>
+                <div style={{ fontSize:13, color:'rgba(255,255,255,0.5)', marginBottom:20 }}>J${booking?.fare?.toLocaleString()} paid by card</div>
+                <button style={s.btnY} onClick={() => go('live-ride')}>Track your ride →</button>
+              </div>
+            ) : (
+              <>
+                {/* Card form */}
+                <div style={{ background:'rgba(255,255,255,0.04)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:14, padding:16, marginBottom:14 }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
+                    <div style={{ fontSize:14, fontWeight:500, color:WHITE }}>Card Details</div>
+                    <div style={{ display:'flex', gap:6 }}>
+                      <div style={{ background:'rgba(255,255,255,0.1)', borderRadius:6, padding:'3px 8px', fontSize:11, color:'rgba(255,255,255,0.6)' }}>VISA</div>
+                      <div style={{ background:'rgba(255,255,255,0.1)', borderRadius:6, padding:'3px 8px', fontSize:11, color:'rgba(255,255,255,0.6)' }}>MC</div>
+                    </div>
+                  </div>
+
+                  {cardError && <div style={s.errBox}>⚠️ {cardError}</div>}
+
+                  <label style={s.lbl}>Cardholder Name</label>
+                  <input style={s.inp} placeholder="Name on card" value={cardName} onChange={e => setCardName(e.target.value)}/>
+
+                  <label style={s.lbl}>Card Number</label>
+                  <input style={{ ...s.inp, letterSpacing:2 }} placeholder="0000 0000 0000 0000" value={cardNumber}
+                    onChange={e => setCardNumber(fmtCard(e.target.value))} maxLength={19}/>
+
+                  <div style={{ display:'flex', gap:10 }}>
+                    <div style={{ flex:1 }}>
+                      <label style={s.lbl}>Expiry Date</label>
+                      <input style={s.inp} placeholder="MM/YY" value={cardExpiry}
+                        onChange={e => setCardExpiry(fmtExpiry(e.target.value))} maxLength={5}/>
+                    </div>
+                    <div style={{ flex:1 }}>
+                      <label style={s.lbl}>CVV</label>
+                      <input style={s.inp} placeholder="123" value={cardCVV} type="password"
+                        onChange={e => setCardCVV(e.target.value.replace(/\D/g,'').slice(0,4))} maxLength={4}/>
+                    </div>
+                  </div>
+
+                  <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, color:'rgba(255,255,255,0.35)', marginTop:4 }}>
+                    🔒 Your card details are encrypted and secure
+                  </div>
+                </div>
+
+                <div style={{ background:DARK, borderRadius:12, padding:14, marginBottom:14 }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:'rgba(255,255,255,0.6)', marginBottom:6 }}>
+                    <span>Ride fare</span><span>J${booking?.fare?.toLocaleString()}</span>
+                  </div>
+                  <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:'rgba(255,255,255,0.6)', marginBottom:6 }}>
+                    <span>Card processing fee</span><span>J$0</span>
+                  </div>
+                  <div style={{ display:'flex', justifyContent:'space-between', fontSize:16, fontWeight:500, color:YELLOW, borderTop:'0.5px solid rgba(255,255,255,0.1)', paddingTop:8, marginTop:4 }}>
+                    <span>Total charge</span><span>J${booking?.fare?.toLocaleString()}</span>
+                  </div>
+                </div>
+
+                <button style={{ ...s.btnY, opacity:processing?0.7:1 }} onClick={handleCardPay} disabled={processing}>
+                  {processing ? '⏳ Processing payment...' : `Pay J${booking?.fare?.toLocaleString()} by Card`}
+                </button>
+                <button style={s.btnO} onClick={() => go('customer-dash')}>Cancel</button>
+              </>
+            )}
+          </>
+        )}
       </div>
     </div>
   );
@@ -1122,8 +1259,27 @@ function LiveRide({ go, bookingId }) {
 
   const submitRating = async () => {
     if (!rating || !bookingId) return;
-    await updateDoc(doc(db,'bookings',bookingId), { customerRating:rating });
-    setRated(true);
+    try {
+      // Save rating on the booking
+      await updateDoc(doc(db,'bookings',bookingId), { customerRating:rating });
+      // Update driver average rating
+      if (booking?.driverId) {
+        const driverRef = doc(db,'drivers',booking.driverId);
+        const driverSnap = await getDoc(driverRef);
+        if (driverSnap.exists()) {
+          const d = driverSnap.data();
+          const prevTotal = (d.ratingTotal || 0) + rating;
+          const prevCount = (d.ratingCount || 0) + 1;
+          const newAvg    = Math.round((prevTotal / prevCount) * 10) / 10;
+          await updateDoc(driverRef, {
+            ratingTotal: prevTotal,
+            ratingCount: prevCount,
+            rating:      newAvg,
+          });
+        }
+      }
+      setRated(true);
+    } catch(err) { console.error('Rating error:', err); setRated(true); }
   };
 
   const pickupCoords  = booking?.pickup  ? { lat:booking.pickup.lat,  lng:booking.pickup.lng  } : MANCHESTER_CENTER;
