@@ -14,7 +14,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build && copy public\\admin.html build\\admin.html"
+    "build": "react-scripts build && cp public/admin.html build/admin.html"
   },
   "browserslist": {
     "production": [
