@@ -1006,7 +1006,6 @@ function DriverDash({ go, user, setUser }) {
           </>
         )}
       </div>
-    </div>
       {/* Bottom tab bar */}
       <div style={{ position:'sticky', bottom:0, background:'#1a1a2e', borderTop:'0.5px solid rgba(255,255,255,0.1)', display:'flex', zIndex:10 }}>
         <div style={{ flex:1, padding:'12px 0', textAlign:'center', fontSize:11, color:'#e8b400', cursor:'pointer', borderTop:'2px solid #e8b400' }}>
