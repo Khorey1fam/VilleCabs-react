@@ -12,7 +12,6 @@ import {
 import { GoogleMap, useJsApiLoader, Marker, DirectionsRenderer } from '@react-google-maps/api';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const firebaseConfig = {
   apiKey:            process.env.REACT_APP_FIREBASE_API_KEY,
@@ -30,10 +29,6 @@ const messaging     = getMessaging(app);
 const functions_     = getFunctions(app);
 const createPaymentIntentFn   = httpsCallable(functions_, 'createPaymentIntent');
 const updateDriverLocationFn  = httpsCallable(functions_, 'updateDriverLocation');
-const functions_    = getFunctions(app);
-const createPaymentIntent   = httpsCallable(functions_, 'createPaymentIntent');
-const updateDriverLocationFn = httpsCallable(functions_, 'updateDriverLocation');
-
 const YELLOW = '#e8b400';
 const DARK   = '#1a1a2e';
 const GREEN  = '#1a9e5a';
