@@ -1127,6 +1127,7 @@ function CustomerSettings({ go, user, setUser }) {
 function PinPickup({ go, setPickupData }) {
   const [pinPos,   setPinPos]   = useState(MANCHESTER_CENTER);
   const [address,  setAddress]  = useState('Manchester, Jamaica');
+  const [note,     setNote]     = useState('');
   const [loading,  setLoading]  = useState(false);
 
   const handleMapClick = useCallback(async (e) => {
@@ -1140,14 +1141,15 @@ function PinPickup({ go, setPickupData }) {
   }, []);
 
   const handleConfirm = () => {
-    setPickupData({ coords:pinPos, address });
+    const finalAddress = note.trim() ? `${address} — ${note.trim()}` : address;
+    setPickupData({ coords:pinPos, address: finalAddress });
     go('pin-dropoff');
   };
 
   return (
     <div style={{ ...s.content, background:'transparent' }}>
       <TopBar title="Pin Pickup Location" onBack={() => go('customer-dash')}/>
-      <VilleMap height={300} center={MANCHESTER_CENTER} zoom={14} onClick={handleMapClick}
+      <VilleMap height={260} center={MANCHESTER_CENTER} zoom={14} onClick={handleMapClick}
         markers={[{ position:pinPos, title:'Pickup' }]}/>
       <div style={{ padding:16 }}>
         <div style={{ background:'rgba(26,158,90,0.1)', border:'0.5px solid rgba(26,158,90,0.3)', borderRadius:8, padding:'8px 12px', marginBottom:12, fontSize:12, color:'#9fe1cb' }}>
@@ -1155,6 +1157,8 @@ function PinPickup({ go, setPickupData }) {
         </div>
         <label style={s.lbl}>Pinned address</label>
         <input style={s.inp} value={loading ? 'Getting address...' : address} onChange={e => setAddress(e.target.value)}/>
+        <label style={s.lbl}>District / Road / Landmark <span style={{ color:'rgba(255,255,255,0.3)', fontWeight:400 }}>(optional)</span></label>
+        <input style={s.inp} placeholder="e.g. Hatfield district, top of Caledonia Road, near the blue gate..." value={note} onChange={e => setNote(e.target.value)}/>
         <button style={s.btnY} onClick={handleConfirm}>Confirm Pickup</button>
       </div>
     </div>
@@ -1165,6 +1169,7 @@ function PinPickup({ go, setPickupData }) {
 function PinDropoff({ go, pickupData, setDropoffData }) {
   const [pinPos,  setPinPos]  = useState({ lat:18.02, lng:-77.48 });
   const [address, setAddress] = useState('');
+  const [note,    setNote]    = useState('');
   const [loading, setLoading] = useState(false);
   const suggestions = [
     { address:'Manchester Market, Mandeville', coords:{ lat:18.0416, lng:-77.5036 } },
@@ -1187,7 +1192,8 @@ function PinDropoff({ go, pickupData, setDropoffData }) {
 
   const handleConfirm = () => {
     if (!address) return;
-    setDropoffData({ coords:pinPos, address });
+    const finalAddress = note.trim() ? `${address} — ${note.trim()}` : address;
+    setDropoffData({ coords:pinPos, address: finalAddress });
     go('vehicle-select');
   };
 
@@ -1207,11 +1213,13 @@ function PinDropoff({ go, pickupData, setDropoffData }) {
           <div style={{ marginBottom:12 }}>
             <label style={s.lbl}>Pinned address</label>
             <input style={s.inp} value={loading ? 'Getting address...' : address} onChange={e => setAddress(e.target.value)}/>
+            <label style={s.lbl}>District / Road / Landmark <span style={{ color:'rgba(255,255,255,0.3)', fontWeight:400 }}>(optional)</span></label>
+            <input style={s.inp} placeholder="e.g. Hatfield district, top of Caledonia Road, near the blue gate..." value={note} onChange={e => setNote(e.target.value)}/>
           </div>
         )}
         <div style={{ background:'rgba(15,20,40,0.6)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:12, overflow:'hidden', marginBottom:14 }}>
           {suggestions.map((sug,i) => (
-            <div key={i} onClick={() => { setAddress(sug.address); setDropoffData({ coords:sug.coords, address:sug.address }); go('vehicle-select'); }}
+            <div key={i} onClick={() => { const fa = note.trim() ? `${sug.address} — ${note.trim()}` : sug.address; setDropoffData({ coords:sug.coords, address:fa }); go('vehicle-select'); }}
               style={{ padding:'11px 14px', fontSize:13, color:'rgba(255,255,255,0.8)', borderBottom:i<suggestions.length-1?'0.5px solid rgba(255,255,255,0.08)':'none', cursor:'pointer' }}>
               📍 {sug.address}
             </div>
