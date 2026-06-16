@@ -452,6 +452,7 @@ function LoginChoice({ go }) {
           </p>
         </div>
       </div>
+    <Footer go={go}/>
     </div>
   );
 }
@@ -476,6 +477,7 @@ function RoleSelect({ go }) {
           </div>
         </div>
       </div>
+    <Footer go={go}/>
     </div>
   );
 }
@@ -598,6 +600,7 @@ function OTPScreen({ go, user }) {
           </p>
         </div>
       </div>
+    <Footer go={go}/>
     </div>
   );
 }
@@ -652,6 +655,7 @@ function CustomerLogin({ go, setUser }) {
         <button style={{ ...s.btnY, opacity:loading?0.7:1 }} onClick={handleLogin} disabled={loading}>{loading?'Logging in...':'Log In'}</button>
         <button style={s.link} onClick={() => go('customer-signup')}>Create an account</button>
       </div>
+    <Footer go={go}/>
     </div>
   );
 }
@@ -904,6 +908,7 @@ function TermsScreen({ go, user }) {
           Agree & Continue →
         </button>
       </div>
+    <Footer go={go}/>
     </div>
   );
 }
@@ -991,6 +996,7 @@ function WelcomeTips({ go, user }) {
           )}
         </div>
       </div>
+    <Footer go={go}/>
     </div>
   );
 }
@@ -1126,6 +1132,7 @@ function ContactUs({ go, user }) {
           {loading ? 'Sending...' : 'Send Message'}
         </button>
       </div>
+    <Footer go={go}/>
     </div>
   );
 }
@@ -1158,6 +1165,7 @@ function HelpScreen({ go, user }) {
           </div>
         ))}
       </div>
+    <Footer go={go}/>
     </div>
   );
 }
@@ -1539,6 +1547,7 @@ function CustomerDash({ go, user, setUser }) {
           
         </div>
       )}
+      <Footer go={go}/>
     </div>
   );
 }
@@ -1602,6 +1611,7 @@ function CustomerProfile({ go, user, setUser }) {
         </button>
         <button style={s.btnO} onClick={() => go('customer-settings')}>Go to Settings</button>
       </div>
+    <Footer go={go}/>
     </div>
   );
 }
@@ -1727,6 +1737,7 @@ function CustomerSettings({ go, user, setUser }) {
         </div>
 
       </div>
+    <Footer go={go}/>
     </div>
   );
 }
