@@ -87,114 +87,19 @@ const s = {
 };
 
 // ── SVG fallback map (for auth screens) ──────────────────────────────────────
-// ── GLOBAL HOVER STYLES ──────────────────────────────────────────────────────
 function GlobalStyles() {
   React.useEffect(() => {
     const style = document.createElement('style');
     style.innerHTML = `
-      /* Buttons */
-      button:hover:not(:disabled) {
-        filter: brightness(1.15);
-        transform: translateY(-1px);
-        transition: all 0.15s ease;
-      }
-      button:active:not(:disabled) {
-        transform: translateY(0px) scale(0.98);
-        filter: brightness(0.95);
-      }
-      button { transition: all 0.15s ease; }
-
-      /* Clickable divs — ride cards, menu items, etc */
-      [data-clickable="true"]:hover {
-        filter: brightness(1.1);
-        transform: translateY(-1px);
-        box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        transition: all 0.15s ease;
-      }
-      [data-clickable="true"] { transition: all 0.15s ease; cursor: pointer; }
-
-      /* Links */
-      a:hover { opacity: 0.85; transition: opacity 0.15s; }
-
-      /* Input focus glow */
-      input:focus, textarea:focus, select:focus {
-        border-color: rgba(232,180,0,0.6) !important;
-        box-shadow: 0 0 0 2px rgba(232,180,0,0.15);
-        transition: all 0.2s ease;
-      }
-
-      /* Yellow buttons */
-      button[class*="btnY"]:hover, .btn-yellow:hover {
-        box-shadow: 0 4px 20px rgba(232,180,0,0.35);
-      }
-
-      /* Ride cards hover */
-      .ride-card:hover {
-        border-color: rgba(232,180,0,0.4) !important;
-        transform: translateY(-2px);
-        box-shadow: 0 6px 24px rgba(0,0,0,0.35);
-      }
-      .ride-card { transition: all 0.2s ease; }
-
-      /* Menu items */
-      .menu-item:hover {
-        background: rgba(255,255,255,0.06) !important;
-        padding-left: 22px !important;
-        transition: all 0.15s ease;
-      }
-      .menu-item { transition: all 0.15s ease; }
-
-      /* Circle buttons */
-      .circle-btn:hover {
-        transform: scale(1.05);
-        box-shadow: 0 0 50px rgba(232,180,0,0.5);
-        transition: all 0.2s ease;
-      }
-      .circle-btn { transition: all 0.2s ease; }
-
-      /* Tab items */
-      .tab-item:hover {
-        color: rgba(232,180,0,0.8) !important;
-        transition: color 0.15s ease;
-      }
-
-      /* Notification banners */
-      .notif-banner:hover {
-        filter: brightness(1.05);
-        transition: all 0.15s ease;
-      }
-
-      /* Vehicle select cards */
-      .vehicle-card:hover {
-        border-color: rgba(232,180,0,0.6) !important;
-        background: rgba(232,180,0,0.12) !important;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-      }
-      .vehicle-card { transition: all 0.2s ease; cursor: pointer; }
-
-      /* Upload boxes */
-      .upload-box:hover {
-        border-color: rgba(232,180,0,0.5) !important;
-        background: rgba(232,180,0,0.06) !important;
-        transition: all 0.15s ease;
-      }
-      .upload-box { transition: all 0.15s ease; }
-
-      /* Quick action cards in admin */
-      .quick-action:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(0,0,0,0.3);
-        filter: brightness(1.1);
-        transition: all 0.15s ease;
-      }
-      .quick-action { transition: all 0.15s ease; }
-
-      /* Scrollbar styling */
-      ::-webkit-scrollbar { width: 4px; }
-      ::-webkit-scrollbar-track { background: rgba(255,255,255,0.03); }
-      ::-webkit-scrollbar-thumb { background: rgba(232,180,0,0.3); border-radius: 4px; }
-      ::-webkit-scrollbar-thumb:hover { background: rgba(232,180,0,0.5); }
+      button:hover:not(:disabled) { filter:brightness(1.15); transform:translateY(-1px); transition:all 0.15s ease; }
+      button:active:not(:disabled) { transform:translateY(0) scale(0.98); filter:brightness(0.95); }
+      button { transition:all 0.15s ease; }
+      a:hover { opacity:0.8; transition:opacity 0.15s; }
+      input:focus, textarea:focus, select:focus { border-color:rgba(232,180,0,0.6)!important; box-shadow:0 0 0 2px rgba(232,180,0,0.15); transition:all 0.2s; }
+      ::-webkit-scrollbar { width:4px; }
+      ::-webkit-scrollbar-track { background:rgba(255,255,255,0.03); }
+      ::-webkit-scrollbar-thumb { background:rgba(232,180,0,0.3); border-radius:4px; }
+      ::-webkit-scrollbar-thumb:hover { background:rgba(232,180,0,0.5); }
     `;
     document.head.appendChild(style);
     return () => { if (style.parentNode) style.parentNode.removeChild(style); };
@@ -571,6 +476,7 @@ function DriverLogin({ go, setUser }) {
       const data = snap.data();
       if (data.status==='pending')  { setError('Your application is still pending admin approval.'); setLoading(false); return; }
       if (data.status==='rejected') { setError('Your application was not approved. Contact support.'); setLoading(false); return; }
+      try { await updateDoc(doc(db,'drivers',cred.user.uid), { role:'driver' }); } catch(e) {}
       try { await updateDoc(doc(db,'drivers',cred.user.uid), { role:'driver' }); } catch(e) {}
       setUser({ uid:cred.user.uid, name:data.name, email:cred.user.email, role:'driver' });
       if (!data.termsAccepted) go('driver-terms');
@@ -1744,9 +1650,12 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
   // Base fare: J$751 covers the first 1km (flat rate within 1km radius)
   // Beyond 1km: J$200 added per every 100m extra
   // Vehicle multipliers: VilleRide x1.0, VilleXL x1.3, VilleMoto x0.7
-  const BASE_FARE    = 751;   // J$ flat rate for first 1km
-  const BASE_KM      = 1.0;   // km included in base fare
-  const RATE_PER_100M= 9;     // J$ per 100m beyond base km
+  const BASE_FARE    = 751;
+  const BASE_KM      = 1.0;
+  const RATE_PER_100M= 15;
+  const _hour = new Date().getHours();
+  const isSurge = _hour >= 17 && _hour < 20;
+  const SURGE_MULTIPLIER = isSurge ? 1.5 : 1.0;
 
   const calcPrice = (v) => {
     let fare = BASE_FARE;
@@ -3114,9 +3023,32 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   };
 
   useEffect(() => {
-    const q = query(collection(db,'bookings'), where('status','==','searching'), orderBy('createdAt','desc'));
+    const q = query(collection(db,'bookings'), where('status','==','searching'));
+    let prevCount = 0;
     const unsub = onSnapshot(q, snap => {
-      setRides(snap.docs.map(d => ({ id:d.id, ...d.data() })));
+      const all = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+      const filtered = all.filter(r =>
+        r.status === 'searching' &&
+        !r.declinedBy?.includes(user?.uid) &&
+        !r.driverId
+      );
+      filtered.sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+      if (filtered.length > prevCount && prevCount > 0) {
+        try {
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const playBell = (freq, time) => {
+            const osc = ctx.createOscillator(); const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.frequency.value = freq; osc.type = 'sine';
+            gain.gain.setValueAtTime(0.3, ctx.currentTime + time);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + time + 0.8);
+            osc.start(ctx.currentTime + time); osc.stop(ctx.currentTime + time + 0.8);
+          };
+          playBell(880,0); playBell(1100,0.2); playBell(1320,0.4);
+        } catch(e) {}
+      }
+      prevCount = filtered.length;
+      setRides(filtered);
       setLoading(false);
     });
     return () => unsub();
@@ -3170,8 +3102,19 @@ function DriverDash({ go, user, setUser, setBookingId }) {
     } catch(err) { console.error(err); setNotifStatus("error"); }
   };
 
+  const declineRide = async (rideId) => {
+    try {
+      const { arrayUnion } = await import('firebase/firestore');
+      await updateDoc(doc(db,'bookings',rideId), { declinedBy: arrayUnion(user.uid) });
+    } catch(err) { console.error('Decline error:', err); }
+  };
+
   const acceptRide = async (rideId) => {
     try {
+      const rideSnap = await getDoc(doc(db,'bookings',rideId));
+      if (!rideSnap.exists() || rideSnap.data().status !== 'searching' || rideSnap.data().driverId) {
+        alert('Sorry, this ride was already accepted by another driver.'); return;
+      }
       // Fetch driver vehicle info to save on booking for customer safety
       const dSnap = await getDoc(doc(db,'drivers',user.uid));
       const dData = dSnap.exists() ? dSnap.data() : {};
@@ -3315,7 +3258,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
                 <div style={{ fontSize:11, color:'rgba(255,255,255,0.35)', marginBottom:10 }}>🚗 {r.vehicleType} · {r.distanceKm} km · Cash · ~{Math.ceil((r.distanceKm||5)/0.5)} min ETA</div>
                 <div style={{ display:'flex', gap:8 }}>
                   <button onClick={() => acceptRide(r.id)} style={{ flex:1, background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:10, fontSize:13, fontWeight:500, cursor:'pointer' }}>✓ Accept</button>
-                  <button style={{ flex:1, background:'rgba(15,20,40,0.65)', color:'rgba(255,255,255,0.5)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:8, padding:10, fontSize:13, cursor:'pointer' }}>Decline</button>
+                  <button onClick={() => declineRide(r.id)} style={{ flex:1, background:'rgba(15,20,40,0.65)', color:'rgba(255,255,255,0.5)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:8, padding:10, fontSize:13, cursor:'pointer' }}>Decline</button>
                 </div>
               </div>
             ))}
@@ -4084,46 +4027,13 @@ export default function App() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (fu) => {
       if (fu) {
-        const cSnap = await getDoc(doc(db,'customers',fu.uid));
-        const dSnap = await getDoc(doc(db,'drivers',fu.uid));
-        if (cSnap.exists()) {
-          const d = cSnap.data();
-          // Check email verified (skip for Google login which is auto-verified)
-          if (!fu.emailVerified && fu.providerData[0]?.providerId === 'password') {
-            setUser({ uid:fu.uid, name:d.name||fu.displayName, email:fu.email, role:'customer' });
-            setScreen('otp');
-          } else {
-            setUser({ uid:fu.uid, name:d.name||fu.displayName, email:fu.email, role:'customer' });
-            try {
-              // Check for active booking first
-              const q1 = query(collection(db,'bookings'), where('customerId','==',fu.uid), where('status','==','searching'));
-              const q2 = query(collection(db,'bookings'), where('customerId','==',fu.uid), where('status','==','active'));
-              const [s1,s2] = await Promise.all([getDocs(q1), getDocs(q2)]);
-              const found = [...s1.docs, ...s2.docs];
-              const twoHoursAgo = Date.now() / 1000 - 7200;
-              const recentBooking = found.find(b => (b.data().createdAt?.seconds||0) > twoHoursAgo);
-              if (recentBooking) {
-                setBookingId(recentBooking.id);
-                setScreen('live-ride');
-              } else if (!d.termsAccepted) {
-                setScreen('terms');
-              } else if (!d.tipsSeen) {
-                setScreen('welcome-tips');
-              } else {
-                setScreen('customer-dash');
-              }
-            } catch(e) {
-              setScreen('customer-dash');
-            }
-          }
-        } else if (dSnap.exists()) {
-          const d = dSnap.data();
-          if (d.status==='approved') {
-            // Check email verified for drivers too
-            if (!fu.emailVerified && fu.providerData[0]?.providerId === 'password') {
-              setUser({ uid:fu.uid, name:d.name, email:fu.email, role:'driver' });
-              setScreen('otp');
-            } else {
+        try {
+          const cSnap = await getDoc(doc(db,'customers',fu.uid));
+          const dSnap = await getDoc(doc(db,'drivers',fu.uid));
+          // ── DRIVER FIRST — no email verification required ─────────────────
+          if (dSnap.exists()) {
+            const d = dSnap.data();
+            if (d.status === 'approved') {
               setUser({ uid:fu.uid, name:d.name, email:fu.email, role:'driver' });
               try {
                 const activeQ = query(collection(db,'bookings'), where('driverId','==',fu.uid), where('status','==','active'));
@@ -4138,14 +4048,41 @@ export default function App() {
                 } else {
                   setScreen('driver-dash');
                 }
-              } catch(e) {
-                setScreen('driver-dash');
-              }
+              } catch(e) { setScreen('driver-dash'); }
+            } else if (d.status === 'pending') {
+              setScreen('driver-pending');
+            } else {
+              setScreen('driver-login');
             }
-          } else {
-            setScreen('driver-pending');
+          // ── CUSTOMER ──────────────────────────────────────────────────────
+          } else if (cSnap.exists()) {
+            const d = cSnap.data();
+            if (!fu.emailVerified && fu.providerData[0]?.providerId === 'password') {
+              setUser({ uid:fu.uid, name:d.name||fu.displayName, email:fu.email, role:'customer' });
+              setScreen('otp');
+            } else {
+              setUser({ uid:fu.uid, name:d.name||fu.displayName, email:fu.email, role:'customer' });
+              try {
+                const q1 = query(collection(db,'bookings'), where('customerId','==',fu.uid), where('status','==','searching'));
+                const q2 = query(collection(db,'bookings'), where('customerId','==',fu.uid), where('status','==','active'));
+                const [s1,s2] = await Promise.all([getDocs(q1), getDocs(q2)]);
+                const found = [...s1.docs, ...s2.docs];
+                const twoHoursAgo = Date.now() / 1000 - 7200;
+                const recentBooking = found.find(b => (b.data().createdAt?.seconds||0) > twoHoursAgo);
+                if (recentBooking) {
+                  setBookingId(recentBooking.id);
+                  setScreen('live-ride');
+                } else if (!d.termsAccepted) {
+                  setScreen('terms');
+                } else if (!d.tipsSeen) {
+                  setScreen('welcome-tips');
+                } else {
+                  setScreen('customer-dash');
+                }
+              } catch(e) { setScreen('customer-dash'); }
+            }
           }
-        }
+        } catch(e) { console.error('Auth restore error:', e); }
       } else {
         setTimeout(() => setLoading(false), 1500);
         return;
