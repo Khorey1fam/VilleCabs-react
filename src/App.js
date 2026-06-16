@@ -276,7 +276,8 @@ function CustomerSignup({ go, setUser }) {
     setLoading(true);
     try {
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
-      await setDoc(doc(db,'customers',cred.user.uid), { name:form.name, phone:form.phone, email:form.email, role:'customer', createdAt:serverTimestamp() });
+      const refCode = 'VC' + Math.random().toString(36).substring(2,7).toUpperCase();
+      await setDoc(doc(db,'customers',cred.user.uid), { name:form.name, phone:form.phone, email:form.email, role:'customer', referralCode:refCode, referralCount:0, createdAt:serverTimestamp() });
       await sendEmailVerification(cred.user);
       setUser({ uid:cred.user.uid, name:form.name, email:form.email, role:'customer' });
       go('otp');
@@ -1323,7 +1324,7 @@ function CustomerProfile({ go, user, setUser }) {
     getDoc(doc(db,'customers',user.uid)).then(snap => {
       if (snap.exists()) {
         const d = snap.data();
-        setForm({ name:d.name||'', phone:d.phone||'' });
+        setForm({ name:d.name||'', phone:d.phone||'', referralCode:d.referralCode||'' });
       }
     });
   }, [user]);
@@ -1635,11 +1636,11 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
   const calcPrice = (v) => {
     let fare = BASE_FARE;
     if (dist > BASE_KM) {
-      const extraMeters = (dist - BASE_KM) * 1000; // meters beyond 1km
-      const per100m     = Math.ceil(extraMeters / 100); // how many 100m chunks
+      const extraMeters = (dist - BASE_KM) * 1000;
+      const per100m     = Math.ceil(extraMeters / 100);
       fare += per100m * RATE_PER_100M;
     }
-    return Math.round(fare * v.multiplier);
+    return Math.round(fare * v.multiplier * SURGE_MULTIPLIER);
   };
 
   const fareBreakdown = (v) => {
@@ -1775,6 +1776,15 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
             <div style={{ fontSize:15, fontWeight:500, color:WHITE }}>J${calcPrice(veh).toLocaleString()}</div>
           </div>
         ))}
+        {isSurge && (
+          <div style={{ background:'rgba(226,75,74,0.15)', border:'1.5px solid rgba(226,75,74,0.4)', borderRadius:10, padding:'10px 14px', marginBottom:10, display:'flex', alignItems:'center', gap:8 }}>
+            <span style={{ fontSize:18 }}>⚡</span>
+            <div>
+              <div style={{ fontSize:13, fontWeight:600, color:'#f09595' }}>Surge Pricing Active</div>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Peak hours 5pm–8pm · 1.5× fare applies</div>
+            </div>
+          </div>
+        )}
         <div style={{ background:DARK, borderRadius:12, padding:14, margin:'10px 0' }}>
           <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:6 }}>
             <span>Base (first 1km)</span>
@@ -1797,6 +1807,34 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
             <span>J${calcPrice(v).toLocaleString()}</span>
           </div>
         </div>
+        {/* Referral Code */}
+        <div style={{ background:'rgba(15,20,40,0.6)', border:'0.5px solid rgba(168,139,250,0.2)', borderRadius:12, padding:12, marginBottom:10 }}>
+          <div style={{ fontSize:12, color:'rgba(168,139,250,0.9)', marginBottom:8, fontWeight:500 }}>🎁 Have a referral code?</div>
+          <input
+            style={{ width:'100%', padding:'9px 12px', background:'rgba(255,255,255,0.08)', border:'0.5px solid rgba(168,139,250,0.3)', borderRadius:8, color:'#fff', fontSize:13, outline:'none', boxSizing:'border-box' }}
+            placeholder="Enter referral code e.g. VCABC12"
+            onChange={async (e) => {
+              const code = e.target.value.toUpperCase().trim();
+              if (code.length >= 7) {
+                const snap = await getDocs(query(collection(db,'customers'), where('referralCode','==',code)));
+                if (!snap.empty && snap.docs[0].id !== user.uid) {
+                  // Valid referral - store for use
+                  e.target.style.borderColor = '#1a9e5a';
+                  e.target.nextSibling.textContent = '✅ Valid referral code — 20% off your first ride!';
+                  e.target.nextSibling.style.color = '#9fe1cb';
+                  window._referralDoc = snap.docs[0].id;
+                } else {
+                  e.target.style.borderColor = 'rgba(226,75,74,0.4)';
+                  e.target.nextSibling.textContent = code.length >= 7 ? '❌ Invalid referral code' : '';
+                  e.target.nextSibling.style.color = '#f09595';
+                  window._referralDoc = null;
+                }
+              }
+            }}
+          />
+          <div style={{ fontSize:12, marginTop:6, color:'rgba(255,255,255,0.4)' }}></div>
+        </div>
+
         {/* Promo Code */}
         <div style={{ background:'rgba(15,20,40,0.6)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:12, padding:12, marginBottom:10 }}>
           <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', marginBottom:8, fontWeight:500 }}>🎟️ Promo Code</div>
@@ -2387,32 +2425,90 @@ function LiveRide({ go, bookingId, user }) {
 
   // ── Completed screen ──
   if (booking?.status === 'completed') {
+    const completedTime = booking.completedAt?.seconds
+      ? new Date(booking.completedAt.seconds*1000).toLocaleTimeString('en-JM',{hour:'2-digit',minute:'2-digit'})
+      : '--';
+    const completedDate = booking.completedAt?.seconds
+      ? new Date(booking.completedAt.seconds*1000).toLocaleDateString('en-JM',{day:'numeric',month:'short',year:'numeric'})
+      : '--';
     return (
-      <div style={{ ...s.content, minHeight:'100vh' }}>
-        <div style={{ padding:24, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'100vh' }}>
-          <div style={{ fontSize:64, marginBottom:16 }}>✅</div>
-          <h2 style={{ fontSize:22, fontWeight:500, color:WHITE, marginBottom:8 }}>Ride completed!</h2>
-          <p style={{ fontSize:14, color:'rgba(255,255,255,0.5)', marginBottom:24, textAlign:'center' }}>You have arrived at your destination</p>
-          <div style={{ background:'rgba(15,20,40,0.8)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:14, padding:16, width:'100%', maxWidth:380, marginBottom:20 }}>
-            <div style={{ display:'flex', justifyContent:'space-between', fontSize:14, marginBottom:8 }}><span style={{ color:'rgba(255,255,255,0.6)' }}>Driver</span><span style={{ color:WHITE, fontWeight:500 }}>{booking.driverName||'--'}</span></div>
-            <div style={{ display:'flex', justifyContent:'space-between', fontSize:14, marginBottom:8 }}><span style={{ color:'rgba(255,255,255,0.6)' }}>From</span><span style={{ color:WHITE }}>{booking.pickup?.address?.split(',')[0]}</span></div>
-            <div style={{ display:'flex', justifyContent:'space-between', fontSize:14, marginBottom:8 }}><span style={{ color:'rgba(255,255,255,0.6)' }}>To</span><span style={{ color:WHITE }}>{booking.dropoff?.address?.split(',')[0]}</span></div>
-            <div style={{ display:'flex', justifyContent:'space-between', fontSize:16, fontWeight:500, borderTop:'0.5px solid rgba(255,255,255,0.1)', paddingTop:10, marginTop:4 }}><span style={{ color:'rgba(255,255,255,0.6)' }}>Total paid</span><span style={{ color:GREEN }}>J${booking.fare?.toLocaleString()}</span></div>
+      <div style={{ ...s.content, minHeight:'100vh', background:'transparent' }}>
+        <div style={{ padding:'24px 20px', display:'flex', flexDirection:'column', alignItems:'center', minHeight:'100vh' }}>
+          {/* Receipt header */}
+          <div style={{ textAlign:'center', marginBottom:20, paddingTop:20 }}>
+            <div style={{ width:70, height:70, borderRadius:'50%', background:'rgba(26,158,90,0.15)', border:'2px solid rgba(26,158,90,0.4)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:32, margin:'0 auto 12px' }}>✅</div>
+            <h2 style={{ fontSize:22, fontWeight:700, color:WHITE, margin:'0 0 4px' }}>Ride Complete!</h2>
+            <p style={{ fontSize:13, color:'rgba(255,255,255,0.5)', margin:0 }}>You have arrived safely</p>
           </div>
+
+          {/* Receipt card */}
+          <div style={{ background:'rgba(15,20,40,0.85)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:18, padding:20, width:'100%', maxWidth:400, marginBottom:16 }}>
+            {/* Receipt title */}
+            <div style={{ textAlign:'center', marginBottom:16, paddingBottom:14, borderBottom:'0.5px dashed rgba(255,255,255,0.1)' }}>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', letterSpacing:1, textTransform:'uppercase', marginBottom:4 }}>VilleCabs Receipt</div>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.3)' }}>{completedDate} · {completedTime}</div>
+            </div>
+            {/* Route */}
+            <div style={{ marginBottom:14 }}>
+              <div style={{ display:'flex', alignItems:'flex-start', gap:10, marginBottom:8 }}>
+                <div style={{ width:10, height:10, borderRadius:'50%', background:GREEN, flexShrink:0, marginTop:3 }}/>
+                <div>
+                  <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', marginBottom:2 }}>PICKUP</div>
+                  <div style={{ fontSize:13, color:WHITE }}>{booking.pickup?.address?.split('—')[0]?.trim() || '--'}</div>
+                </div>
+              </div>
+              <div style={{ width:1, height:16, background:'rgba(255,255,255,0.1)', marginLeft:4, marginBottom:8 }}/>
+              <div style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
+                <div style={{ width:10, height:10, borderRadius:'50%', background:YELLOW, flexShrink:0, marginTop:3 }}/>
+                <div>
+                  <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', marginBottom:2 }}>DROP-OFF</div>
+                  <div style={{ fontSize:13, color:WHITE }}>{booking.dropoff?.address?.split('—')[0]?.trim() || '--'}</div>
+                </div>
+              </div>
+            </div>
+            {/* Details */}
+            <div style={{ background:'rgba(255,255,255,0.04)', borderRadius:10, padding:12, marginBottom:14 }}>
+              {[
+                ['Driver', booking.driverName||'--'],
+                ['Vehicle', booking.vehicleMake ? `${booking.vehicleMake} ${booking.vehicleModel||''}` : '--'],
+                ['Plate', booking.licensePlate||'--'],
+                ['Distance', `${booking.distanceKm||'--'} km`],
+                ['Vehicle type', booking.vehicleType||'--'],
+                ['Payment', booking.paymentMethod||'Cash'],
+              ].map(([k,v],i) => (
+                <div key={i} style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:i<5?8:0 }}>
+                  <span style={{ color:'rgba(255,255,255,0.5)' }}>{k}</span>
+                  <span style={{ color:WHITE, fontWeight:500 }}>{v}</span>
+                </div>
+              ))}
+            </div>
+            {/* Total */}
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'0.5px dashed rgba(255,255,255,0.1)', paddingTop:14 }}>
+              <div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:1 }}>Total Paid</div>
+                {booking.promoCode && <div style={{ fontSize:11, color:GREEN, marginTop:2 }}>🎟️ {booking.promoCode} applied</div>}
+              </div>
+              <div style={{ fontSize:24, fontWeight:700, color:GREEN }}>J${booking.fare?.toLocaleString()}</div>
+            </div>
+          </div>
+
+          {/* Rating */}
           {!rated ? (
-            <div style={{ width:'100%', maxWidth:380, marginBottom:20, textAlign:'center' }}>
-              <p style={{ fontSize:14, color:'rgba(255,255,255,0.6)', marginBottom:12 }}>Rate your driver</p>
-              <div style={{ display:'flex', gap:8, justifyContent:'center', marginBottom:16 }}>
+            <div style={{ width:'100%', maxWidth:400, background:'rgba(15,20,40,0.7)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:16, marginBottom:14, textAlign:'center' }}>
+              <p style={{ fontSize:14, color:WHITE, fontWeight:500, marginBottom:4 }}>How was your ride?</p>
+              <p style={{ fontSize:12, color:'rgba(255,255,255,0.4)', marginBottom:14 }}>Rate your driver</p>
+              <div style={{ display:'flex', gap:10, justifyContent:'center', marginBottom:14 }}>
                 {[1,2,3,4,5].map(star => (
-                  <div key={star} onClick={() => setRating(star)} style={{ fontSize:32, cursor:'pointer', opacity:star<=rating?1:0.3 }}>⭐</div>
+                  <div key={star} onClick={() => setRating(star)} style={{ fontSize:36, cursor:'pointer', opacity:star<=rating?1:0.25, transition:'opacity 0.2s' }}>⭐</div>
                 ))}
               </div>
               {rating > 0 && <button style={s.btnY} onClick={submitRating}>Submit Rating</button>}
             </div>
           ) : (
-            <div style={{ ...s.successBox, width:'100%', maxWidth:380, textAlign:'center', marginBottom:20 }}>⭐ Thanks for rating your driver!</div>
+            <div style={{ ...s.successBox, width:'100%', maxWidth:400, textAlign:'center', marginBottom:14 }}>⭐ Thanks for rating your driver!</div>
           )}
-          <button style={{ ...s.btnO, width:'100%', maxWidth:380 }} onClick={() => go('customer-dash')}>Back to Dashboard</button>
+
+          <button style={{ ...s.btnY, width:'100%', maxWidth:400 }} onClick={() => go('customer-dash')}>Back to Dashboard</button>
         </div>
       </div>
     );
@@ -2452,7 +2548,11 @@ function LiveRide({ go, bookingId, user }) {
             <div style={{ background:'rgba(15,20,40,0.65)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:14, padding:14, marginBottom:12 }}>
               <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.5, marginBottom:10, fontWeight:500 }}>🛡️ Driver & Vehicle Info</div>
               <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
-                <div style={{ width:46, height:46, borderRadius:'50%', background:'rgba(232,180,0,0.15)', border:'1.5px solid rgba(232,180,0,0.3)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, flexShrink:0 }}>👤</div>
+                <div style={{ width:46, height:46, borderRadius:'50%', background:'rgba(232,180,0,0.15)', border:'1.5px solid rgba(232,180,0,0.3)', overflow:'hidden', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:22 }}>
+                  {driverInfo?.photoURL
+                    ? <img src={driverInfo.photoURL} alt="Driver" style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
+                    : '👤'}
+                </div>
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:15, fontWeight:500, color:WHITE }}>{booking.driverName||'--'}</div>
                   <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', marginTop:2 }}>
@@ -3097,7 +3197,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
                 </div>
                 <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', marginBottom:4 }}>📍 {r.pickup?.address}</div>
                 <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', marginBottom:6 }}>🏁 {r.dropoff?.address}</div>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,0.35)', marginBottom:10 }}>🚗 {r.vehicleType} · {r.distanceKm} km · Cash</div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.35)', marginBottom:10 }}>🚗 {r.vehicleType} · {r.distanceKm} km · Cash · ~{Math.ceil((r.distanceKm||5)/0.5)} min ETA</div>
                 <div style={{ display:'flex', gap:8 }}>
                   <button onClick={() => acceptRide(r.id)} style={{ flex:1, background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:10, fontSize:13, fontWeight:500, cursor:'pointer' }}>✓ Accept</button>
                   <button style={{ flex:1, background:'rgba(15,20,40,0.65)', color:'rgba(255,255,255,0.5)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:8, padding:10, fontSize:13, cursor:'pointer' }}>Decline</button>

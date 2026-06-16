@@ -520,6 +520,204 @@ function PromoCodesTab() {
   );
 }
 
+
+// ── CUSTOMERS TAB ─────────────────────────────────────────────────────────────
+function CustomersTab() {
+  const [customers, setCustomers] = useState([]);
+  const [loading,   setLoading]   = useState(true);
+  const [search,    setSearch]    = useState('');
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db,'customers'), snap => {
+      const list = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+      list.sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+      setCustomers(list); setLoading(false);
+    });
+    return () => unsub();
+  }, []);
+
+  const filtered = customers.filter(c =>
+    c.name?.toLowerCase().includes(search.toLowerCase()) ||
+    c.email?.toLowerCase().includes(search.toLowerCase()) ||
+    c.phone?.includes(search)
+  );
+
+  const suspendCustomer = async (id, current) => {
+    await updateDoc(doc(db,'customers',id), { status: current==='suspended' ? 'active' : 'suspended' });
+  };
+
+  return (
+    <div>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12, marginBottom:20 }}>
+        <StatCard label="Total customers" value={customers.length} sub="registered"/>
+        <StatCard label="Active" value={customers.filter(c=>c.status!=='suspended'&&c.status!=='deactivated').length} color={GREEN} sub="accounts"/>
+        <StatCard label="Suspended" value={customers.filter(c=>c.status==='suspended').length} color="#f09595" sub="accounts"/>
+      </div>
+      <input
+        style={{ width:'100%', padding:'10px 14px', background:'rgba(255,255,255,0.08)', border:'0.5px solid rgba(255,255,255,0.15)', borderRadius:10, color:'#fff', fontSize:13, outline:'none', marginBottom:16, boxSizing:'border-box' }}
+        placeholder="Search by name, email or phone..."
+        value={search} onChange={e => setSearch(e.target.value)}
+      />
+      {loading ? <div style={{ textAlign:'center', padding:40, color:'rgba(255,255,255,0.4)' }}>Loading...</div>
+      : filtered.map(c => (
+        <div key={c.id} style={{ background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, padding:'14px 18px', marginBottom:10, display:'flex', alignItems:'center', gap:14 }}>
+          <div style={{ width:42, height:42, borderRadius:'50%', background:'rgba(232,180,0,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>👤</div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:14, fontWeight:500, color:WHITE }}>{c.name||'--'}</div>
+            <div style={{ fontSize:12, color:'rgba(255,255,255,0.45)', marginTop:2 }}>{c.email}</div>
+            <div style={{ fontSize:11, color:'rgba(255,255,255,0.35)', marginTop:2 }}>{c.phone||'No phone'} · Code: {c.referralCode||'--'}</div>
+          </div>
+          <div style={{ textAlign:'right' }}>
+            <div style={{ fontSize:11, color: c.status==='suspended'?'#f09595':GREEN, marginBottom:6, fontWeight:500 }}>
+              {c.status==='suspended' ? '⛔ Suspended' : '✓ Active'}
+            </div>
+            <button onClick={() => suspendCustomer(c.id, c.status)}
+              style={{ padding:'5px 12px', borderRadius:8, fontSize:11, cursor:'pointer', border:'0.5px solid rgba(255,255,255,0.15)', background:'rgba(255,255,255,0.05)', color:WHITE }}>
+              {c.status==='suspended' ? 'Unsuspend' : 'Suspend'}
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── CONTACT SUBMISSIONS TAB ───────────────────────────────────────────────────
+function ContactsTab() {
+  const [contacts, setContacts] = useState([]);
+  const [loading,  setLoading]  = useState(true);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db,'contact_submissions'), snap => {
+      const list = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+      list.sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+      setContacts(list); setLoading(false);
+    });
+    return () => unsub();
+  }, []);
+
+  const fmtDate = (ts) => ts?.seconds ? new Date(ts.seconds*1000).toLocaleDateString('en-JM',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '--';
+
+  return (
+    <div>
+      <StatCard label="Total messages" value={contacts.length} sub="contact submissions"/>
+      <div style={{ marginTop:16 }}>
+        {loading ? <div style={{ textAlign:'center', padding:40, color:'rgba(255,255,255,0.4)' }}>Loading...</div>
+        : contacts.length === 0 ? <div style={{ textAlign:'center', padding:40, color:'rgba(255,255,255,0.4)' }}>No messages yet</div>
+        : contacts.map(c => (
+          <div key={c.id} style={{ background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, padding:'16px 18px', marginBottom:12 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
+              <div>
+                <div style={{ fontSize:14, fontWeight:500, color:WHITE }}>{c.name}</div>
+                <div style={{ fontSize:12, color:'rgba(255,255,255,0.45)', marginTop:2 }}>{c.email} · {c.role==='driver'?'Driver':'Customer'}</div>
+              </div>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.35)' }}>{fmtDate(c.createdAt)}</div>
+            </div>
+            <div style={{ fontSize:13, fontWeight:500, color:YELLOW, marginBottom:6 }}>{c.subject}</div>
+            <div style={{ fontSize:13, color:'rgba(255,255,255,0.7)', lineHeight:1.6, background:'rgba(255,255,255,0.04)', borderRadius:8, padding:10 }}>{c.message}</div>
+            <a href={`mailto:${c.email}?subject=Re: ${c.subject}`}
+              style={{ display:'inline-block', marginTop:10, padding:'6px 14px', background:'rgba(232,180,0,0.1)', border:'0.5px solid rgba(232,180,0,0.3)', borderRadius:8, color:YELLOW, fontSize:12, textDecoration:'none' }}>
+              📧 Reply via email
+            </a>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── REVENUE TAB ───────────────────────────────────────────────────────────────
+function RevenueTab() {
+  const [rides,   setRides]   = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [period,  setPeriod]  = useState('month');
+
+  useEffect(() => {
+    const unsub = onSnapshot(query(collection(db,'bookings'), where('status','==','completed')), snap => {
+      setRides(snap.docs.map(d => ({ id:d.id, ...d.data() })));
+      setLoading(false);
+    });
+    return () => unsub();
+  }, []);
+
+  const now   = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const week  = new Date(today); week.setDate(today.getDate()-7);
+  const month = new Date(today); month.setDate(today.getDate()-30);
+  const year  = new Date(today); year.setFullYear(today.getFullYear()-1);
+
+  const inRange = (r, from) => r.completedAt?.seconds ? new Date(r.completedAt.seconds*1000) >= from : false;
+  const periodRides = rides.filter(r => inRange(r, period==='today'?today:period==='week'?week:period==='year'?year:month));
+  const totalRev  = periodRides.reduce((s,r) => s+(r.fare||0), 0);
+  const villeCut  = Math.round(totalRev * 0.15);
+  const driverCut = Math.round(totalRev * 0.85);
+
+  // Group by day for last 7 days
+  const last7 = Array.from({length:7}, (_,i) => {
+    const d = new Date(today); d.setDate(today.getDate()-i);
+    const label = d.toLocaleDateString('en-JM',{weekday:'short',day:'numeric'});
+    const dayRides = rides.filter(r => {
+      if (!r.completedAt?.seconds) return false;
+      const rd = new Date(r.completedAt.seconds*1000);
+      return rd.toDateString() === d.toDateString();
+    });
+    return { label, total:dayRides.reduce((s,r)=>s+(r.fare||0),0), count:dayRides.length };
+  }).reverse();
+
+  const maxVal = Math.max(...last7.map(d=>d.total), 1);
+
+  return (
+    <div>
+      {/* Period selector */}
+      <div style={{ display:'flex', gap:8, marginBottom:20, flexWrap:'wrap' }}>
+        {[['today','Today'],['week','7 Days'],['month','30 Days'],['year','12 Months']].map(([k,l]) => (
+          <button key={k} onClick={() => setPeriod(k)}
+            style={{ padding:'7px 16px', borderRadius:20, fontSize:13, border:'0.5px solid rgba(255,255,255,0.15)', background:period===k?YELLOW:'rgba(255,255,255,0.05)', color:period===k?DARK:'rgba(255,255,255,0.6)', cursor:'pointer', fontWeight:period===k?600:400 }}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {/* Summary cards */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12, marginBottom:20 }}>
+        <StatCard label="Total revenue" value={`J$${totalRev.toLocaleString()}`} color={YELLOW} sub={`${periodRides.length} rides`}/>
+        <StatCard label="VilleCabs (15%)" value={`J$${villeCut.toLocaleString()}`} color={GREEN} sub="platform fee"/>
+        <StatCard label="Driver payouts" value={`J$${driverCut.toLocaleString()}`} sub="85% to drivers"/>
+      </div>
+
+      {/* 7-day bar chart */}
+      <div style={{ background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:20, marginBottom:20 }}>
+        <div style={{ fontSize:14, fontWeight:500, color:WHITE, marginBottom:16 }}>Last 7 Days Revenue</div>
+        <div style={{ display:'flex', alignItems:'flex-end', gap:8, height:120 }}>
+          {last7.map((d,i) => (
+            <div key={i} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
+              <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)' }}>J${(d.total/1000).toFixed(0)}k</div>
+              <div style={{ width:'100%', background:YELLOW, borderRadius:'4px 4px 0 0', height:`${Math.max((d.total/maxVal)*90, d.total>0?8:2)}px`, minHeight:2, transition:'height 0.3s' }}/>
+              <div style={{ fontSize:9, color:'rgba(255,255,255,0.4)', textAlign:'center' }}>{d.label}</div>
+              <div style={{ fontSize:9, color:'rgba(255,255,255,0.3)' }}>{d.count} rides</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Export CSV */}
+      <button onClick={() => {
+        const rows = [['Date','Customer','Driver','Vehicle','Distance','Fare','Promo','Payment']];
+        rides.forEach(r => {
+          const date = r.completedAt?.seconds ? new Date(r.completedAt.seconds*1000).toLocaleDateString() : '--';
+          rows.push([date, r.customerName||'--', r.driverName||'--', r.vehicleType||'--', r.distanceKm||'--', r.fare||0, r.promoCode||'', r.paymentMethod||'cash']);
+        });
+        const csv = rows.map(r => r.join(',')).join('\n');
+        const blob = new Blob([csv], {type:'text/csv'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href=url; a.download='villecabs_revenue.csv'; a.click();
+      }} style={{ padding:'11px 20px', background:'rgba(26,158,90,0.15)', border:'0.5px solid rgba(26,158,90,0.4)', borderRadius:10, color:GREEN, fontSize:13, cursor:'pointer', fontWeight:500 }}>
+        📊 Export All Rides to CSV
+      </button>
+    </div>
+  );
+}
+
 // ── OVERVIEW TAB ──────────────────────────────────────────────────────────────
 function OverviewTab({ setTab }) {
   const [stats, setStats] = useState({ pending:0, approved:0, total_rides:0, revenue:0, active_rides:0, customers:0 });
@@ -568,6 +766,12 @@ function OverviewTab({ setTab }) {
           <div onClick={() => setTab('rides')} style={{ background:'rgba(26,158,90,0.1)', border:'0.5px solid rgba(26,158,90,0.25)', borderRadius:10, padding:'12px 16px', fontSize:13, color:'#9fe1cb', cursor:'pointer' }}>
             🚕 View active rides ({stats.active_rides})
           </div>
+          <div onClick={() => setTab('revenue')} style={{ background:'rgba(56,189,248,0.1)', border:'0.5px solid rgba(56,189,248,0.25)', borderRadius:10, padding:'12px 16px', fontSize:13, color:'#38bdf8', cursor:'pointer' }}>
+            💰 Revenue analytics
+          </div>
+          <div onClick={() => setTab('contacts')} style={{ background:'rgba(168,139,250,0.1)', border:'0.5px solid rgba(168,139,250,0.25)', borderRadius:10, padding:'12px 16px', fontSize:13, color:'#a78bfa', cursor:'pointer' }}>
+            📬 View messages
+          </div>
         </div>
       </div>
     </div>
@@ -599,10 +803,13 @@ export default function AdminPanel() {
   if (!adminUser) return <AdminLogin onLogin={setAdminUser}/>;
 
   const tabs = [
-    { id:'overview', label:'Overview',    icon:'📊' },
-    { id:'drivers',  label:'Drivers',     icon:'🚗' },
-    { id:'rides',    label:'Rides',       icon:'🚕' },
-    { id:'promos',   label:'Promo Codes', icon:'🎟️' },
+    { id:'overview',  label:'Overview',    icon:'📊' },
+    { id:'drivers',   label:'Drivers',     icon:'🚗' },
+    { id:'rides',     label:'Rides',       icon:'🚕' },
+    { id:'customers', label:'Customers',   icon:'👥' },
+    { id:'revenue',   label:'Revenue',     icon:'💰' },
+    { id:'contacts',  label:'Messages',    icon:'📬' },
+    { id:'promos',    label:'Promos',      icon:'🎟️' },
   ];
 
   return (
@@ -634,12 +841,15 @@ export default function AdminPanel() {
 
         <div style={s.main}>
           <div style={{ fontSize:20, fontWeight:500, marginBottom:20, color:WHITE, textTransform:'capitalize' }}>
-            {tab === 'overview' ? '📊 Dashboard Overview' : tab === 'drivers' ? '🚗 Driver Management' : tab === 'rides' ? '🚕 Ride Management' : '🎟️ Promo Codes'}
+            {tab === 'overview' ? '📊 Dashboard Overview' : tab === 'drivers' ? '🚗 Driver Management' : tab === 'rides' ? '🚕 Ride Management' : tab === 'customers' ? '👥 Customer Management' : tab === 'revenue' ? '💰 Revenue & Analytics' : tab === 'contacts' ? '📬 Messages' : '🎟️ Promo Codes'}
           </div>
-          {tab === 'overview' && <OverviewTab setTab={setTab}/>}
-          {tab === 'drivers'  && <DriversTab/>}
-          {tab === 'rides'    && <RidesTab/>}
-          {tab === 'promos'   && <PromoCodesTab/>}
+          {tab === 'overview'  && <OverviewTab setTab={setTab}/>}
+          {tab === 'drivers'   && <DriversTab/>}
+          {tab === 'rides'     && <RidesTab/>}
+          {tab === 'customers' && <CustomersTab/>}
+          {tab === 'revenue'   && <RevenueTab/>}
+          {tab === 'contacts'  && <ContactsTab/>}
+          {tab === 'promos'    && <PromoCodesTab/>}
         </div>
       </div>
     </div>
