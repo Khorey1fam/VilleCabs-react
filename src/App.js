@@ -121,7 +121,7 @@ function VilleMap({ height = 260, center = MANCHESTER_CENTER, zoom = 14, onClick
       center={center}
       zoom={zoom}
       onClick={onClick}
-      options={{ styles:MAP_STYLE, disableDefaultUI:true, zoomControl:true }}
+      options={{ styles:MAP_STYLE, disableDefaultUI:true, zoomControl:true, gestureHandling:'greedy' }}
     >
       {markers.map((m, i) => (
         <Marker key={i} position={m.position} label={m.label} title={m.title}/>
@@ -1125,10 +1125,8 @@ function CustomerSettings({ go, user, setUser }) {
 
 // ── PIN PICKUP ────────────────────────────────────────────────────────────────
 function PinPickup({ go, setPickupData }) {
-  const [mode,     setMode]     = useState('map');   // 'map' | 'type'
   const [pinPos,   setPinPos]   = useState(MANCHESTER_CENTER);
   const [address,  setAddress]  = useState('Manchester, Jamaica');
-  const [typed,    setTyped]    = useState('');
   const [loading,  setLoading]  = useState(false);
 
   const handleMapClick = useCallback(async (e) => {
@@ -1142,88 +1140,22 @@ function PinPickup({ go, setPickupData }) {
   }, []);
 
   const handleConfirm = () => {
-    if (mode === 'type') {
-      if (!typed.trim()) return;
-      setPickupData({ coords: MANCHESTER_CENTER, address: typed.trim() });
-    } else {
-      setPickupData({ coords: pinPos, address });
-    }
+    setPickupData({ coords:pinPos, address });
     go('pin-dropoff');
   };
 
-  const canConfirm = mode === 'map' ? !!address : typed.trim().length > 0;
-
   return (
     <div style={{ ...s.content, background:'transparent' }}>
-      <TopBar title="Set Pickup Location" onBack={() => go('customer-dash')}/>
-
-      {/* Toggle */}
-      <div style={{ display:'flex', margin:'12px 16px 0', background:'rgba(255,255,255,0.06)', borderRadius:12, padding:4, gap:4 }}>
-        <button onClick={() => setMode('map')}
-          style={{ flex:1, padding:'10px 0', border:'none', borderRadius:9, fontSize:13, fontWeight:500, cursor:'pointer',
-            background: mode==='map' ? YELLOW : 'transparent',
-            color:      mode==='map' ? DARK   : 'rgba(255,255,255,0.5)' }}>
-          📍 Pin on Map
-        </button>
-        <button onClick={() => setMode('type')}
-          style={{ flex:1, padding:'10px 0', border:'none', borderRadius:9, fontSize:13, fontWeight:500, cursor:'pointer',
-            background: mode==='type' ? YELLOW : 'transparent',
-            color:      mode==='type' ? DARK   : 'rgba(255,255,255,0.5)' }}>
-          ✏️ Type Location
-        </button>
-      </div>
-
-      {/* MAP MODE */}
-      {mode === 'map' && (
-        <>
-          <VilleMap height={280} center={MANCHESTER_CENTER} zoom={14} onClick={handleMapClick}
-            markers={[{ position:pinPos, title:'Pickup' }]}/>
-          <div style={{ padding:16 }}>
-            <div style={{ background:'rgba(26,158,90,0.1)', border:'0.5px solid rgba(26,158,90,0.3)', borderRadius:8, padding:'8px 12px', marginBottom:12, fontSize:12, color:'#9fe1cb' }}>
-              📍 Tap anywhere on the map to pin your exact pickup location
-            </div>
-            <label style={s.lbl}>Pinned address</label>
-            <input style={s.inp} value={loading ? 'Getting address...' : address} onChange={e => setAddress(e.target.value)}/>
-          </div>
-        </>
-      )}
-
-      {/* TYPE MODE */}
-      {mode === 'type' && (
-        <div style={{ padding:16 }}>
-          <div style={{ background:'rgba(232,180,0,0.08)', border:'0.5px solid rgba(232,180,0,0.25)', borderRadius:8, padding:'10px 12px', marginBottom:16, fontSize:12, color:'rgba(232,180,0,0.9)', lineHeight:1.6 }}>
-            ✏️ Type the name of your road, district, landmark or building so your driver can find you
-          </div>
-          <label style={s.lbl}>Pickup location description</label>
-          <input
-            style={{ ...s.inp, fontSize:15 }}
-            placeholder="e.g. Top of Caledonia Road, near the blue gate"
-            value={typed}
-            onChange={e => setTyped(e.target.value)}
-            autoFocus
-          />
-          <label style={{ ...s.lbl, marginTop:4 }}>Examples</label>
-          <div style={{ background:'rgba(15,20,40,0.6)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, overflow:'hidden', marginBottom:14 }}>
-            {[
-              'Christiana Main Road, beside the gas station',
-              'Spaldings Square, opposite the market',
-              'Walderston District, first house on the left',
-              'Hatfield, near the basic school',
-              'Mile Gully Road, at the junction',
-            ].map((ex, i, arr) => (
-              <div key={i} onClick={() => setTyped(ex)}
-                style={{ padding:'10px 14px', fontSize:12, color:'rgba(255,255,255,0.65)', borderBottom: i<arr.length-1 ? '0.5px solid rgba(255,255,255,0.06)' : 'none', cursor:'pointer' }}>
-                📍 {ex}
-              </div>
-            ))}
-          </div>
+      <TopBar title="Pin Pickup Location" onBack={() => go('customer-dash')}/>
+      <VilleMap height={300} center={MANCHESTER_CENTER} zoom={14} onClick={handleMapClick}
+        markers={[{ position:pinPos, title:'Pickup' }]}/>
+      <div style={{ padding:16 }}>
+        <div style={{ background:'rgba(26,158,90,0.1)', border:'0.5px solid rgba(26,158,90,0.3)', borderRadius:8, padding:'8px 12px', marginBottom:12, fontSize:12, color:'#9fe1cb' }}>
+          📍 Tap anywhere on the map to pin your exact pickup location
         </div>
-      )}
-
-      <div style={{ padding:'0 16px 16px' }}>
-        <button style={{ ...s.btnY, opacity: canConfirm ? 1 : 0.4 }} onClick={handleConfirm} disabled={!canConfirm}>
-          Confirm Pickup
-        </button>
+        <label style={s.lbl}>Pinned address</label>
+        <input style={s.inp} value={loading ? 'Getting address...' : address} onChange={e => setAddress(e.target.value)}/>
+        <button style={s.btnY} onClick={handleConfirm}>Confirm Pickup</button>
       </div>
     </div>
   );
