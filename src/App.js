@@ -681,7 +681,7 @@ function WelcomeTips({ go, user }) {
     {
       icon: '📡',
       title: 'Enable Location Services',
-      desc: 'Turn on your phone's GPS/Location before booking. Go to your phone Settings → Location → turn On. This allows the app to track your ride in real time.',
+      desc: "Turn on your phone's GPS/Location before booking. Go to your phone Settings → Location → turn On. This allows the app to track your ride in real time.",
       color: YELLOW,
     },
     {
@@ -693,7 +693,7 @@ function WelcomeTips({ go, user }) {
     {
       icon: '🏘️',
       title: 'Rural Areas & Unnamed Roads',
-      desc: 'If you're in an area with unnamed roads, use the "Additional Details" field when pinning your location. Describe your location — e.g. "Top of Caledonia Road, near the blue gate, Hatfield district."',
+      desc: "If you're in an area with unnamed roads, use the \"Additional Details\" field when pinning your location. Describe your location — e.g. \"Top of Caledonia Road, near the blue gate, Hatfield district.\"",
       color: '#38bdf8',
     },
     {
