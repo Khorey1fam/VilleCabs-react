@@ -904,6 +904,7 @@ function TermsScreen({ go, user }) {
           Agree & Continue →
         </button>
       </div>
+      <Footer go={go}/>
     </div>
   );
 }
@@ -1126,6 +1127,7 @@ function ContactUs({ go, user }) {
           {loading ? 'Sending...' : 'Send Message'}
         </button>
       </div>
+      <Footer go={go}/>
     </div>
   );
 }
@@ -1158,6 +1160,7 @@ function HelpScreen({ go, user }) {
           </div>
         ))}
       </div>
+      <Footer go={go}/>
     </div>
   );
 }
@@ -1460,10 +1463,10 @@ function CustomerDash({ go, user, setUser }) {
 
           
         </div>
+      <Footer go={go}/>
       )}
 
-      {/* HISTORY TAB */}
-      {tab === 'history' && (
+      {/* HISTORY TABab === 'history' && (
         <div style={{ flex:1, display:'flex', flexDirection:'column' }}>
           <div style={{ flex:1, overflowY:'auto', padding:16 }}>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
@@ -1539,6 +1542,7 @@ function CustomerDash({ go, user, setUser }) {
           
         </div>
       )}
+      <Footer go={go}/>
     </div>
   );
 }
@@ -1603,6 +1607,7 @@ function CustomerProfile({ go, user, setUser }) {
         <button style={s.btnO} onClick={() => go('customer-settings')}>Go to Settings</button>
       </div>
     </div>
+      <Footer go={go}/>
   );
 }
 
@@ -4370,6 +4375,7 @@ export default function App() {
 
   const screens = {
     splash:           <Splash {...props}/>,
+    'login-choice':   <LoginChoice {...props}/>,
     role:             <RoleSelect {...props}/>,
     'customer-signup':<CustomerSignup {...props}/>,
     'customer-login': <CustomerLogin {...props}/>,
