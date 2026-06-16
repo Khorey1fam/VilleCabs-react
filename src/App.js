@@ -2128,6 +2128,14 @@ function DriverDash({ go, user, setUser, setBookingId }) {
       // Fetch driver vehicle info to save on booking for customer safety
       const dSnap = await getDoc(doc(db,'drivers',user.uid));
       const dData = dSnap.exists() ? dSnap.data() : {};
+      // Get current location immediately on accept
+      let initLat = null, initLng = null;
+      if (navigator.geolocation) {
+        await new Promise(res => navigator.geolocation.getCurrentPosition(
+          p => { initLat = p.coords.latitude; initLng = p.coords.longitude; res(); },
+          () => res(), { timeout: 5000 }
+        ));
+      }
       await updateDoc(doc(db,'bookings',rideId), {
         driverId:     user.uid,
         driverName:   user.name,
@@ -2137,6 +2145,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
         driverRating: dData.rating       || null,
         status:       'active',
         acceptedAt:   serverTimestamp(),
+        ...(initLat && initLng ? { driverLocation: { lat: initLat, lng: initLng, updatedAt: serverTimestamp() } } : {}),
       });
       setBookingId(rideId);
       go('driver-active');
@@ -2334,16 +2343,16 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
           async (pos) => {
             const { latitude: lat, longitude: lng } = pos.coords;
             try {
-              await updateDriverLocationFn({ lat, lng, bookingId: booking.id });
-            } catch(err) {
-              try {
-                await updateDoc(doc(db,'bookings',booking.id), { driverLocation:{ lat, lng, updatedAt:serverTimestamp() } });
-                await updateDoc(doc(db,'drivers',user.uid), { currentLocation:{ lat, lng, updatedAt:serverTimestamp() } });
-              } catch(e) { console.error(e); }
-            }
+              await updateDoc(doc(db,'bookings',booking.id), {
+                driverLocation: { lat, lng, updatedAt: serverTimestamp() }
+              });
+              await updateDoc(doc(db,'drivers',user.uid), {
+                currentLocation: { lat, lng, updatedAt: serverTimestamp() }
+              });
+            } catch(e) { console.error('Location update failed:', e); }
           },
           (err) => setLocationStatus(err.code===1?'denied':'idle'),
-          { enableHighAccuracy:false, maximumAge:10000, timeout:15000 }
+          { enableHighAccuracy:true, maximumAge:3000, timeout:10000 }
         );
       },
       (err) => {
