@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
-import { getFirestore, collection, query, where, onSnapshot, updateDoc, doc, orderBy, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, collection, query, where, onSnapshot, updateDoc, doc, orderBy, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey:            process.env.REACT_APP_FIREBASE_API_KEY,
@@ -381,6 +381,145 @@ function RidesTab() {
   );
 }
 
+
+// ── PROMO CODES TAB ───────────────────────────────────────────────────────────
+function PromoCodesTab() {
+  const [promos,  setPromos]  = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [form,    setForm]    = useState({ code:'', discount:'', expiry:'', description:'' });
+  const [saving,  setSaving]  = useState(false);
+  const [error,   setError]   = useState('');
+  const [success, setSuccess] = useState('');
+  const set = (k,v) => setForm(p => ({ ...p, [k]:v }));
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db,'promo_codes'), snap => {
+      const list = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+      list.sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+      setPromos(list); setLoading(false);
+    });
+    return () => unsub();
+  }, []);
+
+  const handleCreate = async () => {
+    setError(''); setSuccess('');
+    if (!form.code.trim()) { setError('Please enter a promo code.'); return; }
+    if (!form.discount || isNaN(form.discount) || +form.discount <= 0 || +form.discount > 100) { setError('Discount must be between 1 and 100%.'); return; }
+    if (!form.expiry) { setError('Please set an expiry date.'); return; }
+    // Check duplicate
+    if (promos.find(p => p.code.toUpperCase() === form.code.toUpperCase())) { setError('That code already exists.'); return; }
+    setSaving(true);
+    try {
+      await addDoc(collection(db,'promo_codes'), {
+        code:        form.code.toUpperCase().trim(),
+        discount:    +form.discount,
+        description: form.description.trim() || `${form.discount}% off`,
+        expiry:      form.expiry,
+        active:      true,
+        usedBy:      [],
+        usageCount:  0,
+        createdAt:   serverTimestamp(),
+      });
+      setSuccess(`Promo code "${form.code.toUpperCase()}" created!`);
+      setForm({ code:'', discount:'', expiry:'', description:'' });
+    } catch(err) { setError(err.message); }
+    setSaving(false);
+  };
+
+  const toggleActive = async (id, current) => {
+    await updateDoc(doc(db,'promo_codes',id), { active: !current });
+  };
+
+  const handleDelete = async (id, code) => {
+    if (!window.confirm(`Delete promo code "${code}"?`)) return;
+    await deleteDoc(doc(db,'promo_codes',id));
+  };
+
+  const isExpired = (expiry) => expiry && new Date(expiry) < new Date();
+
+  return (
+    <div>
+      {/* Create form */}
+      <div style={{ background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:20, marginBottom:24 }}>
+        <div style={{ fontSize:15, fontWeight:500, color:WHITE, marginBottom:16 }}>➕ Create Promo Code</div>
+        {error   && <div style={{ background:'rgba(226,75,74,0.15)', border:'0.5px solid rgba(226,75,74,0.4)', borderRadius:8, padding:'10px 14px', marginBottom:12, fontSize:13, color:'#f09595' }}>⚠️ {error}</div>}
+        {success && <div style={{ background:'rgba(26,158,90,0.15)', border:'0.5px solid rgba(26,158,90,0.4)', borderRadius:8, padding:'10px 14px', marginBottom:12, fontSize:13, color:'#9fe1cb' }}>✅ {success}</div>}
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
+          <div>
+            <label style={s.lbl}>Promo Code</label>
+            <input style={s.inp} placeholder="e.g. VILLE20" value={form.code} onChange={e => set('code', e.target.value.toUpperCase())}/>
+          </div>
+          <div>
+            <label style={s.lbl}>Discount (%)</label>
+            <input style={s.inp} type="number" placeholder="e.g. 20" min="1" max="100" value={form.discount} onChange={e => set('discount', e.target.value)}/>
+          </div>
+          <div>
+            <label style={s.lbl}>Expiry Date</label>
+            <input style={{ ...s.inp, colorScheme:'dark' }} type="date" value={form.expiry} onChange={e => set('expiry', e.target.value)}/>
+          </div>
+          <div>
+            <label style={s.lbl}>Description (optional)</label>
+            <input style={s.inp} placeholder="e.g. Launch promo" value={form.description} onChange={e => set('description', e.target.value)}/>
+          </div>
+        </div>
+        <button onClick={handleCreate} disabled={saving}
+          style={{ padding:'11px 24px', background:YELLOW, color:DARK, border:'none', borderRadius:10, fontSize:14, fontWeight:700, cursor:'pointer', opacity:saving?0.7:1 }}>
+          {saving ? 'Creating...' : 'Create Promo Code'}
+        </button>
+      </div>
+
+      {/* Promo list */}
+      <div style={{ fontSize:13, fontWeight:500, color:'rgba(255,255,255,0.5)', marginBottom:12, textTransform:'uppercase', letterSpacing:0.5 }}>
+        {promos.length} promo code{promos.length !== 1 ? 's' : ''}
+      </div>
+      {loading ? (
+        <div style={{ textAlign:'center', padding:40, color:'rgba(255,255,255,0.4)' }}>Loading...</div>
+      ) : promos.length === 0 ? (
+        <div style={{ textAlign:'center', padding:40 }}>
+          <div style={{ fontSize:36, marginBottom:12 }}>🎟️</div>
+          <div style={{ color:'rgba(255,255,255,0.4)' }}>No promo codes yet</div>
+        </div>
+      ) : promos.map(p => {
+        const expired = isExpired(p.expiry);
+        const status  = !p.active ? 'disabled' : expired ? 'expired' : 'active';
+        const statusColor = status==='active' ? GREEN : status==='expired' ? '#f09595' : 'rgba(255,255,255,0.3)';
+        return (
+          <div key={p.id} style={{ background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, padding:'16px 18px', marginBottom:10 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
+              <div>
+                <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:4 }}>
+                  <span style={{ fontSize:18, fontWeight:700, color:YELLOW, letterSpacing:2 }}>{p.code}</span>
+                  <span style={{ background:`${statusColor}22`, color:statusColor, borderRadius:20, padding:'2px 10px', fontSize:11, fontWeight:500, textTransform:'uppercase' }}>{status}</span>
+                </div>
+                <div style={{ fontSize:13, color:'rgba(255,255,255,0.5)' }}>{p.description}</div>
+              </div>
+              <div style={{ textAlign:'right' }}>
+                <div style={{ fontSize:22, fontWeight:700, color:GREEN }}>{p.discount}% off</div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.35)', marginTop:2 }}>Used {p.usageCount||0} time{p.usageCount!==1?'s':''}</div>
+              </div>
+            </div>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'0.5px solid rgba(255,255,255,0.06)', paddingTop:10 }}>
+              <div style={{ fontSize:12, color:'rgba(255,255,255,0.4)' }}>
+                Expires: <span style={{ color: expired ? '#f09595' : 'rgba(255,255,255,0.6)' }}>{p.expiry || '--'}</span>
+              </div>
+              <div style={{ display:'flex', gap:8 }}>
+                <button onClick={() => toggleActive(p.id, p.active)}
+                  style={{ padding:'5px 12px', borderRadius:8, fontSize:12, cursor:'pointer', border:'0.5px solid rgba(255,255,255,0.15)', background:'rgba(255,255,255,0.05)', color:WHITE }}>
+                  {p.active ? 'Disable' : 'Enable'}
+                </button>
+                <button onClick={() => handleDelete(p.id, p.code)}
+                  style={{ padding:'5px 12px', borderRadius:8, fontSize:12, cursor:'pointer', border:'0.5px solid rgba(226,75,74,0.3)', background:'rgba(226,75,74,0.1)', color:'#f09595' }}>
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── OVERVIEW TAB ──────────────────────────────────────────────────────────────
 function OverviewTab({ setTab }) {
   const [stats, setStats] = useState({ pending:0, approved:0, total_rides:0, revenue:0, active_rides:0, customers:0 });
@@ -463,6 +602,7 @@ export default function AdminPanel() {
     { id:'overview', label:'Overview',    icon:'📊' },
     { id:'drivers',  label:'Drivers',     icon:'🚗' },
     { id:'rides',    label:'Rides',       icon:'🚕' },
+    { id:'promos',   label:'Promo Codes', icon:'🎟️' },
   ];
 
   return (
@@ -494,11 +634,12 @@ export default function AdminPanel() {
 
         <div style={s.main}>
           <div style={{ fontSize:20, fontWeight:500, marginBottom:20, color:WHITE, textTransform:'capitalize' }}>
-            {tab === 'overview' ? '📊 Dashboard Overview' : tab === 'drivers' ? '🚗 Driver Management' : '🚕 Ride Management'}
+            {tab === 'overview' ? '📊 Dashboard Overview' : tab === 'drivers' ? '🚗 Driver Management' : tab === 'rides' ? '🚕 Ride Management' : '🎟️ Promo Codes'}
           </div>
           {tab === 'overview' && <OverviewTab setTab={setTab}/>}
           {tab === 'drivers'  && <DriversTab/>}
           {tab === 'rides'    && <RidesTab/>}
+          {tab === 'promos'   && <PromoCodesTab/>}
         </div>
       </div>
     </div>

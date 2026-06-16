@@ -1233,11 +1233,15 @@ function PinDropoff({ go, pickupData, setDropoffData }) {
 
 // ── VEHICLE SELECT ────────────────────────────────────────────────────────────
 function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
-  const [sel,     setSel]     = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState('');
-  const [dist,    setDist]    = useState(8.2);
+  const [sel,        setSel]        = useState(0);
+  const [loading,    setLoading]    = useState(false);
+  const [error,      setError]      = useState('');
+  const [dist,       setDist]       = useState(8.2);
   const [directions, setDirections] = useState(null);
+  const [promoCode,  setPromoCode]  = useState('');
+  const [promoMsg,   setPromoMsg]   = useState('');
+  const [promoData,  setPromoData]  = useState(null); // { id, discount, code }
+  const [promoLoading, setPromoLoading] = useState(false);
 
   const vehicles = [
     { name:'VilleRide', eta:'4 min away',      icon:'🚗', multiplier:1.0 },
@@ -1302,22 +1306,60 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
   if (pickupData?.coords && !directions)  markers.push({ position:pickupData.coords,  title:'Pickup' });
   if (dropoffData?.coords && !directions) markers.push({ position:dropoffData.coords, title:'Drop-off' });
 
+  const applyPromo = async () => {
+    if (!promoCode.trim()) return;
+    setPromoLoading(true); setPromoMsg(''); setPromoData(null);
+    try {
+      const snap = await getDocs(query(collection(db,'promo_codes'), where('code','==',promoCode.toUpperCase().trim())));
+      if (snap.empty) { setPromoMsg('❌ Invalid promo code.'); setPromoLoading(false); return; }
+      const pd = { id: snap.docs[0].id, ...snap.docs[0].data() };
+      if (!pd.active) { setPromoMsg('❌ This promo code is no longer active.'); setPromoLoading(false); return; }
+      if (pd.expiry && new Date(pd.expiry) < new Date()) { setPromoMsg('❌ This promo code has expired.'); setPromoLoading(false); return; }
+      if (pd.usedBy && pd.usedBy.includes(user.uid)) { setPromoMsg('❌ You have already used this promo code.'); setPromoLoading(false); return; }
+      setPromoData(pd);
+      setPromoMsg(`✅ "${pd.code}" applied — ${pd.discount}% off!`);
+    } catch(err) { setPromoMsg('❌ Error applying code. Try again.'); }
+    setPromoLoading(false);
+  };
+
+  const removePromo = () => { setPromoData(null); setPromoCode(''); setPromoMsg(''); };
+
+  const calcFinalPrice = (v) => {
+    const base = calcPrice(v);
+    if (!promoData) return base;
+    return Math.round(base * (1 - promoData.discount / 100));
+  };
+
   const handleBook = async () => {
     setLoading(true); setError('');
     try {
       const v = vehicles[sel];
-      const price = calcPrice(v);
+      const price      = calcPrice(v);
+      const finalPrice = calcFinalPrice(v);
       const ref = await addDoc(collection(db,'bookings'), {
         customerId:   user.uid,
         customerName: user.name,
         pickup:       { address: pickupData?.address||'Manchester, Jamaica', lat: pickupData?.coords?.lat||MANCHESTER_CENTER.lat, lng: pickupData?.coords?.lng||MANCHESTER_CENTER.lng },
         dropoff:      { address: dropoffData?.address||'Destination', lat: dropoffData?.coords?.lat||18.02, lng: dropoffData?.coords?.lng||-77.48 },
         vehicleType:  v.name,
-        fare:         price,
+        fare:         finalPrice,
+        originalFare: price,
+        promoCode:    promoData?.code || null,
+        promoDiscount:promoData?.discount || null,
         distanceKm:   dist,
         status:       'searching',
         createdAt:    serverTimestamp(),
       });
+      // Mark promo as used
+      if (promoData?.id) {
+        try {
+          const { arrayUnion, increment } = await import('firebase/firestore');
+          await updateDoc(doc(db,'promo_codes',promoData.id), {
+            usedBy:     arrayUnion(user.uid),
+            usageCount: increment(1),
+          });
+        } catch(e) { console.error('Promo update error:', e); }
+      }
       setBookingId(ref.id);
       // Notify all approved drivers via FCM
       try {
@@ -1380,8 +1422,48 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
             <span>J${calcPrice(v).toLocaleString()}</span>
           </div>
         </div>
+        {/* Promo Code */}
+        <div style={{ background:'rgba(15,20,40,0.6)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:12, padding:12, marginBottom:10 }}>
+          <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', marginBottom:8, fontWeight:500 }}>🎟️ Promo Code</div>
+          {!promoData ? (
+            <div style={{ display:'flex', gap:8 }}>
+              <input
+                style={{ flex:1, padding:'9px 12px', background:'rgba(255,255,255,0.08)', border:'0.5px solid rgba(255,255,255,0.2)', borderRadius:8, color:'#fff', fontSize:13, outline:'none' }}
+                placeholder="Enter code e.g. VILLE20"
+                value={promoCode}
+                onChange={e => { setPromoCode(e.target.value.toUpperCase()); setPromoMsg(''); }}
+                onKeyDown={e => { if (e.key==='Enter') applyPromo(); }}
+              />
+              <button onClick={applyPromo} disabled={promoLoading||!promoCode.trim()}
+                style={{ padding:'9px 16px', background:YELLOW, color:DARK, border:'none', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer', opacity:promoLoading||!promoCode.trim()?0.5:1 }}>
+                {promoLoading ? '...' : 'Apply'}
+              </button>
+            </div>
+          ) : (
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <div>
+                <span style={{ color:GREEN, fontWeight:600 }}>{promoData.code}</span>
+                <span style={{ color:'rgba(255,255,255,0.5)', fontSize:12, marginLeft:8 }}>{promoData.discount}% off applied</span>
+              </div>
+              <button onClick={removePromo} style={{ background:'none', border:'none', color:'#f09595', cursor:'pointer', fontSize:12 }}>✕ Remove</button>
+            </div>
+          )}
+          {promoMsg && <div style={{ fontSize:12, marginTop:8, color: promoMsg.startsWith('✅') ? GREEN : '#f09595' }}>{promoMsg}</div>}
+        </div>
+
+        {/* Price summary with discount */}
+        {promoData && (
+          <div style={{ background:'rgba(26,158,90,0.1)', border:'0.5px solid rgba(26,158,90,0.3)', borderRadius:10, padding:'10px 14px', marginBottom:10, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <div>
+              <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', textDecoration:'line-through' }}>J${calcPrice(v).toLocaleString()}</div>
+              <div style={{ fontSize:15, fontWeight:700, color:GREEN }}>J${calcFinalPrice(v).toLocaleString()} after {promoData.discount}% off</div>
+            </div>
+            <div style={{ fontSize:22 }}>🎉</div>
+          </div>
+        )}
+
         <button style={{ ...s.btnY, opacity:loading?0.7:1 }} onClick={handleBook} disabled={loading}>
-          {loading ? 'Creating booking...' : 'Book Ride — J$' + calcPrice(v).toLocaleString()}
+          {loading ? 'Creating booking...' : 'Book Ride — J$' + calcFinalPrice(v).toLocaleString()}
         </button>
       </div>
     </div>
