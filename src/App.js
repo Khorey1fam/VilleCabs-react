@@ -768,8 +768,8 @@ function AboutUs({ go }) {
 
         {[
           { text:'VilleCabs is a modern ride-hailing and taxi platform built for the people of Mandeville, Manchester, Jamaica. Created to bring convenience, reliability, and opportunity to our community, VilleCabs connects passengers with trusted local drivers through a simple and accessible transportation service.' },
-          { text:'We're bringing the ease and flexibility of app-based transportation to Mandeville while supporting local drivers and creating new earning opportunities within our parish.' },
-          { text:'Whether you need a quick ride across town, transportation to work, school, appointments, shopping, or getting home safely — VilleCabs is designed to make moving around easier.' },
+          { text:"We're bringing the ease and flexibility of app-based transportation to Mandeville while supporting local drivers and creating new earning opportunities within our parish." },
+          { text:"Whether you need a quick ride across town, transportation to work, school, appointments, shopping, or getting home safely — VilleCabs is designed to make moving around easier." },
         ].map((p,i) => (
           <p key={i} style={{ fontSize:13, color:'rgba(255,255,255,0.7)', lineHeight:1.8, marginBottom:14 }}>{p.text}</p>
         ))}
@@ -2719,7 +2719,7 @@ function DriverWelcomeTips({ go, user }) {
     {
       icon: '💬',
       title: 'Negotiate Fares With Customers',
-      desc: 'The app shows a suggested fare based on distance. You can chat with the customer directly in the app to negotiate the final fare before or during the ride. Always agree before starting.',
+      desc: "The app shows a suggested fare based on distance. You can chat with the customer directly in the app to negotiate the final fare before or during the ride. Always agree before starting.",
       color: YELLOW,
     },
     {
@@ -2731,19 +2731,19 @@ function DriverWelcomeTips({ go, user }) {
     {
       icon: '📍',
       title: 'Use Live GPS Tracking',
-      desc: 'When you accept a ride always allow location access. Your GPS location is shared with the customer in real time so they can track you. Tap "I Have Arrived" when you reach the pickup point.',
+      desc: "When you accept a ride always allow location access. Your GPS location is shared with the customer in real time so they can track you. Tap \"I Have Arrived\" when you reach the pickup point.",
       color: '#a78bfa',
     },
     {
       icon: '🆘',
       title: 'SOS Emergency Button',
-      desc: 'Your safety matters. During any ride hold the SOS button for 5 seconds to send an emergency alert with your location to our admin team immediately. Use it if you ever feel unsafe.',
+      desc: "Your safety matters. During any ride hold the SOS button for 5 seconds to send an emergency alert with your location to our admin team immediately. Use it if you ever feel unsafe.",
       color: '#f09595',
     },
     {
       icon: '⭐',
       title: 'Build Your Rating',
-      desc: 'Customers rate their experience after every ride. A high rating means more ride requests. Be punctual, polite, and professional. Drivers with ratings below 3.0 may be reviewed by admin.',
+      desc: "Customers rate their experience after every ride. A high rating means more ride requests. Be punctual, polite, and professional. Drivers with ratings below 3.0 may be reviewed by admin.",
       color: YELLOW,
     },
   ];
@@ -2805,7 +2805,7 @@ function DriverAboutUs({ go }) {
         </div>
         {[
           'VilleCabs is a modern ride-hailing and taxi platform built for the people of Mandeville, Manchester, Jamaica. Created to bring convenience, reliability, and opportunity to our community.',
-          'We are bringing the ease and flexibility of app-based transportation to Mandeville while supporting local drivers and creating new earning opportunities within our parish.',
+          "We are bringing the ease and flexibility of app-based transportation to Mandeville while supporting local drivers and creating new earning opportunities within our parish.",
         ].map((t,i) => <p key={i} style={{ fontSize:13, color:'rgba(255,255,255,0.7)', lineHeight:1.8, marginBottom:14 }}>{t}</p>)}
         <div style={{ background:'rgba(232,180,0,0.08)', border:'0.5px solid rgba(232,180,0,0.25)', borderRadius:14, padding:16, marginBottom:16 }}>
           <div style={{ fontSize:14, fontWeight:600, color:YELLOW, marginBottom:10 }}>Driver Earnings</div>
