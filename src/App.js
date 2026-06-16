@@ -3153,35 +3153,46 @@ export default function App() {
   const [loading,     setLoading]     = useState(true);
 
   useEffect(() => {
-    // Set auth persistence to local so login survives refresh
-    import('firebase/auth').then(({ setPersistence, browserLocalPersistence }) => {
-      setPersistence(auth, browserLocalPersistence).catch(console.error);
-    });
-
     const unsub = onAuthStateChanged(auth, async (fu) => {
       if (fu) {
         const cSnap = await getDoc(doc(db,'customers',fu.uid));
         const dSnap = await getDoc(doc(db,'drivers',fu.uid));
         if (cSnap.exists()) {
           const d = cSnap.data();
-          // Check email verified (skip for Google login which is auto-verified)
           if (!fu.emailVerified && fu.providerData[0]?.providerId === 'password') {
             setUser({ uid:fu.uid, name:d.name||fu.displayName, email:fu.email, role:'customer' });
             setScreen('otp');
           } else {
             setUser({ uid:fu.uid, name:d.name||fu.displayName, email:fu.email, role:'customer' });
-            setScreen('customer-dash');
+            // Restore active booking if any
+            try {
+              const q1 = query(collection(db,'bookings'), where('customerId','==',fu.uid), where('status','==','searching'));
+              const q2 = query(collection(db,'bookings'), where('customerId','==',fu.uid), where('status','==','active'));
+              const [s1,s2] = await Promise.all([getDocs(q1), getDocs(q2)]);
+              const found = [...s1.docs,...s2.docs];
+              if (found.length > 0) { setBookingId(found[0].id); setScreen('live-ride'); }
+              else setScreen('customer-dash');
+            } catch(e) { setScreen('customer-dash'); }
           }
         } else if (dSnap.exists()) {
           const d = dSnap.data();
           if (d.status==='approved') {
-            // Check email verified for drivers too
             if (!fu.emailVerified && fu.providerData[0]?.providerId === 'password') {
               setUser({ uid:fu.uid, name:d.name, email:fu.email, role:'driver' });
               setScreen('otp');
             } else {
               setUser({ uid:fu.uid, name:d.name, email:fu.email, role:'driver' });
-              setScreen('driver-dash');
+              // Restore active ride if driver has one
+              try {
+                const activeQ = query(collection(db,'bookings'), where('driverId','==',fu.uid), where('status','==','active'));
+                const activeSnap = await getDocs(activeQ);
+                if (!activeSnap.empty) {
+                  setBookingId(activeSnap.docs[0].id);
+                  setScreen('driver-active');
+                } else {
+                  setScreen('driver-dash');
+                }
+              } catch(e) { setScreen('driver-dash'); }
             }
           } else {
             setScreen('driver-pending');
