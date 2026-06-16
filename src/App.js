@@ -455,6 +455,7 @@ function DriverLogin({ go, setUser }) {
       const data = snap.data();
       if (data.status==='pending')  { setError('Your application is still pending admin approval.'); setLoading(false); return; }
       if (data.status==='rejected') { setError('Your application was not approved. Contact support.'); setLoading(false); return; }
+      try { await updateDoc(doc(db,'drivers',cred.user.uid), { role:'driver' }); } catch(e) {}
       setUser({ uid:cred.user.uid, name:data.name, email:cred.user.email, role:'driver' });
       if (!data.termsAccepted) go('driver-terms');
       else if (!data.tipsSeen) go('driver-welcome-tips');
@@ -1146,7 +1147,7 @@ function CustomerDash({ go, user, setUser }) {
       {tab === 'book' && (
         <div style={{ flex:1, display:'flex', flexDirection:'column' }}>
 
-          {/* Driver accepted notification banner */}
+          {/* Notification banners */}
           {notification?.type === 'driver_accepted' && (
             <div style={{ background:'rgba(26,158,90,0.15)', border:'1.5px solid rgba(26,158,90,0.5)', margin:'10px 14px 0', borderRadius:12, padding:14, display:'flex', alignItems:'center', gap:10 }}>
               <div style={{ fontSize:28, flexShrink:0 }}>🚗</div>
@@ -1161,8 +1162,6 @@ function CustomerDash({ go, user, setUser }) {
               </div>
             </div>
           )}
-
-          {/* Driver arrived notification banner */}
           {notification?.type === 'driver_arrived' && (
             <div style={{ background:'rgba(232,180,0,0.15)', border:'1.5px solid rgba(232,180,0,0.6)', margin:'10px 14px 0', borderRadius:12, padding:14, display:'flex', alignItems:'center', gap:10 }}>
               <div style={{ fontSize:28, flexShrink:0 }}>📍</div>
@@ -1183,80 +1182,49 @@ function CustomerDash({ go, user, setUser }) {
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:14, fontWeight:500, color:GREEN }}>On the way to drop-off!</div>
                 <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{notification.driverName} has picked you up</div>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Heading to {notification.dropoff} 📍</div>
               </div>
-              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-                <button onClick={() => go('live-ride')} style={{ background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:500 }}>Track →</button>
-                <button onClick={() => setNotification(null)} style={{ background:'rgba(255,255,255,0.08)', color:'rgba(255,255,255,0.5)', border:'none', borderRadius:8, padding:'6px 12px', fontSize:11, cursor:'pointer' }}>OK</button>
-              </div>
+              <button onClick={() => go('live-ride')} style={{ background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:500 }}>Track →</button>
             </div>
           )}
-
-          {/* Active ride banner */}
           {activeRide && !notification && (
             <div style={{ background:'rgba(232,180,0,0.1)', border:'0.5px solid rgba(232,180,0,0.3)', margin:'10px 14px 0', borderRadius:12, padding:12, display:'flex', alignItems:'center', gap:10, cursor:'pointer' }} onClick={() => go('live-ride')}>
               <div style={{ fontSize:22 }}>🚕</div>
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:13, fontWeight:500, color:YELLOW }}>Ride in progress</div>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Driver: {activeRide.driverName||'Assigned'} · Tap to track</div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Tap to track your ride</div>
               </div>
               <span style={{ color:YELLOW, fontSize:18 }}>›</span>
             </div>
           )}
 
-          <VilleMap height={210} center={MANCHESTER_CENTER} zoom={13}>
+          {/* Home — Big Book a Ride circle in centre */}
+          <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'20px 24px', textAlign:'center' }}>
+            <div style={{ fontSize:13, color:'rgba(255,255,255,0.5)', marginBottom:4 }}>
+              Good day, <span style={{ color:WHITE, fontWeight:500 }}>{user?.name?.split(' ')[0]||'Rider'}</span> 👋
+            </div>
+            <div style={{ fontSize:20, fontWeight:700, color:WHITE, marginBottom:4 }}>Where are you going?</div>
+            <div style={{ fontSize:13, color:'rgba(255,255,255,0.4)', marginBottom:36 }}>Tap below to book a ride in Manchester</div>
 
-          {/* Driver accepted notification banner */}
-          {notification?.type === 'driver_accepted' && (
-            <div style={{ background:'rgba(26,158,90,0.15)', border:'1.5px solid rgba(26,158,90,0.5)', margin:'10px 14px 0', borderRadius:12, padding:14, display:'flex', alignItems:'center', gap:10 }}>
-              <div style={{ fontSize:28, flexShrink:0 }}>🚗</div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:14, fontWeight:500, color:GREEN }}>Driver found!</div>
-                <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{notification.driverName} is on the way</div>
-                {notification.licensePlate && <div style={{ fontSize:11, color:YELLOW, marginTop:2 }}>🔑 {notification.vehicleMake} {notification.vehicleModel} · {notification.licensePlate}</div>}
+            {/* Circle button */}
+            <button onClick={() => go('pin-pickup')}
+              style={{ width:180, height:180, borderRadius:'50%', background:`radial-gradient(circle, ${YELLOW}, #c49600)`, border:'4px solid rgba(255,255,255,0.15)', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', boxShadow:'0 0 40px rgba(232,180,0,0.35)', marginBottom:40 }}>
+              <div style={{ fontSize:48, marginBottom:6 }}>🚕</div>
+              <div style={{ fontSize:15, fontWeight:700, color:DARK, lineHeight:1.2 }}>Book a Ride</div>
+            </button>
+
+            {/* Stats */}
+            <div style={{ display:'flex', gap:14, width:'100%', maxWidth:320 }}>
+              <div style={{ flex:1, background:'rgba(15,20,40,0.7)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:'14px 10px', textAlign:'center' }}>
+                <div style={{ fontSize:22, fontWeight:700, color:YELLOW }}>{history.length}</div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:4 }}>Total Rides</div>
               </div>
-              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-                <button onClick={() => go('live-ride')} style={{ background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:500 }}>Track →</button>
-                <button onClick={() => setNotification(null)} style={{ background:'rgba(255,255,255,0.08)', color:'rgba(255,255,255,0.5)', border:'none', borderRadius:8, padding:'6px 12px', fontSize:11, cursor:'pointer' }}>Dismiss</button>
+              <div style={{ flex:1, background:'rgba(15,20,40,0.7)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:'14px 10px', textAlign:'center' }}>
+                <div style={{ fontSize:18, fontWeight:700, color:GREEN }}>J${totalSpent.toLocaleString()}</div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:4 }}>Total Spent</div>
               </div>
             </div>
-          )}
-
-          {/* Driver arrived notification banner */}
-
-          {/* Active ride banner - shows if ride is in progress */}
-          {activeRide && !notification && (
-            <div style={{ background:'rgba(232,180,0,0.1)', border:'0.5px solid rgba(232,180,0,0.3)', margin:'10px 14px 0', borderRadius:12, padding:12, display:'flex', alignItems:'center', gap:10, cursor:'pointer' }} onClick={() => go('live-ride')}>
-              <div style={{ fontSize:22 }}>🚕</div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:13, fontWeight:500, color:YELLOW }}>Ride in progress</div>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Driver: {activeRide.driverName||'Assigned'} · Tap to track</div>
-              </div>
-              <span style={{ color:YELLOW, fontSize:18 }}>›</span>
-            </div>
-          )}
-
-            <Marker position={MANCHESTER_CENTER} title="Manchester, Jamaica"/>
-          </VilleMap>
-          <div style={{ padding:16 }}>
-            <div onClick={() => go('pin-pickup')} style={{ background:'rgba(15,20,40,0.65)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:12, padding:12, marginBottom:10, display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
-              <div style={{ width:10, height:10, borderRadius:'50%', background:GREEN, flexShrink:0 }}/>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:13, color:WHITE }}>Pickup location</div>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>Manchester, Jamaica (tap to pin)</div>
-              </div>
-              <span style={{ color:'rgba(255,255,255,0.3)' }}>›</span>
-            </div>
-            <div onClick={() => go('pin-dropoff')} style={{ background:'rgba(15,20,40,0.65)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:12, padding:12, marginBottom:16, display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
-              <div style={{ width:10, height:10, borderRadius:'50%', background:YELLOW, flexShrink:0 }}/>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:13, color:WHITE }}>Drop-off location</div>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>Where are you going?</div>
-              </div>
-              <span style={{ color:'rgba(255,255,255,0.3)' }}>›</span>
-            </div>
-            <button style={s.btnY} onClick={() => go('vehicle-select')}>Find a Ride</button>
           </div>
+
           <TabBar/>
         </div>
       )}
@@ -3917,9 +3885,8 @@ export default function App() {
               const q2 = query(collection(db,'bookings'), where('customerId','==',fu.uid), where('status','==','active'));
               const [s1,s2] = await Promise.all([getDocs(q1), getDocs(q2)]);
               const found = [...s1.docs, ...s2.docs];
-              // Only restore live-ride if booking was created in the last 2 hours
               const twoHoursAgo = Date.now() / 1000 - 7200;
-              const recentBooking = found.find(d => (d.data().createdAt?.seconds || 0) > twoHoursAgo);
+              const recentBooking = found.find(b => (b.data().createdAt?.seconds||0) > twoHoursAgo);
               if (recentBooking) {
                 setBookingId(recentBooking.id);
                 setScreen('live-ride');
@@ -3964,6 +3931,9 @@ export default function App() {
             setScreen('driver-pending');
           }
         }
+      } else {
+        setTimeout(() => setLoading(false), 1500);
+        return;
       }
       setLoading(false);
     });
