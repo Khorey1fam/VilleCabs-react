@@ -73,7 +73,7 @@ const s = {
   btnY:      { width:'100%', padding:'14px 20px', background:YELLOW, color:DARK, border:'none', borderRadius:12, fontSize:15, fontWeight:700, cursor:'pointer', marginBottom:10 },
   btnO:      { width:'100%', padding:'14px 20px', background:'transparent', color:WHITE, border:'1.5px solid rgba(255,255,255,0.35)', borderRadius:12, fontSize:15, fontWeight:500, cursor:'pointer', marginBottom:10 },
   btnG:      { width:'100%', padding:'14px 20px', background:GREEN, color:WHITE, border:'none', borderRadius:12, fontSize:15, fontWeight:600, cursor:'pointer', marginBottom:10 },
-  inp:       { width:'100%', padding:'12px 14px', background:'rgba(255,255,255,0.08)', border:'0.5px solid rgba(255,255,255,0.2)', borderRadius:10, color:WHITE, fontSize:14, marginBottom:12, boxSizing:'border-box', outline:'none' },
+  inp:       { width:'100%', padding:'14px', background:'rgba(255,255,255,0.08)', border:'0.5px solid rgba(255,255,255,0.2)', borderRadius:10, color:WHITE, fontSize:16, marginBottom:12, boxSizing:'border-box', outline:'none' },
   lbl:       { fontSize:11, color:'rgba(255,255,255,0.55)', marginBottom:4, display:'block', fontWeight:500 },
   topBar:    { background:'rgba(10,15,35,0.85)', padding:'12px 16px', display:'flex', alignItems:'center', gap:12, borderBottom:'0.5px solid rgba(255,255,255,0.15)', position:'sticky', top:0, zIndex:10, backdropFilter:'blur(10px)' },
   backBtn:   { background:'none', border:'none', color:YELLOW, fontSize:22, cursor:'pointer', padding:'2px 6px' },
@@ -89,17 +89,30 @@ const s = {
 // ── SVG fallback map (for auth screens) ──────────────────────────────────────
 function GlobalStyles() {
   React.useEffect(() => {
+    // Ensure proper mobile viewport
+    let meta = document.querySelector('meta[name="viewport"]');
+    if (!meta) { meta = document.createElement('meta'); meta.name='viewport'; document.head.appendChild(meta); }
+    meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
     const style = document.createElement('style');
     style.innerHTML = `
+      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+      html, body { margin:0; padding:0; overflow-x:hidden; font-size:16px; }
       button:hover:not(:disabled) { filter:brightness(1.15); transform:translateY(-1px); transition:all 0.15s ease; }
       button:active:not(:disabled) { transform:translateY(0) scale(0.98); filter:brightness(0.95); }
-      button { transition:all 0.15s ease; }
+      button { transition:all 0.15s ease; -webkit-appearance:none; }
       a:hover { opacity:0.8; transition:opacity 0.15s; }
+      input, textarea, select { font-size:16px !important; } /* Prevent iOS zoom on focus */
       input:focus, textarea:focus, select:focus { border-color:rgba(232,180,0,0.6)!important; box-shadow:0 0 0 2px rgba(232,180,0,0.15); transition:all 0.2s; }
       ::-webkit-scrollbar { width:4px; }
       ::-webkit-scrollbar-track { background:rgba(255,255,255,0.03); }
       ::-webkit-scrollbar-thumb { background:rgba(232,180,0,0.3); border-radius:4px; }
       ::-webkit-scrollbar-thumb:hover { background:rgba(232,180,0,0.5); }
+      /* Responsive font sizes */
+      @media (max-width: 380px) { html { font-size:14px; } }
+      @media (min-width: 768px) { html { font-size:17px; } }
+      /* Full screen map overlay */
+      .map-fullscreen { position:fixed !important; top:0; left:0; right:0; bottom:0; z-index:200; }
+      .map-fullscreen > div { height:100% !important; }
     `;
     document.head.appendChild(style);
     return () => { if (style.parentNode) style.parentNode.removeChild(style); };
@@ -125,23 +138,27 @@ function MapBg() {
 }
 
 // ── Google Map component ──────────────────────────────────────────────────────
-function VilleMap({ height = 260, center = MANCHESTER_CENTER, zoom = 14, onClick, markers = [], directions = null, children }) {
+function VilleMap({ height = 260, center = MANCHESTER_CENTER, zoom = 14, onClick, markers = [], directions = null, children, expandable = false }) {
+  const [expanded, setExpanded] = useState(false);
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: process.env.REACT_APP_GOOGLE_MAPS_KEY,
     libraries: LIBRARIES,
   });
 
+  // Use window height for mobile-aware sizing
+  const mobileHeight = Math.min(height, window.innerHeight * 0.45);
+
   if (!isLoaded) return (
-    <div style={{ height, background:'#1a2744', display:'flex', alignItems:'center', justifyContent:'center', color:YELLOW, fontSize:13 }}>
+    <div style={{ height:mobileHeight, background:'#1a2744', display:'flex', alignItems:'center', justifyContent:'center', color:YELLOW, fontSize:13 }}>
       Loading map...
     </div>
   );
 
-  return (
+  const mapEl = (
     <GoogleMap
-      mapContainerStyle={{ width:'100%', height }}
+      mapContainerStyle={{ width:'100%', height: expanded ? '100%' : mobileHeight }}
       center={center}
-      zoom={zoom}
+      zoom={expanded ? zoom + 1 : zoom}
       onClick={onClick}
       options={{ styles:MAP_STYLE, disableDefaultUI:true, zoomControl:true, gestureHandling:'greedy' }}
     >
@@ -151,6 +168,37 @@ function VilleMap({ height = 260, center = MANCHESTER_CENTER, zoom = 14, onClick
       {directions && <DirectionsRenderer directions={directions} options={{ suppressMarkers:false }}/>}
       {children}
     </GoogleMap>
+  );
+
+  if (expanded) {
+    return (
+      <div style={{ position:'fixed', top:0, left:0, right:0, bottom:0, zIndex:300, display:'flex', flexDirection:'column' }}>
+        {mapEl}
+        {/* Close bar */}
+        <div style={{ position:'absolute', bottom:0, left:0, right:0, background:'rgba(10,15,35,0.95)', padding:'14px 20px', display:'flex', alignItems:'center', justifyContent:'space-between', backdropFilter:'blur(10px)' }}>
+          <div style={{ fontSize:13, color:'rgba(255,255,255,0.7)' }}>
+            {markers.length > 0 ? `📍 ${markers[markers.length-1]?.title || 'Location pinned'}` : 'Tap map to pin location'}
+          </div>
+          <button onClick={() => setExpanded(false)}
+            style={{ padding:'10px 24px', background:YELLOW, color:DARK, border:'none', borderRadius:10, fontSize:14, fontWeight:700, cursor:'pointer' }}>
+            ✓ Done
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ position:'relative' }}>
+      {mapEl}
+      {/* Expand button */}
+      {expandable && (
+        <button onClick={() => setExpanded(true)}
+          style={{ position:'absolute', top:10, right:10, background:'rgba(10,15,35,0.85)', border:'0.5px solid rgba(255,255,255,0.2)', borderRadius:8, color:WHITE, fontSize:11, padding:'6px 10px', cursor:'pointer', backdropFilter:'blur(8px)', display:'flex', alignItems:'center', gap:4 }}>
+          ⛶ Expand
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -1550,8 +1598,8 @@ function PinPickup({ go, setPickupData }) {
   return (
     <div style={{ ...s.content, background:'transparent' }}>
       <TopBar title="Pin Pickup Location" onBack={() => go('customer-dash')}/>
-      <VilleMap height={260} center={MANCHESTER_CENTER} zoom={14} onClick={handleMapClick}
-        markers={[{ position:pinPos, title:'Pickup' }]}/>
+      <VilleMap height={300} center={MANCHESTER_CENTER} zoom={14} onClick={handleMapClick}
+        markers={[{ position:pinPos, title:'Pickup' }]} expandable={true}/>
       <div style={{ padding:16 }}>
         <div style={{ background:'rgba(26,158,90,0.1)', border:'0.5px solid rgba(26,158,90,0.3)', borderRadius:8, padding:'8px 12px', marginBottom:12, fontSize:12, color:'#9fe1cb' }}>
           📍 Tap anywhere on the map to pin your exact pickup location
@@ -1633,7 +1681,7 @@ function PinDropoff({ go, pickupData, setDropoffData }) {
   return (
     <div style={{ ...s.content, background:'transparent' }}>
       <TopBar title="Pin Drop-off Location" onBack={() => go('pin-pickup')}/>
-      <VilleMap height={260} center={MANCHESTER_CENTER} zoom={12} onClick={handleMapClick} markers={markers}/>
+      <VilleMap height={300} center={MANCHESTER_CENTER} zoom={12} onClick={handleMapClick} markers={markers} expandable={true}/>
       <div style={{ padding:16 }}>
         <div style={{ background:'rgba(232,180,0,0.08)', border:'0.5px solid rgba(232,180,0,0.25)', borderRadius:8, padding:'8px 12px', marginBottom:12, fontSize:12, color:'rgba(232,180,0,0.9)' }}>
           🏁 Tap the map or choose a location below
@@ -1816,7 +1864,7 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
   return (
     <div style={{ ...s.content, background:'transparent' }}>
       <TopBar title="Choose Ride" onBack={() => go('pin-dropoff')}/>
-      <VilleMap height={160} center={pickupData?.coords||MANCHESTER_CENTER} zoom={12} markers={markers} directions={directions}/>
+      <VilleMap height={220} center={pickupData?.coords||MANCHESTER_CENTER} zoom={12} markers={markers} directions={directions} expandable={true}/>
       <div style={{ padding:14 }}>
         <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.5)', marginBottom:10 }}>
           <span>📍 {pickupData?.address?.split(',')[0]||'Pickup'} → {dropoffData?.address?.split(',')[0]||'Destination'}</span>
@@ -2575,7 +2623,7 @@ function LiveRide({ go, bookingId, user }) {
   return (
     <div style={{ ...s.content }}>
       <div style={{ position:'relative' }}>
-        <VilleMap height={240} center={driverCoords||pickupCoords} zoom={15}>
+        <VilleMap height={320} center={driverCoords||pickupCoords} zoom={15} expandable={true}>
           <Marker position={pickupCoords} title="Pickup"
             icon={{ url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><circle cx="14" cy="14" r="11" fill="#1a9e5a" stroke="white" stroke-width="2.5"/></svg>'), scaledSize:{width:28,height:28} }}/>
           {dropoffCoords && (
@@ -3254,7 +3302,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
 
       {/* Rides tab */}
       {driverTab === 'rides' && <>
-      <VilleMap height={160} center={MANCHESTER_CENTER} zoom={12}/>
+      <VilleMap height={200} center={MANCHESTER_CENTER} zoom={12}/>
       <div style={{ padding:14 }}>
         {notifStatus === "idle" && (
           <div onClick={requestNotifPermission} style={{ background:"rgba(232,180,0,0.1)", border:"1px solid rgba(232,180,0,0.3)", borderRadius:10, padding:"10px 14px", marginBottom:12, display:"flex", alignItems:"center", gap:10, cursor:"pointer", fontSize:13 }}>
@@ -3558,7 +3606,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
            <span>⚠️ Location denied — <span style={{textDecoration:'underline',cursor:'pointer'}} onClick={() => alert('To enable location:\n\n1. Click the 🔒 lock icon in your browser address bar\n2. Set Location to Allow\n3. Refresh the page')}>tap here to fix</span></span>
          ) : '📍 Getting your location...'}
       </div>
-      <VilleMap height={200} center={driverCoords||pickupCoords} zoom={14} markers={markers}>
+      <VilleMap height={320} center={driverCoords||pickupCoords} zoom={14} markers={markers} expandable={true}>
         {driverCoords && (
           <Marker position={driverCoords} title="Your location"
             icon={{ url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="#e8b400" stroke="white" stroke-width="3"/><text x="18" y="24" text-anchor="middle" font-size="16">🚗</text></svg>'), scaledSize:{width:36,height:36} }}/>
