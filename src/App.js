@@ -440,7 +440,7 @@ function DriverSignup({ go }) {
   const handleSubmit = async () => {
     setError('');
     if (Object.values(form).some(v => !v)) { setError('Please fill in all fields.'); return; }
-    if (!docs.license||!docs.fitness||!docs.registration) { setError('Please upload all 3 documents.'); return; }
+    if (!docs.license||!docs.fitness||!docs.registration) { setError('Please upload all 3 required documents.'); return; }
     if (form.password.length < 6) { setError('Password must be at least 6 characters.'); return; }
     setLoading(true);
     try {
@@ -472,9 +472,25 @@ function DriverSignup({ go }) {
         ))}
         <div style={{ height:'0.5px', background:'rgba(255,255,255,0.1)', margin:'8px 0 16px' }}/>
         {[['license',"Driver's License"],['fitness','Vehicle Fitness Certificate'],['registration','Vehicle Registration']].map(([k,lbl]) => (
-          <div key={k} onClick={() => setDocs(p => ({ ...p, [k]:!p[k] }))} style={docs[k]?s.uploadOk:s.uploadBox}>
-            <div style={{ fontSize:24, marginBottom:6 }}>{docs[k]?'✅':'📄'}</div>
-            <div style={{ fontSize:12, color:docs[k]?GREEN:'rgba(255,255,255,0.4)' }}>{docs[k]?`${lbl} uploaded ✓`:`Tap to upload ${lbl}`}</div>
+          <div key={k}>
+            <input
+              type="file"
+              id={`doc-${k}`}
+              accept="image/*,application/pdf"
+              style={{ display:'none' }}
+              onChange={e => {
+                if (e.target.files && e.target.files[0]) {
+                  setDocs(p => ({ ...p, [k]:e.target.files[0].name }));
+                }
+              }}
+            />
+            <div onClick={() => document.getElementById(`doc-${k}`).click()} style={docs[k]?s.uploadOk:s.uploadBox}>
+              <div style={{ fontSize:24, marginBottom:6 }}>{docs[k]?'✅':'📄'}</div>
+              <div style={{ fontSize:12, color:docs[k]?GREEN:'rgba(255,255,255,0.4)', fontWeight:docs[k]?500:400 }}>
+                {docs[k] ? `${lbl} ✓` : `Tap to upload ${lbl}`}
+              </div>
+              {docs[k] && <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', marginTop:4 }}>{docs[k]}</div>}
+            </div>
           </div>
         ))}
       {(!docs.license||!docs.fitness||!docs.registration) && (
