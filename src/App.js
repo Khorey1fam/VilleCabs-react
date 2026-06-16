@@ -1251,7 +1251,7 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
   // Vehicle multipliers: VilleRide x1.0, VilleXL x1.3, VilleMoto x0.7
   const BASE_FARE    = 751;   // J$ flat rate for first 1km
   const BASE_KM      = 1.0;   // km included in base fare
-  const RATE_PER_100M= 9;     // J$ per 100m beyond base km
+  const RATE_PER_100M= 15;    // J$ per 100m beyond base km
 
   const calcPrice = (v) => {
     let fare = BASE_FARE;
@@ -1358,19 +1358,9 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
             <div style={{ fontSize:15, fontWeight:500, color:WHITE }}>J${calcPrice(veh).toLocaleString()}</div>
           </div>
         ))}
-        <div style={{ background:DARK, borderRadius:12, padding:14, margin:'10px 0' }}>
-          <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:6 }}>
-            <span>Base (first 1km)</span><span>J$751</span>
-          </div>
-          <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:6 }}>
-            <span>Fare Based on Distance</span><span>{dist} km</span>
-          </div>
-          <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:6 }}>
-            <span>Service fee</span><span>J$0</span>
-          </div>
-          <div style={{ display:'flex', justifyContent:'space-between', fontSize:15, fontWeight:500, color:YELLOW, borderTop:'0.5px solid rgba(255,255,255,0.12)', paddingTop:8, marginTop:4 }}>
-            <span>Total</span><span>J${calcPrice(v).toLocaleString()}</span>
-          </div>
+        <div style={{ background:DARK, borderRadius:12, padding:'12px 14px', margin:'10px 0', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <span style={{ fontSize:13, color:'rgba(255,255,255,0.5)' }}>Fare Based on Distance</span>
+          <span style={{ fontSize:20, fontWeight:700, color:YELLOW }}>J${calcPrice(v).toLocaleString()}</span>
         </div>
         <button style={{ ...s.btnY, opacity:loading?0.7:1 }} onClick={handleBook} disabled={loading}>
           {loading ? 'Creating booking...' : 'Book Ride — J$' + calcPrice(v).toLocaleString()}
