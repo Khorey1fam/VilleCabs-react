@@ -3,7 +3,7 @@ import { initializeApp } from 'firebase/app';
 import {
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
   signInWithPopup, GoogleAuthProvider, sendEmailVerification,
-  onAuthStateChanged, signOut
+  onAuthStateChanged, signOut, setPersistence, browserLocalPersistence
 } from 'firebase/auth';
 import {
   getFirestore, doc, setDoc, getDoc, addDoc, collection,
@@ -24,6 +24,7 @@ const firebaseConfig = {
 };
 const app            = initializeApp(firebaseConfig);
 const auth           = getAuth(app);
+setPersistence(auth, browserLocalPersistence).catch(console.error);
 const db             = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
 const storage = getStorage(app);
@@ -593,7 +594,7 @@ function CustomerDash({ go, user, setUser }) {
   const [activeRide, setActiveRide] = useState(null);
   const [notification, setNotification] = useState(null);
   const prevStatusRef = useRef(null);
-  const handleLogout = async () => { await signOut(auth); setUser(null); go('splash'); };
+  const handleLogout = async () => { await signOut(auth); setUser(null); sessionStorage.removeItem('activeBookingId'); go('splash'); };
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -1074,7 +1075,7 @@ function CustomerSettings({ go, user, setUser }) {
     setLoadingDeact(false);
   };
 
-  const handleLogout = async () => { await signOut(auth); setUser(null); go('splash'); };
+  const handleLogout = async () => { await signOut(auth); setUser(null); sessionStorage.removeItem('activeBookingId'); go('splash'); };
 
   return (
     <div style={{ ...s.content, background:'transparent' }}>
@@ -2250,7 +2251,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   const [notifStatus, setNotifStatus] = useState("idle");
   const [loading,     setLoading]     = useState(true);
   const [earnings,    setEarnings]    = useState({ today:0, week:0, month:0, total:0, todayRides:0, weekRides:0, monthRides:0, totalRides:0, history:[] });
-  const handleLogout = async () => { await signOut(auth); setUser(null); go('splash'); };
+  const handleLogout = async () => { await signOut(auth); setUser(null); sessionStorage.removeItem('activeBookingId'); go('splash'); };
 
   useEffect(() => {
     const q = query(collection(db,'bookings'), where('status','==','searching'), orderBy('createdAt','desc'));
@@ -2632,6 +2633,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
     await updateDoc(doc(db,'bookings',booking.id), { status:'completed', completedAt:serverTimestamp() });
     try { await updateDoc(doc(db,'drivers',user.uid), { isOnline:false, currentLocation:null }); } catch(e) {}
+    sessionStorage.removeItem('activeBookingId');
     go('driver-dash');
   };
 
@@ -2874,7 +2876,7 @@ function DriverSettings({ go, user, setUser }) {
     setLoadingDeact(false);
   };
 
-  const handleLogout = async () => { await signOut(auth); setUser(null); go('splash'); };
+  const handleLogout = async () => { await signOut(auth); setUser(null); sessionStorage.removeItem('activeBookingId'); go('splash'); };
 
   return (
     <div style={{ ...s.content, background:'transparent' }}>
@@ -3147,7 +3149,7 @@ const MAP_BG_SCREENS = new Set(['splash','role','customer-signup','customer-logi
 export default function App() {
   const [screen,      setScreen]      = useState('splash');
   const [user,        setUser]        = useState(null);
-  const [bookingId,   setBookingId]   = useState(null);
+  const [bookingId,   setBookingId]   = useState(() => sessionStorage.getItem('activeBookingId') || null);
   const [pickupData,  setPickupData]  = useState(null);
   const [dropoffData, setDropoffData] = useState(null);
   const [loading,     setLoading]     = useState(true);
@@ -3165,7 +3167,24 @@ export default function App() {
             setScreen('otp');
           } else {
             setUser({ uid:fu.uid, name:d.name||fu.displayName, email:fu.email, role:'customer' });
-            setScreen('customer-dash');
+            // Check if customer has an active booking — restore live ride
+            try {
+              const activeQ = query(
+                collection(db,'bookings'),
+                where('customerId','==',fu.uid),
+                where('status','in',['searching','active'])
+              );
+              const activeSnap = await getDocs(activeQ);
+              if (!activeSnap.empty) {
+                const bId = activeSnap.docs[0].id;
+                sessionStorage.setItem('activeBookingId', bId);
+                setScreen('live-ride');
+              } else {
+                setScreen('customer-dash');
+              }
+            } catch(e) {
+              setScreen('customer-dash');
+            }
           }
         } else if (dSnap.exists()) {
           const d = dSnap.data();
@@ -3176,7 +3195,26 @@ export default function App() {
               setScreen('otp');
             } else {
               setUser({ uid:fu.uid, name:d.name, email:fu.email, role:'driver' });
-              setScreen('driver-dash');
+              // Check if driver has an active ride — resume it
+              try {
+                const activeQ = query(
+                  collection(db,'bookings'),
+                  where('driverId','==',fu.uid),
+                  where('status','==','active')
+                );
+                const activeSnap = await getDocs(activeQ);
+                if (!activeSnap.empty) {
+                  const activeBooking = activeSnap.docs[0];
+                  // Will be set via props but we need bookingId available
+                  // Store in sessionStorage so App can read it
+                  sessionStorage.setItem('activeBookingId', activeBooking.id);
+                  setScreen('driver-active');
+                } else {
+                  setScreen('driver-dash');
+                }
+              } catch(e) {
+                setScreen('driver-dash');
+              }
             }
           } else {
             setScreen('driver-pending');
@@ -3189,6 +3227,12 @@ export default function App() {
   }, []);
 
   if (loading) return <LoadingScreen/>;
+
+  // Keep sessionStorage in sync with bookingId
+  useEffect(() => {
+    if (bookingId) sessionStorage.setItem('activeBookingId', bookingId);
+    else sessionStorage.removeItem('activeBookingId');
+  }, [bookingId]);
 
   const props = { go:setScreen, user, setUser, bookingId, setBookingId, pickupData, setPickupData, dropoffData, setDropoffData };
 
