@@ -13,6 +13,33 @@ import { GoogleMap, useJsApiLoader, Marker, DirectionsRenderer } from '@react-go
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
+// ── EmailJS OTP helpers ───────────────────────────────────────────────────────
+function generateOTP() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+async function sendOTPEmail(toEmail, toName, otpCode) {
+  const payload = {
+    service_id:  'service_h9ryisl',
+    template_id: 'template_ss6rofa',
+    user_id:     '9-C6Nw3ZGGd5R7jto',
+    template_params: {
+      to_email: toEmail,
+      to_name:  toName || 'Rider',
+      otp_code: otpCode,
+    },
+  };
+  const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error('Failed to send OTP email');
+}
+
+// Store OTP in memory (keyed by email)
+const otpStore = {};
+
 const firebaseConfig = {
   apiKey:            process.env.REACT_APP_FIREBASE_API_KEY,
   authDomain:        process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
@@ -272,9 +299,12 @@ function CustomerSignup({ go, setUser }) {
     setLoading(true);
     try {
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
-      await sendEmailVerification(cred.user);
       await setDoc(doc(db,'customers',cred.user.uid), { name:form.name, phone:form.phone, email:form.email, role:'customer', createdAt:serverTimestamp() });
       setUser({ uid:cred.user.uid, name:form.name, email:form.email, role:'customer' });
+      // Generate and send OTP
+      const otp = generateOTP();
+      otpStore[form.email] = { code: otp, expires: Date.now() + 10 * 60 * 1000 };
+      await sendOTPEmail(form.email, form.name, otp);
       go('otp');
     } catch(err) { setError(err.code==='auth/email-already-in-use'?'Email already registered.':err.message); }
     setLoading(false);
@@ -312,25 +342,82 @@ function CustomerSignup({ go, setUser }) {
 }
 
 // ── OTP ───────────────────────────────────────────────────────────────────────
-function OTPScreen({ go, user }) {
-  const [resent, setResent] = useState(false);
-  const resend = async () => { if (auth.currentUser) { await sendEmailVerification(auth.currentUser); setResent(true); } };
+function OTPScreen({ go, user, setUser }) {
+  const [code,    setCode]    = useState('');
+  const [error,   setError]   = useState('');
+  const [success, setSuccess] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
+
+  const handleVerify = async () => {
+    setError(''); setLoading(true);
+    try {
+      const email = user?.email;
+      const stored = otpStore[email];
+      if (!stored) { setError('Code expired. Please request a new one.'); setLoading(false); return; }
+      if (Date.now() > stored.expires) { delete otpStore[email]; setError('Code expired. Please request a new one.'); setLoading(false); return; }
+      if (code.trim() !== stored.code) { setError('Incorrect code. Please try again.'); setLoading(false); return; }
+      // Code is correct — mark verified
+      delete otpStore[email];
+      if (user?.role === 'driver') {
+        await updateDoc(doc(db,'drivers',user.uid), { emailVerified: true });
+        go('driver-pending');
+      } else {
+        setUser(prev => ({ ...prev, emailVerified: true }));
+        go('customer-dash');
+      }
+    } catch(err) { setError(err.message); }
+    setLoading(false);
+  };
+
+  const handleResend = async () => {
+    setResending(true); setError(''); setSuccess('');
+    try {
+      const otp = generateOTP();
+      otpStore[user?.email] = { code: otp, expires: Date.now() + 10 * 60 * 1000 };
+      await sendOTPEmail(user?.email, user?.name, otp);
+      setSuccess('New code sent! Check your email.');
+      setCode('');
+    } catch(err) { setError('Failed to resend. Try again.'); }
+    setResending(false);
+  };
+
   return (
     <div style={s.content}>
-      <TopBar title="Verify Email" onBack={() => go('customer-signup')}/>
+      <TopBar title="Verify Email" onBack={() => go(user?.role==='driver'?'driver-signup':'customer-signup')}/>
       <div style={{ ...s.center, paddingTop:40 }}>
         <div style={{ fontSize:56, marginBottom:16 }}>📧</div>
-        <h2 style={{ fontSize:20, fontWeight:500, marginBottom:6 }}>Check your inbox</h2>
-        <p style={{ color:'rgba(255,255,255,0.5)', fontSize:13, marginBottom:8, textAlign:'center' }}>We sent a verification link to</p>
+        <h2 style={{ fontSize:20, fontWeight:500, marginBottom:6 }}>Enter verification code</h2>
+        <p style={{ color:'rgba(255,255,255,0.5)', fontSize:13, marginBottom:4, textAlign:'center' }}>We sent a 6-digit code to</p>
         <p style={{ color:YELLOW, fontSize:14, fontWeight:500, marginBottom:28 }}>{user?.email||'your email'}</p>
-        {resent && <div style={s.successBox}>✅ Verification email resent!</div>}
+        {error   && <div style={{ ...s.errBox, maxWidth:320, width:'100%' }}>⚠️ {error}</div>}
+        {success && <div style={{ ...s.successBox, maxWidth:320, width:'100%' }}>✅ {success}</div>}
         <div style={{ width:'100%', maxWidth:320 }}>
-          <button style={s.btnY} onClick={async () => { await auth.currentUser?.reload(); const isVerified = auth.currentUser?.emailVerified; if (isVerified) { go(user?.role==='driver'?'driver-dash':'customer-dash'); } else { setResent(false); alert('Email not verified yet. Please check your inbox and click the verification link first.'); } }}>I've verified my email →</button>
-          <button style={s.btnO} onClick={resend}>Resend verification email</button>
+          <input
+            style={{ ...s.inp, fontSize:28, fontWeight:700, textAlign:'center', letterSpacing:12, padding:'16px 14px' }}
+            type="number"
+            placeholder="000000"
+            maxLength={6}
+            value={code}
+            onChange={e => setCode(e.target.value.slice(0,6))}
+            onKeyDown={e => { if (e.key==='Enter') handleVerify(); }}
+          />
+          <button style={{ ...s.btnY, opacity:loading||code.length!==6?0.6:1 }} onClick={handleVerify} disabled={loading||code.length!==6}>
+            {loading ? 'Verifying...' : 'Verify Code →'}
+          </button>
+          <button style={{ ...s.btnO, opacity:resending?0.6:1 }} onClick={handleResend} disabled={resending}>
+            {resending ? 'Sending...' : 'Resend code'}
+          </button>
+          <p style={{ color:'rgba(255,255,255,0.3)', fontSize:11, textAlign:'center', marginTop:8 }}>Code expires in 10 minutes</p>
         </div>
       </div>
     </div>
   );
+}
+
+// ── DRIVER OTP (same UI, goes to driver-pending after) ────────────────────────
+function DriverOTPScreen({ go, user, setUser }) {
+  return <OTPScreen go={go} user={user} setUser={setUser}/>;
 }
 
 // ── CUSTOMER LOGIN ────────────────────────────────────────────────────────────
@@ -440,7 +527,7 @@ function DriverSignup({ go }) {
   const handleSubmit = async () => {
     setError('');
     if (Object.values(form).some(v => !v)) { setError('Please fill in all fields.'); return; }
-    if (!docs.license||!docs.fitness||!docs.registration) { setError('Please upload all 3 required documents.'); return; }
+    if (!docs.license||!docs.fitness||!docs.registration) { setError('Please upload all 3 documents.'); return; }
     if (form.password.length < 6) { setError('Password must be at least 6 characters.'); return; }
     setLoading(true);
     try {
@@ -450,8 +537,13 @@ function DriverSignup({ go }) {
         vehicleMake:form.make, vehicleModel:form.model, licensePlate:form.plate,
         status:'pending', role:'driver', createdAt:serverTimestamp(),
         docs:{ license:'pending_upload', fitness:'pending_upload', registration:'pending_upload' },
+        emailVerified: false,
       });
-      go('driver-pending');
+      // Generate and send OTP
+      const otp = generateOTP();
+      otpStore[form.email] = { code: otp, expires: Date.now() + 10 * 60 * 1000 };
+      await sendOTPEmail(form.email, form.name, otp);
+      go('driver-otp');
     } catch(err) { setError(err.code==='auth/email-already-in-use'?'Email already registered.':err.message); }
     setLoading(false);
   };
@@ -2920,6 +3012,7 @@ export default function App() {
     'customer-signup':<CustomerSignup {...props}/>,
     'customer-login': <CustomerLogin {...props}/>,
     otp:              <OTPScreen {...props}/>,
+    'driver-otp':     <DriverOTPScreen {...props}/>,
     'customer-dash':  <CustomerDash {...props}/>,
     'pin-pickup':     <PinPickup {...props}/>,
     'pin-dropoff':    <PinDropoff {...props}/>,
