@@ -1127,18 +1127,7 @@ function CustomerDash({ go, user, setUser }) {
 
   const totalSpent = history.reduce((s,r) => s+(r.fare||0), 0);
 
-  const TabBar = () => (
-    <div style={{ display:'flex', background:'rgba(10,15,35,0.9)', backdropFilter:'blur(10px)', borderTop:'0.5px solid rgba(255,255,255,0.08)', position:'sticky', bottom:0, zIndex:10 }}>
-      {[['book','🚕','Book'],['history','📋','History'],['profile','👤','Profile'],['settings','⚙️','Settings']].map(([t,icon,label]) => (
-        <div key={t} onClick={() => t==='profile'?go('customer-profile'):t==='settings'?go('customer-settings'):setTab(t)}
-          style={{ flex:1, padding:'10px 0', textAlign:'center', fontSize:10, cursor:'pointer',
-            color:tab===t?YELLOW:'rgba(255,255,255,0.45)',
-            borderTop:tab===t?`2px solid ${YELLOW}`:'2px solid transparent' }}>
-          <div style={{ fontSize:20, marginBottom:2 }}>{icon}</div>{label}
-        </div>
-      ))}
-    </div>
-  );
+
 
   return (
     <div style={{ ...s.content, background:'transparent', minHeight:'100vh', display:'flex', flexDirection:'column' }}>
@@ -1298,7 +1287,7 @@ function CustomerDash({ go, user, setUser }) {
             </div>
           </div>
 
-          <TabBar/>
+          
         </div>
       )}
 
@@ -1376,7 +1365,7 @@ function CustomerDash({ go, user, setUser }) {
               );
             })}
           </div>
-          <TabBar/>
+          
         </div>
       )}
     </div>
@@ -3418,19 +3407,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
         </div>
       )}
 
-      {/* Bottom tab bar */}
-      <div style={{ position:'sticky', bottom:0, background:'rgba(10,15,35,0.9)', backdropFilter:'blur(10px)', borderTop:'0.5px solid rgba(255,255,255,0.1)', display:'flex', zIndex:10 }}>
-        {[['home','🏠','Home'],['earnings','💰','Earnings']].map(([tab,icon,label]) => (
-          <div key={tab} onClick={() => { if (tab==='rides' && !isOnline) { goOnline(); return; } setDriverTab(tab); }}
-            style={{ flex:1, padding:'10px 0', textAlign:'center', fontSize:10, cursor:'pointer', color:driverTab===tab?YELLOW:'rgba(255,255,255,0.45)', borderTop:driverTab===tab?`2px solid ${YELLOW}`:'2px solid transparent' }}>
-            <div style={{ fontSize:22, marginBottom:2 }}>{icon}</div>{label}
-          </div>
-        ))}
-        <div onClick={() => isOnline ? setDriverTab('rides') : goOnline()}
-          style={{ flex:1, padding:'10px 0', textAlign:'center', fontSize:10, cursor:'pointer', color:driverTab==='rides'?YELLOW:isOnline?'rgba(255,255,255,0.45)':GREEN, borderTop:driverTab==='rides'?`2px solid ${YELLOW}`:'2px solid transparent' }}>
-          <div style={{ fontSize:22, marginBottom:2 }}>🚕</div>{isOnline?'Rides':'Go Online'}
-        </div>
-      </div>
+
     </div>
   );
 }
