@@ -2999,34 +2999,9 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   };
 
   useEffect(() => {
-    const q = query(collection(db,'bookings'), where('status','==','searching'));
-    let prevCount = 0;
+    const q = query(collection(db,'bookings'), where('status','==','searching'), orderBy('createdAt','desc'));
     const unsub = onSnapshot(q, snap => {
-      const all = snap.docs.map(d => ({ id:d.id, ...d.data() }));
-      // Only show rides still searching, not declined, not already accepted
-      const filtered = all.filter(r =>
-        r.status === 'searching' &&
-        !r.declinedBy?.includes(user?.uid) &&
-        !r.driverId
-      );
-      filtered.sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
-      // Bell sound for new rides
-      if (filtered.length > prevCount && prevCount > 0) {
-        try {
-          const ctx = new (window.AudioContext || window.webkitAudioContext)();
-          const playBell = (freq, time) => {
-            const osc = ctx.createOscillator(); const gain = ctx.createGain();
-            osc.connect(gain); gain.connect(ctx.destination);
-            osc.frequency.value = freq; osc.type = 'sine';
-            gain.gain.setValueAtTime(0.3, ctx.currentTime + time);
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + time + 0.8);
-            osc.start(ctx.currentTime + time); osc.stop(ctx.currentTime + time + 0.8);
-          };
-          playBell(880, 0); playBell(1100, 0.2); playBell(1320, 0.4);
-        } catch(e) {}
-      }
-      prevCount = filtered.length;
-      setRides(filtered);
+      setRides(snap.docs.map(d => ({ id:d.id, ...d.data() })));
       setLoading(false);
     });
     return () => unsub();
@@ -3082,12 +3057,6 @@ function DriverDash({ go, user, setUser, setBookingId }) {
 
   const acceptRide = async (rideId) => {
     try {
-      // Check ride is still available (not already taken)
-      const rideSnap = await getDoc(doc(db,'bookings',rideId));
-      if (!rideSnap.exists() || rideSnap.data().status !== 'searching' || rideSnap.data().driverId) {
-        alert('Sorry, this ride was already accepted by another driver.');
-        return;
-      }
       // Fetch driver vehicle info to save on booking for customer safety
       const dSnap = await getDoc(doc(db,'drivers',user.uid));
       const dData = dSnap.exists() ? dSnap.data() : {};
@@ -3347,11 +3316,8 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     const unsub = onSnapshot(q, snap => {
       if (!snap.empty) {
         const b = { id:snap.docs[0].id, ...snap.docs[0].data() };
-        // Double check this driver owns this ride
-        if (b.driverId === user.uid) {
-          setBooking(b);
-          if (b.id) setBookingId(b.id);
-        }
+        setBooking(b);
+        if (b.id) setBookingId(b.id);
       }
     });
     return () => unsub();
@@ -4003,46 +3969,15 @@ export default function App() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (fu) => {
       if (fu) {
-        const cSnap = await getDoc(doc(db,'customers',fu.uid));
-        const dSnap = await getDoc(doc(db,'drivers',fu.uid));
-        if (cSnap.exists()) {
-          const d = cSnap.data();
-          // Check email verified (skip for Google login which is auto-verified)
-          if (!fu.emailVerified && fu.providerData[0]?.providerId === 'password') {
-            setUser({ uid:fu.uid, name:d.name||fu.displayName, email:fu.email, role:'customer' });
-            setScreen('otp');
-          } else {
-            setUser({ uid:fu.uid, name:d.name||fu.displayName, email:fu.email, role:'customer' });
-            try {
-              // Check for active booking first
-              const q1 = query(collection(db,'bookings'), where('customerId','==',fu.uid), where('status','==','searching'));
-              const q2 = query(collection(db,'bookings'), where('customerId','==',fu.uid), where('status','==','active'));
-              const [s1,s2] = await Promise.all([getDocs(q1), getDocs(q2)]);
-              const found = [...s1.docs, ...s2.docs];
-              const twoHoursAgo = Date.now() / 1000 - 7200;
-              const recentBooking = found.find(b => (b.data().createdAt?.seconds||0) > twoHoursAgo);
-              if (recentBooking) {
-                setBookingId(recentBooking.id);
-                setScreen('live-ride');
-              } else if (!d.termsAccepted) {
-                setScreen('terms');
-              } else if (!d.tipsSeen) {
-                setScreen('welcome-tips');
-              } else {
-                setScreen('customer-dash');
-              }
-            } catch(e) {
-              setScreen('customer-dash');
-            }
-          }
-        } else if (dSnap.exists()) {
-          const d = dSnap.data();
-          if (d.status==='approved') {
-            // Check email verified for drivers too
-            if (!fu.emailVerified && fu.providerData[0]?.providerId === 'password') {
-              setUser({ uid:fu.uid, name:d.name, email:fu.email, role:'driver' });
-              setScreen('otp');
-            } else {
+        try {
+          const cSnap = await getDoc(doc(db,'customers',fu.uid));
+          const dSnap = await getDoc(doc(db,'drivers',fu.uid));
+
+          // ── Check DRIVER first ──────────────────────────────────────────────
+          if (dSnap.exists()) {
+            const d = dSnap.data();
+            if (d.status === 'approved') {
+              // Drivers skip email verification — they are manually approved by admin
               setUser({ uid:fu.uid, name:d.name, email:fu.email, role:'driver' });
               try {
                 const activeQ = query(collection(db,'bookings'), where('driverId','==',fu.uid), where('status','==','active'));
@@ -4060,10 +3995,44 @@ export default function App() {
               } catch(e) {
                 setScreen('driver-dash');
               }
+            } else if (d.status === 'pending') {
+              setScreen('driver-pending');
+            } else {
+              setScreen('driver-login');
             }
-          } else {
-            setScreen('driver-pending');
+
+          // ── Then check CUSTOMER ─────────────────────────────────────────────
+          } else if (cSnap.exists()) {
+            const d = cSnap.data();
+            if (!fu.emailVerified && fu.providerData[0]?.providerId === 'password') {
+              setUser({ uid:fu.uid, name:d.name||fu.displayName, email:fu.email, role:'customer' });
+              setScreen('otp');
+            } else {
+              setUser({ uid:fu.uid, name:d.name||fu.displayName, email:fu.email, role:'customer' });
+              try {
+                const q1 = query(collection(db,'bookings'), where('customerId','==',fu.uid), where('status','==','searching'));
+                const q2 = query(collection(db,'bookings'), where('customerId','==',fu.uid), where('status','==','active'));
+                const [s1,s2] = await Promise.all([getDocs(q1), getDocs(q2)]);
+                const found = [...s1.docs, ...s2.docs];
+                const twoHoursAgo = Date.now() / 1000 - 7200;
+                const recentBooking = found.find(b => (b.data().createdAt?.seconds||0) > twoHoursAgo);
+                if (recentBooking) {
+                  setBookingId(recentBooking.id);
+                  setScreen('live-ride');
+                } else if (!d.termsAccepted) {
+                  setScreen('terms');
+                } else if (!d.tipsSeen) {
+                  setScreen('welcome-tips');
+                } else {
+                  setScreen('customer-dash');
+                }
+              } catch(e) {
+                setScreen('customer-dash');
+              }
+            }
           }
+        } catch(e) {
+          console.error('Auth restore error:', e);
         }
       } else {
         setTimeout(() => setLoading(false), 1500);
