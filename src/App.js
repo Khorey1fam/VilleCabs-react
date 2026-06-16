@@ -3199,8 +3199,14 @@ function DriverDash({ go, user, setUser, setBookingId }) {
       // Fetch driver vehicle info to save on booking for customer safety
       const dSnap = await getDoc(doc(db,'drivers',user.uid));
       const dData = dSnap.exists() ? dSnap.data() : {};
+      // Write driverId first to claim the ride atomically
+      await updateDoc(doc(db,'bookings',rideId), { driverId: user.uid });
+      // Verify we got it (no one else claimed it in the same instant)
+      const verifySnap = await getDoc(doc(db,'bookings',rideId));
+      if (verifySnap.data()?.driverId !== user.uid) {
+        alert('Sorry, this ride was already accepted by another driver.'); return;
+      }
       await updateDoc(doc(db,'bookings',rideId), {
-        driverId:     user.uid,
         driverName:   user.name,
         vehicleMake:  dData.vehicleMake  || '',
         vehicleModel: dData.vehicleModel || '',
@@ -3458,8 +3464,11 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     const unsub = onSnapshot(q, snap => {
       if (!snap.empty) {
         const b = { id:snap.docs[0].id, ...snap.docs[0].data() };
-        setBooking(b);
-        if (b.id) setBookingId(b.id);
+        // Only show if THIS driver owns this ride
+        if (b.driverId === user.uid) {
+          setBooking(b);
+          if (b.id) setBookingId(b.id);
+        }
       }
     });
     return () => unsub();
