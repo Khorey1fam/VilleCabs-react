@@ -1139,7 +1139,10 @@ function CustomerDash({ go, user, setUser }) {
                 ['📬','Contact Us',      () => { go('contact-us'); setMenuOpen(false); }],
                 ['❓','Help & Info',     () => { go('help');       setMenuOpen(false); }],
               ].map(([icon,label,action],i) => (
-                <div key={i} onClick={action} style={{ padding:'13px 18px', display:'flex', alignItems:'center', gap:14, cursor:'pointer' }}>
+                <div key={i} onClick={action}
+                  onMouseEnter={e => { e.currentTarget.style.background='rgba(255,255,255,0.07)'; e.currentTarget.style.paddingLeft='22px'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.paddingLeft='18px'; }}
+                  style={{ padding:'13px 18px', display:'flex', alignItems:'center', gap:14, cursor:'pointer', transition:'all 0.15s ease' }}>
                   <span style={{ fontSize:20, width:28, textAlign:'center' }}>{icon}</span>
                   <span style={{ fontSize:14, color:WHITE }}>{label}</span>
                 </div>
@@ -1522,10 +1525,11 @@ function CustomerSettings({ go, user, setUser }) {
 
 // ── PIN PICKUP ────────────────────────────────────────────────────────────────
 function PinPickup({ go, setPickupData }) {
-  const [pinPos,   setPinPos]   = useState(MANCHESTER_CENTER);
-  const [address,  setAddress]  = useState('Manchester, Jamaica');
-  const [note,     setNote]     = useState('');
-  const [loading,  setLoading]  = useState(false);
+  const [pinPos,      setPinPos]      = useState(MANCHESTER_CENTER);
+  const [address,     setAddress]     = useState('Manchester, Jamaica');
+  const [note,        setNote]        = useState('');
+  const [loading,     setLoading]     = useState(false);
+  const [passengers,  setPassengers]  = useState(1);
 
   const handleMapClick = useCallback(async (e) => {
     const lat = e.latLng.lat();
@@ -1539,7 +1543,7 @@ function PinPickup({ go, setPickupData }) {
 
   const handleConfirm = () => {
     const finalAddress = note.trim() ? `${address} — ${note.trim()}` : address;
-    setPickupData({ coords:pinPos, address: finalAddress });
+    setPickupData({ coords:pinPos, address: finalAddress, passengers });
     go('pin-dropoff');
   };
 
@@ -1556,6 +1560,34 @@ function PinPickup({ go, setPickupData }) {
         <input style={s.inp} value={loading ? 'Getting address...' : address} onChange={e => setAddress(e.target.value)}/>
         <label style={s.lbl}>District / Road / Landmark <span style={{ color:'rgba(255,255,255,0.3)', fontWeight:400 }}>(optional)</span></label>
         <input style={s.inp} placeholder="e.g. Hatfield district, top of Caledonia Road, near the blue gate..." value={note} onChange={e => setNote(e.target.value)}/>
+        {/* Passenger counter */}
+        <div style={{ background:'rgba(15,20,40,0.6)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:12, padding:'14px 16px', marginBottom:14 }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+            <div>
+              <div style={{ fontSize:14, fontWeight:500, color:WHITE }}>👥 Number of Passengers</div>
+              <div style={{ fontSize:12, color:'rgba(255,255,255,0.4)', marginTop:3 }}>Including yourself</div>
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap:16 }}>
+              <button
+                onClick={() => setPassengers(p => Math.max(1, p - 1))}
+                style={{ width:38, height:38, borderRadius:'50%', background:passengers<=1?'rgba(255,255,255,0.05)':'rgba(232,180,0,0.15)', border:`1.5px solid ${passengers<=1?'rgba(255,255,255,0.1)':'rgba(232,180,0,0.4)'}`, color:passengers<=1?'rgba(255,255,255,0.3)':YELLOW, fontSize:20, fontWeight:700, cursor:passengers<=1?'default':'pointer', display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>
+                −
+              </button>
+              <div style={{ fontSize:24, fontWeight:700, color:WHITE, minWidth:24, textAlign:'center' }}>{passengers}</div>
+              <button
+                onClick={() => setPassengers(p => Math.min(6, p + 1))}
+                style={{ width:38, height:38, borderRadius:'50%', background:passengers>=6?'rgba(255,255,255,0.05)':'rgba(232,180,0,0.15)', border:`1.5px solid ${passengers>=6?'rgba(255,255,255,0.1)':'rgba(232,180,0,0.4)'}`, color:passengers>=6?'rgba(255,255,255,0.3)':YELLOW, fontSize:20, fontWeight:700, cursor:passengers>=6?'default':'pointer', display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>
+                +
+              </button>
+            </div>
+          </div>
+          {passengers > 1 && (
+            <div style={{ marginTop:10, padding:'8px 10px', background:'rgba(232,180,0,0.08)', borderRadius:8, fontSize:12, color:'rgba(232,180,0,0.9)' }}>
+              ⚡ {passengers >= 5 ? 'VilleXL recommended for your group' : `${passengers} passengers — driver will be notified`}
+            </div>
+          )}
+        </div>
+
         <button style={s.btnY} onClick={handleConfirm}>Confirm Pickup</button>
       </div>
     </div>
@@ -1739,6 +1771,7 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
       const ref = await addDoc(collection(db,'bookings'), {
         customerId:   user.uid,
         customerName: user.name,
+        passengers:   pickupData?.passengers || 1,
         pickup:       { address: pickupData?.address||'Manchester, Jamaica', lat: pickupData?.coords?.lat||MANCHESTER_CENTER.lat, lng: pickupData?.coords?.lng||MANCHESTER_CENTER.lng },
         dropoff:      { address: dropoffData?.address||'Destination', lat: dropoffData?.coords?.lat||18.02, lng: dropoffData?.coords?.lng||-77.48 },
         vehicleType:  v.name,
@@ -3177,7 +3210,10 @@ function DriverDash({ go, user, setUser, setBookingId }) {
                 ['📬','Contact Us',     () => { go('driver-contact');     setMenuOpen(false); }],
                 ['❓','Help & Info',    () => { go('driver-help');        setMenuOpen(false); }],
               ].map(([icon,label,action],i) => (
-                <div key={i} onClick={action} style={{ padding:'13px 18px', display:'flex', alignItems:'center', gap:14, cursor:'pointer' }}>
+                <div key={i} onClick={action}
+                  onMouseEnter={e => { e.currentTarget.style.background='rgba(255,255,255,0.07)'; e.currentTarget.style.paddingLeft='22px'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.paddingLeft='18px'; }}
+                  style={{ padding:'13px 18px', display:'flex', alignItems:'center', gap:14, cursor:'pointer', transition:'all 0.15s ease' }}>
                   <span style={{ fontSize:20, width:28, textAlign:'center' }}>{icon}</span>
                   <span style={{ fontSize:14, color:WHITE }}>{label}</span>
                 </div>
@@ -3255,7 +3291,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
                 </div>
                 <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', marginBottom:4 }}>📍 {r.pickup?.address}</div>
                 <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', marginBottom:6 }}>🏁 {r.dropoff?.address}</div>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,0.35)', marginBottom:10 }}>🚗 {r.vehicleType} · {r.distanceKm} km · Cash · ~{Math.ceil((r.distanceKm||5)/0.5)} min ETA</div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.35)', marginBottom:10 }}>🚗 {r.vehicleType} · {r.distanceKm} km · Cash · ~{Math.ceil((r.distanceKm||5)/0.5)} min ETA · 👥 {r.passengers||1} passenger{(r.passengers||1)>1?'s':''}</div>
                 <div style={{ display:'flex', gap:8 }}>
                   <button onClick={() => acceptRide(r.id)} style={{ flex:1, background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:10, fontSize:13, fontWeight:500, cursor:'pointer' }}>✓ Accept</button>
                   <button onClick={() => declineRide(r.id)} style={{ flex:1, background:'rgba(15,20,40,0.65)', color:'rgba(255,255,255,0.5)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:8, padding:10, fontSize:13, cursor:'pointer' }}>Decline</button>
@@ -3558,7 +3594,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
                 <div style={{ width:36, height:36, borderRadius:'50%', background:DARK, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>👤</div>
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:13, fontWeight:500, color:WHITE }}>{booking.customerName}</div>
-                  <div style={{ fontSize:11, color:'rgba(255,255,255,0.45)' }}>Verified rider</div>
+                  <div style={{ fontSize:11, color:'rgba(255,255,255,0.45)' }}>Verified rider · 👥 {booking.passengers||1} passenger{(booking.passengers||1)>1?'s':''}</div>
                 </div>
                 <div style={{ display:'flex', gap:8 }}>
                   <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, cursor:'pointer' }}>
