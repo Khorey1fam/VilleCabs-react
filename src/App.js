@@ -1463,11 +1463,11 @@ function CustomerDash({ go, user, setUser }) {
 
           
         </div>
-          <Footer go={go}/>
         </div>
       )}
 
-      {/* HISTORY TABab === 'history' && (
+      {/* HISTORY TAB */}
+      {tab === 'history' && (
         <div style={{ flex:1, display:'flex', flexDirection:'column' }}>
           <div style={{ flex:1, overflowY:'auto', padding:16 }}>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
@@ -1543,6 +1543,7 @@ function CustomerDash({ go, user, setUser }) {
           
         </div>
       )}
+      <Footer go={go}/>
     </div>
   );
 }
