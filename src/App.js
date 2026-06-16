@@ -1125,8 +1125,10 @@ function CustomerSettings({ go, user, setUser }) {
 
 // ── PIN PICKUP ────────────────────────────────────────────────────────────────
 function PinPickup({ go, setPickupData }) {
+  const [mode,     setMode]     = useState('map');   // 'map' | 'type'
   const [pinPos,   setPinPos]   = useState(MANCHESTER_CENTER);
   const [address,  setAddress]  = useState('Manchester, Jamaica');
+  const [typed,    setTyped]    = useState('');
   const [loading,  setLoading]  = useState(false);
 
   const handleMapClick = useCallback(async (e) => {
@@ -1140,22 +1142,88 @@ function PinPickup({ go, setPickupData }) {
   }, []);
 
   const handleConfirm = () => {
-    setPickupData({ coords:pinPos, address });
+    if (mode === 'type') {
+      if (!typed.trim()) return;
+      setPickupData({ coords: MANCHESTER_CENTER, address: typed.trim() });
+    } else {
+      setPickupData({ coords: pinPos, address });
+    }
     go('pin-dropoff');
   };
 
+  const canConfirm = mode === 'map' ? !!address : typed.trim().length > 0;
+
   return (
     <div style={{ ...s.content, background:'transparent' }}>
-      <TopBar title="Pin Pickup Location" onBack={() => go('customer-dash')}/>
-      <VilleMap height={300} center={MANCHESTER_CENTER} zoom={14} onClick={handleMapClick}
-        markers={[{ position:pinPos, title:'Pickup' }]}/>
-      <div style={{ padding:16 }}>
-        <div style={{ background:'rgba(26,158,90,0.1)', border:'0.5px solid rgba(26,158,90,0.3)', borderRadius:8, padding:'8px 12px', marginBottom:12, fontSize:12, color:'#9fe1cb' }}>
-          📍 Tap anywhere on the map to pin your exact pickup location
+      <TopBar title="Set Pickup Location" onBack={() => go('customer-dash')}/>
+
+      {/* Toggle */}
+      <div style={{ display:'flex', margin:'12px 16px 0', background:'rgba(255,255,255,0.06)', borderRadius:12, padding:4, gap:4 }}>
+        <button onClick={() => setMode('map')}
+          style={{ flex:1, padding:'10px 0', border:'none', borderRadius:9, fontSize:13, fontWeight:500, cursor:'pointer',
+            background: mode==='map' ? YELLOW : 'transparent',
+            color:      mode==='map' ? DARK   : 'rgba(255,255,255,0.5)' }}>
+          📍 Pin on Map
+        </button>
+        <button onClick={() => setMode('type')}
+          style={{ flex:1, padding:'10px 0', border:'none', borderRadius:9, fontSize:13, fontWeight:500, cursor:'pointer',
+            background: mode==='type' ? YELLOW : 'transparent',
+            color:      mode==='type' ? DARK   : 'rgba(255,255,255,0.5)' }}>
+          ✏️ Type Location
+        </button>
+      </div>
+
+      {/* MAP MODE */}
+      {mode === 'map' && (
+        <>
+          <VilleMap height={280} center={MANCHESTER_CENTER} zoom={14} onClick={handleMapClick}
+            markers={[{ position:pinPos, title:'Pickup' }]}/>
+          <div style={{ padding:16 }}>
+            <div style={{ background:'rgba(26,158,90,0.1)', border:'0.5px solid rgba(26,158,90,0.3)', borderRadius:8, padding:'8px 12px', marginBottom:12, fontSize:12, color:'#9fe1cb' }}>
+              📍 Tap anywhere on the map to pin your exact pickup location
+            </div>
+            <label style={s.lbl}>Pinned address</label>
+            <input style={s.inp} value={loading ? 'Getting address...' : address} onChange={e => setAddress(e.target.value)}/>
+          </div>
+        </>
+      )}
+
+      {/* TYPE MODE */}
+      {mode === 'type' && (
+        <div style={{ padding:16 }}>
+          <div style={{ background:'rgba(232,180,0,0.08)', border:'0.5px solid rgba(232,180,0,0.25)', borderRadius:8, padding:'10px 12px', marginBottom:16, fontSize:12, color:'rgba(232,180,0,0.9)', lineHeight:1.6 }}>
+            ✏️ Type the name of your road, district, landmark or building so your driver can find you
+          </div>
+          <label style={s.lbl}>Pickup location description</label>
+          <input
+            style={{ ...s.inp, fontSize:15 }}
+            placeholder="e.g. Top of Caledonia Road, near the blue gate"
+            value={typed}
+            onChange={e => setTyped(e.target.value)}
+            autoFocus
+          />
+          <label style={{ ...s.lbl, marginTop:4 }}>Examples</label>
+          <div style={{ background:'rgba(15,20,40,0.6)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, overflow:'hidden', marginBottom:14 }}>
+            {[
+              'Christiana Main Road, beside the gas station',
+              'Spaldings Square, opposite the market',
+              'Walderston District, first house on the left',
+              'Hatfield, near the basic school',
+              'Mile Gully Road, at the junction',
+            ].map((ex, i, arr) => (
+              <div key={i} onClick={() => setTyped(ex)}
+                style={{ padding:'10px 14px', fontSize:12, color:'rgba(255,255,255,0.65)', borderBottom: i<arr.length-1 ? '0.5px solid rgba(255,255,255,0.06)' : 'none', cursor:'pointer' }}>
+                📍 {ex}
+              </div>
+            ))}
+          </div>
         </div>
-        <label style={s.lbl}>Pinned address</label>
-        <input style={s.inp} value={loading ? 'Getting address...' : address} onChange={e => setAddress(e.target.value)}/>
-        <button style={s.btnY} onClick={handleConfirm}>Confirm Pickup</button>
+      )}
+
+      <div style={{ padding:'0 16px 16px' }}>
+        <button style={{ ...s.btnY, opacity: canConfirm ? 1 : 0.4 }} onClick={handleConfirm} disabled={!canConfirm}>
+          Confirm Pickup
+        </button>
       </div>
     </div>
   );
@@ -2128,14 +2196,6 @@ function DriverDash({ go, user, setUser, setBookingId }) {
       // Fetch driver vehicle info to save on booking for customer safety
       const dSnap = await getDoc(doc(db,'drivers',user.uid));
       const dData = dSnap.exists() ? dSnap.data() : {};
-      // Get current location immediately on accept
-      let initLat = null, initLng = null;
-      if (navigator.geolocation) {
-        await new Promise(res => navigator.geolocation.getCurrentPosition(
-          p => { initLat = p.coords.latitude; initLng = p.coords.longitude; res(); },
-          () => res(), { timeout: 5000 }
-        ));
-      }
       await updateDoc(doc(db,'bookings',rideId), {
         driverId:     user.uid,
         driverName:   user.name,
@@ -2145,7 +2205,6 @@ function DriverDash({ go, user, setUser, setBookingId }) {
         driverRating: dData.rating       || null,
         status:       'active',
         acceptedAt:   serverTimestamp(),
-        ...(initLat && initLng ? { driverLocation: { lat: initLat, lng: initLng, updatedAt: serverTimestamp() } } : {}),
       });
       setBookingId(rideId);
       go('driver-active');
@@ -2343,16 +2402,16 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
           async (pos) => {
             const { latitude: lat, longitude: lng } = pos.coords;
             try {
-              await updateDoc(doc(db,'bookings',booking.id), {
-                driverLocation: { lat, lng, updatedAt: serverTimestamp() }
-              });
-              await updateDoc(doc(db,'drivers',user.uid), {
-                currentLocation: { lat, lng, updatedAt: serverTimestamp() }
-              });
-            } catch(e) { console.error('Location update failed:', e); }
+              await updateDriverLocationFn({ lat, lng, bookingId: booking.id });
+            } catch(err) {
+              try {
+                await updateDoc(doc(db,'bookings',booking.id), { driverLocation:{ lat, lng, updatedAt:serverTimestamp() } });
+                await updateDoc(doc(db,'drivers',user.uid), { currentLocation:{ lat, lng, updatedAt:serverTimestamp() } });
+              } catch(e) { console.error(e); }
+            }
           },
           (err) => setLocationStatus(err.code===1?'denied':'idle'),
-          { enableHighAccuracy:true, maximumAge:3000, timeout:10000 }
+          { enableHighAccuracy:false, maximumAge:10000, timeout:15000 }
         );
       },
       (err) => {
