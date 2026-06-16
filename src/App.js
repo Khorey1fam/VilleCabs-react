@@ -393,7 +393,7 @@ function Splash({ go }) {
         {/* Main buttons */}
         <div style={{ width:'100%', maxWidth:320, marginBottom:16 }}>
           {/* Login button */}
-          <button style={{ ...s.btnY, marginBottom:12 }} onClick={() => go('login')}>
+          <button style={{ ...s.btnY, marginBottom:12 }} onClick={() => go('customer-login')}>
             Log In
           </button>
           {/* Sign Up button */}
