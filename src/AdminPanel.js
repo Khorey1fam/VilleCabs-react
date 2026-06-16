@@ -273,14 +273,30 @@ function RidesTab() {
   };
 
   const total = rides.reduce((sum, r) => sum + (r.fare||0), 0);
-  const filters = ['all','searching','active','completed'];
+  const filters = ['all','searching','active','completed','cancelled'];
+
+  const fmtDateTime = (ts) => {
+    if (!ts?.seconds) return '--';
+    const d = new Date(ts.seconds * 1000);
+    return d.toLocaleDateString('en-JM', { day:'numeric', month:'short', year:'numeric' })
+      + ' · ' + d.toLocaleTimeString('en-JM', { hour:'2-digit', minute:'2-digit' });
+  };
+
+  const changeStatus = async (id, newStatus) => {
+    const updates = { status: newStatus };
+    if (newStatus === 'completed') updates.completedAt = serverTimestamp();
+    if (newStatus === 'cancelled') updates.cancelledAt = serverTimestamp();
+    await updateDoc(doc(db,'bookings',id), updates);
+  };
+
+  const sorted = [...rides].sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
 
   return (
     <div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:20 }}>
-        <StatCard label="Total rides" value={rides.length} sub="in current filter"/>
+        <StatCard label="Total rides"   value={rides.length} sub="in current filter"/>
         <StatCard label="Total revenue" value={`J$${total.toLocaleString()}`} color={YELLOW} sub="all rides"/>
-        <StatCard label="Active now" value={rides.filter(r=>r.status==='active').length} color={GREEN} sub="in progress"/>
+        <StatCard label="Active now"    value={rides.filter(r=>r.status==='active').length} color={GREEN} sub="in progress"/>
       </div>
 
       <div style={{ display:'flex', gap:8, marginBottom:20, flexWrap:'wrap' }}>
@@ -294,33 +310,79 @@ function RidesTab() {
 
       {loading ? (
         <div style={{ textAlign:'center', padding:40, color:'rgba(255,255,255,0.4)' }}>Loading rides...</div>
-      ) : rides.length === 0 ? (
+      ) : sorted.length === 0 ? (
         <div style={{ textAlign:'center', padding:40 }}>
           <div style={{ fontSize:36, marginBottom:12 }}>🚕</div>
           <div style={{ color:'rgba(255,255,255,0.4)', fontSize:14 }}>No {filter} rides yet</div>
         </div>
-      ) : (
-        <div style={{ background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, overflow:'hidden' }}>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 80px 80px', padding:'10px 16px', background:'rgba(255,255,255,0.04)', fontSize:11, color:'rgba(255,255,255,0.4)', fontWeight:500, textTransform:'uppercase', letterSpacing:0.5 }}>
-            <span>Customer</span><span>Route</span><span>Driver</span><span>Fare</span><span>Status</span>
-          </div>
-          {rides.map((r,i) => (
-            <div key={r.id} style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 80px 80px', padding:'12px 16px', borderTop:'0.5px solid rgba(255,255,255,0.06)', fontSize:13, alignItems:'center', background:i%2===0?'transparent':'rgba(255,255,255,0.02)' }}>
-              <span style={{ color:WHITE }}>{r.customerName||'--'}</span>
-              <span style={{ color:'rgba(255,255,255,0.55)', fontSize:12 }}>{r.pickup?.address?.split(',')[0]||'--'} → {r.dropoff?.address?.split(',')[0]||'--'}</span>
-              <span style={{ color:'rgba(255,255,255,0.55)', fontSize:12 }}>{r.driverName||'Unassigned'}</span>
-              <span style={{ color:GREEN, fontWeight:500 }}>J${r.fare?.toLocaleString()||'--'}</span>
-              <span>{statusBadge(r.status)}</span>
+      ) : sorted.map((r,i) => (
+        <div key={r.id} style={{ background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, padding:'16px 18px', marginBottom:12 }}>
+
+          {/* Top row: customer + status + changer */}
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
+            <div>
+              <div style={{ fontSize:15, fontWeight:500, color:WHITE }}>{r.customerName||'--'}</div>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:2 }}>#{r.id?.slice(-6).toUpperCase()}</div>
             </div>
-          ))}
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              {statusBadge(r.status)}
+              <select value={r.status} onChange={e => changeStatus(r.id, e.target.value)}
+                style={{ background:'rgba(255,255,255,0.08)', border:'0.5px solid rgba(255,255,255,0.2)', borderRadius:8, color:WHITE, fontSize:12, padding:'4px 8px', cursor:'pointer', outline:'none' }}>
+                <option value="searching">Searching</option>
+                <option value="active">Active</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Date/time row */}
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:12 }}>
+            <div style={{ background:'rgba(255,255,255,0.04)', borderRadius:8, padding:'8px 10px' }}>
+              <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)', marginBottom:2 }}>Booked</div>
+              <div style={{ fontSize:11, color:WHITE }}>{fmtDateTime(r.createdAt)}</div>
+            </div>
+            <div style={{ background:'rgba(255,255,255,0.04)', borderRadius:8, padding:'8px 10px' }}>
+              <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)', marginBottom:2 }}>Accepted</div>
+              <div style={{ fontSize:11, color:WHITE }}>{fmtDateTime(r.acceptedAt)}</div>
+            </div>
+            <div style={{ background:'rgba(255,255,255,0.04)', borderRadius:8, padding:'8px 10px' }}>
+              <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)', marginBottom:2 }}>Completed</div>
+              <div style={{ fontSize:11, color:WHITE }}>{fmtDateTime(r.completedAt)}</div>
+            </div>
+          </div>
+
+          {/* Route + driver + fare */}
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 80px', gap:8, alignItems:'center' }}>
+            <div>
+              <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)', marginBottom:4 }}>Route</div>
+              <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)' }}><span style={{ color:GREEN }}>●</span> {r.pickup?.address?.split(',')[0]||'--'}</div>
+              <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}><span style={{ color:YELLOW }}>●</span> {r.dropoff?.address?.split(',')[0]||'--'}</div>
+            </div>
+            <div>
+              <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)', marginBottom:4 }}>Driver</div>
+              <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)' }}>{r.driverName||'Unassigned'}</div>
+              {r.licensePlate && <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:2 }}>{r.licensePlate}</div>}
+            </div>
+            <div>
+              <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)', marginBottom:4 }}>Vehicle</div>
+              <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)' }}>{r.vehicleType||'--'}</div>
+              {r.distanceKm && <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:2 }}>{r.distanceKm} km</div>}
+            </div>
+            <div style={{ textAlign:'right' }}>
+              <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)', marginBottom:4 }}>Fare</div>
+              <div style={{ fontSize:16, fontWeight:600, color:GREEN }}>J${r.fare?.toLocaleString()||'--'}</div>
+              <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)', marginTop:2 }}>{r.paymentMethod||'cash'}</div>
+            </div>
+          </div>
         </div>
-      )}
+      ))}
     </div>
   );
 }
 
 // ── OVERVIEW TAB ──────────────────────────────────────────────────────────────
-function OverviewTab() {
+function OverviewTab({ setTab }) {
   const [stats, setStats] = useState({ pending:0, approved:0, total_rides:0, revenue:0, active_rides:0, customers:0 });
 
   useEffect(() => {
@@ -361,10 +423,10 @@ function OverviewTab() {
       <div style={{ ...s.card, marginTop:8 }}>
         <div style={{ fontSize:14, fontWeight:500, marginBottom:12 }}>Quick actions</div>
         <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
-          <div style={{ background:'rgba(232,180,0,0.1)', border:'0.5px solid rgba(232,180,0,0.25)', borderRadius:10, padding:'12px 16px', fontSize:13, color:YELLOW, cursor:'pointer' }}>
+          <div onClick={() => setTab('drivers')} style={{ background:'rgba(232,180,0,0.1)', border:'0.5px solid rgba(232,180,0,0.25)', borderRadius:10, padding:'12px 16px', fontSize:13, color:YELLOW, cursor:'pointer' }}>
             👤 Review pending drivers ({stats.pending})
           </div>
-          <div style={{ background:'rgba(26,158,90,0.1)', border:'0.5px solid rgba(26,158,90,0.25)', borderRadius:10, padding:'12px 16px', fontSize:13, color:'#9fe1cb', cursor:'pointer' }}>
+          <div onClick={() => setTab('rides')} style={{ background:'rgba(26,158,90,0.1)', border:'0.5px solid rgba(26,158,90,0.25)', borderRadius:10, padding:'12px 16px', fontSize:13, color:'#9fe1cb', cursor:'pointer' }}>
             🚕 View active rides ({stats.active_rides})
           </div>
         </div>
@@ -434,7 +496,7 @@ export default function AdminPanel() {
           <div style={{ fontSize:20, fontWeight:500, marginBottom:20, color:WHITE, textTransform:'capitalize' }}>
             {tab === 'overview' ? '📊 Dashboard Overview' : tab === 'drivers' ? '🚗 Driver Management' : '🚕 Ride Management'}
           </div>
-          {tab === 'overview' && <OverviewTab/>}
+          {tab === 'overview' && <OverviewTab setTab={setTab}/>}
           {tab === 'drivers'  && <DriversTab/>}
           {tab === 'rides'    && <RidesTab/>}
         </div>
