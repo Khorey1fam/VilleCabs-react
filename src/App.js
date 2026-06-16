@@ -3444,6 +3444,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
   const [sosSent,       setSosSent]       = useState(false);
   const [sosHolding,    setSosHolding]    = useState(false);
   const [sosCount,      setSosCount]      = useState(5);
+  const [directions, setDirections] = useState(null);
   const watchRef = useRef(null);
   const sosRef   = useRef(null);
 
@@ -3464,7 +3465,6 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     const unsub = onSnapshot(q, snap => {
       if (!snap.empty) {
         const b = { id:snap.docs[0].id, ...snap.docs[0].data() };
-        // Only show if THIS driver owns this ride
         if (b.driverId === user.uid) {
           setBooking(b);
           if (b.id) setBookingId(b.id);
@@ -3473,6 +3473,31 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     });
     return () => unsub();
   }, [user]);
+
+  // Fetch route: driver → pickup (before arrived), pickup → dropoff (after arrived)
+  useEffect(() => {
+    if (!booking?.pickup || !window.google) return;
+    const fetchRoute = async () => {
+      if (!arrived) {
+        // Route from driver location to pickup
+        const origin = booking.driverLocation
+          ? { lat: booking.driverLocation.lat, lng: booking.driverLocation.lng }
+          : null;
+        if (!origin) return;
+        const result = await getDirections(origin, { lat: booking.pickup.lat, lng: booking.pickup.lng });
+        if (result) setDirections(result);
+      } else {
+        // Route from pickup to dropoff
+        if (!booking.dropoff) return;
+        const result = await getDirections(
+          { lat: booking.pickup.lat, lng: booking.pickup.lng },
+          { lat: booking.dropoff.lat, lng: booking.dropoff.lng }
+        );
+        if (result) setDirections(result);
+      }
+    };
+    fetchRoute();
+  }, [booking?.driverLocation?.lat, booking?.driverLocation?.lng, arrived, booking?.pickup?.lat]);
 
   useEffect(() => {
     if (!booking?.id || !user?.uid) return;
@@ -3553,6 +3578,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
   const notifyArrived = async () => {
     if (!booking?.id) return;
     setArrived(true);
+    setDirections(null); // Clear old route, new one will load via useEffect
     try {
       // Update booking with arrived status
       await updateDoc(doc(db,'bookings',booking.id), {
@@ -3615,10 +3641,14 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
            <span>⚠️ Location denied — <span style={{textDecoration:'underline',cursor:'pointer'}} onClick={() => alert('To enable location:\n\n1. Click the 🔒 lock icon in your browser address bar\n2. Set Location to Allow\n3. Refresh the page')}>tap here to fix</span></span>
          ) : '📍 Getting your location...'}
       </div>
-      <VilleMap height={320} center={driverCoords||pickupCoords} zoom={14} markers={markers} expandable={true}>
-        {driverCoords && (
+      <VilleMap height={320} center={driverCoords||pickupCoords} zoom={14} markers={arrived?[]:markers} directions={directions} expandable={true}>
+        {driverCoords && !directions && (
           <Marker position={driverCoords} title="Your location"
             icon={{ url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="#e8b400" stroke="white" stroke-width="3"/><text x="18" y="24" text-anchor="middle" font-size="16">🚗</text></svg>'), scaledSize:{width:36,height:36} }}/>
+        )}
+        {driverCoords && directions && (
+          <Marker position={driverCoords} title="You"
+            icon={{ url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="#e8b400" stroke="white" stroke-width="2.5"/><text x="20" y="26" text-anchor="middle" font-size="18">🚗</text></svg>'), scaledSize:{width:40,height:40} }}/>
         )}
       </VilleMap>
       <div style={{ padding:14 }}>
