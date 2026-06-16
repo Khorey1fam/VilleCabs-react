@@ -106,10 +106,12 @@ function DriversTab() {
 
   useEffect(() => {
     const q = filter === 'all'
-      ? query(collection(db,'drivers'), orderBy('createdAt','desc'))
-      : query(collection(db,'drivers'), where('status','==',filter), orderBy('createdAt','desc'));
+      ? query(collection(db,'drivers'))
+      : query(collection(db,'drivers'), where('status','==',filter));
     const unsub = onSnapshot(q, snap => {
-      setDrivers(snap.docs.map(d => ({ id:d.id, ...d.data() })));
+      const list = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+      list.sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+      setDrivers(list);
       setLoading(false);
     });
     return () => unsub();
@@ -198,12 +200,28 @@ function DriversTab() {
             ))}
           </div>
 
-          <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:12 }}>
-            {['license','fitness','registration'].map(docType => (
-              <span key={docType} style={{ ...s.badge, background: driver.docs?.[docType] && driver.docs[docType]!=='pending_upload' ? 'rgba(26,158,90,0.15)' : 'rgba(226,75,74,0.12)', color: driver.docs?.[docType] && driver.docs[docType]!=='pending_upload' ? '#9fe1cb' : '#f09595', fontSize:11 }}>
-                {driver.docs?.[docType] && driver.docs[docType]!=='pending_upload' ? '✓' : '⚠'} {docType}
-              </span>
-            ))}
+          <div style={{ marginBottom:12 }}>
+            <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginBottom:8, textTransform:'uppercase', letterSpacing:0.5 }}>Documents</div>
+            <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+              {[['license',"Driver's License"],['fitness','Fitness Certificate'],['registration','Registration']].map(([docType,docLabel]) => {
+                const url = driver.docs?.[docType];
+                const uploaded = url && url !== 'pending_upload';
+                return (
+                  <div key={docType}>
+                    {uploaded ? (
+                      <a href={url} target="_blank" rel="noopener noreferrer"
+                        style={{ ...s.badge, background:'rgba(26,158,90,0.15)', color:'#9fe1cb', fontSize:11, textDecoration:'none', cursor:'pointer', padding:'5px 10px' }}>
+                        📄 View {docLabel}
+                      </a>
+                    ) : (
+                      <span style={{ ...s.badge, background:'rgba(226,75,74,0.12)', color:'#f09595', fontSize:11, padding:'5px 10px' }}>
+                        ⚠️ {docLabel} not uploaded
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
@@ -234,8 +252,8 @@ function RidesTab() {
 
   useEffect(() => {
     const q = filter === 'all'
-      ? query(collection(db,'bookings'), orderBy('createdAt','desc'))
-      : query(collection(db,'bookings'), where('status','==',filter), orderBy('createdAt','desc'));
+      ? query(collection(db,'bookings'))
+      : query(collection(db,'bookings'), where('status','==',filter));
     const unsub = onSnapshot(q, snap => {
       setRides(snap.docs.map(d => ({ id:d.id, ...d.data() })));
       setLoading(false);

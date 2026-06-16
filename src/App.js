@@ -10,6 +10,7 @@ import {
   onSnapshot, updateDoc, query, where, orderBy, serverTimestamp, getDocs
 } from 'firebase/firestore';
 import { GoogleMap, useJsApiLoader, Marker, DirectionsRenderer } from '@react-google-maps/api';
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
@@ -17,27 +18,16 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 function generateOTP() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
-
 async function sendOTPEmail(toEmail, toName, otpCode) {
-  const payload = {
-    service_id:  'service_h9ryisl',
-    template_id: 'template_ss6rofa',
-    user_id:     '9-C6Nw3ZGGd5R7jto',
-    template_params: {
-      to_email: toEmail,
-      to_name:  toName || 'Rider',
-      otp_code: otpCode,
-    },
-  };
   const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body:    JSON.stringify(payload),
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      service_id: 'service_h9ryisl', template_id: 'template_ss6rofa', user_id: '9-C6Nw3ZGGd5R7jto',
+      template_params: { to_email: toEmail, to_name: toName || 'User', otp_code: otpCode },
+    }),
   });
-  if (!res.ok) throw new Error('Failed to send OTP email');
+  if (!res.ok) throw new Error('Failed to send OTP');
 }
-
-// Store OTP in memory (keyed by email)
 const otpStore = {};
 
 const firebaseConfig = {
@@ -52,6 +42,7 @@ const app            = initializeApp(firebaseConfig);
 const auth           = getAuth(app);
 const db             = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
+const storage = getStorage(app);
 let messaging = null;
 try { messaging = getMessaging(app); } catch(e) { console.warn('Messaging unavailable'); }
 const functions_     = getFunctions(app);
@@ -301,7 +292,6 @@ function CustomerSignup({ go, setUser }) {
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
       await setDoc(doc(db,'customers',cred.user.uid), { name:form.name, phone:form.phone, email:form.email, role:'customer', createdAt:serverTimestamp() });
       setUser({ uid:cred.user.uid, name:form.name, email:form.email, role:'customer' });
-      // Generate and send OTP
       const otp = generateOTP();
       otpStore[form.email] = { code: otp, expires: Date.now() + 10 * 60 * 1000 };
       await sendOTPEmail(form.email, form.name, otp);
@@ -343,22 +333,21 @@ function CustomerSignup({ go, setUser }) {
 
 // ── OTP ───────────────────────────────────────────────────────────────────────
 function OTPScreen({ go, user, setUser }) {
-  const [code,    setCode]    = useState('');
-  const [error,   setError]   = useState('');
-  const [success, setSuccess] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [resending, setResending] = useState(false);
+  const [code,     setCode]     = useState('');
+  const [error,    setError]    = useState('');
+  const [success,  setSuccess]  = useState('');
+  const [loading,  setLoading]  = useState(false);
+  const [resending,setResending]= useState(false);
 
   const handleVerify = async () => {
     setError(''); setLoading(true);
+    const email = user?.email;
+    const stored = otpStore[email];
+    if (!stored)                   { setError('Code expired. Request a new one.'); setLoading(false); return; }
+    if (Date.now() > stored.expires) { delete otpStore[email]; setError('Code expired. Request a new one.'); setLoading(false); return; }
+    if (code.trim() !== stored.code) { setError('Incorrect code. Try again.');     setLoading(false); return; }
+    delete otpStore[email];
     try {
-      const email = user?.email;
-      const stored = otpStore[email];
-      if (!stored) { setError('Code expired. Please request a new one.'); setLoading(false); return; }
-      if (Date.now() > stored.expires) { delete otpStore[email]; setError('Code expired. Please request a new one.'); setLoading(false); return; }
-      if (code.trim() !== stored.code) { setError('Incorrect code. Please try again.'); setLoading(false); return; }
-      // Code is correct — mark verified
-      delete otpStore[email];
       if (user?.role === 'driver') {
         await updateDoc(doc(db,'drivers',user.uid), { emailVerified: true });
         go('driver-pending');
@@ -376,8 +365,7 @@ function OTPScreen({ go, user, setUser }) {
       const otp = generateOTP();
       otpStore[user?.email] = { code: otp, expires: Date.now() + 10 * 60 * 1000 };
       await sendOTPEmail(user?.email, user?.name, otp);
-      setSuccess('New code sent! Check your email.');
-      setCode('');
+      setSuccess('New code sent! Check your email.'); setCode('');
     } catch(err) { setError('Failed to resend. Try again.'); }
     setResending(false);
   };
@@ -390,18 +378,13 @@ function OTPScreen({ go, user, setUser }) {
         <h2 style={{ fontSize:20, fontWeight:500, marginBottom:6 }}>Enter verification code</h2>
         <p style={{ color:'rgba(255,255,255,0.5)', fontSize:13, marginBottom:4, textAlign:'center' }}>We sent a 6-digit code to</p>
         <p style={{ color:YELLOW, fontSize:14, fontWeight:500, marginBottom:28 }}>{user?.email||'your email'}</p>
-        {error   && <div style={{ ...s.errBox, maxWidth:320, width:'100%' }}>⚠️ {error}</div>}
+        {error   && <div style={{ ...s.errBox,    maxWidth:320, width:'100%' }}>⚠️ {error}</div>}
         {success && <div style={{ ...s.successBox, maxWidth:320, width:'100%' }}>✅ {success}</div>}
         <div style={{ width:'100%', maxWidth:320 }}>
-          <input
-            style={{ ...s.inp, fontSize:28, fontWeight:700, textAlign:'center', letterSpacing:12, padding:'16px 14px' }}
-            type="number"
-            placeholder="000000"
-            maxLength={6}
-            value={code}
+          <input style={{ ...s.inp, fontSize:28, fontWeight:700, textAlign:'center', letterSpacing:12, padding:'16px 14px' }}
+            type="number" placeholder="000000" value={code}
             onChange={e => setCode(e.target.value.slice(0,6))}
-            onKeyDown={e => { if (e.key==='Enter') handleVerify(); }}
-          />
+            onKeyDown={e => { if (e.key==='Enter') handleVerify(); }}/>
           <button style={{ ...s.btnY, opacity:loading||code.length!==6?0.6:1 }} onClick={handleVerify} disabled={loading||code.length!==6}>
             {loading ? 'Verifying...' : 'Verify Code →'}
           </button>
@@ -413,11 +396,6 @@ function OTPScreen({ go, user, setUser }) {
       </div>
     </div>
   );
-}
-
-// ── DRIVER OTP (same UI, goes to driver-pending after) ────────────────────────
-function DriverOTPScreen({ go, user, setUser }) {
-  return <OTPScreen go={go} user={user} setUser={setUser}/>;
 }
 
 // ── CUSTOMER LOGIN ────────────────────────────────────────────────────────────
@@ -519,7 +497,7 @@ function DriverLogin({ go, setUser }) {
 // ── DRIVER SIGNUP ─────────────────────────────────────────────────────────────
 function DriverSignup({ go }) {
   const [form, setForm]       = useState({ name:'',trn:'',dob:'',phone:'',email:'',password:'',make:'',model:'',plate:'' });
-  const [docs, setDocs]       = useState({ license:false, fitness:false, registration:false });
+  const [docs, setDocs]       = useState({ license:null, fitness:null, registration:null });
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
   const set = (k,v) => setForm(p => ({ ...p, [k]:v }));
@@ -532,18 +510,27 @@ function DriverSignup({ go }) {
     setLoading(true);
     try {
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
+      // Upload documents to Firebase Storage
+      const uploadFile = async (file, name) => {
+        const r = storageRef(storage, `driver-docs/${cred.user.uid}/${name}`);
+        await uploadBytes(r, file);
+        return await getDownloadURL(r);
+      };
+      const [licenseUrl, fitnessUrl, registrationUrl] = await Promise.all([
+        uploadFile(docs.license,      'license'),
+        uploadFile(docs.fitness,      'fitness'),
+        uploadFile(docs.registration, 'registration'),
+      ]);
       await setDoc(doc(db,'drivers',cred.user.uid), {
         name:form.name, trn:form.trn, dob:form.dob, phone:form.phone, email:form.email,
         vehicleMake:form.make, vehicleModel:form.model, licensePlate:form.plate,
         status:'pending', role:'driver', createdAt:serverTimestamp(),
-        docs:{ license:'pending_upload', fitness:'pending_upload', registration:'pending_upload' },
-        emailVerified: false,
+        docs:{ license:licenseUrl, fitness:fitnessUrl, registration:registrationUrl },
       });
-      // Generate and send OTP
       const otp = generateOTP();
       otpStore[form.email] = { code: otp, expires: Date.now() + 10 * 60 * 1000 };
       await sendOTPEmail(form.email, form.name, otp);
-      go('driver-otp');
+      go('otp');
     } catch(err) { setError(err.code==='auth/email-already-in-use'?'Email already registered.':err.message); }
     setLoading(false);
   };
@@ -565,23 +552,14 @@ function DriverSignup({ go }) {
         <div style={{ height:'0.5px', background:'rgba(255,255,255,0.1)', margin:'8px 0 16px' }}/>
         {[['license',"Driver's License"],['fitness','Vehicle Fitness Certificate'],['registration','Vehicle Registration']].map(([k,lbl]) => (
           <div key={k}>
-            <input
-              type="file"
-              id={`doc-${k}`}
-              accept="image/*,application/pdf"
-              style={{ display:'none' }}
-              onChange={e => {
-                if (e.target.files && e.target.files[0]) {
-                  setDocs(p => ({ ...p, [k]:e.target.files[0].name }));
-                }
-              }}
-            />
+            <input type="file" id={`doc-${k}`} accept="image/*,application/pdf" style={{ display:'none' }}
+              onChange={e => { if (e.target.files?.[0]) setDocs(p => ({ ...p, [k]: e.target.files[0] })); }}/>
             <div onClick={() => document.getElementById(`doc-${k}`).click()} style={docs[k]?s.uploadOk:s.uploadBox}>
               <div style={{ fontSize:24, marginBottom:6 }}>{docs[k]?'✅':'📄'}</div>
               <div style={{ fontSize:12, color:docs[k]?GREEN:'rgba(255,255,255,0.4)', fontWeight:docs[k]?500:400 }}>
                 {docs[k] ? `${lbl} ✓` : `Tap to upload ${lbl}`}
               </div>
-              {docs[k] && <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', marginTop:4 }}>{docs[k]}</div>}
+              {docs[k] && <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', marginTop:4 }}>{docs[k].name}</div>}
             </div>
           </div>
         ))}
@@ -3012,7 +2990,6 @@ export default function App() {
     'customer-signup':<CustomerSignup {...props}/>,
     'customer-login': <CustomerLogin {...props}/>,
     otp:              <OTPScreen {...props}/>,
-    'driver-otp':     <DriverOTPScreen {...props}/>,
     'customer-dash':  <CustomerDash {...props}/>,
     'pin-pickup':     <PinPickup {...props}/>,
     'pin-dropoff':    <PinDropoff {...props}/>,
