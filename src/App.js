@@ -784,6 +784,20 @@ function CustomerDash({ go, user, setUser }) {
               </div>
             </div>
           )}
+          {notification?.type === 'enroute_dropoff' && (
+            <div style={{ background:'rgba(26,158,90,0.15)', border:'1.5px solid rgba(26,158,90,0.5)', margin:'10px 14px 0', borderRadius:12, padding:14, display:'flex', alignItems:'center', gap:10 }}>
+              <div style={{ fontSize:28, flexShrink:0 }}>🚗</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:14, fontWeight:500, color:GREEN }}>On the way to drop-off!</div>
+                <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{notification.driverName} has picked you up</div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Heading to {notification.dropoff} 📍</div>
+              </div>
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                <button onClick={() => go('live-ride')} style={{ background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:500 }}>Track →</button>
+                <button onClick={() => setNotification(null)} style={{ background:'rgba(255,255,255,0.08)', color:'rgba(255,255,255,0.5)', border:'none', borderRadius:8, padding:'6px 12px', fontSize:11, cursor:'pointer' }}>OK</button>
+              </div>
+            </div>
+          )}
 
           {/* Active ride banner */}
           {activeRide && !notification && (
@@ -2060,7 +2074,13 @@ function LiveRide({ go, bookingId, user }) {
           )}
         </VilleMap>
         <div style={{ position:'absolute', bottom:0, left:0, right:0, background:'rgba(10,15,35,0.88)', backdropFilter:'blur(8px)', padding:'7px 14px', textAlign:'center', fontSize:12, color:YELLOW, fontWeight:500 }}>
-          {booking?.status==='active' ? driverCoords ? '📍 Tracking driver live on map' : '🟢 Driver accepted — heading to you' : '🔍 Finding your driver...'}
+          {booking?.status==='active'
+            ? booking?.enrouteToDropoff
+              ? '🚗 En route to drop-off — tracking live'
+              : driverCoords
+                ? '📍 Tracking driver live on map'
+                : '🟢 Driver accepted — heading to you'
+            : '🔍 Finding your driver...'}
         </div>
       </div>
 
@@ -2130,7 +2150,7 @@ function LiveRide({ go, bookingId, user }) {
         )}
 
         {/* Driver arrived in-screen alert */}
-        {booking?.driverArrived && booking?.status === 'active' && (
+        {booking?.driverArrived && !booking?.enrouteToDropoff && booking?.status === 'active' && (
           <div style={{ background:'rgba(232,180,0,0.15)', border:'2px solid rgba(232,180,0,0.7)', borderRadius:12, padding:14, marginBottom:12, display:'flex', alignItems:'center', gap:12 }}>
             <div style={{ fontSize:28 }}>📍</div>
             <div style={{ flex:1 }}>
@@ -2141,14 +2161,38 @@ function LiveRide({ go, bookingId, user }) {
           </div>
         )}
 
+        {/* En route to drop-off banner */}
+        {booking?.enrouteToDropoff && booking?.status === 'active' && (
+          <div style={{ background:'rgba(26,158,90,0.15)', border:'2px solid rgba(26,158,90,0.5)', borderRadius:12, padding:14, marginBottom:12, display:'flex', alignItems:'center', gap:12 }}>
+            <div style={{ fontSize:28 }}>🚗</div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:14, fontWeight:700, color:GREEN }}>On the way to drop-off!</div>
+              <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{booking.driverName} has picked you up</div>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Heading to {booking.dropoff?.address?.split(',')[0]} 📍</div>
+            </div>
+          </div>
+        )}
+
         {/* Driver arrived in-screen alert */}
-        {booking?.driverArrived && booking?.status === 'active' && (
+        {booking?.driverArrived && !booking?.enrouteToDropoff && booking?.status === 'active' && (
           <div style={{ background:'rgba(232,180,0,0.15)', border:'2px solid rgba(232,180,0,0.7)', borderRadius:12, padding:14, marginBottom:12, display:'flex', alignItems:'center', gap:12 }}>
             <div style={{ fontSize:28 }}>📍</div>
             <div style={{ flex:1 }}>
               <div style={{ fontSize:14, fontWeight:700, color:YELLOW }}>Driver has arrived!</div>
               <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{booking.driverName} is at your pickup location</div>
               <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Please come outside 🚶</div>
+            </div>
+          </div>
+        )}
+
+        {/* En route to drop-off banner */}
+        {booking?.enrouteToDropoff && booking?.status === 'active' && (
+          <div style={{ background:'rgba(26,158,90,0.15)', border:'2px solid rgba(26,158,90,0.5)', borderRadius:12, padding:14, marginBottom:12, display:'flex', alignItems:'center', gap:12 }}>
+            <div style={{ fontSize:28 }}>🚗</div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:14, fontWeight:700, color:GREEN }}>On the way to drop-off!</div>
+              <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{booking.driverName} has picked you up</div>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Heading to {booking.dropoff?.address?.split(',')[0]} 📍</div>
             </div>
           </div>
         )}
@@ -2434,6 +2478,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
   const [booking,       setBooking]       = useState(null);
   const [locationStatus,setLocationStatus]= useState('idle');
   const [arrived,       setArrived]       = useState(false);
+  const [enroute,       setEnroute]       = useState(false);
   const [sosSent,       setSosSent]       = useState(false);
   const [sosHolding,    setSosHolding]    = useState(false);
   const [sosCount,      setSosCount]      = useState(5);
@@ -2562,6 +2607,26 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     } catch(err) { console.error('Arrived notification error:', err); }
   };
 
+  const notifyEnroute = async () => {
+    if (!booking?.id) return;
+    setEnroute(true);
+    try {
+      await updateDoc(doc(db,'bookings',booking.id), {
+        enrouteToDropoff: true,
+        enrouteAt:        serverTimestamp(),
+      });
+      await addDoc(collection(db,'notifications'), {
+        type:        'enroute_dropoff',
+        customerId:  booking.customerId,
+        bookingId:   booking.id,
+        driverName:  user?.name || 'Your driver',
+        message:     `${user?.name || 'Your driver'} has picked you up and is on the way to your drop-off!`,
+        read:        false,
+        createdAt:   serverTimestamp(),
+      });
+    } catch(err) { console.error('Enroute notification error:', err); }
+  };
+
   const completeRide = async () => {
     if (!booking?.id) return;
     if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
@@ -2664,6 +2729,22 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
               </div>
             )}
 
+            {/* On my way to drop-off button — shows after passenger picked up */}
+            {arrived && !enroute && (
+              <button onClick={notifyEnroute}
+                style={{ width:'100%', padding:'13px', background:'rgba(232,180,0,0.2)', border:'1.5px solid rgba(232,180,0,0.6)', borderRadius:12, color:YELLOW, fontSize:14, fontWeight:600, cursor:'pointer', marginBottom:12, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+                🚗 On My Way to Drop-off
+              </button>
+            )}
+            {arrived && enroute && (
+              <div style={{ background:'rgba(232,180,0,0.12)', border:'1.5px solid rgba(232,180,0,0.4)', borderRadius:12, padding:'12px 16px', marginBottom:12, display:'flex', alignItems:'center', gap:10 }}>
+                <div style={{ fontSize:22 }}>🚗</div>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:500, color:YELLOW }}>En route to drop-off!</div>
+                  <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Customer notified — live tracking active</div>
+                </div>
+              </div>
+            )}
             <button style={s.btnG} onClick={completeRide}>Complete Ride ✓</button>
           </>
         ) : (
