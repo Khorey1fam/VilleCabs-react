@@ -393,7 +393,7 @@ function Splash({ go }) {
         {/* Main buttons */}
         <div style={{ width:'100%', maxWidth:320, marginBottom:16 }}>
           {/* Login button */}
-          <button style={{ ...s.btnY, marginBottom:12 }} onClick={() => go('login-choice')}>
+          <button style={{ ...s.btnY, marginBottom:12 }} onClick={() => go('login')}>
             Log In
           </button>
           {/* Sign Up button */}
@@ -904,7 +904,6 @@ function TermsScreen({ go, user }) {
           Agree & Continue →
         </button>
       </div>
-      <Footer go={go}/>
     </div>
   );
 }
@@ -1127,7 +1126,6 @@ function ContactUs({ go, user }) {
           {loading ? 'Sending...' : 'Send Message'}
         </button>
       </div>
-      <Footer go={go}/>
     </div>
   );
 }
@@ -1160,7 +1158,6 @@ function HelpScreen({ go, user }) {
           </div>
         ))}
       </div>
-      <Footer go={go}/>
     </div>
   );
 }
@@ -1542,7 +1539,6 @@ function CustomerDash({ go, user, setUser }) {
           
         </div>
       )}
-      <Footer go={go}/>
     </div>
   );
 }
@@ -1606,7 +1602,6 @@ function CustomerProfile({ go, user, setUser }) {
         </button>
         <button style={s.btnO} onClick={() => go('customer-settings')}>Go to Settings</button>
       </div>
-      <Footer go={go}/>
     </div>
   );
 }
@@ -4375,7 +4370,6 @@ export default function App() {
 
   const screens = {
     splash:           <Splash {...props}/>,
-    'login-choice':   <LoginChoice {...props}/>,
     role:             <RoleSelect {...props}/>,
     'customer-signup':<CustomerSignup {...props}/>,
     'customer-login': <CustomerLogin {...props}/>,
