@@ -1629,13 +1629,9 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
   // Base fare: J$751 covers the first 1km (flat rate within 1km radius)
   // Beyond 1km: J$200 added per every 100m extra
   // Vehicle multipliers: VilleRide x1.0, VilleXL x1.3, VilleMoto x0.7
-  const BASE_FARE    = 751;
-  const BASE_KM      = 1.0;
-  const RATE_PER_100M= 15;
-  // Surge pricing: 1.5x between 5pm-8pm
-  const _hour = new Date().getHours();
-  const isSurge = _hour >= 17 && _hour < 20;
-  const SURGE_MULTIPLIER = isSurge ? 1.5 : 1.0;
+  const BASE_FARE    = 751;   // J$ flat rate for first 1km
+  const BASE_KM      = 1.0;   // km included in base fare
+  const RATE_PER_100M= 9;     // J$ per 100m beyond base km
 
   const calcPrice = (v) => {
     let fare = BASE_FARE;
@@ -3003,9 +2999,34 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   };
 
   useEffect(() => {
-    const q = query(collection(db,'bookings'), where('status','==','searching'), orderBy('createdAt','desc'));
+    const q = query(collection(db,'bookings'), where('status','==','searching'));
+    let prevCount = 0;
     const unsub = onSnapshot(q, snap => {
-      setRides(snap.docs.map(d => ({ id:d.id, ...d.data() })));
+      const all = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+      // Only show rides still searching, not declined, not already accepted
+      const filtered = all.filter(r =>
+        r.status === 'searching' &&
+        !r.declinedBy?.includes(user?.uid) &&
+        !r.driverId
+      );
+      filtered.sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+      // Bell sound for new rides
+      if (filtered.length > prevCount && prevCount > 0) {
+        try {
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const playBell = (freq, time) => {
+            const osc = ctx.createOscillator(); const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.frequency.value = freq; osc.type = 'sine';
+            gain.gain.setValueAtTime(0.3, ctx.currentTime + time);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + time + 0.8);
+            osc.start(ctx.currentTime + time); osc.stop(ctx.currentTime + time + 0.8);
+          };
+          playBell(880, 0); playBell(1100, 0.2); playBell(1320, 0.4);
+        } catch(e) {}
+      }
+      prevCount = filtered.length;
+      setRides(filtered);
       setLoading(false);
     });
     return () => unsub();
@@ -3061,6 +3082,12 @@ function DriverDash({ go, user, setUser, setBookingId }) {
 
   const acceptRide = async (rideId) => {
     try {
+      // Check ride is still available (not already taken)
+      const rideSnap = await getDoc(doc(db,'bookings',rideId));
+      if (!rideSnap.exists() || rideSnap.data().status !== 'searching' || rideSnap.data().driverId) {
+        alert('Sorry, this ride was already accepted by another driver.');
+        return;
+      }
       // Fetch driver vehicle info to save on booking for customer safety
       const dSnap = await getDoc(doc(db,'drivers',user.uid));
       const dData = dSnap.exists() ? dSnap.data() : {};
@@ -3320,8 +3347,11 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     const unsub = onSnapshot(q, snap => {
       if (!snap.empty) {
         const b = { id:snap.docs[0].id, ...snap.docs[0].data() };
-        setBooking(b);
-        if (b.id) setBookingId(b.id);
+        // Double check this driver owns this ride
+        if (b.driverId === user.uid) {
+          setBooking(b);
+          if (b.id) setBookingId(b.id);
+        }
       }
     });
     return () => unsub();
