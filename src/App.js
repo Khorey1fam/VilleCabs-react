@@ -1804,10 +1804,38 @@ function LiveRide({ go, bookingId, user }) {
   const [rating,    setRating]    = useState(0);
   const [rated,     setRated]     = useState(false);
   const [driverInfo,setDriverInfo]= useState(null);
-  const [sosSent,   setSosSent]   = useState(false);
-  const [sosHolding,setSosHolding]= useState(false);
-  const [sosCount,  setSosCount]  = useState(5);
+  const [sosSent,    setSosSent]    = useState(false);
+  const [sosHolding, setSosHolding] = useState(false);
+  const [sosCount,   setSosCount]   = useState(5);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelDone, setCancelDone] = useState(false);
   const sosRef = useRef(null);
+
+  const cancelRide = async () => {
+    if (!bookingId || !window.confirm('Cancel this ride? The booking will be removed.')) return;
+    setCancelling(true);
+    try {
+      await updateDoc(doc(db,'bookings',bookingId), {
+        status:      'cancelled',
+        cancelledBy: 'customer',
+        cancelledAt: serverTimestamp(),
+      });
+      setCancelDone(true);
+    } catch(err) { console.error('Cancel error:', err); }
+    setCancelling(false);
+  };
+
+  // Block browser back button when searching
+  useEffect(() => {
+    if (!booking || booking?.status !== 'searching') return;
+    const handlePop = () => {
+      window.history.pushState(null, '', window.location.href);
+      alert('Please cancel your ride before leaving this page.');
+    };
+    window.history.pushState(null, '', window.location.href);
+    window.addEventListener('popstate', handlePop);
+    return () => window.removeEventListener('popstate', handlePop);
+  }, [booking?.status]);
 
   useEffect(() => {
     if (!bookingId) return;
@@ -1948,6 +1976,20 @@ function LiveRide({ go, bookingId, user }) {
   const dropoffCoords = booking?.dropoff?.lat   ? { lat:booking.dropoff.lat,        lng:booking.dropoff.lng        } : null;
   const driverCoords  = booking?.driverLocation ? { lat:booking.driverLocation.lat, lng:booking.driverLocation.lng } : null;
 
+  // ── Cancelled screen ──
+  if (cancelDone || booking?.status === 'cancelled') {
+    return (
+      <div style={{ ...s.content, display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh' }}>
+        <div style={{ textAlign:'center', padding:24 }}>
+          <div style={{ fontSize:56, marginBottom:16 }}>❌</div>
+          <h2 style={{ fontSize:20, fontWeight:500, color:'#fff', marginBottom:8 }}>Ride Cancelled</h2>
+          <p style={{ color:'rgba(255,255,255,0.5)', fontSize:13, marginBottom:28 }}>Your booking has been cancelled successfully.</p>
+          <button style={s.btnY} onClick={() => go('customer-dash')}>Back to Dashboard</button>
+        </div>
+      </div>
+    );
+  }
+
   // ── Loading screen ──
   if (!booking) {
     return (
@@ -1956,7 +1998,13 @@ function LiveRide({ go, bookingId, user }) {
           <div style={{ fontSize:48, marginBottom:16 }}>🚕</div>
           <div style={{ color:YELLOW, fontSize:16, fontWeight:500, marginBottom:8 }}>Finding your driver...</div>
           <div style={{ color:'rgba(255,255,255,0.4)', fontSize:13 }}>Setting up your ride</div>
-          <button style={{ ...s.btnO, marginTop:24 }} onClick={() => go('customer-dash')}>Back to Dashboard</button>
+          <button style={{ ...s.btnO, marginTop:24 }} onClick={async () => {
+            if (bookingId) {
+              if (!window.confirm('You must cancel your ride before leaving.')) return;
+              try { await updateDoc(doc(db,'bookings',bookingId), { status:'cancelled', cancelledBy:'customer', cancelledAt:serverTimestamp() }); } catch(e) {}
+            }
+            go('customer-dash');
+          }}>Cancel & Go Back</button>
         </div>
       </div>
     );
@@ -2074,6 +2122,10 @@ function LiveRide({ go, bookingId, user }) {
             <div style={{ fontSize:32, marginBottom:8 }}>🔍</div>
             <div style={{ fontSize:15, fontWeight:500, color:YELLOW, marginBottom:4 }}>Finding your driver...</div>
             <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)' }}>Drivers in Manchester are being notified</div>
+            <button onClick={cancelRide} disabled={cancelling}
+              style={{ marginTop:14, padding:'9px 24px', background:'rgba(226,75,74,0.15)', border:'1px solid rgba(226,75,74,0.4)', borderRadius:10, color:'#f09595', fontSize:13, cursor:'pointer', opacity:cancelling?0.6:1 }}>
+              {cancelling ? 'Cancelling...' : '✕ Cancel Ride'}
+            </button>
           </div>
         )}
 
@@ -2133,7 +2185,15 @@ function LiveRide({ go, bookingId, user }) {
           </div>
         )}
 
-        <button style={s.btnO} onClick={() => go('customer-dash')}>Back to Dashboard</button>
+        {/* Only show back button when driver is active — not when searching */}
+        {booking?.status === 'searching' ? (
+          <button onClick={cancelRide} disabled={cancelling}
+            style={{ ...s.btnO, color:'#f09595', borderColor:'rgba(226,75,74,0.4)', marginBottom:0, opacity:cancelling?0.6:1 }}>
+            {cancelling ? 'Cancelling...' : '✕ Cancel Ride'}
+          </button>
+        ) : (
+          <button style={s.btnO} onClick={() => go('customer-dash')}>Back to Dashboard</button>
+        )}
       </div>
     </div>
   );
@@ -2151,9 +2211,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   useEffect(() => {
     const q = query(collection(db,'bookings'), where('status','==','searching'), orderBy('createdAt','desc'));
     const unsub = onSnapshot(q, snap => {
-      const all = snap.docs.map(d => ({ id:d.id, ...d.data() }));
-      // Hide rides this driver already declined
-      setRides(all.filter(r => !r.declinedBy?.includes(user?.uid)));
+      setRides(snap.docs.map(d => ({ id:d.id, ...d.data() })));
       setLoading(false);
     });
     return () => unsub();
@@ -2205,15 +2263,6 @@ function DriverDash({ go, user, setUser, setBookingId }) {
         }
       } else { setNotifStatus("denied"); }
     } catch(err) { console.error(err); setNotifStatus("error"); }
-  };
-
-  const declineRide = async (rideId) => {
-    try {
-      const { arrayUnion } = await import('firebase/firestore');
-      await updateDoc(doc(db,'bookings',rideId), {
-        declinedBy: arrayUnion(user.uid),
-      });
-    } catch(err) { console.error('Decline error:', err); }
   };
 
   const acceptRide = async (rideId) => {
@@ -2297,7 +2346,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
                 <div style={{ fontSize:11, color:'rgba(255,255,255,0.35)', marginBottom:10 }}>🚗 {r.vehicleType} · {r.distanceKm} km · Cash</div>
                 <div style={{ display:'flex', gap:8 }}>
                   <button onClick={() => acceptRide(r.id)} style={{ flex:1, background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:10, fontSize:13, fontWeight:500, cursor:'pointer' }}>✓ Accept</button>
-                  <button onClick={() => declineRide(r.id)} style={{ flex:1, background:'rgba(15,20,40,0.65)', color:'rgba(255,255,255,0.5)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:8, padding:10, fontSize:13, cursor:'pointer' }}>Decline</button>
+                  <button style={{ flex:1, background:'rgba(15,20,40,0.65)', color:'rgba(255,255,255,0.5)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:8, padding:10, fontSize:13, cursor:'pointer' }}>Decline</button>
                 </div>
               </div>
             ))}
