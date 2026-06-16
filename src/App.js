@@ -1146,7 +1146,7 @@ function CustomerDash({ go, user, setUser }) {
       {tab === 'book' && (
         <div style={{ flex:1, display:'flex', flexDirection:'column' }}>
 
-          {/* Active ride banners */}
+          {/* Driver accepted notification banner */}
           {notification?.type === 'driver_accepted' && (
             <div style={{ background:'rgba(26,158,90,0.15)', border:'1.5px solid rgba(26,158,90,0.5)', margin:'10px 14px 0', borderRadius:12, padding:14, display:'flex', alignItems:'center', gap:10 }}>
               <div style={{ fontSize:28, flexShrink:0 }}>🚗</div>
@@ -1161,6 +1161,8 @@ function CustomerDash({ go, user, setUser }) {
               </div>
             </div>
           )}
+
+          {/* Driver arrived notification banner */}
           {notification?.type === 'driver_arrived' && (
             <div style={{ background:'rgba(232,180,0,0.15)', border:'1.5px solid rgba(232,180,0,0.6)', margin:'10px 14px 0', borderRadius:12, padding:14, display:'flex', alignItems:'center', gap:10 }}>
               <div style={{ fontSize:28, flexShrink:0 }}>📍</div>
@@ -1181,10 +1183,16 @@ function CustomerDash({ go, user, setUser }) {
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:14, fontWeight:500, color:GREEN }}>On the way to drop-off!</div>
                 <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{notification.driverName} has picked you up</div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Heading to {notification.dropoff} 📍</div>
               </div>
-              <button onClick={() => go('live-ride')} style={{ background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:500 }}>Track →</button>
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                <button onClick={() => go('live-ride')} style={{ background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:500 }}>Track →</button>
+                <button onClick={() => setNotification(null)} style={{ background:'rgba(255,255,255,0.08)', color:'rgba(255,255,255,0.5)', border:'none', borderRadius:8, padding:'6px 12px', fontSize:11, cursor:'pointer' }}>OK</button>
+              </div>
             </div>
           )}
+
+          {/* Active ride banner */}
           {activeRide && !notification && (
             <div style={{ background:'rgba(232,180,0,0.1)', border:'0.5px solid rgba(232,180,0,0.3)', margin:'10px 14px 0', borderRadius:12, padding:12, display:'flex', alignItems:'center', gap:10, cursor:'pointer' }} onClick={() => go('live-ride')}>
               <div style={{ fontSize:22 }}>🚕</div>
@@ -1196,34 +1204,59 @@ function CustomerDash({ go, user, setUser }) {
             </div>
           )}
 
-          {/* Home dashboard — Book a Ride in the centre */}
-          <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'30px 24px', textAlign:'center' }}>
-            <div style={{ marginBottom:8 }}>
-              <div style={{ fontSize:13, color:'rgba(255,255,255,0.5)' }}>Good day, <span style={{ color:WHITE, fontWeight:500 }}>{user?.name?.split(' ')[0]||'Rider'}</span> 👋</div>
-            </div>
-            <div style={{ fontSize:22, fontWeight:700, color:WHITE, marginBottom:6 }}>Where are you going?</div>
-            <div style={{ fontSize:13, color:'rgba(255,255,255,0.4)', marginBottom:40 }}>Tap below to book a ride in Manchester</div>
+          <VilleMap height={210} center={MANCHESTER_CENTER} zoom={13}>
 
-            {/* Big Book a Ride button */}
-            <button onClick={() => go('pin-pickup')}
-              style={{ width:180, height:180, borderRadius:'50%', background:`radial-gradient(circle, ${YELLOW}, #c49600)`, border:'4px solid rgba(255,255,255,0.15)', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', boxShadow:'0 0 40px rgba(232,180,0,0.35)', marginBottom:40 }}>
-              <div style={{ fontSize:48, marginBottom:6 }}>🚕</div>
-              <div style={{ fontSize:15, fontWeight:700, color:DARK, lineHeight:1.2 }}>Book a Ride</div>
-            </button>
-
-            {/* Stats row */}
-            <div style={{ display:'flex', gap:16, width:'100%', maxWidth:320 }}>
-              <div style={{ flex:1, background:'rgba(15,20,40,0.7)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:'14px 10px', textAlign:'center' }}>
-                <div style={{ fontSize:22, fontWeight:700, color:YELLOW }}>{history.length}</div>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:4 }}>Total Rides</div>
+          {/* Driver accepted notification banner */}
+          {notification?.type === 'driver_accepted' && (
+            <div style={{ background:'rgba(26,158,90,0.15)', border:'1.5px solid rgba(26,158,90,0.5)', margin:'10px 14px 0', borderRadius:12, padding:14, display:'flex', alignItems:'center', gap:10 }}>
+              <div style={{ fontSize:28, flexShrink:0 }}>🚗</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:14, fontWeight:500, color:GREEN }}>Driver found!</div>
+                <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{notification.driverName} is on the way</div>
+                {notification.licensePlate && <div style={{ fontSize:11, color:YELLOW, marginTop:2 }}>🔑 {notification.vehicleMake} {notification.vehicleModel} · {notification.licensePlate}</div>}
               </div>
-              <div style={{ flex:1, background:'rgba(15,20,40,0.7)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:'14px 10px', textAlign:'center' }}>
-                <div style={{ fontSize:18, fontWeight:700, color:GREEN }}>J${totalSpent.toLocaleString()}</div>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:4 }}>Total Spent</div>
+              <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+                <button onClick={() => go('live-ride')} style={{ background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:500 }}>Track →</button>
+                <button onClick={() => setNotification(null)} style={{ background:'rgba(255,255,255,0.08)', color:'rgba(255,255,255,0.5)', border:'none', borderRadius:8, padding:'6px 12px', fontSize:11, cursor:'pointer' }}>Dismiss</button>
               </div>
             </div>
+          )}
+
+          {/* Driver arrived notification banner */}
+
+          {/* Active ride banner - shows if ride is in progress */}
+          {activeRide && !notification && (
+            <div style={{ background:'rgba(232,180,0,0.1)', border:'0.5px solid rgba(232,180,0,0.3)', margin:'10px 14px 0', borderRadius:12, padding:12, display:'flex', alignItems:'center', gap:10, cursor:'pointer' }} onClick={() => go('live-ride')}>
+              <div style={{ fontSize:22 }}>🚕</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:13, fontWeight:500, color:YELLOW }}>Ride in progress</div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Driver: {activeRide.driverName||'Assigned'} · Tap to track</div>
+              </div>
+              <span style={{ color:YELLOW, fontSize:18 }}>›</span>
+            </div>
+          )}
+
+            <Marker position={MANCHESTER_CENTER} title="Manchester, Jamaica"/>
+          </VilleMap>
+          <div style={{ padding:16 }}>
+            <div onClick={() => go('pin-pickup')} style={{ background:'rgba(15,20,40,0.65)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:12, padding:12, marginBottom:10, display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
+              <div style={{ width:10, height:10, borderRadius:'50%', background:GREEN, flexShrink:0 }}/>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:13, color:WHITE }}>Pickup location</div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>Manchester, Jamaica (tap to pin)</div>
+              </div>
+              <span style={{ color:'rgba(255,255,255,0.3)' }}>›</span>
+            </div>
+            <div onClick={() => go('pin-dropoff')} style={{ background:'rgba(15,20,40,0.65)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:12, padding:12, marginBottom:16, display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
+              <div style={{ width:10, height:10, borderRadius:'50%', background:YELLOW, flexShrink:0 }}/>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:13, color:WHITE }}>Drop-off location</div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>Where are you going?</div>
+              </div>
+              <span style={{ color:'rgba(255,255,255,0.3)' }}>›</span>
+            </div>
+            <button style={s.btnY} onClick={() => go('vehicle-select')}>Find a Ride</button>
           </div>
-
           <TabBar/>
         </div>
       )}
@@ -3037,42 +3070,23 @@ function DriverDash({ go, user, setUser, setBookingId }) {
 
       {/* HOME tab — offline screen */}
       {driverTab === 'home' && (
-        <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'24px', textAlign:'center' }}>
-          <div style={{ fontSize:13, color:'rgba(255,255,255,0.5)', marginBottom:4 }}>Welcome back, <span style={{ color:WHITE, fontWeight:500 }}>{user?.name?.split(' ')[0]||'Driver'}</span> 👋</div>
-          <div style={{ fontSize:20, fontWeight:700, color:WHITE, marginBottom:6 }}>{isOnline ? 'You are Online' : 'You are Offline'}</div>
-          <div style={{ fontSize:13, color:'rgba(255,255,255,0.4)', marginBottom:36 }}>
-            {isOnline ? 'You are receiving ride requests' : 'Tap below to start receiving ride requests'}
+        <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'40px 24px', textAlign:'center' }}>
+          <div style={{ marginBottom:24 }}>
+            <img src="/villecabs-logo.png" alt="V" style={{ width:90, height:90, borderRadius:'50%', objectFit:'cover', border:'3px solid rgba(255,255,255,0.1)', marginBottom:16 }}/>
+            <div style={{ fontSize:22, fontWeight:600, color:WHITE, marginBottom:6 }}>You are Offline</div>
+            <div style={{ fontSize:14, color:'rgba(255,255,255,0.5)', lineHeight:1.6 }}>Tap Go Online to start receiving ride requests from customers in Manchester</div>
           </div>
-
-          {/* Big Go Online / Go Offline circle button */}
-          <button onClick={isOnline ? goOffline : goOnline}
-            style={{ width:180, height:180, borderRadius:'50%', background:isOnline ? `radial-gradient(circle, ${GREEN}, #0d6b3a)` : 'radial-gradient(circle, #2a3a5a, #1a2744)', border:`4px solid ${isOnline ? 'rgba(26,158,90,0.5)' : 'rgba(255,255,255,0.1)'}`, cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', boxShadow:isOnline ? '0 0 40px rgba(26,158,90,0.4)' : 'none', marginBottom:36, transition:'all 0.3s' }}>
-            <div style={{ fontSize:46, marginBottom:6 }}>{isOnline ? '🟢' : '⚪'}</div>
-            <div style={{ fontSize:15, fontWeight:700, color:WHITE, lineHeight:1.2 }}>{isOnline ? 'Go Offline' : 'Go Online'}</div>
+          <div style={{ background:'rgba(15,20,40,0.7)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:16, padding:20, marginBottom:32, width:'100%', maxWidth:340, textAlign:'left' }}>
+            <div style={{ fontSize:13, fontWeight:500, color:YELLOW, marginBottom:12 }}>💰 Your earnings today</div>
+            <div style={{ fontSize:28, fontWeight:700, color:WHITE }}>J${earnings.today.toLocaleString()}</div>
+            <div style={{ fontSize:12, color:'rgba(255,255,255,0.4)', marginTop:4 }}>{earnings.todayRides} ride{earnings.todayRides!==1?'s':''} completed today</div>
+            <div style={{ height:'0.5px', background:'rgba(255,255,255,0.08)', margin:'12px 0' }}/>
+            <div style={{ fontSize:12, color:'rgba(255,255,255,0.4)' }}>This week: <span style={{ color:GREEN, fontWeight:500 }}>J${earnings.week.toLocaleString()}</span></div>
+          </div>
+          <button onClick={goOnline} style={{ ...s.btnG, maxWidth:320, width:'100%', padding:'18px 24px', fontSize:17, fontWeight:700, borderRadius:16, boxShadow:'0 0 30px rgba(26,158,90,0.4)' }}>
+            ● Go Online
           </button>
-
-          {/* Earnings row */}
-          <div style={{ display:'flex', gap:12, width:'100%', maxWidth:320, marginBottom:20 }}>
-            <div style={{ flex:1, background:'rgba(15,20,40,0.7)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:'14px 10px', textAlign:'center' }}>
-              <div style={{ fontSize:18, fontWeight:700, color:YELLOW }}>J${earnings.today.toLocaleString()}</div>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:4 }}>Today</div>
-            </div>
-            <div style={{ flex:1, background:'rgba(15,20,40,0.7)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:'14px 10px', textAlign:'center' }}>
-              <div style={{ fontSize:18, fontWeight:700, color:GREEN }}>J${earnings.week.toLocaleString()}</div>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:4 }}>This Week</div>
-            </div>
-            <div style={{ flex:1, background:'rgba(15,20,40,0.7)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:'14px 10px', textAlign:'center' }}>
-              <div style={{ fontSize:16, fontWeight:700, color:WHITE }}>{earnings.totalRides}</div>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:4 }}>Total Rides</div>
-            </div>
-          </div>
-
-          {isOnline && (
-            <div onClick={() => setDriverTab('rides')} style={{ background:'rgba(26,158,90,0.1)', border:'1px solid rgba(26,158,90,0.3)', borderRadius:12, padding:'12px 20px', cursor:'pointer', display:'flex', alignItems:'center', gap:10 }}>
-              <span style={{ fontSize:20 }}>🚕</span>
-              <span style={{ fontSize:13, color:GREEN, fontWeight:500 }}>View incoming ride requests →</span>
-            </div>
-          )}
+          <p style={{ fontSize:12, color:'rgba(255,255,255,0.3)', marginTop:16 }}>You will start receiving ride requests immediately</p>
         </div>
       )}
 
@@ -3887,44 +3901,72 @@ export default function App() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (fu) => {
       if (fu) {
-        const cSnap = await getDoc(doc(db,'customers',fu.uid));
-        const dSnap = await getDoc(doc(db,'drivers',fu.uid));
-        if (cSnap.exists()) {
-          const d = cSnap.data();
-          // Check email verified (skip for Google login which is auto-verified)
-          if (!fu.emailVerified && fu.providerData[0]?.providerId === 'password') {
-            setUser({ uid:fu.uid, name:d.name||fu.displayName, email:fu.email, role:'customer' });
-            setScreen('otp');
-          } else {
-            setUser({ uid:fu.uid, name:d.name||fu.displayName, email:fu.email, role:'customer' });
-            try {
-              // Check for active booking first
-              const q1 = query(collection(db,'bookings'), where('customerId','==',fu.uid), where('status','==','searching'));
-              const q2 = query(collection(db,'bookings'), where('customerId','==',fu.uid), where('status','==','active'));
-              const [s1,s2] = await Promise.all([getDocs(q1), getDocs(q2)]);
-              const found = [...s1.docs, ...s2.docs];
-              if (found.length > 0) {
-                setBookingId(found[0].id);
-                setScreen('live-ride');
-              } else if (!d.termsAccepted) {
-                setScreen('terms');
-              } else if (!d.tipsSeen) {
-                setScreen('welcome-tips');
+        try {
+          const cSnap = await getDoc(doc(db,'customers',fu.uid));
+          const dSnap = await getDoc(doc(db,'drivers',fu.uid));
+
+          // ── DRIVER: check driver collection FIRST and role field ──────────
+          if (dSnap.exists() && dSnap.data().role === 'driver') {
+            const d = dSnap.data();
+            if (d.status === 'approved') {
+              if (!fu.emailVerified && fu.providerData[0]?.providerId === 'password') {
+                setUser({ uid:fu.uid, name:d.name, email:fu.email, role:'driver' });
+                setScreen('otp');
               } else {
-                setScreen('customer-dash');
+                setUser({ uid:fu.uid, name:d.name, email:fu.email, role:'driver' });
+                try {
+                  const activeQ = query(collection(db,'bookings'), where('driverId','==',fu.uid), where('status','==','active'));
+                  const activeSnap = await getDocs(activeQ);
+                  if (!activeSnap.empty) {
+                    setBookingId(activeSnap.docs[0].id);
+                    setScreen('driver-active');
+                  } else if (!d.termsAccepted) {
+                    setScreen('driver-terms');
+                  } else if (!d.tipsSeen) {
+                    setScreen('driver-welcome-tips');
+                  } else {
+                    setScreen('driver-dash');
+                  }
+                } catch(e) {
+                  setScreen('driver-dash');
+                }
               }
-            } catch(e) {
-              setScreen('customer-dash');
+            } else {
+              setScreen('driver-pending');
             }
-          }
-        } else if (dSnap.exists()) {
-          const d = dSnap.data();
-          if (d.status==='approved') {
-            // Check email verified for drivers too
+
+          // ── CUSTOMER ──────────────────────────────────────────────────────
+          } else if (cSnap.exists()) {
+            const d = cSnap.data();
             if (!fu.emailVerified && fu.providerData[0]?.providerId === 'password') {
-              setUser({ uid:fu.uid, name:d.name, email:fu.email, role:'driver' });
+              setUser({ uid:fu.uid, name:d.name||fu.displayName, email:fu.email, role:'customer' });
               setScreen('otp');
             } else {
+              setUser({ uid:fu.uid, name:d.name||fu.displayName, email:fu.email, role:'customer' });
+              try {
+                const q1 = query(collection(db,'bookings'), where('customerId','==',fu.uid), where('status','==','searching'));
+                const q2 = query(collection(db,'bookings'), where('customerId','==',fu.uid), where('status','==','active'));
+                const [s1,s2] = await Promise.all([getDocs(q1), getDocs(q2)]);
+                const found = [...s1.docs, ...s2.docs];
+                if (found.length > 0) {
+                  setBookingId(found[0].id);
+                  setScreen('live-ride');
+                } else if (!d.termsAccepted) {
+                  setScreen('terms');
+                } else if (!d.tipsSeen) {
+                  setScreen('welcome-tips');
+                } else {
+                  setScreen('customer-dash');
+                }
+              } catch(e) {
+                setScreen('customer-dash');
+              }
+            }
+
+          // ── Also handle driver without role field (older accounts) ─────────
+          } else if (dSnap.exists()) {
+            const d = dSnap.data();
+            if (d.status === 'approved') {
               setUser({ uid:fu.uid, name:d.name, email:fu.email, role:'driver' });
               try {
                 const activeQ = query(collection(db,'bookings'), where('driverId','==',fu.uid), where('status','==','active'));
@@ -3942,10 +3984,12 @@ export default function App() {
               } catch(e) {
                 setScreen('driver-dash');
               }
+            } else {
+              setScreen('driver-pending');
             }
-          } else {
-            setScreen('driver-pending');
           }
+        } catch(e) {
+          console.error('Auth restore error:', e);
         }
       }
       setLoading(false);
