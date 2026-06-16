@@ -1463,7 +1463,6 @@ function CustomerDash({ go, user, setUser }) {
 
           
         </div>
-        </div>
       )}
 
       {/* HISTORY TAB */}
