@@ -1629,9 +1629,13 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
   // Base fare: J$751 covers the first 1km (flat rate within 1km radius)
   // Beyond 1km: J$200 added per every 100m extra
   // Vehicle multipliers: VilleRide x1.0, VilleXL x1.3, VilleMoto x0.7
-  const BASE_FARE    = 751;   // J$ flat rate for first 1km
-  const BASE_KM      = 1.0;   // km included in base fare
-  const RATE_PER_100M= 9;     // J$ per 100m beyond base km
+  const BASE_FARE    = 751;
+  const BASE_KM      = 1.0;
+  const RATE_PER_100M= 15;
+  // Surge pricing: 1.5x between 5pm-8pm
+  const _hour = new Date().getHours();
+  const isSurge = _hour >= 17 && _hour < 20;
+  const SURGE_MULTIPLIER = isSurge ? 1.5 : 1.0;
 
   const calcPrice = (v) => {
     let fare = BASE_FARE;
