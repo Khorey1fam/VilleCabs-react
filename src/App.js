@@ -19,14 +19,28 @@ function generateOTP() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 async function sendOTPEmail(toEmail, toName, otpCode) {
+  const body = {
+    service_id:  'service_h9ryisl',
+    template_id: 'template_ss6rofa',
+    user_id:     '9-C6Nw3ZGGd5R7jto',
+    template_params: {
+      to_email: toEmail,
+      to_name:  toName || 'User',
+      otp_code: otpCode,
+      from_name: 'VilleCabs',
+      reply_to:  'noreply@villecabs.com',
+    },
+  };
   const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      service_id: 'service_h9ryisl', template_id: 'template_ss6rofa', user_id: '9-C6Nw3ZGGd5R7jto',
-      template_params: { to_email: toEmail, to_name: toName || 'User', otp_code: otpCode },
-    }),
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error('Failed to send OTP');
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error('EmailJS error:', res.status, errText);
+    throw new Error(`Failed to send OTP: ${errText}`);
+  }
 }
 const otpStore = {};
 
@@ -294,7 +308,7 @@ function CustomerSignup({ go, setUser }) {
       setUser({ uid:cred.user.uid, name:form.name, email:form.email, role:'customer' });
       const otp = generateOTP();
       otpStore[form.email] = { code: otp, expires: Date.now() + 10 * 60 * 1000 };
-      await sendOTPEmail(form.email, form.name, otp);
+      try { await sendOTPEmail(form.email, form.name, otp); } catch(e) { console.error('OTP send failed:', e); }
       go('otp');
     } catch(err) { setError(err.code==='auth/email-already-in-use'?'Email already registered.':err.message); }
     setLoading(false);
@@ -529,7 +543,7 @@ function DriverSignup({ go }) {
       });
       const otp = generateOTP();
       otpStore[form.email] = { code: otp, expires: Date.now() + 10 * 60 * 1000 };
-      await sendOTPEmail(form.email, form.name, otp);
+      try { await sendOTPEmail(form.email, form.name, otp); } catch(e) { console.error('OTP send failed:', e); }
       go('otp');
     } catch(err) { setError(err.code==='auth/email-already-in-use'?'Email already registered.':err.message); }
     setLoading(false);
@@ -1269,7 +1283,7 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
   // Vehicle multipliers: VilleRide x1.0, VilleXL x1.3, VilleMoto x0.7
   const BASE_FARE    = 751;   // J$ flat rate for first 1km
   const BASE_KM      = 1.0;   // km included in base fare
-  const RATE_PER_100M= 10;    // J$ per 100m beyond base km
+  const RATE_PER_100M= 9;     // J$ per 100m beyond base km
 
   const calcPrice = (v) => {
     let fare = BASE_FARE;
@@ -1376,9 +1390,35 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
             <div style={{ fontSize:15, fontWeight:500, color:WHITE }}>J${calcPrice(veh).toLocaleString()}</div>
           </div>
         ))}
-        <div style={{ background:DARK, borderRadius:12, padding:14, margin:'10px 0', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-          <div style={{ fontSize:13, color:'rgba(255,255,255,0.6)' }}>📍 Fare Based by Distance</div>
-          <div style={{ fontSize:18, fontWeight:700, color:YELLOW }}>J${calcPrice(v).toLocaleString()}</div>
+        <div style={{ background:DARK, borderRadius:12, padding:14, margin:'10px 0' }}>
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:6 }}>
+            <span>Base fare (first 1km)</span><span>J$751</span>
+          </div>
+          {dist <= 1 ? (
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(26,158,90,0.9)', marginBottom:6 }}>
+              <span>✓ Within 1km radius — flat rate</span><span>+J$0</span>
+            </div>
+          ) : (
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:6 }}>
+              <span>{fareBreakdown(v).per100m} × 100m beyond 1km (J$9 each)</span>
+              <span>+J${fareBreakdown(v).extra.toLocaleString()}</span>
+            </div>
+          )}
+          {v.multiplier !== 1 && (
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:6 }}>
+              <span>{v.name === 'VilleXL' ? 'VilleXL premium (+30%)' : 'VilleMoto discount (-30%)'}</span>
+              <span>{v.name === 'VilleXL' ? '+' : '-'}J${Math.abs(Math.round(calcPrice({...v, multiplier:1}) * Math.abs(v.multiplier - 1))).toLocaleString()}</span>
+            </div>
+          )}
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:6 }}>
+            <span>Service fee</span><span>J$0</span>
+          </div>
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:15, fontWeight:500, color:YELLOW, borderTop:'0.5px solid rgba(255,255,255,0.12)', paddingTop:8, marginTop:4 }}>
+            <span>Total</span><span>J${calcPrice(v).toLocaleString()}</span>
+          </div>
+          <div style={{ fontSize:10, color:'rgba(255,255,255,0.3)', marginTop:6, textAlign:'center' }}>
+            {dist <= 1 ? `📍 ${dist}km — flat rate zone` : `📍 ${dist}km · ${Math.round((dist-1)*1000)}m beyond 1km base zone`}
+          </div>
         </div>
         <button style={{ ...s.btnY, opacity:loading?0.7:1 }} onClick={handleBook} disabled={loading}>
           {loading ? 'Creating booking...' : 'Book Ride — J$' + calcPrice(v).toLocaleString()}
