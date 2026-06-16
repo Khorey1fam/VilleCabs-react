@@ -1463,7 +1463,8 @@ function CustomerDash({ go, user, setUser }) {
 
           
         </div>
-      <Footer go={go}/>
+          <Footer go={go}/>
+        </div>
       )}
 
       {/* HISTORY TABab === 'history' && (
@@ -1542,7 +1543,6 @@ function CustomerDash({ go, user, setUser }) {
           
         </div>
       )}
-      <Footer go={go}/>
     </div>
   );
 }
@@ -1606,8 +1606,8 @@ function CustomerProfile({ go, user, setUser }) {
         </button>
         <button style={s.btnO} onClick={() => go('customer-settings')}>Go to Settings</button>
       </div>
-    </div>
       <Footer go={go}/>
+    </div>
   );
 }
 
