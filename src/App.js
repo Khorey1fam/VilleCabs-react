@@ -2151,7 +2151,9 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   useEffect(() => {
     const q = query(collection(db,'bookings'), where('status','==','searching'), orderBy('createdAt','desc'));
     const unsub = onSnapshot(q, snap => {
-      setRides(snap.docs.map(d => ({ id:d.id, ...d.data() })));
+      const all = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+      // Hide rides this driver already declined
+      setRides(all.filter(r => !r.declinedBy?.includes(user?.uid)));
       setLoading(false);
     });
     return () => unsub();
@@ -2203,6 +2205,15 @@ function DriverDash({ go, user, setUser, setBookingId }) {
         }
       } else { setNotifStatus("denied"); }
     } catch(err) { console.error(err); setNotifStatus("error"); }
+  };
+
+  const declineRide = async (rideId) => {
+    try {
+      const { arrayUnion } = await import('firebase/firestore');
+      await updateDoc(doc(db,'bookings',rideId), {
+        declinedBy: arrayUnion(user.uid),
+      });
+    } catch(err) { console.error('Decline error:', err); }
   };
 
   const acceptRide = async (rideId) => {
@@ -2286,7 +2297,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
                 <div style={{ fontSize:11, color:'rgba(255,255,255,0.35)', marginBottom:10 }}>🚗 {r.vehicleType} · {r.distanceKm} km · Cash</div>
                 <div style={{ display:'flex', gap:8 }}>
                   <button onClick={() => acceptRide(r.id)} style={{ flex:1, background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:10, fontSize:13, fontWeight:500, cursor:'pointer' }}>✓ Accept</button>
-                  <button style={{ flex:1, background:'rgba(15,20,40,0.65)', color:'rgba(255,255,255,0.5)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:8, padding:10, fontSize:13, cursor:'pointer' }}>Decline</button>
+                  <button onClick={() => declineRide(r.id)} style={{ flex:1, background:'rgba(15,20,40,0.65)', color:'rgba(255,255,255,0.5)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:8, padding:10, fontSize:13, cursor:'pointer' }}>Decline</button>
                 </div>
               </div>
             ))}
