@@ -2324,6 +2324,17 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
   const watchRef = useRef(null);
   const sosRef   = useRef(null);
 
+  // Block browser back button during active ride
+  useEffect(() => {
+    const handlePopState = (e) => {
+      window.history.pushState(null, '', window.location.href);
+      alert('You cannot leave an active ride. Please complete the ride first.');
+    };
+    window.history.pushState(null, '', window.location.href);
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   useEffect(() => {
     if (!user?.uid) return;
     const q = query(collection(db,'bookings'), where('driverId','==',user.uid), where('status','==','active'));
@@ -2451,7 +2462,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
 
   return (
     <div style={{ ...s.content }}>
-      <TopBar title="Active Ride" onBack={() => go('driver-dash')}/>
+      <TopBar title="Active Ride" onBack={() => { if (window.confirm('You cannot leave an active ride. Please complete the ride first.\n\nPress Cancel to stay on this screen.')) {} }}/>
       <div style={{ background:locationStatus==='tracking'?'rgba(26,158,90,0.15)':'rgba(226,75,74,0.1)', padding:'6px 16px', fontSize:11, color:locationStatus==='tracking'?'#9fe1cb':'#f09595', display:'flex', alignItems:'center', gap:6 }}>
         {locationStatus==='tracking' ? '📍 Sharing live location with passenger' :
          locationStatus==='denied' ? (
