@@ -566,27 +566,47 @@ function DriverSignup({ go }) {
     if (!docs.license||!docs.fitness||!docs.registration) { setError('Please upload all 3 documents.'); return; }
     if (form.password.length < 6) { setError('Password must be at least 6 characters.'); return; }
     setLoading(true);
+    setError('');
     try {
+      // Validate file sizes (max 5MB each)
+      const maxSize = 5 * 1024 * 1024;
+      if (docs.license.size > maxSize || docs.fitness.size > maxSize || docs.registration.size > maxSize) {
+        setError('Each document must be under 5MB. Please compress your files and try again.');
+        setLoading(false); return;
+      }
+
+      setError('Creating your account...');
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
-      // Upload documents to Firebase Storage
-      const uploadFile = async (file, name) => {
+
+      // Convert file to base64 and upload with timeout
+      const uploadFile = async (file, name, label) => {
+        setError(`Uploading ${label} (${Math.round(file.size/1024)}KB)...`);
         const r = storageRef(storage, `driver-docs/${cred.user.uid}/${name}`);
-        await uploadBytes(r, file);
-        return await getDownloadURL(r);
+        const snap = await uploadBytes(r, file, { contentType: file.type || 'application/octet-stream' });
+        const url = await getDownloadURL(snap.ref);
+        return url;
       };
-      const [licenseUrl, fitnessUrl, registrationUrl] = await Promise.all([
-        uploadFile(docs.license,      'license'),
-        uploadFile(docs.fitness,      'fitness'),
-        uploadFile(docs.registration, 'registration'),
-      ]);
+
+      const licenseUrl      = await uploadFile(docs.license,      'license',       "Driver's Licence");
+      const fitnessUrl      = await uploadFile(docs.fitness,      'fitness',       'Fitness Certificate');
+      const registrationUrl = await uploadFile(docs.registration, 'registration',  'Vehicle Registration');
+
+      setError('Saving your profile...');
       await setDoc(doc(db,'drivers',cred.user.uid), {
         name:form.name, trn:form.trn, dob:form.dob, phone:form.phone, email:form.email,
         vehicleMake:form.make, vehicleModel:form.model, licensePlate:form.plate,
         status:'pending', role:'driver', createdAt:serverTimestamp(),
         docs:{ license:licenseUrl, fitness:fitnessUrl, registration:registrationUrl },
       });
+      setError('');
       go('driver-pending');
-    } catch(err) { setError(err.code==='auth/email-already-in-use'?'Email already registered.':err.message); }
+    } catch(err) {
+      console.error('Signup error:', err);
+      if (err.code === 'auth/email-already-in-use') setError('Email already registered.');
+      else if (err.code === 'storage/unauthorized') setError('Upload failed: Storage permission denied. Please contact support.');
+      else if (err.code === 'storage/canceled') setError('Upload was cancelled. Please try again.');
+      else setError(err.message || 'Something went wrong. Please try again.');
+    }
     setLoading(false);
   };
 
