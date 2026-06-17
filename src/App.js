@@ -288,7 +288,7 @@ function GoogleBtn({ onClick, loading }) {
 // ── FOOTER COMPONENT ─────────────────────────────────────────────────────────
 function Footer({ go }) {
   return (
-    <div style={{ background:'rgba(5,8,20,0.95)', borderTop:'0.5px solid rgba(255,255,255,0.08)', padding:'40px 24px 24px', marginTop:'auto' }}>
+    <div style={{ background:'#000000', borderTop:'none', padding:'40px 24px 24px', marginTop:'auto' }}>
       <div style={{ maxWidth:900, margin:'0 auto' }}>
         {/* Logo + tagline */}
         <div style={{ marginBottom:32 }}>
@@ -1438,7 +1438,7 @@ function CustomerDash({ go, user, setUser }) {
           )}
 
           {/* ── REDESIGNED HOME DASHBOARD ── */}
-          <div style={{ flex:1, overflowY:'auto', background:'#0a0f1f' }}>
+          <div style={{ flex:1, overflowY:'auto', background:'#f5f6fa' }}>
 
             {/* Hero greeting + Book a Ride */}
             <div style={{ background:'#111111', padding:'28px 20px 32px', textAlign:'center', position:'relative', overflow:'hidden' }}>
@@ -1503,17 +1503,17 @@ function CustomerDash({ go, user, setUser }) {
 
             {/* Feature highlights */}
             <div style={{ padding:'20px 16px 0' }}>
-              <div style={{ fontSize:13, fontWeight:600, color:'#888aaa', marginBottom:12, textTransform:'uppercase', letterSpacing:0.8 }}>Why VilleCabs</div>
+              <div style={{ fontSize:13, fontWeight:600, color:'#999bbb', marginBottom:12, textTransform:'uppercase', letterSpacing:0.8 }}>Why VilleCabs</div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10 }}>
                 {[
                   ['⚡','Fast','Rides in minutes, not hours'],
                   ['🛡️','Safe','Vetted drivers + SOS button'],
                   ['💰','Affordable','Fair fares, negotiate freely'],
                 ].map(([icon, title, desc], i) => (
-                  <div key={i} style={{ background:'#111111', border:'none', borderRadius:14, padding:'14px 10px', textAlign:'center' }}>
+                  <div key={i} style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:14, padding:'14px 10px', textAlign:'center', boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}>
                     <div style={{ fontSize:24, marginBottom:6 }}>{icon}</div>
-                    <div style={{ fontSize:13, fontWeight:600, color:WHITE, marginBottom:4 }}>{title}</div>
-                    <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', lineHeight:1.4 }}>{desc}</div>
+                    <div style={{ fontSize:13, fontWeight:600, color:'#1a1a2e', marginBottom:4 }}>{title}</div>
+                    <div style={{ fontSize:10, color:'#666888', lineHeight:1.4 }}>{desc}</div>
                   </div>
                 ))}
               </div>
@@ -1521,8 +1521,8 @@ function CustomerDash({ go, user, setUser }) {
 
             {/* How it works */}
             <div style={{ padding:'20px 16px 0' }}>
-              <div style={{ fontSize:13, fontWeight:600, color:'#888aaa', marginBottom:12, textTransform:'uppercase', letterSpacing:0.8 }}>How it works</div>
-              <div style={{ background:'#111111', border:'none', borderRadius:16, padding:'16px' }}>
+              <div style={{ fontSize:13, fontWeight:600, color:'#999bbb', marginBottom:12, textTransform:'uppercase', letterSpacing:0.8 }}>How it works</div>
+              <div style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:16, padding:'16px', boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}>
                 {[
                   ['1','📍','Pin your location','Drop your pickup & drop-off on the map'],
                   ['2','🚗','Choose your ride','Pick VilleRide, XL or Moto'],
@@ -1531,8 +1531,8 @@ function CustomerDash({ go, user, setUser }) {
                   <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:12, marginBottom: i < 2 ? 16 : 0 }}>
                     <div style={{ width:28, height:28, borderRadius:'50%', background:YELLOW, display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:700, color:DARK, flexShrink:0, marginTop:2 }}>{step}</div>
                     <div>
-                      <div style={{ fontSize:14, fontWeight:600, color:WHITE }}>{icon} {title}</div>
-                      <div style={{ fontSize:12, color:'rgba(255,255,255,0.45)', marginTop:2 }}>{desc}</div>
+                      <div style={{ fontSize:14, fontWeight:600, color:'#1a1a2e' }}>{icon} {title}</div>
+                      <div style={{ fontSize:12, color:'#666888', marginTop:2 }}>{desc}</div>
                     </div>
                   </div>
                 ))}
