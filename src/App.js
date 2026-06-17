@@ -149,7 +149,7 @@ function VilleMap({ height = 260, center = MANCHESTER_CENTER, zoom = 14, onClick
   });
 
   // Use window height for mobile-aware sizing
-  const mobileHeight = Math.min(height, (typeof window !== 'undefined' ? window.innerHeight : 800) * 0.45);
+  const mobileHeight = Math.min(height, window.innerHeight * 0.45);
 
   if (!isLoaded) return (
     <div style={{ height:mobileHeight, background:'#1a2744', display:'flex', alignItems:'center', justifyContent:'center', color:YELLOW, fontSize:13 }}>
@@ -619,7 +619,6 @@ function CustomerLogin({ go, setUser }) {
     if (!email||!password) { setError('Please enter your email and password.'); return; }
     setLoading(true);
     try {
-      try { await setPersistence(auth, browserLocalPersistence); } catch(e) {}
       const cred = await signInWithEmailAndPassword(auth, email, password);
       let data = {};
       try {
@@ -4560,9 +4559,13 @@ export default function App() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (fu) => {
       if (fu) {
+        // Safety timeout - never stay stuck on loading screen
+        const safetyTimer = setTimeout(() => { setLoading(false); setScreen('splash'); }, 8000);
         try {
-          const cSnap = await getDoc(doc(db,'customers',fu.uid));
-          const dSnap = await getDoc(doc(db,'drivers',fu.uid));
+          const [cSnap, dSnap] = await Promise.all([
+            getDoc(doc(db,'customers',fu.uid)),
+            getDoc(doc(db,'drivers',fu.uid)),
+          ]);
           // ── DRIVER FIRST ──────────────────────────────────────────────────
           if (dSnap.exists()) {
             const d = dSnap.data();
@@ -4603,6 +4606,7 @@ export default function App() {
             }
           }
         } catch(e) { console.error('Auth restore error:', e); }
+        finally { clearTimeout(safetyTimer); }
       } else {
         setTimeout(() => setLoading(false), 800);
         return;
@@ -4618,7 +4622,6 @@ export default function App() {
 
   const screens = {
     splash:           <Splash {...props}/>,
-    'login-choice':   <LoginChoice {...props}/>,
     role:             <RoleSelect {...props}/>,
     'customer-signup':<CustomerSignup {...props}/>,
     'customer-login': <CustomerLogin {...props}/>,
