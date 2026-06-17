@@ -157,12 +157,19 @@ function VilleMap({ height = 260, center = MANCHESTER_CENTER, zoom = 14, onClick
     </div>
   );
 
+  const handleMapClick = (e) => {
+    if (expandable && !expanded) {
+      setExpanded(true);
+    }
+    if (onClick) onClick(e);
+  };
+
   const mapEl = (
     <GoogleMap
       mapContainerStyle={{ width:'100%', height: expanded ? '100%' : mobileHeight }}
       center={center}
       zoom={expanded ? zoom + 1 : zoom}
-      onClick={onClick}
+      onClick={handleMapClick}
       options={{ styles:MAP_STYLE, disableDefaultUI:true, zoomControl:true, gestureHandling:'greedy' }}
     >
       {markers.map((m, i) => (
@@ -2078,9 +2085,17 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
   const isSurge = _hour >= 17 && _hour < 20;
   const SURGE_MULTIPLIER = isSurge ? 1.5 : 1.0;
 
+  const RATE_UNDER_1KM = 180; // J$ per 100m when distance < 1km
   const calcPrice = (v) => {
-    let fare = BASE_FARE;
-    if (dist > BASE_KM) {
+    let fare;
+    if (dist <= BASE_KM) {
+      // Under 1km: J$180 per 100m
+      const meters = dist * 1000;
+      const per100m = Math.ceil(meters / 100);
+      fare = per100m * RATE_UNDER_1KM;
+    } else {
+      // Over 1km: BASE_FARE + J$15 per 100m beyond 1km
+      fare = BASE_FARE;
       const extraMeters = (dist - BASE_KM) * 1000;
       const per100m     = Math.ceil(extraMeters / 100);
       fare += per100m * RATE_PER_100M;
@@ -2674,14 +2689,14 @@ function BookingConfirm({ go, bookingId }) {
           </div>
         )}
 
-        <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:1, marginBottom:12 }}>Payment method</div>
+        <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:12, color:'#888aaa' }}>Payment method</div>
 
         {/* Cash - active */}
         <div style={{ border:`2px solid ${YELLOW}`, borderRadius:14, padding:'16px 14px', marginBottom:10, display:'flex', alignItems:'center', gap:14, background:'rgba(232,180,0,0.1)' }}>
           <div style={{ fontSize:32 }}>💵</div>
           <div style={{ flex:1 }}>
-            <div style={{ fontSize:14, fontWeight:500, color:YELLOW }}>Cash</div>
-            <div style={{ fontSize:12, color:'rgba(255,255,255,0.6)', marginTop:2 }}>Pay your driver directly on arrival</div>
+            <div style={{ fontSize:14, fontWeight:500, color:'#1a1a2e' }}>Cash</div>
+            <div style={{ fontSize:12, color:'#555770', marginTop:2 }}>Pay your driver directly on arrival</div>
           </div>
           <div style={{ width:22, height:22, borderRadius:'50%', background:YELLOW, display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, color:DARK, fontWeight:700 }}>✓</div>
         </div>
@@ -2693,11 +2708,11 @@ function BookingConfirm({ go, bookingId }) {
             <div style={{ fontSize:14, fontWeight:500, color:'rgba(255,255,255,0.5)' }}>Card Payment</div>
             <div style={{ fontSize:12, color:'rgba(255,255,255,0.35)', marginTop:2 }}>Coming soon</div>
           </div>
-          <div style={{ background:'rgba(255,255,255,0.08)', borderRadius:20, padding:'3px 12px', fontSize:11, color:'rgba(255,255,255,0.4)', fontWeight:500 }}>Soon</div>
+          <div style={{ background:'rgba(255,255,255,0.08)', borderRadius:20, padding:'3px 12px', fontSize:11, color:'#aaa', fontWeight:500 }}>Soon</div>
         </div>
 
-        <div style={{ background:'rgba(255,255,255,0.04)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, padding:14, marginBottom:16, fontSize:13, color:'rgba(255,255,255,0.65)', lineHeight:1.6 }}>
-          💵 You will pay <strong style={{ color:WHITE }}>J${booking?.fare?.toLocaleString()}</strong> in cash directly to your driver when you arrive at your destination.
+        <div style={{ background:'#f5f6fa', border:'1px solid #e2e4ed', borderRadius:12, padding:14, marginBottom:16, fontSize:13, color:'#444', lineHeight:1.6 }}>
+          💵 You will pay <strong style={{ color:'#1a1a2e' }}>J${booking?.fare?.toLocaleString()}</strong> in cash directly to your driver when you arrive at your destination.
         </div>
 
         <button style={{ ...s.btnY, background:'#111111', color:'#ffffff' }} onClick={handleConfirm}>Confirm — Pay Cash</button>
