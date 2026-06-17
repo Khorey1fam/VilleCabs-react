@@ -149,7 +149,7 @@ function VilleMap({ height = 260, center = MANCHESTER_CENTER, zoom = 14, onClick
   });
 
   // Use window height for mobile-aware sizing
-  const mobileHeight = Math.min(height, window.innerHeight * 0.45);
+  const mobileHeight = Math.min(height, (typeof window !== 'undefined' ? window.innerHeight : 800) * 0.45);
 
   if (!isLoaded) return (
     <div style={{ height:mobileHeight, background:'#1a2744', display:'flex', alignItems:'center', justifyContent:'center', color:YELLOW, fontSize:13 }}>
@@ -4618,6 +4618,7 @@ export default function App() {
 
   const screens = {
     splash:           <Splash {...props}/>,
+    'login-choice':   <LoginChoice {...props}/>,
     role:             <RoleSelect {...props}/>,
     'customer-signup':<CustomerSignup {...props}/>,
     'customer-login': <CustomerLogin {...props}/>,
