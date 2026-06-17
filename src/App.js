@@ -1418,12 +1418,12 @@ function CustomerDash({ go, user, setUser }) {
 
           {/* Notification banners */}
           {rideNotif?.type === 'driver_accepted' && (
-            <div style={{ background:'rgba(26,158,90,0.15)', border:'1.5px solid rgba(26,158,90,0.5)', margin:'10px 14px 0', borderRadius:12, padding:14, display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{ background:'#f0fff8', border:'2px solid #1a9e5a', margin:'10px 14px 0', borderRadius:12, padding:14, display:'flex', alignItems:'center', gap:10, boxShadow:'0 2px 8px rgba(26,158,90,0.1)' }}>
               <div style={{ fontSize:28, flexShrink:0 }}>🚗</div>
               <div style={{ flex:1 }}>
-                <div style={{ fontSize:14, fontWeight:500, color:GREEN }}>Driver found!</div>
-                <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{rideNotif?.driverName} is on the way</div>
-                {rideNotif?.licensePlate && <div style={{ fontSize:11, color:YELLOW, marginTop:2 }}>🔑 {rideNotif?.vehicleMake} {rideNotif?.vehicleModel} · {rideNotif?.licensePlate}</div>}
+                <div style={{ fontSize:14, fontWeight:500, color:'#1a7a45' }}>Driver found!</div>
+                <div style={{ fontSize:12, color:'#444', marginTop:2 }}>{rideNotif?.driverName} is on the way</div>
+                {rideNotif?.licensePlate && <div style={{ fontSize:11, color:'#b38600', marginTop:2 }}>🔑 {rideNotif?.vehicleMake} {rideNotif?.vehicleModel} · {rideNotif?.licensePlate}</div>}
               </div>
               <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
                 <button onClick={() => go('live-ride')} style={{ background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:500 }}>Track →</button>
@@ -1432,12 +1432,12 @@ function CustomerDash({ go, user, setUser }) {
             </div>
           )}
           {rideNotif?.type === 'driver_arrived' && (
-            <div style={{ background:'rgba(232,180,0,0.15)', border:'1.5px solid rgba(232,180,0,0.6)', margin:'10px 14px 0', borderRadius:12, padding:14, display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{ background:'#fffbe6', border:'2px solid #e8b400', margin:'10px 14px 0', borderRadius:12, padding:14, display:'flex', alignItems:'center', gap:10, boxShadow:'0 2px 8px rgba(232,180,0,0.15)' }}>
               <div style={{ fontSize:28, flexShrink:0 }}>📍</div>
               <div style={{ flex:1 }}>
-                <div style={{ fontSize:14, fontWeight:500, color:YELLOW }}>Driver has arrived!</div>
-                <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{rideNotif?.driverName} is at your pickup location</div>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Please come outside 🚶</div>
+                <div style={{ fontSize:14, fontWeight:500, color:'#b38600' }}>Driver has arrived!</div>
+                <div style={{ fontSize:12, color:'#555', marginTop:2 }}>{rideNotif?.driverName} is at your pickup location</div>
+                <div style={{ fontSize:11, color:'#777', marginTop:2 }}>Please come outside 🚶</div>
               </div>
               <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
                 <button onClick={() => go('live-ride')} style={{ background:YELLOW, color:DARK, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:700 }}>View →</button>
@@ -1446,11 +1446,11 @@ function CustomerDash({ go, user, setUser }) {
             </div>
           )}
           {rideNotif?.type === 'enroute_dropoff' && (
-            <div style={{ background:'rgba(26,158,90,0.15)', border:'1.5px solid rgba(26,158,90,0.5)', margin:'10px 14px 0', borderRadius:12, padding:14, display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{ background:'#f0fff8', border:'2px solid #1a9e5a', margin:'10px 14px 0', borderRadius:12, padding:14, display:'flex', alignItems:'center', gap:10, boxShadow:'0 2px 8px rgba(26,158,90,0.1)' }}>
               <div style={{ fontSize:28, flexShrink:0 }}>🚗</div>
               <div style={{ flex:1 }}>
-                <div style={{ fontSize:14, fontWeight:500, color:GREEN }}>On the way to drop-off!</div>
-                <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{rideNotif?.driverName} has picked you up</div>
+                <div style={{ fontSize:14, fontWeight:500, color:'#1a7a45' }}>On the way to drop-off!</div>
+                <div style={{ fontSize:12, color:'#444', marginTop:2 }}>{rideNotif?.driverName} has picked you up</div>
               </div>
               <button onClick={() => go('live-ride')} style={{ background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:500 }}>Track →</button>
             </div>
@@ -3159,7 +3159,7 @@ function LiveRide({ go, bookingId, user }) {
             <div style={{ flex:1 }}>
               <div style={{ fontSize:14, fontWeight:700, color:YELLOW }}>Driver has arrived!</div>
               <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{booking.driverName} is at your pickup location</div>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Please come outside 🚶</div>
+              <div style={{ fontSize:11, color:'#777', marginTop:2 }}>Please come outside 🚶</div>
             </div>
           </div>
         )}
@@ -3183,7 +3183,7 @@ function LiveRide({ go, bookingId, user }) {
             <div style={{ flex:1 }}>
               <div style={{ fontSize:14, fontWeight:700, color:YELLOW }}>Driver has arrived!</div>
               <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{booking.driverName} is at your pickup location</div>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Please come outside 🚶</div>
+              <div style={{ fontSize:11, color:'#777', marginTop:2 }}>Please come outside 🚶</div>
             </div>
           </div>
         )}
