@@ -1441,46 +1441,30 @@ function CustomerDash({ go, user, setUser }) {
           <div style={{ flex:1, overflowY:'auto', background:'#f5f6fa' }}>
 
             {/* Hero greeting + Book a Ride */}
-            <div style={{ background:'#ffffff', padding:'28px 20px 32px', textAlign:'center', position:'relative', overflow:'hidden' }}>
+            <div style={{ background:'#ffffff', padding:'32px 20px 28px', textAlign:'center', position:'relative', overflow:'hidden' }}>
               {/* Background glow */}
-              <div style={{ position:'absolute', top:-60, left:'50%', transform:'translateX(-50%)', width:300, height:300, background:'radial-gradient(circle, rgba(232,180,0,0.15) 0%, transparent 70%)', pointerEvents:'none' }}/>
-              <div style={{ fontSize:13, color:'rgba(255,255,255,0.5)', marginBottom:4 }}>
-                Good day, <span style={{ color:'#1a1a2e', fontWeight:600 }}>{user?.name?.split(' ')[0]||'Rider'}</span> 👋
-              </div>
-              <div style={{ fontSize:22, fontWeight:700, color:'#1a1a2e', marginBottom:28 }}>Where are you going?</div>
+              <div style={{ position:'absolute', top:-40, left:'50%', transform:'translateX(-50%)', width:400, height:300, background:'radial-gradient(circle, rgba(232,180,0,0.08) 0%, transparent 70%)', pointerEvents:'none' }}/>
 
-              {/* Circle Book a Ride — white with black SVG car */}
+              {/* Big greeting */}
+              <div style={{ fontSize:28, fontWeight:800, color:'#1a1a2e', marginBottom:4, lineHeight:1.2 }}>
+                Good day, {user?.name?.split(' ')[0]||'Rider'} 👋
+              </div>
+
+              {/* Car image + Book a Ride button */}
               <button onClick={() => go('pin-pickup')}
-                style={{ width:170, height:170, borderRadius:'50%', background:'#ffffff', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', boxShadow:'0 8px 40px rgba(0,0,0,0.4), 0 0 0 6px rgba(255,255,255,0.08)', marginBottom:20, margin:'0 auto 20px' }}>
-                {/* Sleek black car SVG */}
-                <svg width="80" height="48" viewBox="0 0 80 48" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ marginBottom:6 }}>
-                  <rect x="8" y="22" width="64" height="16" rx="4" fill="#111"/>
-                  <path d="M16 22 L22 10 L58 10 L64 22 Z" fill="#1a1a1a"/>
-                  <rect x="24" y="12" width="13" height="9" rx="2" fill="#4a9eff" opacity="0.8"/>
-                  <rect x="43" y="12" width="13" height="9" rx="2" fill="#4a9eff" opacity="0.8"/>
-                  <circle cx="21" cy="38" r="6" fill="#222" stroke="#555" strokeWidth="2"/>
-                  <circle cx="21" cy="38" r="3" fill="#888"/>
-                  <circle cx="59" cy="38" r="6" fill="#222" stroke="#555" strokeWidth="2"/>
-                  <circle cx="59" cy="38" r="3" fill="#888"/>
-                  <rect x="62" y="25" width="8" height="4" rx="1" fill="#ffd700" opacity="0.9"/>
-                  <rect x="10" y="25" width="6" height="3" rx="1" fill="#ff4444" opacity="0.7"/>
-                  <rect x="8" y="26" width="5" height="5" rx="1" fill="#333"/>
-                  <rect x="67" y="26" width="5" height="5" rx="1" fill="#333"/>
-                </svg>
-                <div style={{ fontSize:13, fontWeight:800, color:'#111', letterSpacing:0.5 }}>Book a Ride</div>
+                style={{ background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', margin:'16px auto 0', padding:0 }}>
+                <img
+                  src="/car.png"
+                  alt="VilleCabs Ride"
+                  style={{ width:'min(320px, 90vw)', height:'auto', objectFit:'contain', marginBottom:0, filter:'drop-shadow(0 8px 24px rgba(0,0,0,0.18))' }}
+                />
+                <div style={{ marginTop:8, background:'#111111', color:'#ffffff', borderRadius:30, padding:'12px 36px', fontSize:16, fontWeight:700, letterSpacing:0.5, boxShadow:'0 4px 16px rgba(0,0,0,0.2)' }}>
+                  🚕 Book a Ride
+                </div>
               </button>
 
-              {/* Stats row */}
-              <div style={{ display:'flex', gap:10, marginTop:24, justifyContent:'center' }}>
-                <div style={{ background:'#f5f6fa', border:'1px solid #e2e4ed', borderRadius:12, padding:'12px 20px', textAlign:'center', minWidth:110 }}>
-                  <div style={{ fontSize:20, fontWeight:700, color:YELLOW }}>{history.length}</div>
-                  <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:2 }}>Total Rides</div>
-                </div>
-                <div style={{ background:'#f5f6fa', border:'1px solid #e2e4ed', borderRadius:12, padding:'12px 20px', textAlign:'center', minWidth:110 }}>
-                  <div style={{ fontSize:18, fontWeight:700, color:GREEN }}>J${totalSpent.toLocaleString()}</div>
-                  <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:2 }}>Total Spent</div>
-                </div>
-              </div>
+              {/* Where are you going — below button */}
+              <div style={{ fontSize:15, color:'#888aaa', marginTop:14 }}>Where are you going today?</div>
             </div>
 
             {/* Banner — Safe rides in Manchester */}
