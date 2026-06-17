@@ -1542,12 +1542,7 @@ function CustomerDash({ go, user, setUser }) {
 
             {/* Driver promo banner */}
             <div style={{ margin:'20px 16px 20px', background:'#111111', border:'1px solid rgba(232,180,0,0.3)', borderRadius:16, padding:'20px', position:'relative', overflow:'hidden' }}>
-              <div style={{ position:'absolute', right:-10, top:-10, opacity:0.06 }}>
-                <svg width="120" height="120" viewBox="0 0 120 120" fill="none">
-                  <circle cx="60" cy="60" r="58" stroke={YELLOW} strokeWidth="3"/>
-                  <text x="60" y="75" textAnchor="middle" fontSize="50" fill={YELLOW}>💰</text>
-                </svg>
-              </div>
+              <div style={{ position:'absolute', right:-10, top:-10, opacity:0.08, fontSize:80, lineHeight:1, pointerEvents:'none' }}>💰</div>
               <div style={{ fontSize:11, color:YELLOW, fontWeight:600, textTransform:'uppercase', letterSpacing:1, marginBottom:6 }}>For Drivers</div>
               <div style={{ fontSize:18, fontWeight:700, color:WHITE, marginBottom:6 }}>Earn with VilleCabs</div>
               <div style={{ fontSize:12, color:'rgba(255,255,255,0.55)', lineHeight:1.6, marginBottom:14 }}>
