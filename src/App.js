@@ -1451,41 +1451,29 @@ function CustomerDash({ go, user, setUser }) {
               </div>
 
               {/* Car image + Book a Ride button */}
-        onClick={() => go('pin-pickup')}
+              <button onClick={() => go('pin-pickup')}
                 style={{ background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', margin:'16px auto 0', padding:0 }}>
-<div style={{ width:200, height:200, borderRadius:'50%', background:'#ffffff', boxShadow:'0 8px 40px rgba(0,0,0,0.15), 0 0 0 6px rgba(232,180,0,0.2)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', overflow:'hidden', position:'relative' }}>
+                <div style={{ width:200, height:200, borderRadius:'50%', background:'#ffffff', boxShadow:'0 8px 40px rgba(0,0,0,0.15), 0 0 0 6px rgba(232,180,0,0.2)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', overflow:'hidden', position:'relative' }}>
                   <div style={{ position:'absolute', inset:0, background:'radial-gradient(circle at 50% 60%, rgba(232,180,0,0.1) 0%, transparent 70%)' }}/>
-                  <div style={{ position:'relative', zIndex:1, width:'100%', display:'flex', justifyContent:'center' }}
-                    dangerouslySetInnerHTML={{ __html: `<svg width="170" height="95" viewBox="0 0 300 160" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M30 105 L30 80 Q32 78 40 72 L80 55 Q95 45 110 42 L190 42 Q210 42 228 50 L260 68 Q272 74 275 80 L275 105 Q275 108 272 108 L33 108 Q30 108 30 105Z" fill="#e8b400"/>
-                      <path d="M95 42 L115 18 Q120 12 130 11 L175 11 Q185 11 190 18 L210 42Z" fill="#d4a200"/>
-                      <path d="M100 42 L118 20 Q122 15 130 14 L172 14 Q180 14 184 20 L202 42Z" fill="#b8d4f0" opacity="0.8"/>
-                      <rect x="95" y="46" width="38" height="24" rx="3" fill="#b8d4f0" opacity="0.65"/>
-                      <rect x="140" y="46" width="55" height="24" rx="3" fill="#b8d4f0" opacity="0.65"/>
-                      <line x1="138" y1="43" x2="138" y2="108" stroke="#d4a200" stroke-width="1.5"/>
-                      <line x1="200" y1="43" x2="200" y2="108" stroke="#d4a200" stroke-width="1.5"/>
-                      <path d="M48 108 Q48 78 72 78 Q96 78 96 108Z" fill="#e8b400"/>
-                      <path d="M205 108 Q205 78 229 78 Q253 78 253 108Z" fill="#e8b400"/>
-                      <circle cx="72" cy="112" r="22" fill="#1a1a1a"/>
-                      <circle cx="72" cy="112" r="14" fill="#2a2a2a"/>
-                      <circle cx="72" cy="112" r="6" fill="#444"/>
-                      <line x1="72" y1="98" x2="72" y2="126" stroke="#555" stroke-width="2"/>
-                      <line x1="58" y1="112" x2="86" y2="112" stroke="#555" stroke-width="2"/>
-                      <line x1="62" y1="102" x2="82" y2="122" stroke="#555" stroke-width="2"/>
-                      <line x1="82" y1="102" x2="62" y2="122" stroke="#555" stroke-width="2"/>
-                      <circle cx="229" cy="112" r="22" fill="#1a1a1a"/>
-                      <circle cx="229" cy="112" r="14" fill="#2a2a2a"/>
-                      <circle cx="229" cy="112" r="6" fill="#444"/>
-                      <line x1="229" y1="98" x2="229" y2="126" stroke="#555" stroke-width="2"/>
-                      <line x1="215" y1="112" x2="243" y2="112" stroke="#555" stroke-width="2"/>
-                      <line x1="219" y1="102" x2="239" y2="122" stroke="#555" stroke-width="2"/>
-                      <line x1="239" y1="102" x2="219" y2="122" stroke="#555" stroke-width="2"/>
-                      <path d="M30 82 L38 78 L44 82 L42 90 L32 90Z" fill="#fffbe6" opacity="0.9"/>
-                      <rect x="268" y="80" width="8" height="16" rx="2" fill="#ff4444" opacity="0.8"/>
-                      <ellipse cx="152" cy="130" rx="100" ry="5" fill="rgba(0,0,0,0.07)"/>
-                    </svg>` }}
-                  />
-                  <div style={{ fontSize:14, fontWeight:800, color:'#1a1a2e', marginTop:4, letterSpacing:0.3, position:'relative', zIndex:1 }}>Book a Ride</div>
+                  <svg width="160" height="90" viewBox="0 0 300 160" fill="none" style={{ position:'relative', zIndex:1 }}>
+                    <path d="M30 105 L30 80 Q32 78 40 72 L80 55 Q95 45 110 42 L190 42 Q210 42 228 50 L260 68 Q272 74 275 80 L275 105 Q275 108 272 108 L33 108 Q30 108 30 105Z" fill="#e8b400"/>
+                    <path d="M95 42 L115 18 Q120 12 130 11 L175 11 Q185 11 190 18 L210 42Z" fill="#d4a200"/>
+                    <path d="M100 42 L118 20 Q122 15 130 14 L172 14 Q180 14 184 20 L202 42Z" fill="#b8d4f0" opacity="0.8"/>
+                    <rect x="95" y="46" width="38" height="24" rx="3" fill="#b8d4f0" opacity="0.65"/>
+                    <rect x="140" y="46" width="55" height="24" rx="3" fill="#b8d4f0" opacity="0.65"/>
+                    <path d="M48 108 Q48 78 72 78 Q96 78 96 108Z" fill="#e8b400"/>
+                    <path d="M205 108 Q205 78 229 78 Q253 78 253 108Z" fill="#e8b400"/>
+                    <circle cx="72" cy="112" r="22" fill="#1a1a1a"/>
+                    <circle cx="72" cy="112" r="14" fill="#333"/>
+                    <circle cx="72" cy="112" r="5" fill="#555"/>
+                    <circle cx="229" cy="112" r="22" fill="#1a1a1a"/>
+                    <circle cx="229" cy="112" r="14" fill="#333"/>
+                    <circle cx="229" cy="112" r="5" fill="#555"/>
+                    <path d="M30 82 L38 78 L44 82 L42 90 L32 90Z" fill="#fffbe6" opacity="0.9"/>
+                    <rect x="268" y="80" width="8" height="16" rx="2" fill="#ff4444" opacity="0.8"/>
+                    <ellipse cx="152" cy="130" rx="100" ry="5" fill="rgba(0,0,0,0.07)"/>
+                  </svg>
+                  <div style={{ fontSize:14, fontWeight:800, color:'#1a1a2e', marginTop:2, letterSpacing:0.3, position:'relative', zIndex:1 }}>Book a Ride</div>
                 </div>
               </button>
 
