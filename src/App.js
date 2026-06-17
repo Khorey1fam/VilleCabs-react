@@ -1809,6 +1809,8 @@ function PinPickup({ go, setPickupData }) {
         <button style={s.btnY} onClick={handleConfirm}>Confirm Pickup</button>
       </div>
     </div>
+  
+    <Footer go={go}/>
   );
 }
 
@@ -1875,6 +1877,8 @@ function PinDropoff({ go, pickupData, setDropoffData }) {
         <button style={{ ...s.btnY, opacity:!address?0.5:1 }} onClick={handleConfirm} disabled={!address}>Confirm Drop-off</button>
       </div>
     </div>
+  
+    <Footer go={go}/>
   );
 }
 
@@ -2155,6 +2159,8 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
         </button>
       </div>
     </div>
+  
+    <Footer go={go}/>
   );
 }
 
@@ -2976,6 +2982,8 @@ function LiveRide({ go, bookingId, user }) {
         )}
       </div>
     </div>
+  
+    <Footer go={go}/>
   );
 }
 
