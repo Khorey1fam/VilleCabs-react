@@ -699,6 +699,7 @@ function DriverLogin({ go, setUser }) {
       try { await updateDoc(doc(db,'drivers',cred.user.uid), { role:'driver' }); } catch(e) {}
       try { await updateDoc(doc(db,'drivers',cred.user.uid), { role:'driver' }); } catch(e) {}
       setUser({ uid:cred.user.uid, name:data.name, email:cred.user.email, role:'driver' });
+      _manualNavDone = true;
       if (!data.termsAccepted) go('driver-terms');
       else if (!data.tipsSeen) go('driver-welcome-tips');
       else go('driver-dash');
@@ -1197,7 +1198,7 @@ function CustomerDash({ go, user, setUser }) {
   const [activeRide, setActiveRide] = useState(null);
   const [notification, setNotification] = useState(null);
   const prevStatusRef = useRef(null);
-  const handleLogout = async () => { await signOut(auth); setUser(null); go('splash'); };
+  const handleLogout = async () => { _manualNavDone = false; await signOut(auth); setUser(null); go('splash'); };
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -1772,7 +1773,7 @@ function CustomerSettings({ go, user, setUser }) {
     setLoadingDeact(false);
   };
 
-  const handleLogout = async () => { await signOut(auth); setUser(null); go('splash'); };
+  const handleLogout = async () => { _manualNavDone = false; await signOut(auth); setUser(null); go('splash'); };
 
   return (
     <div style={{ ...s.content, background:'transparent' }}>
@@ -3509,7 +3510,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   const [notifStatus, setNotifStatus] = useState("idle");
   const [loading,     setLoading]     = useState(true);
   const [earnings,    setEarnings]    = useState({ today:0, week:0, month:0, total:0, todayRides:0, weekRides:0, monthRides:0, totalRides:0, history:[] });
-  const handleLogout = async () => { await signOut(auth); setUser(null); go('splash'); };
+  const handleLogout = async () => { _manualNavDone = false; await signOut(auth); setUser(null); go('splash'); };
 
   const goOnline = async () => {
     setIsOnline(true);
@@ -4278,7 +4279,7 @@ function DriverSettings({ go, user, setUser }) {
     setLoadingDeact(false);
   };
 
-  const handleLogout = async () => { await signOut(auth); setUser(null); go('splash'); };
+  const handleLogout = async () => { _manualNavDone = false; await signOut(auth); setUser(null); go('splash'); };
 
   return (
     <div style={{ ...s.content, background:'transparent' }}>
@@ -4548,6 +4549,9 @@ function LoadingScreen() {
 // ── APP ───────────────────────────────────────────────────────────────────────
 const MAP_BG_SCREENS = new Set(['splash','role','customer-signup','customer-login','otp','driver-signup','driver-pending','driver-login','customer-dash','pin-pickup','pin-dropoff','vehicle-select','booking-confirm','live-ride','driver-dash','driver-active','driver-profile','driver-settings','customer-profile','customer-settings','chat']);
 
+// Prevent auth handler from re-navigating after manual login
+let _manualNavDone = false;
+
 export default function App() {
   const [screen,      setScreen]      = useState('splash');
   const [user,        setUser]        = useState(null);
@@ -4559,6 +4563,8 @@ export default function App() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (fu) => {
       if (fu) {
+        // Skip if user already manually logged in
+        if (_manualNavDone) { setLoading(false); return; }
         // Safety timeout - never stay stuck on loading screen
         const safetyTimer = setTimeout(() => { setLoading(false); setScreen('splash'); }, 8000);
         try {
