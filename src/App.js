@@ -93,6 +93,9 @@ function GlobalStyles() {
     let meta = document.querySelector('meta[name="viewport"]');
     if (!meta) { meta = document.createElement('meta'); meta.name='viewport'; document.head.appendChild(meta); }
     meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+    document.documentElement.style.height = '100%';
+    document.body.style.height = '100%';
+    document.body.style.overscrollBehavior = 'none';
     const style = document.createElement('style');
     style.innerHTML = `
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -616,15 +619,28 @@ function CustomerLogin({ go, setUser }) {
     if (!email||!password) { setError('Please enter your email and password.'); return; }
     setLoading(true);
     try {
-      // Small delay to ensure loading state renders before Firebase call
+      try { await setPersistence(auth, browserLocalPersistence); } catch(e) {}
       const cred = await signInWithEmailAndPassword(auth, email, password);
-      const snap = await getDoc(doc(db,'customers',cred.user.uid));
-      const data = snap.exists() ? snap.data() : {};
-      setUser({ uid:cred.user.uid, name:data.name||cred.user.displayName||'Rider', email:cred.user.email, role:'customer' });
+      let data = {};
+      try {
+        const snap = await Promise.race([
+          getDoc(doc(db,'customers',cred.user.uid)),
+          new Promise((_,r) => setTimeout(() => r(new Error('timeout')), 6000))
+        ]);
+        if (snap && snap.exists && snap.exists()) data = snap.data();
+      } catch(e) { console.warn('Firestore slow, proceeding anyway'); }
+      setUser({ uid:cred.user.uid, name:data.name||cred.user.displayName||email, email:cred.user.email, role:'customer' });
       if (!data.termsAccepted) go('terms');
       else if (!data.tipsSeen) go('welcome-tips');
       else go('customer-dash');
-    } catch(err) { setError('Incorrect email or password.'); }
+    } catch(err) {
+      const code = err.code||'';
+      if (code.includes('user-not-found')||code.includes('wrong-password')||code.includes('invalid-credential')) {
+        setError('Incorrect email or password.');
+      } else {
+        setError('Login failed. Check your connection and try again.');
+      }
+    }
     setLoading(false);
   };
 
