@@ -3060,7 +3060,7 @@ function LiveRide({ go, bookingId, user }) {
   return (
     <div style={{ ...s.content }}>
       <div style={{ position:'relative' }}>
-        <VilleMap height={320} center={driverCoords||pickupCoords} zoom={15} expandable={true}>
+        <VilleMap height={typeof window!=='undefined'?Math.max(320,window.innerHeight*0.45):320} center={driverCoords||pickupCoords} zoom={15} expandable={true}>
           <Marker position={pickupCoords} title="Pickup"
             icon={{ url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><circle cx="14" cy="14" r="11" fill="#1a9e5a" stroke="white" stroke-width="2.5"/></svg>'), scaledSize:{width:28,height:28} }}/>
           {dropoffCoords && (
@@ -3154,11 +3154,11 @@ function LiveRide({ go, bookingId, user }) {
 
         {/* Driver arrived in-screen alert */}
         {booking?.driverArrived && !booking?.enrouteToDropoff && booking?.status === 'active' && (
-          <div style={{ background:'rgba(232,180,0,0.15)', border:'2px solid rgba(232,180,0,0.7)', borderRadius:12, padding:14, marginBottom:12, display:'flex', alignItems:'center', gap:12 }}>
+          <div style={{ background:'#fffbe6', border:'2px solid #e8b400', borderRadius:12, padding:14, marginBottom:12, display:'flex', alignItems:'center', gap:12, boxShadow:'0 2px 8px rgba(232,180,0,0.2)' }}>
             <div style={{ fontSize:28 }}>📍</div>
             <div style={{ flex:1 }}>
-              <div style={{ fontSize:14, fontWeight:700, color:YELLOW }}>Driver has arrived!</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{booking.driverName} is at your pickup location</div>
+              <div style={{ fontSize:14, fontWeight:700, color:'#b38600' }}>Driver has arrived!</div>
+              <div style={{ fontSize:12, color:'#555', marginTop:2 }}>{booking.driverName} is at your pickup location</div>
               <div style={{ fontSize:11, color:'#777', marginTop:2 }}>Please come outside 🚶</div>
             </div>
           </div>
@@ -3166,36 +3166,25 @@ function LiveRide({ go, bookingId, user }) {
 
         {/* En route to drop-off banner */}
         {booking?.enrouteToDropoff && booking?.status === 'active' && (
-          <div style={{ background:'rgba(26,158,90,0.15)', border:'2px solid rgba(26,158,90,0.5)', borderRadius:12, padding:14, marginBottom:12, display:'flex', alignItems:'center', gap:12 }}>
+          <div style={{ background:'#f0fff8', border:'2px solid #1a9e5a', borderRadius:12, padding:14, marginBottom:12, display:'flex', alignItems:'center', gap:12, boxShadow:'0 2px 8px rgba(26,158,90,0.15)' }}>
             <div style={{ fontSize:28 }}>🚗</div>
             <div style={{ flex:1 }}>
-              <div style={{ fontSize:14, fontWeight:700, color:GREEN }}>On the way to drop-off!</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{booking.driverName} has picked you up</div>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Heading to {booking.dropoff?.address?.split(',')[0]} 📍</div>
+              <div style={{ fontSize:14, fontWeight:700, color:'#1a7a45' }}>On the way to drop-off!</div>
+              <div style={{ fontSize:12, color:'#444', marginTop:2 }}>{booking.driverName} has picked you up</div>
+              <div style={{ fontSize:11, color:'#666', marginTop:2 }}>Heading to {booking.dropoff?.address?.split(',')[0]} 📍</div>
             </div>
           </div>
         )}
 
-        {/* Driver arrived in-screen alert */}
-        {booking?.driverArrived && !booking?.enrouteToDropoff && booking?.status === 'active' && (
-          <div style={{ background:'rgba(232,180,0,0.15)', border:'2px solid rgba(232,180,0,0.7)', borderRadius:12, padding:14, marginBottom:12, display:'flex', alignItems:'center', gap:12 }}>
-            <div style={{ fontSize:28 }}>📍</div>
-            <div style={{ flex:1 }}>
-              <div style={{ fontSize:14, fontWeight:700, color:YELLOW }}>Driver has arrived!</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{booking.driverName} is at your pickup location</div>
-              <div style={{ fontSize:11, color:'#777', marginTop:2 }}>Please come outside 🚶</div>
-            </div>
-          </div>
-        )}
-
+        
         {/* En route to drop-off banner */}
         {booking?.enrouteToDropoff && booking?.status === 'active' && (
-          <div style={{ background:'rgba(26,158,90,0.15)', border:'2px solid rgba(26,158,90,0.5)', borderRadius:12, padding:14, marginBottom:12, display:'flex', alignItems:'center', gap:12 }}>
+          <div style={{ background:'#f0fff8', border:'2px solid #1a9e5a', borderRadius:12, padding:14, marginBottom:12, display:'flex', alignItems:'center', gap:12, boxShadow:'0 2px 8px rgba(26,158,90,0.15)' }}>
             <div style={{ fontSize:28 }}>🚗</div>
             <div style={{ flex:1 }}>
-              <div style={{ fontSize:14, fontWeight:700, color:GREEN }}>On the way to drop-off!</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{booking.driverName} has picked you up</div>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Heading to {booking.dropoff?.address?.split(',')[0]} 📍</div>
+              <div style={{ fontSize:14, fontWeight:700, color:'#1a7a45' }}>On the way to drop-off!</div>
+              <div style={{ fontSize:12, color:'#444', marginTop:2 }}>{booking.driverName} has picked you up</div>
+              <div style={{ fontSize:11, color:'#666', marginTop:2 }}>Heading to {booking.dropoff?.address?.split(',')[0]} 📍</div>
             </div>
           </div>
         )}
@@ -4068,7 +4057,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
            <span>⚠️ Location denied — <span style={{textDecoration:'underline',cursor:'pointer'}} onClick={() => alert('To enable location:\n\n1. Click the 🔒 lock icon in your browser address bar\n2. Set Location to Allow\n3. Refresh the page')}>tap here to fix</span></span>
          ) : '📍 Getting your location...'}
       </div>
-      <VilleMap height={320} center={driverCoords||pickupCoords} zoom={14} markers={arrived?[]:markers} directions={directions} expandable={true}>
+      <VilleMap height={typeof window!=='undefined'?Math.max(320,window.innerHeight*0.45):320} center={driverCoords||pickupCoords} zoom={14} markers={arrived?[]:markers} directions={directions} expandable={true}>
         {driverCoords && !directions && (
           <Marker position={driverCoords} title="Your location"
             icon={{ url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="#e8b400" stroke="white" stroke-width="3"/><text x="18" y="24" text-anchor="middle" font-size="16">🚗</text></svg>'), scaledSize:{width:36,height:36} }}/>
