@@ -1453,13 +1453,10 @@ function CustomerDash({ go, user, setUser }) {
               {/* Car image + Book a Ride button */}
               <button onClick={() => go('pin-pickup')}
                 style={{ background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', margin:'16px auto 0', padding:0 }}>
-                <img
-                  src="/car.png"
-                  alt="VilleCabs Ride"
-                  style={{ width:'min(320px, 90vw)', height:'auto', objectFit:'contain', marginBottom:0, filter:'drop-shadow(0 8px 24px rgba(0,0,0,0.18))' }}
-                />
-                <div style={{ marginTop:8, background:'#111111', color:'#ffffff', borderRadius:30, padding:'12px 36px', fontSize:16, fontWeight:700, letterSpacing:0.5, boxShadow:'0 4px 16px rgba(0,0,0,0.2)' }}>
-                  🚕 Book a Ride
+                <div style={{ width:200, height:200, borderRadius:'50%', background:'#ffffff', boxShadow:'0 8px 40px rgba(0,0,0,0.15), 0 0 0 6px rgba(232,180,0,0.2)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', position:'relative', overflow:'hidden' }}>
+                  <div style={{ position:'absolute', inset:0, background:'radial-gradient(circle at 50% 60%, rgba(232,180,0,0.12) 0%, transparent 70%)' }}/>
+                  <div style={{ fontSize:80, lineHeight:1, position:'relative', zIndex:1 }}>🚕</div>
+                  <div style={{ fontSize:14, fontWeight:800, color:'#1a1a2e', marginTop:8, letterSpacing:0.3, position:'relative', zIndex:1 }}>Book a Ride</div>
                 </div>
               </button>
 
