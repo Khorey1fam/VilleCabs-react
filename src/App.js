@@ -1413,8 +1413,8 @@ function CustomerDash({ go, user, setUser }) {
               <div style={{ fontSize:28, flexShrink:0 }}>🚗</div>
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:14, fontWeight:500, color:GREEN }}>Driver found!</div>
-                <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{notification.driverName} is on the way</div>
-                {notification.licensePlate && <div style={{ fontSize:11, color:YELLOW, marginTop:2 }}>🔑 {notification.vehicleMake} {notification.vehicleModel} · {notification.licensePlate}</div>}
+                <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{notification?.driverName} is on the way</div>
+                {notification?.licensePlate && <div style={{ fontSize:11, color:YELLOW, marginTop:2 }}>🔑 {notification?.vehicleMake} {notification?.vehicleModel} · {notification?.licensePlate}</div>}
               </div>
               <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
                 <button onClick={() => go('live-ride')} style={{ background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:500 }}>Track →</button>
@@ -1427,7 +1427,7 @@ function CustomerDash({ go, user, setUser }) {
               <div style={{ fontSize:28, flexShrink:0 }}>📍</div>
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:14, fontWeight:500, color:YELLOW }}>Driver has arrived!</div>
-                <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{notification.driverName} is at your pickup location</div>
+                <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{notification?.driverName} is at your pickup location</div>
                 <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Please come outside 🚶</div>
               </div>
               <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
@@ -1441,7 +1441,7 @@ function CustomerDash({ go, user, setUser }) {
               <div style={{ fontSize:28, flexShrink:0 }}>🚗</div>
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:14, fontWeight:500, color:GREEN }}>On the way to drop-off!</div>
-                <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{notification.driverName} has picked you up</div>
+                <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{notification?.driverName} has picked you up</div>
               </div>
               <button onClick={() => go('live-ride')} style={{ background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:500 }}>Track →</button>
             </div>
@@ -1542,7 +1542,12 @@ function CustomerDash({ go, user, setUser }) {
 
             {/* Driver promo banner */}
             <div style={{ margin:'20px 16px 20px', background:'#111111', border:'1px solid rgba(232,180,0,0.3)', borderRadius:16, padding:'20px', position:'relative', overflow:'hidden' }}>
-              <div style={{ position:'absolute', right:-10, top:-10, opacity:0.08, fontSize:80, lineHeight:1, pointerEvents:'none' }}>💰</div>
+              <div style={{ position:'absolute', right:-10, top:-10, opacity:0.06 }}>
+                <svg width="120" height="120" viewBox="0 0 120 120" fill="none">
+                  <circle cx="60" cy="60" r="58" stroke={YELLOW} strokeWidth="3"/>
+                  <text x="60" y="75" textAnchor="middle" fontSize="50" fill={YELLOW}>💰</text>
+                </svg>
+              </div>
               <div style={{ fontSize:11, color:YELLOW, fontWeight:600, textTransform:'uppercase', letterSpacing:1, marginBottom:6 }}>For Drivers</div>
               <div style={{ fontSize:18, fontWeight:700, color:WHITE, marginBottom:6 }}>Earn with VilleCabs</div>
               <div style={{ fontSize:12, color:'rgba(255,255,255,0.55)', lineHeight:1.6, marginBottom:14 }}>
