@@ -617,7 +617,6 @@ function CustomerLogin({ go, setUser }) {
     setLoading(true);
     try {
       // Small delay to ensure loading state renders before Firebase call
-      await new Promise(r => setTimeout(r, 50));
       const cred = await signInWithEmailAndPassword(auth, email, password);
       const snap = await getDoc(doc(db,'customers',cred.user.uid));
       const data = snap.exists() ? snap.data() : {};
@@ -676,7 +675,6 @@ function DriverLogin({ go, setUser }) {
     setLoading(true);
     try {
       // Small delay to ensure loading state renders before Firebase call
-      await new Promise(r => setTimeout(r, 50));
       const cred = await signInWithEmailAndPassword(auth, email, password);
       const snap = await getDoc(doc(db,'drivers',cred.user.uid));
       if (!snap.exists()) { setError('No driver account found. Please apply first.'); setLoading(false); return; }
@@ -4544,20 +4542,12 @@ export default function App() {
   const [loading,     setLoading]     = useState(true);
 
   useEffect(() => {
-    let manualLogin = false; // prevent double navigation on manual login
-
     const unsub = onAuthStateChanged(auth, async (fu) => {
       if (fu) {
-        // Only auto-navigate on initial page load (splash screen)
-        // If user already manually logged in, don't re-navigate
-        const currentScreen = document.body.getAttribute('data-screen') || 'splash';
-        if (currentScreen !== 'splash' && currentScreen !== 'loading') {
-          setLoading(false); return;
-        }
         try {
           const cSnap = await getDoc(doc(db,'customers',fu.uid));
           const dSnap = await getDoc(doc(db,'drivers',fu.uid));
-          // ── DRIVER FIRST — no email verification required ─────────────────
+          // ── DRIVER FIRST ──────────────────────────────────────────────────
           if (dSnap.exists()) {
             const d = dSnap.data();
             if (d.status === 'approved') {
@@ -4568,19 +4558,12 @@ export default function App() {
                 if (!activeSnap.empty) {
                   setBookingId(activeSnap.docs[0].id);
                   setScreen('driver-active');
-                } else if (!d.termsAccepted) {
-                  setScreen('driver-terms');
-                } else if (!d.tipsSeen) {
-                  setScreen('driver-welcome-tips');
-                } else {
-                  setScreen('driver-dash');
-                }
+                } else if (!d.termsAccepted) { setScreen('driver-terms'); }
+                else if (!d.tipsSeen) { setScreen('driver-welcome-tips'); }
+                else { setScreen('driver-dash'); }
               } catch(e) { setScreen('driver-dash'); }
-            } else if (d.status === 'pending') {
-              setScreen('driver-pending');
-            } else {
-              setScreen('driver-login');
-            }
+            } else if (d.status === 'pending') { setScreen('driver-pending'); }
+            else { setScreen('driver-login'); }
           // ── CUSTOMER ──────────────────────────────────────────────────────
           } else if (cSnap.exists()) {
             const d = cSnap.data();
@@ -4596,33 +4579,22 @@ export default function App() {
                 const found = [...s1.docs, ...s2.docs];
                 const twoHoursAgo = Date.now() / 1000 - 7200;
                 const recentBooking = found.find(b => (b.data().createdAt?.seconds||0) > twoHoursAgo);
-                if (recentBooking) {
-                  setBookingId(recentBooking.id);
-                  setScreen('live-ride');
-                } else if (!d.termsAccepted) {
-                  setScreen('terms');
-                } else if (!d.tipsSeen) {
-                  setScreen('welcome-tips');
-                } else {
-                  setScreen('customer-dash');
-                }
+                if (recentBooking) { setBookingId(recentBooking.id); setScreen('live-ride'); }
+                else if (!d.termsAccepted) { setScreen('terms'); }
+                else if (!d.tipsSeen) { setScreen('welcome-tips'); }
+                else { setScreen('customer-dash'); }
               } catch(e) { setScreen('customer-dash'); }
             }
           }
         } catch(e) { console.error('Auth restore error:', e); }
       } else {
-        setTimeout(() => setLoading(false), 1500);
+        setTimeout(() => setLoading(false), 800);
         return;
       }
       setLoading(false);
     });
     return () => unsub();
   }, []);
-
-  // Sync current screen to body for auth handler
-  React.useEffect(() => {
-    document.body.setAttribute('data-screen', screen);
-  }, [screen]);
 
   if (loading) return <LoadingScreen/>;
 
