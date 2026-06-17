@@ -616,6 +616,8 @@ function CustomerLogin({ go, setUser }) {
     if (!email||!password) { setError('Please enter your email and password.'); return; }
     setLoading(true);
     try {
+      // Small delay to ensure loading state renders before Firebase call
+      await new Promise(r => setTimeout(r, 50));
       const cred = await signInWithEmailAndPassword(auth, email, password);
       const snap = await getDoc(doc(db,'customers',cred.user.uid));
       const data = snap.exists() ? snap.data() : {};
@@ -673,6 +675,8 @@ function DriverLogin({ go, setUser }) {
     if (!email||!password) { setError('Please enter your email and password.'); return; }
     setLoading(true);
     try {
+      // Small delay to ensure loading state renders before Firebase call
+      await new Promise(r => setTimeout(r, 50));
       const cred = await signInWithEmailAndPassword(auth, email, password);
       const snap = await getDoc(doc(db,'drivers',cred.user.uid));
       if (!snap.exists()) { setError('No driver account found. Please apply first.'); setLoading(false); return; }
@@ -4540,8 +4544,16 @@ export default function App() {
   const [loading,     setLoading]     = useState(true);
 
   useEffect(() => {
+    let manualLogin = false; // prevent double navigation on manual login
+
     const unsub = onAuthStateChanged(auth, async (fu) => {
       if (fu) {
+        // Only auto-navigate on initial page load (splash screen)
+        // If user already manually logged in, don't re-navigate
+        const currentScreen = document.body.getAttribute('data-screen') || 'splash';
+        if (currentScreen !== 'splash' && currentScreen !== 'loading') {
+          setLoading(false); return;
+        }
         try {
           const cSnap = await getDoc(doc(db,'customers',fu.uid));
           const dSnap = await getDoc(doc(db,'drivers',fu.uid));
@@ -4606,6 +4618,11 @@ export default function App() {
     });
     return () => unsub();
   }, []);
+
+  // Sync current screen to body for auth handler
+  React.useEffect(() => {
+    document.body.setAttribute('data-screen', screen);
+  }, [screen]);
 
   if (loading) return <LoadingScreen/>;
 
