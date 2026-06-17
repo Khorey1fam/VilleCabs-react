@@ -1451,63 +1451,42 @@ function CustomerDash({ go, user, setUser }) {
               </div>
 
               {/* Car image + Book a Ride button */}
-              <button onClick={() => go('pin-pickup')}
+        onClick={() => go('pin-pickup')}
                 style={{ background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', margin:'16px auto 0', padding:0 }}>
-                {/* Sleek car silhouette SVG */}
-                <svg width="300" height="160" viewBox="0 0 300 160" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ filter:'drop-shadow(0 12px 32px rgba(0,0,0,0.18))', maxWidth:'90vw' }}>
-                  {/* Body */}
-                  <path d="M30 105 L30 80 Q32 78 40 72 L80 55 Q95 45 110 42 L190 42 Q210 42 228 50 L260 68 Q272 74 275 80 L275 105 Q275 108 272 108 L33 108 Q30 108 30 105Z" fill="#e8b400"/>
-                  {/* Roof */}
-                  <path d="M95 42 L115 18 Q120 12 130 11 L175 11 Q185 11 190 18 L210 42Z" fill="#d4a200"/>
-                  {/* Windshield */}
-                  <path d="M100 42 L118 20 Q122 15 130 14 L172 14 Q180 14 184 20 L202 42Z" fill="#b8d4f0" opacity="0.7"/>
-                  {/* Side windows */}
-                  <rect x="95" y="46" width="38" height="24" rx="3" fill="#b8d4f0" opacity="0.6"/>
-                  <rect x="140" y="46" width="55" height="24" rx="3" fill="#b8d4f0" opacity="0.6"/>
-                  {/* Door lines */}
-                  <line x1="138" y1="43" x2="138" y2="108" stroke="#d4a200" strokeWidth="1.5"/>
-                  <line x1="200" y1="43" x2="200" y2="108" stroke="#d4a200" strokeWidth="1.5"/>
-                  {/* Front wheel arch */}
-                  <path d="M48 108 Q48 78 72 78 Q96 78 96 108Z" fill="#e8b400"/>
-                  {/* Rear wheel arch */}
-                  <path d="M205 108 Q205 78 229 78 Q253 78 253 108Z" fill="#e8b400"/>
-                  {/* Front wheel */}
-                  <circle cx="72" cy="112" r="22" fill="#1a1a1a"/>
-                  <circle cx="72" cy="112" r="16" fill="#2a2a2a"/>
-                  <circle cx="72" cy="112" r="9" fill="#3a3a3a"/>
-                  <circle cx="72" cy="112" r="4" fill="#555"/>
-                  {/* Front wheel spokes */}
-                  <line x1="72" y1="96" x2="72" y2="128" stroke="#555" strokeWidth="2"/>
-                  <line x1="56" y1="112" x2="88" y2="112" stroke="#555" strokeWidth="2"/>
-                  <line x1="61" y1="101" x2="83" y2="123" stroke="#555" strokeWidth="2"/>
-                  <line x1="83" y1="101" x2="61" y2="123" stroke="#555" strokeWidth="2"/>
-                  {/* Rear wheel */}
-                  <circle cx="229" cy="112" r="22" fill="#1a1a1a"/>
-                  <circle cx="229" cy="112" r="16" fill="#2a2a2a"/>
-                  <circle cx="229" cy="112" r="9" fill="#3a3a3a"/>
-                  <circle cx="229" cy="112" r="4" fill="#555"/>
-                  <line x1="229" y1="96" x2="229" y2="128" stroke="#555" strokeWidth="2"/>
-                  <line x1="213" y1="112" x2="245" y2="112" stroke="#555" strokeWidth="2"/>
-                  <line x1="218" y1="101" x2="240" y2="123" stroke="#555" strokeWidth="2"/>
-                  <line x1="240" y1="101" x2="218" y2="123" stroke="#555" strokeWidth="2"/>
-                  {/* Headlights */}
-                  <path d="M30 82 L38 78 L44 82 L42 90 L32 90Z" fill="#fffbe6" opacity="0.9"/>
-                  <path d="M30 82 L38 78 L44 82 L42 90 L32 90Z" fill="none" stroke="#d4a200" strokeWidth="1"/>
-                  {/* Tail lights */}
-                  <rect x="268" y="80" width="8" height="16" rx="2" fill="#ff4444" opacity="0.8"/>
-                  {/* Grille */}
-                  <path d="M30 86 L30 100 Q32 105 38 106 L50 106 L50 86Z" fill="#111" opacity="0.6"/>
-                  {/* Door handles */}
-                  <rect x="155" y="70" width="12" height="3" rx="1.5" fill="#d4a200"/>
-                  <rect x="215" y="70" width="12" height="3" rx="1.5" fill="#d4a200"/>
-                  {/* VilleCabs logo on door */}
-                  <circle cx="165" cy="90" r="8" fill="#d4a200" opacity="0.4"/>
-                  <text x="165" y="93" textAnchor="middle" fontSize="7" fill="#1a1a1a" fontWeight="bold">VC</text>
-                  {/* Ground shadow */}
-                  <ellipse cx="152" cy="135" rx="118" ry="8" fill="rgba(0,0,0,0.08)"/>
-                </svg>
-                <div style={{ marginTop:8, background:'#111111', color:'#ffffff', borderRadius:30, padding:'12px 36px', fontSize:16, fontWeight:700, letterSpacing:0.5, boxShadow:'0 4px 16px rgba(0,0,0,0.2)' }}>
-                  🚕 Book a Ride
+                {/* Circle with yellow car inside */}
+                <div style={{ width:200, height:200, borderRadius:'50%', background:'#ffffff', boxShadow:'0 8px 40px rgba(0,0,0,0.15), 0 0 0 6px rgba(232,180,0,0.15)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', overflow:'hidden', position:'relative' }}>
+                  {/* Yellow glow bg */}
+                  <div style={{ position:'absolute', inset:0, background:'radial-gradient(circle at 50% 60%, rgba(232,180,0,0.12) 0%, transparent 70%)' }}/>
+                  <svg width="170" height="95" viewBox="0 0 300 160" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ position:'relative', zIndex:1 }}>
+                    <path d="M30 105 L30 80 Q32 78 40 72 L80 55 Q95 45 110 42 L190 42 Q210 42 228 50 L260 68 Q272 74 275 80 L275 105 Q275 108 272 108 L33 108 Q30 108 30 105Z" fill="#e8b400"/>
+                    <path d="M95 42 L115 18 Q120 12 130 11 L175 11 Q185 11 190 18 L210 42Z" fill="#d4a200"/>
+                    <path d="M100 42 L118 20 Q122 15 130 14 L172 14 Q180 14 184 20 L202 42Z" fill="#b8d4f0" opacity="0.8"/>
+                    <rect x="95" y="46" width="38" height="24" rx="3" fill="#b8d4f0" opacity="0.65"/>
+                    <rect x="140" y="46" width="55" height="24" rx="3" fill="#b8d4f0" opacity="0.65"/>
+                    <line x1="138" y1="43" x2="138" y2="108" stroke="#d4a200" strokeWidth="1.5"/>
+                    <line x1="200" y1="43" x2="200" y2="108" stroke="#d4a200" strokeWidth="1.5"/>
+                    <path d="M48 108 Q48 78 72 78 Q96 78 96 108Z" fill="#e8b400"/>
+                    <path d="M205 108 Q205 78 229 78 Q253 78 253 108Z" fill="#e8b400"/>
+                    <circle cx="72" cy="112" r="22" fill="#1a1a1a"/>
+                    <circle cx="72" cy="112" r="14" fill="#2a2a2a"/>
+                    <circle cx="72" cy="112" r="6" fill="#444"/>
+                    <line x1="72" y1="98" x2="72" y2="126" stroke="#555" strokeWidth="2"/>
+                    <line x1="58" y1="112" x2="86" y2="112" stroke="#555" strokeWidth="2"/>
+                    <line x1="62" y1="102" x2="82" y2="122" stroke="#555" strokeWidth="2"/>
+                    <line x1="82" y1="102" x2="62" y2="122" stroke="#555" strokeWidth="2"/>
+                    <circle cx="229" cy="112" r="22" fill="#1a1a1a"/>
+                    <circle cx="229" cy="112" r="14" fill="#2a2a2a"/>
+                    <circle cx="229" cy="112" r="6" fill="#444"/>
+                    <line x1="229" y1="98" x2="229" y2="126" stroke="#555" strokeWidth="2"/>
+                    <line x1="215" y1="112" x2="243" y2="112" stroke="#555" strokeWidth="2"/>
+                    <line x1="219" y1="102" x2="239" y2="122" stroke="#555" strokeWidth="2"/>
+                    <line x1="239" y1="102" x2="219" y2="122" stroke="#555" strokeWidth="2"/>
+                    <path d="M30 82 L38 78 L44 82 L42 90 L32 90Z" fill="#fffbe6" opacity="0.9"/>
+                    <rect x="268" y="80" width="8" height="16" rx="2" fill="#ff4444" opacity="0.8"/>
+                    <path d="M30 86 L30 100 Q32 105 38 106 L50 106 L50 86Z" fill="#111" opacity="0.5"/>
+                    <ellipse cx="152" cy="130" rx="100" ry="5" fill="rgba(0,0,0,0.07)"/>
+                  </svg>
+                  <div style={{ fontSize:14, fontWeight:800, color:'#1a1a2e', marginTop:4, letterSpacing:0.3, position:'relative', zIndex:1 }}>Book a Ride</div>
                 </div>
               </button>
 
