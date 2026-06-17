@@ -1266,7 +1266,7 @@ function CustomerDash({ go, user, setUser }) {
           }
         }
       } else if (completed && (prevStatusRef.current === 'active' || prevStatusRef.current === 'arrived')) {
-        // Ride just completed — clear ALL rideNotifs regardless of previous state
+        // Ride just completed — clear ALL notifications regardless of previous state
         prevStatusRef.current = 'completed';
         setActiveRide(null);
         setRideNotif(null);
