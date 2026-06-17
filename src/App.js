@@ -4552,6 +4552,29 @@ const MAP_BG_SCREENS = new Set(['splash','role','customer-signup','customer-logi
 // Prevent auth handler from re-navigating after manual login
 let _manualNavDone = false;
 
+// Error boundary to catch runtime crashes
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { hasError:false, error:null }; }
+  static getDerivedStateFromError(e) { return { hasError:true, error:e }; }
+  componentDidCatch(e, info) { console.error('App crash:', e, info); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ minHeight:'100vh', background:'#f5f6fa', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24, textAlign:'center' }}>
+          <div style={{ fontSize:48, marginBottom:16 }}>⚠️</div>
+          <div style={{ fontSize:18, fontWeight:700, color:'#1a1a2e', marginBottom:8 }}>Something went wrong</div>
+          <div style={{ fontSize:13, color:'#666', marginBottom:8 }}>{this.state.error?.message||'Unknown error'}</div>
+          <button onClick={() => { this.setState({ hasError:false }); window.location.reload(); }}
+            style={{ padding:'12px 24px', background:'#0f1a35', color:'#fff', border:'none', borderRadius:10, fontSize:14, cursor:'pointer', marginTop:16 }}>
+            Reload App
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   const [screen,      setScreen]      = useState('splash');
   const [user,        setUser]        = useState(null);
@@ -4661,10 +4684,12 @@ export default function App() {
   };
 
   return (
-    <div style={s.screen}>
-      <GlobalStyles/>
-      <MapBg/>
-      {screens[screen]||<Splash {...props}/>}
-    </div>
+    <ErrorBoundary>
+      <div style={s.screen}>
+        <GlobalStyles/>
+        <MapBg/>
+        {screens[screen]||<Splash {...props}/>}
+      </div>
+    </ErrorBoundary>
   );
 }
