@@ -75,8 +75,8 @@ const s = {
   btnG:      { width:'100%', padding:'14px 20px', background:GREEN, color:WHITE, border:'none', borderRadius:12, fontSize:15, fontWeight:600, cursor:'pointer', marginBottom:10 },
   inp:       { width:'100%', padding:'14px', background:'rgba(255,255,255,0.08)', border:'0.5px solid rgba(255,255,255,0.2)', borderRadius:10, color:WHITE, fontSize:16, marginBottom:12, boxSizing:'border-box', outline:'none' },
   lbl:       { fontSize:11, color:'rgba(255,255,255,0.55)', marginBottom:4, display:'block', fontWeight:500 },
-  topBar:    { background:'rgba(10,15,35,0.85)', padding:'12px 16px', display:'flex', alignItems:'center', gap:12, borderBottom:'0.5px solid rgba(255,255,255,0.15)', position:'sticky', top:0, zIndex:10, backdropFilter:'blur(10px)' },
-  backBtn:   { background:'none', border:'none', color:YELLOW, fontSize:22, cursor:'pointer', padding:'2px 6px' },
+  topBar:    { background:'#0f1a35', padding:'14px 16px', display:'flex', alignItems:'center', gap:12, borderBottom:'none', position:'sticky', top:0, zIndex:10, boxShadow:'0 2px 10px rgba(0,0,0,0.15)' },
+  backBtn:   { background:'none', border:'none', color:WHITE, fontSize:22, cursor:'pointer', padding:'0 6px 0 0', lineHeight:1 },
   topTitle:  { color:WHITE, fontSize:16, fontWeight:500 },
   link:      { color:YELLOW, fontSize:13, cursor:'pointer', textAlign:'center', marginTop:8, background:'none', border:'none', width:'100%', display:'block', padding:4 },
   divLine:   { display:'flex', alignItems:'center', gap:10, margin:'8px 0 14px', color:'rgba(255,255,255,0.3)', fontSize:12 },
@@ -1319,7 +1319,7 @@ function CustomerDash({ go, user, setUser }) {
         </button>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           <img src="/villecabs-logo.png" alt="V" style={{ width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
-          <span style={{ color:'#1a1a2e', fontSize:15, fontWeight:600 }}>VilleCabs</span>
+          <span style={{ color:'#ffffff', fontSize:15, fontWeight:600 }}>VilleCabs</span>
         </div>
         <div style={{ display:'flex', gap:6, alignItems:'center' }}>
           {activeRide && <div onClick={() => go('live-ride')} style={{ background:GREEN, borderRadius:20, padding:'4px 10px', fontSize:11, color:WHITE, cursor:'pointer' }}>🚕 Live</div>}
@@ -1874,7 +1874,7 @@ function PinPickup({ go, setPickupData }) {
         <label style={s.lbl}>District / Road / Landmark <span style={{ color:'rgba(255,255,255,0.3)', fontWeight:400 }}>(optional)</span></label>
         <input style={s.inp} placeholder="e.g. Hatfield district, top of Caledonia Road, near the blue gate..." value={note} onChange={e => setNote(e.target.value)}/>
         {/* Passenger counter */}
-        <div style={{ background:'rgba(15,20,40,0.6)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:12, padding:'14px 16px', marginBottom:14 }}>
+        <div style={{ background:'#111111', border:'none', borderRadius:12, padding:'14px 16px', marginBottom:14 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
             <div>
               <div style={{ fontSize:14, fontWeight:500, color:WHITE }}>👥 Number of Passengers</div>
@@ -1947,6 +1947,13 @@ function PinDropoff({ go, pickupData, setDropoffData }) {
   return (
     <div style={{ ...s.content, background:'transparent' }}>
       <TopBar title="Pin Drop-off Location" onBack={() => go('pin-pickup')}/>
+      <div style={{ background:'#111111', padding:'12px 16px', display:'flex', gap:10, alignItems:'flex-start' }}>
+        <span style={{ fontSize:18, flexShrink:0 }}>🛡️</span>
+        <div>
+          <div style={{ fontSize:12, fontWeight:600, color:'#e8b400', marginBottom:2 }}>Safety & Accuracy</div>
+          <div style={{ fontSize:11, color:'rgba(255,255,255,0.65)', lineHeight:1.5 }}>Pin your drop-off as precisely as possible. Use the "Additional Details" field to add landmarks — e.g. "Blue gate, top of hill." Your driver will appreciate it!</div>
+        </div>
+      </div>
       <VilleMap height={300} center={MANCHESTER_CENTER} zoom={12} onClick={handleMapClick} markers={markers} expandable={true}/>
       <div style={{ padding:16 }}>
         <div style={{ background:'rgba(232,180,0,0.08)', border:'0.5px solid rgba(232,180,0,0.25)', borderRadius:8, padding:'8px 12px', marginBottom:12, fontSize:12, color:'rgba(232,180,0,0.9)' }}>
@@ -1968,7 +1975,7 @@ function PinDropoff({ go, pickupData, setDropoffData }) {
             </div>
           ))}
         </div>
-        <button style={{ ...s.btnY, opacity:!address?0.5:1 }} onClick={handleConfirm} disabled={!address}>Confirm Drop-off</button>
+        <button style={{ ...s.btnY, background:'#111111', color:'#ffffff', opacity:!address?0.5:1 }} onClick={handleConfirm} disabled={!address}>Confirm Drop-off</button>
       </div>
     <Footer go={go}/>
     </div>
@@ -2132,6 +2139,14 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
     <div style={{ ...s.content, background:'transparent' }}>
       <TopBar title="Choose Ride" onBack={() => go('pin-dropoff')}/>
       <VilleMap height={220} center={pickupData?.coords||MANCHESTER_CENTER} zoom={12} markers={markers} directions={directions} expandable={true}/>
+      {/* SOS + cash reminder */}
+      <div style={{ background:'#111111', padding:'12px 16px', display:'flex', gap:10, alignItems:'flex-start' }}>
+        <span style={{ fontSize:18, flexShrink:0 }}>🆘</span>
+        <div>
+          <div style={{ fontSize:12, fontWeight:600, color:'#e8b400', marginBottom:2 }}>Reminder — Before You Go</div>
+          <div style={{ fontSize:11, color:'rgba(255,255,255,0.65)', lineHeight:1.5 }}>Your driver is almost there! Hold the <strong style={{color:'#f09595'}}>SOS button 5 seconds</strong> in any emergency. Don't forget your <strong style={{color:'#ffffff'}}>cash, keys, and phone</strong> before you step out.</div>
+        </div>
+      </div>
       <div style={{ padding:14 }}>
         <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.5)', marginBottom:10 }}>
           <span>📍 {pickupData?.address?.split(',')[0]||'Pickup'} → {dropoffData?.address?.split(',')[0]||'Destination'}</span>
@@ -2157,7 +2172,7 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
             </div>
           </div>
         )}
-        <div style={{ background:DARK, borderRadius:12, padding:14, margin:'10px 0' }}>
+        <div style={{ background:'#111111', borderRadius:12, padding:14, margin:'10px 0' }}>
           <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:6 }}>
             <span>Base (first 1km)</span>
             <span style={{ color:WHITE, fontWeight:500 }}>J$751</span>
@@ -2174,7 +2189,7 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
               </div>
             </>
           )}
-          <div style={{ display:'flex', justifyContent:'space-between', fontSize:15, fontWeight:600, color:YELLOW, borderTop:'0.5px solid rgba(255,255,255,0.12)', paddingTop:8, marginTop:4 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:15, fontWeight:600, color:'#e8b400', borderTop:'0.5px solid rgba(255,255,255,0.15)', paddingTop:8, marginTop:4 }}>
             <span>Total</span>
             <span>J${calcPrice(v).toLocaleString()}</span>
           </div>
@@ -2497,7 +2512,7 @@ function BookingConfirm({ go, bookingId }) {
             <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:'rgba(255,255,255,0.6)', marginBottom:6 }}>
               <span>Processing fee</span><span>J$0</span>
             </div>
-            <div style={{ display:'flex', justifyContent:'space-between', fontSize:15, fontWeight:500, color:YELLOW, borderTop:'0.5px solid rgba(255,255,255,0.12)', paddingTop:8, marginTop:4 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:15, fontWeight:500, color:'#e8b400', borderTop:'0.5px solid rgba(255,255,255,0.15)', paddingTop:8, marginTop:4 }}>
               <span>Total (JMD)</span><span>J${booking?.fare?.toLocaleString()}</span>
             </div>
             <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.4)', marginTop:4 }}>
@@ -2521,6 +2536,14 @@ function BookingConfirm({ go, bookingId }) {
   return (
     <div style={{ ...s.content }}>
       <TopBar title="Confirm Booking" onBack={() => go('vehicle-select')}/>
+      {/* What to look for */}
+      <div style={{ background:'#111111', padding:'12px 16px', display:'flex', gap:10, alignItems:'flex-start' }}>
+        <span style={{ fontSize:18, flexShrink:0 }}>👀</span>
+        <div>
+          <div style={{ fontSize:12, fontWeight:600, color:'#e8b400', marginBottom:2 }}>What to Look For</div>
+          <div style={{ fontSize:11, color:'rgba(255,255,255,0.65)', lineHeight:1.5 }}>When your driver arrives — check the <strong style={{color:'#ffffff'}}>licence plate number</strong>, <strong style={{color:'#ffffff'}}>car colour</strong>, and <strong style={{color:'#ffffff'}}>driver photo</strong> in the app before getting in. Your safety comes first!</div>
+        </div>
+      </div>
       <div style={{ padding:16 }}>
 
         {/* Booking summary */}
@@ -2576,7 +2599,7 @@ function BookingConfirm({ go, bookingId }) {
           💵 You will pay <strong style={{ color:WHITE }}>J${booking?.fare?.toLocaleString()}</strong> in cash directly to your driver when you arrive at your destination.
         </div>
 
-        <button style={s.btnY} onClick={handleConfirm}>Confirm — Pay Cash</button>
+        <button style={{ ...s.btnY, background:'#111111', color:'#ffffff' }} onClick={handleConfirm}>Confirm — Pay Cash</button>
         <button style={s.btnO} onClick={() => go('customer-dash')}>Cancel</button>
       </div>
     </div>
@@ -3493,7 +3516,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   return (
     <div style={{ ...s.content, background:'transparent', minHeight:'100vh' }}>
       {/* Hamburger top bar */}
-      <div style={{ background:'#ffffff', padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'1px solid #e2e4ed', boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
+      <div style={{ background:'#0f1a35', padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'none', boxShadow:'0 2px 10px rgba(0,0,0,0.15)' }}>
         <button onClick={() => setMenuOpen(true)} style={{ background:'none', border:'none', cursor:'pointer', padding:4, display:'flex', flexDirection:'column', gap:5 }}>
           <div style={{ width:24, height:2.5, background:WHITE, borderRadius:2 }}/>
           <div style={{ width:18, height:2.5, background:WHITE, borderRadius:2 }}/>
@@ -3501,7 +3524,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
         </button>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           <img src="/villecabs-logo.png" alt="V" style={{ width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
-          <span style={{ color:'#1a1a2e', fontSize:15, fontWeight:600 }}>VilleCabs</span>
+          <span style={{ color:'#ffffff', fontSize:15, fontWeight:600 }}>VilleCabs</span>
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           <div style={{ background:isOnline?GREEN:'#e8eaf0', borderRadius:20, padding:'5px 12px', fontSize:11, color:isOnline?WHITE:'#555770', fontWeight:500 }}>
