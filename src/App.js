@@ -1903,6 +1903,40 @@ function PinPickup({ go, setPickupData }) {
 
         <button style={{ ...s.btnY, background:'#111111', color:'#ffffff' }} onClick={handleConfirm}>Confirm Pickup</button>
       </div>
+
+      {/* ── PICKUP PAGE BANNERS ── */}
+      <div style={{ padding:'20px 16px 0', background:'#f5f6fa' }}>
+
+        {/* Tip 1: Accuracy */}
+        <div style={{ background:'#111111', borderRadius:16, padding:'18px', marginBottom:14, display:'flex', gap:14, alignItems:'flex-start' }}>
+          <div style={{ fontSize:28, flexShrink:0 }}>📍</div>
+          <div>
+            <div style={{ fontSize:14, fontWeight:700, color:'#e8b400', marginBottom:6 }}>Pin Your Exact Location</div>
+            <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', lineHeight:1.7 }}>Place your pickup pin as close as possible to where you are standing. This helps your driver find you quickly and ensures your fare is calculated accurately based on the real distance.</div>
+          </div>
+        </div>
+
+        {/* Tip 2: Rural areas */}
+        <div style={{ background:'#111111', borderRadius:16, padding:'18px', marginBottom:14, display:'flex', gap:14, alignItems:'flex-start' }}>
+          <div style={{ fontSize:28, flexShrink:0 }}>🏘️</div>
+          <div>
+            <div style={{ fontSize:14, fontWeight:700, color:'#e8b400', marginBottom:6 }}>In a Rural Area?</div>
+            <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', lineHeight:1.7 }}>If you're on an unnamed road or in a district not on the map, use the <strong style={{color:'#ffffff'}}>"Additional Details"</strong> field below your pickup pin to describe your location — e.g. "Top of Caledonia Road, near the blue gate, Hatfield district."</div>
+          </div>
+        </div>
+
+        {/* Tip 3: Last trip */}
+        <div style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:16, padding:'18px', marginBottom:14, boxShadow:'0 2px 8px rgba(0,0,0,0.05)' }}>
+          <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:10 }}>🕐 Quick Tip — Returning Customer?</div>
+          <div style={{ fontSize:12, color:'#666888', lineHeight:1.7 }}>You can view your past trips under <strong>My Rides</strong> in the menu. Favourite locations? Just pin the same spot — the map remembers where you last looked!</div>
+        </div>
+
+        {/* Tip 4: Chat */}
+        <div style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:16, padding:'18px', marginBottom:14, boxShadow:'0 2px 8px rgba(0,0,0,0.05)' }}>
+          <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:10 }}>💬 Chat With Your Driver</div>
+          <div style={{ fontSize:12, color:'#666888', lineHeight:1.7 }}>Once a driver accepts your ride, you can chat directly with them in the app to share extra directions, confirm your spot, or negotiate your fare before the ride starts.</div>
+        </div>
+      </div>
     <Footer go={go}/>
     </div>
   );
@@ -1976,6 +2010,36 @@ function PinDropoff({ go, pickupData, setDropoffData }) {
           ))}
         </div>
         <button style={{ ...s.btnY, background:'#111111', color:'#ffffff', opacity:!address?0.5:1 }} onClick={handleConfirm} disabled={!address}>Confirm Drop-off</button>
+      </div>
+
+      {/* ── DROPOFF PAGE BANNERS ── */}
+      <div style={{ padding:'20px 16px 0', background:'#f5f6fa' }}>
+
+        <div style={{ background:'#111111', borderRadius:16, padding:'18px', marginBottom:14, display:'flex', gap:14, alignItems:'flex-start' }}>
+          <div style={{ fontSize:28, flexShrink:0 }}>🗺️</div>
+          <div>
+            <div style={{ fontSize:14, fontWeight:700, color:'#e8b400', marginBottom:6 }}>Pin Your Drop-off Precisely</div>
+            <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', lineHeight:1.7 }}>Tap exactly where you want to be dropped off. The more accurate your pin, the better your driver can plan the route and the more accurate your fare will be.</div>
+          </div>
+        </div>
+
+        <div style={{ background:'#111111', borderRadius:16, padding:'18px', marginBottom:14, display:'flex', gap:14, alignItems:'flex-start' }}>
+          <div style={{ fontSize:28, flexShrink:0 }}>✏️</div>
+          <div>
+            <div style={{ fontSize:14, fontWeight:700, color:'#e8b400', marginBottom:6 }}>Add Landmark Details</div>
+            <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', lineHeight:1.7 }}>Use the <strong style={{color:'#ffffff'}}>"Additional Details"</strong> field to describe your drop-off point — e.g. "Opposite Mandeville Regional Hospital, green building on the right." This helps your driver drop you at the right spot.</div>
+          </div>
+        </div>
+
+        <div style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:16, padding:'18px', marginBottom:14, boxShadow:'0 2px 8px rgba(0,0,0,0.05)' }}>
+          <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:10 }}>🛡️ Your Safety Matters</div>
+          <div style={{ fontSize:12, color:'#666888', lineHeight:1.7 }}>During your ride, you can use the <strong>SOS button</strong> at any time if you feel unsafe. Hold it for 5 seconds to send an emergency alert with your location to our admin team immediately.</div>
+        </div>
+
+        <div style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:16, padding:'18px', marginBottom:14, boxShadow:'0 2px 8px rgba(0,0,0,0.05)' }}>
+          <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:10 }}>💰 Negotiate Your Fare</div>
+          <div style={{ fontSize:12, color:'#666888', lineHeight:1.7 }}>Once a driver accepts, chat with them to agree on the final fare before the ride. The app shows a suggested price based on distance — but you and your driver can negotiate freely.</div>
+        </div>
       </div>
     <Footer go={go}/>
     </div>
@@ -2265,6 +2329,40 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
         <button style={{ ...s.btnY, background:'#111111', color:'#ffffff', opacity:loading?0.7:1 }} onClick={handleBook} disabled={loading}>
           {loading ? 'Creating booking...' : 'Book Ride — J$' + calcFinalPrice(v).toLocaleString()}
         </button>
+      </div>
+
+      {/* ── CHOOSE RIDE BANNERS ── */}
+      <div style={{ padding:'16px 16px 0', background:'#f5f6fa' }}>
+
+        <div style={{ background:'#111111', borderRadius:16, padding:'18px', marginBottom:14, display:'flex', gap:14, alignItems:'flex-start' }}>
+          <div style={{ fontSize:28, flexShrink:0 }}>🆘</div>
+          <div>
+            <div style={{ fontSize:14, fontWeight:700, color:'#e8b400', marginBottom:6 }}>SOS Emergency Button</div>
+            <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', lineHeight:1.7 }}>During your ride, hold the <strong style={{color:'#f09595'}}>SOS button for 5 seconds</strong> at any time to send an emergency alert with your live location to our admin team. Your safety always comes first.</div>
+          </div>
+        </div>
+
+        <div style={{ background:'#111111', borderRadius:16, padding:'18px', marginBottom:14, display:'flex', gap:14, alignItems:'flex-start' }}>
+          <div style={{ fontSize:28, flexShrink:0 }}>💳</div>
+          <div>
+            <div style={{ fontSize:14, fontWeight:700, color:'#e8b400', marginBottom:6 }}>Get Ready — Driver Coming Soon!</div>
+            <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', lineHeight:1.7 }}>Make sure you have your <strong style={{color:'#ffffff'}}>cash ready</strong> to pay your driver on arrival. Also grab your <strong style={{color:'#ffffff'}}>keys, phone, and any belongings</strong> — your driver will be at your pickup point shortly!</div>
+          </div>
+        </div>
+
+        <div style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:16, padding:'18px', marginBottom:14, boxShadow:'0 2px 8px rgba(0,0,0,0.05)' }}>
+          <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:10 }}>🚗 Choosing the Right Vehicle</div>
+          <div style={{ fontSize:12, color:'#666888', lineHeight:1.7 }}>
+            <strong>VilleRide</strong> — Standard car, great for 1–4 passengers.<br/>
+            <strong>VilleXL</strong> — Larger vehicle for 5–6 passengers or extra luggage.<br/>
+            <strong>VilleMoto</strong> — Motorcycle, fastest option for short solo trips.
+          </div>
+        </div>
+
+        <div style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:16, padding:'18px', marginBottom:14, boxShadow:'0 2px 8px rgba(0,0,0,0.05)' }}>
+          <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:10 }}>⚡ Surge Pricing Explained</div>
+          <div style={{ fontSize:12, color:'#666888', lineHeight:1.7 }}>Between <strong>5pm and 8pm</strong> peak hours, fares may be slightly higher due to high demand. Book early or travel off-peak to get the best rates.</div>
+        </div>
       </div>
     <Footer go={go}/>
     </div>
@@ -2601,6 +2699,36 @@ function BookingConfirm({ go, bookingId }) {
 
         <button style={{ ...s.btnY, background:'#111111', color:'#ffffff' }} onClick={handleConfirm}>Confirm — Pay Cash</button>
         <button style={s.btnO} onClick={() => go('customer-dash')}>Cancel</button>
+      </div>
+
+      {/* ── CONFIRM BOOKING BANNERS ── */}
+      <div style={{ padding:'16px 16px 0', background:'#f5f6fa' }}>
+        <div style={{ background:'#111111', borderRadius:16, padding:'18px', marginBottom:14, display:'flex', gap:14, alignItems:'flex-start' }}>
+          <div style={{ fontSize:28, flexShrink:0 }}>👀</div>
+          <div>
+            <div style={{ fontSize:14, fontWeight:700, color:'#e8b400', marginBottom:6 }}>Verify Your Driver</div>
+            <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', lineHeight:1.7 }}>When your driver arrives check the <strong style={{color:'#ffffff'}}>licence plate number</strong>, <strong style={{color:'#ffffff'}}>car colour and make</strong>, and <strong style={{color:'#ffffff'}}>driver photo</strong> in the app before getting in. Never enter a vehicle if these do not match.</div>
+          </div>
+        </div>
+        <div style={{ background:'#111111', borderRadius:16, padding:'18px', marginBottom:14, display:'flex', gap:14, alignItems:'flex-start' }}>
+          <div style={{ fontSize:28, flexShrink:0 }}>📲</div>
+          <div>
+            <div style={{ fontSize:14, fontWeight:700, color:'#e8b400', marginBottom:6 }}>Share Your Trip</div>
+            <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', lineHeight:1.7 }}>Once your ride starts use the <strong style={{color:'#ffffff'}}>"Share Trip"</strong> button on the tracking screen to send your live ride details to a friend or family member.</div>
+          </div>
+        </div>
+        <div style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:16, padding:'18px', marginBottom:14, boxShadow:'0 2px 8px rgba(0,0,0,0.05)' }}>
+          <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:10 }}>💬 Confirm Fare With Your Driver</div>
+          <div style={{ fontSize:12, color:'#666888', lineHeight:1.7 }}>VilleCabs fares are negotiable. Use the in-app chat to agree on the final price with your driver before you confirm.</div>
+        </div>
+        <div style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:16, padding:'18px', marginBottom:14, boxShadow:'0 2px 8px rgba(0,0,0,0.05)' }}>
+          <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:10 }}>💵 Cash Payment Only</div>
+          <div style={{ fontSize:12, color:'#666888', lineHeight:1.7 }}>Pay your driver directly in cash at the end of your trip. Have the correct amount or small bills ready. Card and online payment coming soon.</div>
+        </div>
+        <div style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:16, padding:'18px', marginBottom:20, boxShadow:'0 2px 8px rgba(0,0,0,0.05)' }}>
+          <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:10 }}>⭐ Rate Your Driver After</div>
+          <div style={{ fontSize:12, color:'#666888', lineHeight:1.7 }}>After your trip you will be asked to rate your driver. Your feedback helps maintain high standards on VilleCabs.</div>
+        </div>
       </div>
     </div>
   );
