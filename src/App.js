@@ -2055,8 +2055,8 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
           <div style={{ background:'rgba(226,75,74,0.15)', border:'1.5px solid rgba(226,75,74,0.4)', borderRadius:10, padding:'10px 14px', marginBottom:10, display:'flex', alignItems:'center', gap:8 }}>
             <span style={{ fontSize:18 }}>⚡</span>
             <div>
-              <div style={{ fontSize:13, fontWeight:600, color:'#f09595' }}>Surge Pricing Active</div>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Peak hours 5pm–8pm · 1.5× fare applies</div>
+              <div style={{ fontSize:13, fontWeight:600, color:'#f09595' }}>Peak Hours</div>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Peak hours rate may apply</div>
             </div>
           </div>
         )}
