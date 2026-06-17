@@ -1319,7 +1319,7 @@ function CustomerDash({ go, user, setUser }) {
         </button>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           <img src="/villecabs-logo.png" alt="V" style={{ width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
-          <span style={{ color:WHITE, fontSize:15, fontWeight:600 }}>VilleCabs</span>
+          <span style={{ color:'#1a1a2e', fontSize:15, fontWeight:600 }}>VilleCabs</span>
         </div>
         <div style={{ display:'flex', gap:6, alignItems:'center' }}>
           {activeRide && <div onClick={() => go('live-ride')} style={{ background:GREEN, borderRadius:20, padding:'4px 10px', fontSize:11, color:WHITE, cursor:'pointer' }}>🚕 Live</div>}
@@ -1331,15 +1331,15 @@ function CustomerDash({ go, user, setUser }) {
       {menuOpen && (
         <div style={{ position:'fixed', inset:0, zIndex:100 }}>
           <div onClick={() => setMenuOpen(false)} style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.6)' }}/>
-          <div style={{ position:'absolute', left:0, top:0, bottom:0, width:280, background:'rgba(10,15,35,0.98)', borderRight:'0.5px solid rgba(255,255,255,0.1)', display:'flex', flexDirection:'column', backdropFilter:'blur(20px)' }}>
+          <div style={{ position:'absolute', left:0, top:0, bottom:0, width:280, background:'#ffffff', borderRight:'1px solid #e2e4ed', display:'flex', flexDirection:'column', boxShadow:'4px 0 24px rgba(0,0,0,0.12)' }}>
             {/* Menu header */}
-            <div style={{ padding:'24px 18px 16px', borderBottom:'0.5px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ padding:'24px 18px 16px', borderBottom:'1px solid #e2e4ed' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
                 <img src="/villecabs-logo.png" alt="V" style={{ width:48, height:48, borderRadius:'50%', objectFit:'cover', border:'2px solid rgba(232,180,0,0.4)' }}/>
-                <button onClick={() => setMenuOpen(false)} style={{ background:'rgba(255,255,255,0.08)', border:'none', color:WHITE, width:32, height:32, borderRadius:'50%', cursor:'pointer', fontSize:16 }}>✕</button>
+                <button onClick={() => setMenuOpen(false)} style={{ background:'#f0f1f5', border:'1px solid #e2e4ed', color:'#1a1a2e', width:32, height:32, borderRadius:'50%', cursor:'pointer', fontSize:16 }}>✕</button>
               </div>
-              <div style={{ fontSize:16, fontWeight:600, color:WHITE }}>{user?.name}</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.45)', marginTop:2 }}>{user?.email}</div>
+              <div style={{ fontSize:16, fontWeight:600, color:'#1a1a2e' }}>{user?.name}</div>
+              <div style={{ fontSize:12, color:'#888aaa', marginTop:2 }}>{user?.email}</div>
               <div style={{ display:'inline-block', marginTop:8, background:'rgba(26,158,90,0.15)', color:GREEN, borderRadius:20, padding:'3px 12px', fontSize:11, fontWeight:500 }}>✓ Verified Rider</div>
             </div>
 
@@ -1359,7 +1359,7 @@ function CustomerDash({ go, user, setUser }) {
                   onMouseLeave={e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.paddingLeft='18px'; }}
                   style={{ padding:'13px 18px', display:'flex', alignItems:'center', gap:14, cursor:'pointer', transition:'all 0.15s ease' }}>
                   <span style={{ fontSize:20, width:28, textAlign:'center' }}>{icon}</span>
-                  <span style={{ fontSize:14, color:WHITE }}>{label}</span>
+                  <span style={{ fontSize:14, color:'#1a1a2e' }}>{label}</span>
                 </div>
               ))}
               {activeRide && (
@@ -1374,7 +1374,7 @@ function CustomerDash({ go, user, setUser }) {
             </div>
 
             {/* Logout */}
-            <div style={{ padding:16, borderTop:'0.5px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ padding:16, borderTop:'1px solid #e2e4ed' }}>
               <button onClick={handleLogout} style={{ width:'100%', padding:12, background:'rgba(226,75,74,0.12)', border:'0.5px solid rgba(226,75,74,0.3)', borderRadius:10, color:'#f09595', fontSize:13, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
                 🚪 Log Out
               </button>
@@ -1441,13 +1441,13 @@ function CustomerDash({ go, user, setUser }) {
           <div style={{ flex:1, overflowY:'auto', background:'#f5f6fa' }}>
 
             {/* Hero greeting + Book a Ride */}
-            <div style={{ background:'#111111', padding:'28px 20px 32px', textAlign:'center', position:'relative', overflow:'hidden' }}>
+            <div style={{ background:'#ffffff', padding:'28px 20px 32px', textAlign:'center', position:'relative', overflow:'hidden' }}>
               {/* Background glow */}
               <div style={{ position:'absolute', top:-60, left:'50%', transform:'translateX(-50%)', width:300, height:300, background:'radial-gradient(circle, rgba(232,180,0,0.15) 0%, transparent 70%)', pointerEvents:'none' }}/>
               <div style={{ fontSize:13, color:'rgba(255,255,255,0.5)', marginBottom:4 }}>
-                Good day, <span style={{ color:WHITE, fontWeight:600 }}>{user?.name?.split(' ')[0]||'Rider'}</span> 👋
+                Good day, <span style={{ color:'#1a1a2e', fontWeight:600 }}>{user?.name?.split(' ')[0]||'Rider'}</span> 👋
               </div>
-              <div style={{ fontSize:22, fontWeight:700, color:WHITE, marginBottom:28 }}>Where are you going?</div>
+              <div style={{ fontSize:22, fontWeight:700, color:'#1a1a2e', marginBottom:28 }}>Where are you going?</div>
 
               {/* Circle Book a Ride — white with black SVG car */}
               <button onClick={() => go('pin-pickup')}
@@ -1472,11 +1472,11 @@ function CustomerDash({ go, user, setUser }) {
 
               {/* Stats row */}
               <div style={{ display:'flex', gap:10, marginTop:24, justifyContent:'center' }}>
-                <div style={{ background:'#222222', border:'none', borderRadius:12, padding:'12px 20px', textAlign:'center', minWidth:110 }}>
+                <div style={{ background:'#f5f6fa', border:'1px solid #e2e4ed', borderRadius:12, padding:'12px 20px', textAlign:'center', minWidth:110 }}>
                   <div style={{ fontSize:20, fontWeight:700, color:YELLOW }}>{history.length}</div>
                   <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:2 }}>Total Rides</div>
                 </div>
-                <div style={{ background:'#222222', border:'none', borderRadius:12, padding:'12px 20px', textAlign:'center', minWidth:110 }}>
+                <div style={{ background:'#f5f6fa', border:'1px solid #e2e4ed', borderRadius:12, padding:'12px 20px', textAlign:'center', minWidth:110 }}>
                   <div style={{ fontSize:18, fontWeight:700, color:GREEN }}>J${totalSpent.toLocaleString()}</div>
                   <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:2 }}>Total Spent</div>
                 </div>
@@ -1682,8 +1682,8 @@ function CustomerProfile({ go, user, setUser }) {
         {/* Avatar */}
         <div style={{ textAlign:'center', marginBottom:24 }}>
           <div style={{ width:76, height:76, borderRadius:'50%', background:'rgba(232,180,0,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:34, margin:'0 auto 10px' }}>👤</div>
-          <div style={{ fontSize:16, fontWeight:500, color:WHITE }}>{user?.name}</div>
-          <div style={{ fontSize:12, color:'rgba(255,255,255,0.45)', marginTop:2 }}>{user?.email}</div>
+          <div style={{ fontSize:16, fontWeight:500, color:'#1a1a2e' }}>{user?.name}</div>
+          <div style={{ fontSize:12, color:'#888aaa', marginTop:2 }}>{user?.email}</div>
           <div style={{ display:'inline-block', marginTop:6, background:'rgba(26,158,90,0.15)', color:GREEN, borderRadius:20, padding:'3px 12px', fontSize:11, fontWeight:500 }}>✓ Verified Rider</div>
         </div>
 
@@ -3493,7 +3493,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   return (
     <div style={{ ...s.content, background:'transparent', minHeight:'100vh' }}>
       {/* Hamburger top bar */}
-      <div style={{ background:'rgba(10,15,35,0.92)', padding:'12px 16px', backdropFilter:'blur(10px)', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'0.5px solid rgba(255,255,255,0.08)' }}>
+      <div style={{ background:'#ffffff', padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'1px solid #e2e4ed', boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
         <button onClick={() => setMenuOpen(true)} style={{ background:'none', border:'none', cursor:'pointer', padding:4, display:'flex', flexDirection:'column', gap:5 }}>
           <div style={{ width:24, height:2.5, background:WHITE, borderRadius:2 }}/>
           <div style={{ width:18, height:2.5, background:WHITE, borderRadius:2 }}/>
@@ -3501,10 +3501,10 @@ function DriverDash({ go, user, setUser, setBookingId }) {
         </button>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           <img src="/villecabs-logo.png" alt="V" style={{ width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
-          <span style={{ color:WHITE, fontSize:15, fontWeight:600 }}>VilleCabs</span>
+          <span style={{ color:'#1a1a2e', fontSize:15, fontWeight:600 }}>VilleCabs</span>
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-          <div style={{ background:isOnline?GREEN:'rgba(255,255,255,0.1)', borderRadius:20, padding:'5px 12px', fontSize:11, color:isOnline?WHITE:'rgba(255,255,255,0.5)', fontWeight:500 }}>
+          <div style={{ background:isOnline?GREEN:'#e8eaf0', borderRadius:20, padding:'5px 12px', fontSize:11, color:isOnline?WHITE:'#555770', fontWeight:500 }}>
             {isOnline ? '● Online' : '○ Offline'}
           </div>
         </div>
@@ -3514,14 +3514,14 @@ function DriverDash({ go, user, setUser, setBookingId }) {
       {menuOpen && (
         <div style={{ position:'fixed', inset:0, zIndex:100 }}>
           <div onClick={() => setMenuOpen(false)} style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.6)' }}/>
-          <div style={{ position:'absolute', left:0, top:0, bottom:0, width:280, background:'rgba(10,15,35,0.98)', borderRight:'0.5px solid rgba(255,255,255,0.1)', display:'flex', flexDirection:'column', backdropFilter:'blur(20px)' }}>
-            <div style={{ padding:'24px 18px 16px', borderBottom:'0.5px solid rgba(255,255,255,0.08)' }}>
+          <div style={{ position:'absolute', left:0, top:0, bottom:0, width:280, background:'#ffffff', borderRight:'1px solid #e2e4ed', display:'flex', flexDirection:'column', boxShadow:'4px 0 24px rgba(0,0,0,0.12)' }}>
+            <div style={{ padding:'24px 18px 16px', borderBottom:'1px solid #e2e4ed' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
                 <img src="/villecabs-logo.png" alt="V" style={{ width:48, height:48, borderRadius:'50%', objectFit:'cover', border:'2px solid rgba(232,180,0,0.4)' }}/>
-                <button onClick={() => setMenuOpen(false)} style={{ background:'rgba(255,255,255,0.08)', border:'none', color:WHITE, width:32, height:32, borderRadius:'50%', cursor:'pointer', fontSize:16 }}>✕</button>
+                <button onClick={() => setMenuOpen(false)} style={{ background:'#f0f1f5', border:'1px solid #e2e4ed', color:'#1a1a2e', width:32, height:32, borderRadius:'50%', cursor:'pointer', fontSize:16 }}>✕</button>
               </div>
-              <div style={{ fontSize:16, fontWeight:600, color:WHITE }}>{user?.name}</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.45)', marginTop:2 }}>{user?.email}</div>
+              <div style={{ fontSize:16, fontWeight:600, color:'#1a1a2e' }}>{user?.name}</div>
+              <div style={{ fontSize:12, color:'#888aaa', marginTop:2 }}>{user?.email}</div>
               <div style={{ display:'inline-block', marginTop:8, background:'rgba(26,158,90,0.15)', color:GREEN, borderRadius:20, padding:'3px 12px', fontSize:11, fontWeight:500 }}>✓ Approved Driver</div>
             </div>
             <div style={{ flex:1, overflowY:'auto', padding:'8px 0' }}>
@@ -3539,11 +3539,11 @@ function DriverDash({ go, user, setUser, setBookingId }) {
                   onMouseLeave={e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.paddingLeft='18px'; }}
                   style={{ padding:'13px 18px', display:'flex', alignItems:'center', gap:14, cursor:'pointer', transition:'all 0.15s ease' }}>
                   <span style={{ fontSize:20, width:28, textAlign:'center' }}>{icon}</span>
-                  <span style={{ fontSize:14, color:WHITE }}>{label}</span>
+                  <span style={{ fontSize:14, color:'#1a1a2e' }}>{label}</span>
                 </div>
               ))}
             </div>
-            <div style={{ padding:16, borderTop:'0.5px solid rgba(255,255,255,0.08)', display:'flex', flexDirection:'column', gap:8 }}>
+            <div style={{ padding:16, borderTop:'1px solid #e2e4ed', display:'flex', flexDirection:'column', gap:8 }}>
               {isOnline
                 ? <button onClick={() => { goOffline(); setMenuOpen(false); }} style={{ width:'100%', padding:11, background:'rgba(255,255,255,0.06)', border:'0.5px solid rgba(255,255,255,0.15)', borderRadius:10, color:'rgba(255,255,255,0.6)', fontSize:13, cursor:'pointer' }}>○ Go Offline</button>
                 : <button onClick={() => { goOnline(); setMenuOpen(false); }} style={{ width:'100%', padding:11, background:GREEN, border:'none', borderRadius:10, color:WHITE, fontSize:13, fontWeight:600, cursor:'pointer' }}>● Go Online</button>
@@ -4042,7 +4042,7 @@ function DriverProfile({ go, user, setUser }) {
       <div style={{ padding:20, maxWidth:420, margin:'0 auto' }}>
         <div style={{ textAlign:'center', marginBottom:24 }}>
           <div style={{ width:72, height:72, borderRadius:'50%', background:'rgba(232,180,0,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:32, margin:'0 auto 10px' }}>👤</div>
-          <div style={{ fontSize:16, fontWeight:500, color:WHITE }}>{user?.name}</div>
+          <div style={{ fontSize:16, fontWeight:500, color:'#1a1a2e' }}>{user?.name}</div>
           <div style={{ fontSize:12, color:'rgba(255,255,255,0.45)' }}>{user?.email}</div>
           <div style={{ display:'inline-block', marginTop:6, background:'rgba(26,158,90,0.15)', color:'#1a9e5a', borderRadius:20, padding:'3px 12px', fontSize:11, fontWeight:500 }}>✓ Approved Driver</div>
         </div>
