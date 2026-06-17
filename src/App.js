@@ -1196,7 +1196,7 @@ function CustomerDash({ go, user, setUser }) {
   const [history,    setHistory]    = useState([]);
   const [loadingH,   setLoadingH]   = useState(true);
   const [activeRide, setActiveRide] = useState(null);
-  const [notification, setNotification] = useState(null);
+  const [rideNotif, setRideNotif] = useState(null);
   const prevStatusRef = useRef(null);
   const handleLogout = async () => { _manualNavDone = false; await signOut(auth); setUser(null); go('splash'); };
 
@@ -1233,10 +1233,10 @@ function CustomerDash({ go, user, setUser }) {
 
       if (active) {
         setActiveRide(active);
-        // Show driver accepted notification
+        // Show driver accepted rideNotif
         if (prevStatusRef.current !== 'active' && prevStatusRef.current !== 'arrived') {
           prevStatusRef.current = 'active';
-          setNotification({
+          setRideNotif({
             type:         'driver_accepted',
             driverName:   active.driverName   || 'Your driver',
             vehicleMake:  active.vehicleMake  || '',
@@ -1250,10 +1250,10 @@ function CustomerDash({ go, user, setUser }) {
             });
           }
         }
-        // Show driver arrived notification - check driverArrived field
+        // Show driver arrived rideNotif - check driverArrived field
         if (active.driverArrived && prevStatusRef.current !== 'arrived') {
           prevStatusRef.current = 'arrived';
-          setNotification({
+          setRideNotif({
             type:        'driver_arrived',
             driverName:  active.driverName  || 'Your driver',
             licensePlate:active.licensePlate || '',
@@ -1266,10 +1266,10 @@ function CustomerDash({ go, user, setUser }) {
           }
         }
       } else if (completed && (prevStatusRef.current === 'active' || prevStatusRef.current === 'arrived')) {
-        // Ride just completed — clear ALL notifications regardless of previous state
+        // Ride just completed — clear ALL rideNotifs regardless of previous state
         prevStatusRef.current = 'completed';
         setActiveRide(null);
-        setNotification(null);
+        setRideNotif(null);
         if (Notification.permission === 'granted') {
           new Notification('✅ Ride completed!', {
             body: `Your ride with ${completed.driverName||'your driver'} is complete. Rate your driver!`,
@@ -1278,14 +1278,14 @@ function CustomerDash({ go, user, setUser }) {
         }
       } else if (!active && !completed) {
         setActiveRide(null);
-        setNotification(null);
+        setRideNotif(null);
         if (prevStatusRef.current !== null) prevStatusRef.current = null;
       }
     });
     return () => unsub();
   }, [user]);
 
-  // Request notification permission on mount
+  // Request rideNotif permission on mount
   useEffect(() => {
     if (Notification.permission === 'default') {
       Notification.requestPermission();
@@ -1298,10 +1298,10 @@ function CustomerDash({ go, user, setUser }) {
     const unsub = onSnapshot(doc(db,'bookings',activeRide.id), snap => {
       if (!snap.exists()) return;
       const data = snap.data();
-      // Fire arrived notification regardless of prevStatusRef
+      // Fire arrived rideNotif regardless of prevStatusRef
       if (data.driverArrived && prevStatusRef.current !== 'arrived') {
         prevStatusRef.current = 'arrived';
-        setNotification({
+        setRideNotif({
           type:        'driver_arrived',
           driverName:  data.driverName  || 'Your driver',
           licensePlate:data.licensePlate || '',
@@ -1315,7 +1315,7 @@ function CustomerDash({ go, user, setUser }) {
       }
       // Clear if ride completed
       if (data.status === 'completed') {
-        setNotification(null);
+        setRideNotif(null);
         setActiveRide(null);
         prevStatusRef.current = 'completed';
       }
@@ -1408,45 +1408,45 @@ function CustomerDash({ go, user, setUser }) {
         <div style={{ flex:1, display:'flex', flexDirection:'column' }}>
 
           {/* Notification banners */}
-          {notification?.type === 'driver_accepted' && (
+          {rideNotif?.type === 'driver_accepted' && (
             <div style={{ background:'rgba(26,158,90,0.15)', border:'1.5px solid rgba(26,158,90,0.5)', margin:'10px 14px 0', borderRadius:12, padding:14, display:'flex', alignItems:'center', gap:10 }}>
               <div style={{ fontSize:28, flexShrink:0 }}>🚗</div>
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:14, fontWeight:500, color:GREEN }}>Driver found!</div>
-                <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{notification?.driverName} is on the way</div>
-                {notification?.licensePlate && <div style={{ fontSize:11, color:YELLOW, marginTop:2 }}>🔑 {notification?.vehicleMake} {notification?.vehicleModel} · {notification?.licensePlate}</div>}
+                <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{rideNotif?.driverName} is on the way</div>
+                {rideNotif?.licensePlate && <div style={{ fontSize:11, color:YELLOW, marginTop:2 }}>🔑 {rideNotif?.vehicleMake} {rideNotif?.vehicleModel} · {rideNotif?.licensePlate}</div>}
               </div>
               <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
                 <button onClick={() => go('live-ride')} style={{ background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:500 }}>Track →</button>
-                <button onClick={() => setNotification(null)} style={{ background:'rgba(255,255,255,0.08)', color:'rgba(255,255,255,0.5)', border:'none', borderRadius:8, padding:'6px 12px', fontSize:11, cursor:'pointer' }}>Dismiss</button>
+                <button onClick={() => setRideNotif(null)} style={{ background:'rgba(255,255,255,0.08)', color:'rgba(255,255,255,0.5)', border:'none', borderRadius:8, padding:'6px 12px', fontSize:11, cursor:'pointer' }}>Dismiss</button>
               </div>
             </div>
           )}
-          {notification?.type === 'driver_arrived' && (
+          {rideNotif?.type === 'driver_arrived' && (
             <div style={{ background:'rgba(232,180,0,0.15)', border:'1.5px solid rgba(232,180,0,0.6)', margin:'10px 14px 0', borderRadius:12, padding:14, display:'flex', alignItems:'center', gap:10 }}>
               <div style={{ fontSize:28, flexShrink:0 }}>📍</div>
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:14, fontWeight:500, color:YELLOW }}>Driver has arrived!</div>
-                <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{notification?.driverName} is at your pickup location</div>
+                <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{rideNotif?.driverName} is at your pickup location</div>
                 <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Please come outside 🚶</div>
               </div>
               <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
                 <button onClick={() => go('live-ride')} style={{ background:YELLOW, color:DARK, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:700 }}>View →</button>
-                <button onClick={() => setNotification(null)} style={{ background:'rgba(255,255,255,0.08)', color:'rgba(255,255,255,0.5)', border:'none', borderRadius:8, padding:'6px 12px', fontSize:11, cursor:'pointer' }}>OK</button>
+                <button onClick={() => setRideNotif(null)} style={{ background:'rgba(255,255,255,0.08)', color:'rgba(255,255,255,0.5)', border:'none', borderRadius:8, padding:'6px 12px', fontSize:11, cursor:'pointer' }}>OK</button>
               </div>
             </div>
           )}
-          {notification?.type === 'enroute_dropoff' && (
+          {rideNotif?.type === 'enroute_dropoff' && (
             <div style={{ background:'rgba(26,158,90,0.15)', border:'1.5px solid rgba(26,158,90,0.5)', margin:'10px 14px 0', borderRadius:12, padding:14, display:'flex', alignItems:'center', gap:10 }}>
               <div style={{ fontSize:28, flexShrink:0 }}>🚗</div>
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:14, fontWeight:500, color:GREEN }}>On the way to drop-off!</div>
-                <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{notification?.driverName} has picked you up</div>
+                <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{rideNotif?.driverName} has picked you up</div>
               </div>
               <button onClick={() => go('live-ride')} style={{ background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:500 }}>Track →</button>
             </div>
           )}
-          {activeRide && !notification && (
+          {activeRide && !rideNotif && (
             <div style={{ background:'rgba(232,180,0,0.1)', border:'0.5px solid rgba(232,180,0,0.3)', margin:'10px 14px 0', borderRadius:12, padding:12, display:'flex', alignItems:'center', gap:10, cursor:'pointer' }} onClick={() => go('live-ride')}>
               <div style={{ fontSize:22 }}>🚕</div>
               <div style={{ flex:1 }}>
