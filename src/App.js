@@ -64,24 +64,24 @@ const MAP_STYLE = [
 ];
 
 const s = {
-  screen:    { minHeight:'100vh', fontFamily:"'Segoe UI', sans-serif", background:DARK, color:WHITE, position:'relative' },
+  screen:    { minHeight:'100vh', fontFamily:"'Segoe UI', sans-serif", background:'#f5f6fa', color:'#1a1a2e', position:'relative' },
   mapBg:     { position:'fixed', inset:0, zIndex:0, background:DARK },
-  overlay:   { position:'fixed', inset:0, zIndex:1, background:'rgba(15,25,50,0.72)', backdropFilter:'blur(4px)' },
-  content:   { position:'relative', zIndex:2, minHeight:'100vh' },
-  center:    { display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'100vh', padding:'0 24px' },
-  card:      { background:'rgba(15,20,40,0.75)', border:'0.5px solid rgba(255,255,255,0.18)', borderRadius:20, padding:'28px 24px', width:'100%', maxWidth:380, backdropFilter:'blur(10px)' },
+  overlay:   { position:'fixed', inset:0, zIndex:1, background:'rgba(245,246,250,0.3)' },
+  content:   { position:'relative', zIndex:2, minHeight:'100vh', background:'#f5f6fa' },
+  center:    { display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'100vh', padding:'0 24px', background:'#f5f6fa' },
+  card:      { background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:20, padding:'28px 24px', width:'100%', maxWidth:380, boxShadow:'0 4px 24px rgba(0,0,0,0.08)' },
   btnY:      { width:'100%', padding:'14px 20px', background:YELLOW, color:DARK, border:'none', borderRadius:12, fontSize:15, fontWeight:700, cursor:'pointer', marginBottom:10 },
-  btnO:      { width:'100%', padding:'14px 20px', background:'transparent', color:WHITE, border:'1.5px solid rgba(255,255,255,0.35)', borderRadius:12, fontSize:15, fontWeight:500, cursor:'pointer', marginBottom:10 },
+  btnO:      { width:'100%', padding:'14px 20px', background:'#ffffff', color:'#1a1a2e', border:'1.5px solid #d0d3e0', borderRadius:12, fontSize:15, fontWeight:500, cursor:'pointer', marginBottom:10 },
   btnG:      { width:'100%', padding:'14px 20px', background:GREEN, color:WHITE, border:'none', borderRadius:12, fontSize:15, fontWeight:600, cursor:'pointer', marginBottom:10 },
-  inp:       { width:'100%', padding:'14px', background:'rgba(255,255,255,0.08)', border:'0.5px solid rgba(255,255,255,0.2)', borderRadius:10, color:WHITE, fontSize:16, marginBottom:12, boxSizing:'border-box', outline:'none' },
+  inp:       { width:'100%', padding:'14px', background:'#ffffff', border:'1px solid #d0d3e0', borderRadius:10, color:'#1a1a2e', fontSize:16, marginBottom:12, boxSizing:'border-box', outline:'none' },
   lbl:       { fontSize:11, color:'rgba(255,255,255,0.55)', marginBottom:4, display:'block', fontWeight:500 },
   topBar:    { background:'rgba(10,15,35,0.85)', padding:'12px 16px', display:'flex', alignItems:'center', gap:12, borderBottom:'0.5px solid rgba(255,255,255,0.15)', position:'sticky', top:0, zIndex:10, backdropFilter:'blur(10px)' },
   backBtn:   { background:'none', border:'none', color:YELLOW, fontSize:22, cursor:'pointer', padding:'2px 6px' },
   topTitle:  { color:WHITE, fontSize:16, fontWeight:500 },
   link:      { color:YELLOW, fontSize:13, cursor:'pointer', textAlign:'center', marginTop:8, background:'none', border:'none', width:'100%', display:'block', padding:4 },
   divLine:   { display:'flex', alignItems:'center', gap:10, margin:'8px 0 14px', color:'rgba(255,255,255,0.3)', fontSize:12 },
-  errBox:    { background:'rgba(226,75,74,0.15)', border:'0.5px solid rgba(226,75,74,0.4)', borderRadius:10, padding:'10px 14px', marginBottom:12, fontSize:13, color:'#f09595' },
-  successBox:{ background:'rgba(26,158,90,0.15)', border:'0.5px solid rgba(26,158,90,0.4)', borderRadius:10, padding:'10px 14px', marginBottom:12, fontSize:13, color:'#9fe1cb' },
+  errBox:    { background:'#fff0f0', border:'1px solid #ffcccc', borderRadius:10, padding:'10px 14px', marginBottom:12, fontSize:13, color:'#cc2222' },
+  successBox:{ background:'#f0fff8', border:'1px solid #99ddbb', borderRadius:10, padding:'10px 14px', marginBottom:12, fontSize:13, color:'#1a7a45' },
   uploadBox: { border:'1.5px dashed rgba(255,255,255,0.25)', borderRadius:10, padding:14, textAlign:'center', cursor:'pointer', marginBottom:12, background:'rgba(15,20,40,0.6)' },
   uploadOk:  { border:'1.5px dashed #1a9e5a', borderRadius:10, padding:14, textAlign:'center', cursor:'pointer', marginBottom:12, background:'rgba(26,158,90,0.1)' },
 };
@@ -96,7 +96,7 @@ function GlobalStyles() {
     const style = document.createElement('style');
     style.innerHTML = `
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-      html, body { margin:0; padding:0; overflow-x:hidden; font-size:16px; }
+      html, body { margin:0; padding:0; overflow-x:hidden; font-size:16px; background:#f5f6fa; color:#1a1a2e; }
       button:hover:not(:disabled) { filter:brightness(1.15); transform:translateY(-1px); transition:all 0.15s ease; }
       button:active:not(:disabled) { transform:translateY(0) scale(0.98); filter:brightness(0.95); }
       button { transition:all 0.15s ease; -webkit-appearance:none; }
@@ -125,10 +125,7 @@ function MapBg() {
     <>
       <div style={{
         position:'fixed', inset:0, zIndex:0,
-        backgroundImage:"url('/bg.jpg')",
-        backgroundSize:'cover',
-        backgroundPosition:'center',
-        backgroundRepeat:'no-repeat',
+        background:'#f5f6fa',
         filter:'blur(6px)',
         transform:'scale(1.05)', // prevent blur edge white borders
       }}/>
@@ -288,7 +285,7 @@ function GoogleBtn({ onClick, loading }) {
 // ── FOOTER COMPONENT ─────────────────────────────────────────────────────────
 function Footer({ go }) {
   return (
-    <div style={{ background:'rgba(5,8,20,0.95)', borderTop:'0.5px solid rgba(255,255,255,0.08)', padding:'40px 24px 24px', marginTop:'auto' }}>
+    <div style={{ background:'#000000', borderTop:'none', padding:'40px 24px 24px', marginTop:'auto' }}>
       <div style={{ maxWidth:900, margin:'0 auto' }}>
         {/* Logo + tagline */}
         <div style={{ marginBottom:32 }}>
@@ -1308,7 +1305,7 @@ function CustomerDash({ go, user, setUser }) {
 
 
   return (
-    <div style={{ ...s.content, background:'transparent', minHeight:'100vh', display:'flex', flexDirection:'column' }}>
+    <div style={{ ...s.content, background:'#f5f6fa', minHeight:'100vh', display:'flex', flexDirection:'column' }}>
 
       {/* Hamburger top bar */}
       <div style={{ background:'rgba(10,15,35,0.92)', padding:'12px 16px', backdropFilter:'blur(10px)', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'0.5px solid rgba(255,255,255,0.08)' }}>
@@ -1331,15 +1328,15 @@ function CustomerDash({ go, user, setUser }) {
       {menuOpen && (
         <div style={{ position:'fixed', inset:0, zIndex:100 }}>
           <div onClick={() => setMenuOpen(false)} style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.6)' }}/>
-          <div style={{ position:'absolute', left:0, top:0, bottom:0, width:280, background:'rgba(10,15,35,0.98)', borderRight:'0.5px solid rgba(255,255,255,0.1)', display:'flex', flexDirection:'column', backdropFilter:'blur(20px)' }}>
+          <div style={{ position:'absolute', left:0, top:0, bottom:0, width:280, background:'#ffffff', borderRight:'1px solid #e2e4ed', display:'flex', flexDirection:'column', boxShadow:'4px 0 24px rgba(0,0,0,0.12)' }}>
             {/* Menu header */}
             <div style={{ padding:'24px 18px 16px', borderBottom:'0.5px solid rgba(255,255,255,0.08)' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
                 <img src="/villecabs-logo.png" alt="V" style={{ width:48, height:48, borderRadius:'50%', objectFit:'cover', border:'2px solid rgba(232,180,0,0.4)' }}/>
-                <button onClick={() => setMenuOpen(false)} style={{ background:'rgba(255,255,255,0.08)', border:'none', color:WHITE, width:32, height:32, borderRadius:'50%', cursor:'pointer', fontSize:16 }}>✕</button>
+                <button onClick={() => setMenuOpen(false)} style={{ background:'#f0f1f5', border:'1px solid #e2e4ed', color:'#1a1a2e', width:32, height:32, borderRadius:'50%', cursor:'pointer', fontSize:16 }}>✕</button>
               </div>
-              <div style={{ fontSize:16, fontWeight:600, color:WHITE }}>{user?.name}</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.45)', marginTop:2 }}>{user?.email}</div>
+              <div style={{ fontSize:16, fontWeight:600, color:'#1a1a2e' }}>{user?.name}</div>
+              <div style={{ fontSize:12, color:'#888aaa', marginTop:2 }}>{user?.email}</div>
               <div style={{ display:'inline-block', marginTop:8, background:'rgba(26,158,90,0.15)', color:GREEN, borderRadius:20, padding:'3px 12px', fontSize:11, fontWeight:500 }}>✓ Verified Rider</div>
             </div>
 
@@ -1359,7 +1356,7 @@ function CustomerDash({ go, user, setUser }) {
                   onMouseLeave={e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.paddingLeft='18px'; }}
                   style={{ padding:'13px 18px', display:'flex', alignItems:'center', gap:14, cursor:'pointer', transition:'all 0.15s ease' }}>
                   <span style={{ fontSize:20, width:28, textAlign:'center' }}>{icon}</span>
-                  <span style={{ fontSize:14, color:WHITE }}>{label}</span>
+                  <span style={{ fontSize:14, color:'#1a1a2e' }}>{label}</span>
                 </div>
               ))}
               {activeRide && (
@@ -1438,7 +1435,7 @@ function CustomerDash({ go, user, setUser }) {
           )}
 
           {/* ── REDESIGNED HOME DASHBOARD ── */}
-          <div style={{ flex:1, overflowY:'auto', background:'#0a0f1f' }}>
+          <div style={{ flex:1, overflowY:'auto', background:'#f5f6fa' }}>
 
             {/* Hero greeting + Book a Ride */}
             <div style={{ background:'linear-gradient(160deg, #0f1a35 0%, #1a2744 50%, #0f1a35 100%)', padding:'28px 20px 32px', textAlign:'center', position:'relative', overflow:'hidden' }}>
@@ -1683,7 +1680,7 @@ function CustomerProfile({ go, user, setUser }) {
         <div style={{ textAlign:'center', marginBottom:24 }}>
           <div style={{ width:76, height:76, borderRadius:'50%', background:'rgba(232,180,0,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:34, margin:'0 auto 10px' }}>👤</div>
           <div style={{ fontSize:16, fontWeight:500, color:WHITE }}>{user?.name}</div>
-          <div style={{ fontSize:12, color:'rgba(255,255,255,0.45)', marginTop:2 }}>{user?.email}</div>
+          <div style={{ fontSize:12, color:'#888aaa', marginTop:2 }}>{user?.email}</div>
           <div style={{ display:'inline-block', marginTop:6, background:'rgba(26,158,90,0.15)', color:GREEN, borderRadius:20, padding:'3px 12px', fontSize:11, fontWeight:500 }}>✓ Verified Rider</div>
         </div>
 
@@ -3491,9 +3488,9 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   };
 
   return (
-    <div style={{ ...s.content, background:'transparent', minHeight:'100vh' }}>
+    <div style={{ ...s.content, background:'#f5f6fa', minHeight:'100vh' }}>
       {/* Hamburger top bar */}
-      <div style={{ background:'rgba(10,15,35,0.92)', padding:'12px 16px', backdropFilter:'blur(10px)', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'0.5px solid rgba(255,255,255,0.08)' }}>
+      <div style={{ background:'#ffffff', padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'1px solid #e2e4ed', boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
         <button onClick={() => setMenuOpen(true)} style={{ background:'none', border:'none', cursor:'pointer', padding:4, display:'flex', flexDirection:'column', gap:5 }}>
           <div style={{ width:24, height:2.5, background:WHITE, borderRadius:2 }}/>
           <div style={{ width:18, height:2.5, background:WHITE, borderRadius:2 }}/>
@@ -3504,7 +3501,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
           <span style={{ color:WHITE, fontSize:15, fontWeight:600 }}>VilleCabs</span>
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-          <div style={{ background:isOnline?GREEN:'rgba(255,255,255,0.1)', borderRadius:20, padding:'5px 12px', fontSize:11, color:isOnline?WHITE:'rgba(255,255,255,0.5)', fontWeight:500 }}>
+          <div style={{ background:isOnline?GREEN:'#e8eaf0', borderRadius:20, padding:'5px 12px', fontSize:11, color:isOnline?WHITE:'#888aaa', fontWeight:500 }}>
             {isOnline ? '● Online' : '○ Offline'}
           </div>
         </div>
@@ -3514,14 +3511,14 @@ function DriverDash({ go, user, setUser, setBookingId }) {
       {menuOpen && (
         <div style={{ position:'fixed', inset:0, zIndex:100 }}>
           <div onClick={() => setMenuOpen(false)} style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.6)' }}/>
-          <div style={{ position:'absolute', left:0, top:0, bottom:0, width:280, background:'rgba(10,15,35,0.98)', borderRight:'0.5px solid rgba(255,255,255,0.1)', display:'flex', flexDirection:'column', backdropFilter:'blur(20px)' }}>
+          <div style={{ position:'absolute', left:0, top:0, bottom:0, width:280, background:'#ffffff', borderRight:'1px solid #e2e4ed', display:'flex', flexDirection:'column', boxShadow:'4px 0 24px rgba(0,0,0,0.12)' }}>
             <div style={{ padding:'24px 18px 16px', borderBottom:'0.5px solid rgba(255,255,255,0.08)' }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
                 <img src="/villecabs-logo.png" alt="V" style={{ width:48, height:48, borderRadius:'50%', objectFit:'cover', border:'2px solid rgba(232,180,0,0.4)' }}/>
-                <button onClick={() => setMenuOpen(false)} style={{ background:'rgba(255,255,255,0.08)', border:'none', color:WHITE, width:32, height:32, borderRadius:'50%', cursor:'pointer', fontSize:16 }}>✕</button>
+                <button onClick={() => setMenuOpen(false)} style={{ background:'#f0f1f5', border:'1px solid #e2e4ed', color:'#1a1a2e', width:32, height:32, borderRadius:'50%', cursor:'pointer', fontSize:16 }}>✕</button>
               </div>
-              <div style={{ fontSize:16, fontWeight:600, color:WHITE }}>{user?.name}</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.45)', marginTop:2 }}>{user?.email}</div>
+              <div style={{ fontSize:16, fontWeight:600, color:'#1a1a2e' }}>{user?.name}</div>
+              <div style={{ fontSize:12, color:'#888aaa', marginTop:2 }}>{user?.email}</div>
               <div style={{ display:'inline-block', marginTop:8, background:'rgba(26,158,90,0.15)', color:GREEN, borderRadius:20, padding:'3px 12px', fontSize:11, fontWeight:500 }}>✓ Approved Driver</div>
             </div>
             <div style={{ flex:1, overflowY:'auto', padding:'8px 0' }}>
@@ -3539,7 +3536,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
                   onMouseLeave={e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.paddingLeft='18px'; }}
                   style={{ padding:'13px 18px', display:'flex', alignItems:'center', gap:14, cursor:'pointer', transition:'all 0.15s ease' }}>
                   <span style={{ fontSize:20, width:28, textAlign:'center' }}>{icon}</span>
-                  <span style={{ fontSize:14, color:WHITE }}>{label}</span>
+                  <span style={{ fontSize:14, color:'#1a1a2e' }}>{label}</span>
                 </div>
               ))}
             </div>
