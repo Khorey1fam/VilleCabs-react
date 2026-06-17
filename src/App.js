@@ -1243,7 +1243,7 @@ function CustomerDash({ go, user, setUser }) {
             vehicleModel: active.vehicleModel || '',
             licensePlate: active.licensePlate || '',
           });
-          if (Notification.permission === 'granted') {
+          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
             new Notification('🚗 Driver found!', {
               body: `${active.driverName||'Your driver'} is on the way · ${active.licensePlate||''}`,
               icon: '/villecabs-logo.png',
@@ -1258,7 +1258,7 @@ function CustomerDash({ go, user, setUser }) {
             driverName:  active.driverName  || 'Your driver',
             licensePlate:active.licensePlate || '',
           });
-          if (Notification.permission === 'granted') {
+          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
             new Notification('📍 Driver has arrived!', {
               body: `${active.driverName||'Your driver'} is at your pickup location. Please come outside!`,
               icon: '/villecabs-logo.png',
@@ -1270,7 +1270,7 @@ function CustomerDash({ go, user, setUser }) {
         prevStatusRef.current = 'completed';
         setActiveRide(null);
         setRideNotif(null);
-        if (Notification.permission === 'granted') {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
           new Notification('✅ Ride completed!', {
             body: `Your ride with ${completed.driverName||'your driver'} is complete. Rate your driver!`,
             icon: '/villecabs-logo.png',
@@ -1287,9 +1287,11 @@ function CustomerDash({ go, user, setUser }) {
 
   // Request rideNotif permission on mount
   useEffect(() => {
-    if (Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
+    try {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    } catch(e) {}
   }, []);
 
   // Watch active booking directly for driverArrived field
@@ -1306,7 +1308,7 @@ function CustomerDash({ go, user, setUser }) {
           driverName:  data.driverName  || 'Your driver',
           licensePlate:data.licensePlate || '',
         });
-        if (Notification.permission === 'granted') {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
           new Notification('📍 Driver has arrived!', {
             body: `${data.driverName||'Your driver'} is at your pickup location. Please come outside!`,
             icon: '/villecabs-logo.png',
@@ -2393,7 +2395,7 @@ function BookingConfirm({ go, bookingId }) {
         setBooking(data);
         // Browser notification when driver accepts
         if (data.status === 'active' && prevStatus !== 'active') {
-          if (Notification.permission === 'granted') {
+          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
             new Notification('🚗 Driver found!', {
               body: `${data.driverName||'Your driver'} is on the way in a ${data.vehicleMake||''} ${data.vehicleModel||''} · ${data.licensePlate||''}`,
               icon: '/villecabs-logo.png',
@@ -2412,7 +2414,7 @@ function BookingConfirm({ go, bookingId }) {
         // Browser notification when driver arrives
         if (data.driverArrived && prevStatus !== 'arrived') {
           prevStatus = 'arrived';
-          if (Notification.permission === 'granted') {
+          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
             new Notification('📍 Driver has arrived!', {
               body: `${data.driverName||'Your driver'} is at your pickup location. Please come outside!`,
               icon: '/villecabs-logo.png',
@@ -2784,7 +2786,7 @@ function LiveRide({ go, bookingId, user }) {
         setBooking(data);
         // Browser notification when driver accepts
         if (data.status === 'active' && prevStatus !== 'active') {
-          if (Notification.permission === 'granted') {
+          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
             new Notification('🚗 Driver found!', {
               body: `${data.driverName||'Your driver'} is on the way in a ${data.vehicleMake||''} ${data.vehicleModel||''} · ${data.licensePlate||''}`,
               icon: '/villecabs-logo.png',
@@ -2803,7 +2805,7 @@ function LiveRide({ go, bookingId, user }) {
         // Browser notification when driver arrives
         if (data.driverArrived && prevStatus !== 'arrived') {
           prevStatus = 'arrived';
-          if (Notification.permission === 'granted') {
+          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
             new Notification('📍 Driver has arrived!', {
               body: `${data.driverName||'Your driver'} is at your pickup location. Please come outside!`,
               icon: '/villecabs-logo.png',
