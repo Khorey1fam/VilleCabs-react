@@ -1808,9 +1808,8 @@ function PinPickup({ go, setPickupData }) {
 
         <button style={s.btnY} onClick={handleConfirm}>Confirm Pickup</button>
       </div>
-    </div>
-  
     <Footer go={go}/>
+    </div>
   );
 }
 
@@ -1876,9 +1875,8 @@ function PinDropoff({ go, pickupData, setDropoffData }) {
         </div>
         <button style={{ ...s.btnY, opacity:!address?0.5:1 }} onClick={handleConfirm} disabled={!address}>Confirm Drop-off</button>
       </div>
-    </div>
-  
     <Footer go={go}/>
+    </div>
   );
 }
 
@@ -2158,9 +2156,8 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
           {loading ? 'Creating booking...' : 'Book Ride — J$' + calcFinalPrice(v).toLocaleString()}
         </button>
       </div>
-    </div>
-  
     <Footer go={go}/>
+    </div>
   );
 }
 
@@ -2981,9 +2978,8 @@ function LiveRide({ go, bookingId, user }) {
           <button style={s.btnO} onClick={() => go('customer-dash')}>Back to Dashboard</button>
         )}
       </div>
-    </div>
-  
     <Footer go={go}/>
+    </div>
   );
 }
 
