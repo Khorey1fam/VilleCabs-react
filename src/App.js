@@ -1321,9 +1321,9 @@ function CustomerDash({ go, user, setUser }) {
           <img src="/villecabs-logo.png" alt="V" style={{ width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
           <span style={{ color:'#ffffff', fontSize:15, fontWeight:600 }}>VilleCabs</span>
         </div>
-        <div style={{ display:'flex', gap:6, alignItems:'center' }}>
+        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
           {activeRide && <div onClick={() => go('live-ride')} style={{ background:GREEN, borderRadius:20, padding:'4px 10px', fontSize:11, color:WHITE, cursor:'pointer' }}>🚕 Live</div>}
-          <span style={{ background:YELLOW, borderRadius:20, padding:'3px 10px', fontSize:11, fontWeight:500, color:DARK }}>{history.length}</span>
+          <span style={{ fontSize:13, fontWeight:600, color:'#ffffff' }}>{user?.name||''}</span>
         </div>
       </div>
 
@@ -1453,27 +1453,13 @@ function CustomerDash({ go, user, setUser }) {
               {/* Car image + Book a Ride button */}
               <button onClick={() => go('pin-pickup')}
                 style={{ background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', margin:'16px auto 0', padding:0 }}>
-                <div style={{ width:200, height:200, borderRadius:'50%', background:'#ffffff', boxShadow:'0 8px 40px rgba(0,0,0,0.15), 0 0 0 6px rgba(232,180,0,0.2)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', overflow:'hidden', position:'relative' }}>
-                  <div style={{ position:'absolute', inset:0, background:'radial-gradient(circle at 50% 60%, rgba(232,180,0,0.1) 0%, transparent 70%)' }}/>
-                  <svg width="160" height="90" viewBox="0 0 300 160" fill="none" style={{ position:'relative', zIndex:1 }}>
-                    <path d="M30 105 L30 80 Q32 78 40 72 L80 55 Q95 45 110 42 L190 42 Q210 42 228 50 L260 68 Q272 74 275 80 L275 105 Q275 108 272 108 L33 108 Q30 108 30 105Z" fill="#e8b400"/>
-                    <path d="M95 42 L115 18 Q120 12 130 11 L175 11 Q185 11 190 18 L210 42Z" fill="#d4a200"/>
-                    <path d="M100 42 L118 20 Q122 15 130 14 L172 14 Q180 14 184 20 L202 42Z" fill="#b8d4f0" opacity="0.8"/>
-                    <rect x="95" y="46" width="38" height="24" rx="3" fill="#b8d4f0" opacity="0.65"/>
-                    <rect x="140" y="46" width="55" height="24" rx="3" fill="#b8d4f0" opacity="0.65"/>
-                    <path d="M48 108 Q48 78 72 78 Q96 78 96 108Z" fill="#e8b400"/>
-                    <path d="M205 108 Q205 78 229 78 Q253 78 253 108Z" fill="#e8b400"/>
-                    <circle cx="72" cy="112" r="22" fill="#1a1a1a"/>
-                    <circle cx="72" cy="112" r="14" fill="#333"/>
-                    <circle cx="72" cy="112" r="5" fill="#555"/>
-                    <circle cx="229" cy="112" r="22" fill="#1a1a1a"/>
-                    <circle cx="229" cy="112" r="14" fill="#333"/>
-                    <circle cx="229" cy="112" r="5" fill="#555"/>
-                    <path d="M30 82 L38 78 L44 82 L42 90 L32 90Z" fill="#fffbe6" opacity="0.9"/>
-                    <rect x="268" y="80" width="8" height="16" rx="2" fill="#ff4444" opacity="0.8"/>
-                    <ellipse cx="152" cy="130" rx="100" ry="5" fill="rgba(0,0,0,0.07)"/>
-                  </svg>
-                  <div style={{ fontSize:14, fontWeight:800, color:'#1a1a2e', marginTop:2, letterSpacing:0.3, position:'relative', zIndex:1 }}>Book a Ride</div>
+                <img
+                  src="/car.png"
+                  alt="VilleCabs Ride"
+                  style={{ width:'min(320px, 90vw)', height:'auto', objectFit:'contain', marginBottom:0, filter:'drop-shadow(0 8px 24px rgba(0,0,0,0.18))' }}
+                />
+                <div style={{ marginTop:8, background:'#111111', color:'#ffffff', borderRadius:30, padding:'12px 36px', fontSize:16, fontWeight:700, letterSpacing:0.5, boxShadow:'0 4px 16px rgba(0,0,0,0.2)' }}>
+                  🚕 Book a Ride
                 </div>
               </button>
 
