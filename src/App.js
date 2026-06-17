@@ -308,7 +308,6 @@ function Footer({ go }) {
               ['About VilleCabs', () => go('about-us')],
               ['Contact Us',      () => go('contact-us')],
               ['Help & Info',     () => go('help')],
-              ['Terms & Conditions', () => go('terms')],
               ['Privacy Policy',  () => window.open('/privacy','_blank')],
             ].map(([label, action], i) => (
               <div key={i} onClick={action}
@@ -348,7 +347,7 @@ function Footer({ go }) {
               style={{ fontSize:13, color:'rgba(255,255,255,0.5)', marginBottom:10, cursor:'pointer' }}
               onMouseEnter={e => e.target.style.color=YELLOW}
               onMouseLeave={e => e.target.style.color='rgba(255,255,255,0.5)'}>
-              Cities
+              Explore Mandeville
             </div>
           </div>
         </div>
@@ -1809,7 +1808,6 @@ function PinPickup({ go, setPickupData }) {
 
         <button style={s.btnY} onClick={handleConfirm}>Confirm Pickup</button>
       </div>
-    <Footer go={go}/>
     </div>
   );
 }
@@ -1876,7 +1874,6 @@ function PinDropoff({ go, pickupData, setDropoffData }) {
         </div>
         <button style={{ ...s.btnY, opacity:!address?0.5:1 }} onClick={handleConfirm} disabled={!address}>Confirm Drop-off</button>
       </div>
-    <Footer go={go}/>
     </div>
   );
 }
@@ -2157,7 +2154,6 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
           {loading ? 'Creating booking...' : 'Book Ride — J$' + calcFinalPrice(v).toLocaleString()}
         </button>
       </div>
-    <Footer go={go}/>
     </div>
   );
 }
@@ -2979,7 +2975,6 @@ function LiveRide({ go, bookingId, user }) {
           <button style={s.btnO} onClick={() => go('customer-dash')}>Back to Dashboard</button>
         )}
       </div>
-    <Footer go={go}/>
     </div>
   );
 }
