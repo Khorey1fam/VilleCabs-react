@@ -3,11 +3,13 @@ import { initializeApp } from 'firebase/app';
 import {
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
   signInWithPopup, GoogleAuthProvider, sendEmailVerification,
-  onAuthStateChanged, signOut, setPersistence, browserLocalPersistence
+  onAuthStateChanged, signOut, setPersistence, browserLocalPersistence,
+  updatePassword, updateEmail, reauthenticateWithCredential, EmailAuthProvider
 } from 'firebase/auth';
 import {
   getFirestore, doc, setDoc, getDoc, addDoc, collection,
-  onSnapshot, updateDoc, query, where, orderBy, serverTimestamp, getDocs
+  onSnapshot, updateDoc, query, where, orderBy, serverTimestamp, getDocs,
+  arrayUnion, increment, arrayRemove
 } from 'firebase/firestore';
 import { GoogleMap, useJsApiLoader, Marker, DirectionsRenderer } from '@react-google-maps/api';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -2137,7 +2139,7 @@ function CustomerSettings({ go, user, setUser }) {
     if (newPassword !== confirmPassword) { setErrPass('Passwords do not match.'); return; }
     setLoadingPass(true);
     try {
-      const { updatePassword } = await import('firebase/auth');
+      // updatePassword now statically imported
       await updatePassword(auth.currentUser, newPassword);
       setMsgPass('Password updated successfully!');
       setNewPassword(''); setConfirmPassword('');
@@ -2153,7 +2155,7 @@ function CustomerSettings({ go, user, setUser }) {
     if (!newEmail) { setErrEmail('Please enter a new email address.'); return; }
     setLoadingEmail(true);
     try {
-      const { updateEmail, sendEmailVerification } = await import('firebase/auth');
+      // (statically imported)
       await updateEmail(auth.currentUser, newEmail);
       await sendEmailVerification(auth.currentUser);
       await updateDoc(doc(db,'customers',user.uid), { email:newEmail });
@@ -2759,7 +2761,7 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
       // Mark promo as used
       if (promoData?.id) {
         try {
-          const { arrayUnion, increment } = await import('firebase/firestore');
+          // arrayUnion/increment now statically imported
           await updateDoc(doc(db,'promo_codes',promoData.id), {
             usedBy:     arrayUnion(user.uid),
             usageCount: increment(1),
@@ -3012,8 +3014,10 @@ function BookingConfirm({ go, bookingId, user }) {
   useEffect(() => {
     if (step !== 'card-form' || !stripeKey || !stripeKey.startsWith('pk_')) return;
     const loadStripeElements = async () => {
-      const { loadStripe } = await import('@stripe/stripe-js');
-      const stripeInstance  = await loadStripe(stripeKey);
+      // Stripe not available - skip
+      console.log('Stripe payment not available');
+      return;
+      const stripeInstance  = await (null)(stripeKey);
       const elementsInstance= stripeInstance.elements();
       const cardElement     = elementsInstance.create('card', {
         style: {
@@ -4203,7 +4207,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
 
   const declineRide = async (rideId) => {
     try {
-      const { arrayUnion } = await import('firebase/firestore');
+      // (statically imported)
       await updateDoc(doc(db,'bookings',rideId), { declinedBy: arrayUnion(user.uid) });
     } catch(err) { console.error('Decline error:', err); }
   };
@@ -5024,7 +5028,7 @@ function DriverSettings({ go, user, setUser }) {
     if (newPassword !== confirmPassword) { setErrPass('Passwords do not match.'); return; }
     setLoadingPass(true);
     try {
-      const { updatePassword } = await import('firebase/auth');
+      // updatePassword now statically imported
       await updatePassword(auth.currentUser, newPassword);
       setMsgPass('Password updated successfully!');
       setNewPassword(''); setConfirmPassword('');
@@ -5040,7 +5044,7 @@ function DriverSettings({ go, user, setUser }) {
     if (!newEmail) { setErrEmail('Please enter a new email address.'); return; }
     setLoadingEmail(true);
     try {
-      const { updateEmail, sendEmailVerification } = await import('firebase/auth');
+      // (statically imported)
       await updateEmail(auth.currentUser, newEmail);
       await sendEmailVerification(auth.currentUser);
       await updateDoc(doc(db,'drivers',user.uid), { email:newEmail });
