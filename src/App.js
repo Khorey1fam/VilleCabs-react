@@ -952,7 +952,7 @@ function DriverLogin({ go, setUser }) {
 
   return (
     <div style={s.content}>
-      <TopBar title="Driver Login" onBack={() => go('splash')} go={go} user={user}/>
+      <TopBar title="Driver Login" onBack={() => go('splash')} go={go} user={null}/>
       <div style={{ padding:'32px 20px', maxWidth:420, margin:'0 auto' }}>
         <h2 style={{ fontSize:20, fontWeight:500, marginBottom:4 }}>Welcome back</h2>
         <p style={{ color:'rgba(255,255,255,0.5)', fontSize:13, marginBottom:20 }}>Sign in to your driver account</p>
@@ -5982,109 +5982,95 @@ function FeaturedMandeville({ go }) {
 
 // ── NEW PUBLIC LANDING PAGE ────────────────────────────────────────────────────
 function PublicLanding({ go }) {
-  const [heroSlide,   setHeroSlide]   = useState(0);
-  const [safetySlide, setSafetySlide] = useState(0);
+  const [slide, setSlide] = useState(0);
 
-  const heroSlides = [
-    { icon:'🚕', bg:'#6b21a8', title:"Mandeville's Local Ride App", sub:'Fast, safe, and reliable rides across Mandeville and Manchester.' },
-    { icon:'🛡️', bg:'#4c1d95', title:'Your Safety Comes First',     sub:'Verified drivers, GPS tracking, SOS emergency button, and share trip.' },
-    { icon:'🚗', bg:'#1e1b4b', title:'Drive With VilleCabs',        sub:'Use your vehicle, set your own schedule, and keep 85% of every fare.' },
-    { icon:'🤝', bg:'#2d1b69', title:'Partner With VilleCabs',      sub:'Help your customers move safely and conveniently across Manchester.' },
+  const slides = [
+    { bg:'#6b21a8', emoji:'🚕', h:"Mandeville's Local Ride App",   sub:'Fast, safe, and reliable rides across Mandeville and Manchester.' },
+    { bg:'#4c1d95', emoji:'🛡️', h:'Your Safety Comes First',       sub:'Verified drivers, GPS tracking, SOS emergency button, and share trip.' },
+    { bg:'#1e1b4b', emoji:'🚗', h:'Drive With VilleCabs',          sub:'Use your vehicle, set your own schedule, and keep 85% of every fare.' },
+    { bg:'#2d1b69', emoji:'🤝', h:'Partner With VilleCabs',        sub:'Help your customers move safely and conveniently across Manchester.' },
   ];
-  useEffect(() => { const t=setInterval(()=>setHeroSlide(s=>(s+1)%heroSlides.length),5000); return ()=>clearInterval(t); },[]);
 
-  const safetyTips = [
-    { icon:'✅', title:'Verified Drivers', desc:'Every VilleCabs driver is approved before they receive ride requests.' },
-    { icon:'📍', title:'GPS Tracked Rides', desc:'All rides are monitored live. Your location is always known.' },
-    { icon:'🆘', title:'SOS Emergency Button', desc:'Hold SOS for 5 seconds during a ride for immediate emergency support.' },
-    { icon:'📲', title:'Share Your Trip', desc:'Send live ride details to someone you trust at any time.' },
-    { icon:'👀', title:'Driver Verification', desc:'Check driver name, photo, vehicle make, colour, and plate before entering.' },
-  ];
-  useEffect(() => { const t=setInterval(()=>setSafetySlide(s=>(s+1)%safetyTips.length),4000); return ()=>clearInterval(t); },[]);
+  useEffect(() => {
+    const t = setInterval(() => setSlide(s => (s + 1) % 4), 5000);
+    return () => clearInterval(t);
+  }, []);
 
-  const cur = heroSlides[heroSlide] || heroSlides[0];
+  const cur = slides[slide] || slides[0];
 
   return (
-    <div style={{ background:'#ffffff', minHeight:'100vh' }}>
-      {/* Sticky nav */}
-      <nav style={{ position:'sticky', top:0, zIndex:100, background:'rgba(255,255,255,0.97)', borderBottom:'1px solid #eee', padding:'10px 16px', display:'flex', alignItems:'center', gap:10, backdropFilter:'blur(8px)' }}>
-        <img src="/logo.png" alt="VilleCabs" style={{ height:32, objectFit:'contain', cursor:'pointer' }} onClick={() => window.scrollTo({top:0,behavior:'smooth'})}/>
-        <div style={{ display:'flex', gap:6, marginLeft:'auto' }}>
-          <button onClick={() => go('partner-with-us')} style={{ padding:'5px 10px', background:'#f5f0ff', border:'1px solid #d8b4fe', borderRadius:12, color:'#6b21a8', fontSize:11, fontWeight:600, cursor:'pointer' }}>Partners</button>
-          <button onClick={() => go('customer-login')} style={{ padding:'5px 10px', background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:12, color:'#1a1a2e', fontSize:11, fontWeight:600, cursor:'pointer' }}>Login</button>
-          <button onClick={() => go('role')} style={{ padding:'5px 10px', background:'#6b21a8', border:'none', borderRadius:12, color:'#ffffff', fontSize:11, fontWeight:700, cursor:'pointer' }}>Sign Up</button>
-        </div>
-      </nav>
+    <div style={{ background:'#ffffff', minHeight:'100vh', fontFamily:"'Segoe UI', sans-serif" }}>
 
-      {/* Hero */}
-      <div style={{ background:cur.bg, padding:'52px 24px 48px', textAlign:'center', position:'relative', overflow:'hidden', transition:'background 0.8s ease' }}>
-        <div style={{ position:'absolute', inset:0, background:'radial-gradient(circle at 70% 30%, rgba(255,255,255,0.06) 0%, transparent 60%)', pointerEvents:'none' }}/>
-        <div key={heroSlide} style={{ animation:'fadeUp 0.6s ease', position:'relative', zIndex:1 }}>
-          <div style={{ fontSize:64, marginBottom:14, animation:'gentleBounce 3s ease-in-out infinite' }}>{cur.icon}</div>
-          <h1 style={{ fontSize:28, fontWeight:800, color:'#ffffff', margin:'0 0 10px', lineHeight:1.2 }}>{cur.title}</h1>
-          <p style={{ fontSize:14, color:'rgba(255,255,255,0.8)', margin:'0 0 28px', lineHeight:1.6 }}>{cur.sub}</p>
-          <div style={{ display:'flex', gap:10, justifyContent:'center', flexWrap:'wrap' }}>
-            <button onClick={() => go('customer-login')} style={{ padding:'13px 24px', background:'#ffffff', color:'#6b21a8', border:'none', borderRadius:28, fontSize:14, fontWeight:700, cursor:'pointer' }}>Book a Ride</button>
-            <button onClick={() => go('driver-signup')} style={{ padding:'13px 24px', background:'transparent', color:'#ffffff', border:'2px solid rgba(255,255,255,0.5)', borderRadius:28, fontSize:14, fontWeight:600, cursor:'pointer' }}>Drive With Us</button>
-          </div>
+      {/* ── NAV ── */}
+      <div style={{ background:'#ffffff', borderBottom:'1px solid #eee', padding:'10px 16px', display:'flex', alignItems:'center', gap:8, position:'sticky', top:0, zIndex:100 }}>
+        <img src="/logo.png" alt="VilleCabs" style={{ height:30, objectFit:'contain' }}/>
+        <div style={{ marginLeft:'auto', display:'flex', gap:6 }}>
+          <button onClick={() => go('partner-with-us')} style={{ padding:'5px 10px', background:'#f5f0ff', border:'1px solid #d8b4fe', borderRadius:12, color:'#6b21a8', fontSize:11, fontWeight:600, cursor:'pointer' }}>Partners</button>
+          <button onClick={() => go('customer-login')} style={{ padding:'5px 10px', background:'#fff', border:'1px solid #e2e4ed', borderRadius:12, color:'#1a1a2e', fontSize:11, fontWeight:600, cursor:'pointer' }}>Login</button>
+          <button onClick={() => go('role')} style={{ padding:'5px 10px', background:'#6b21a8', border:'none', borderRadius:12, color:'#fff', fontSize:11, fontWeight:700, cursor:'pointer' }}>Sign Up</button>
         </div>
-        <div style={{ display:'flex', gap:6, justifyContent:'center', marginTop:28, position:'relative', zIndex:1 }}>
-          {heroSlides.map((_,i) => (
-            <button key={i} onClick={() => setHeroSlide(i)}
-              style={{ width:i===heroSlide?24:6, height:6, borderRadius:3, border:'none', background:i===heroSlide?'#ffffff':'rgba(255,255,255,0.35)', cursor:'pointer', transition:'all 0.3s', padding:0 }}/>
+      </div>
+
+      {/* ── HERO ── */}
+      <div style={{ background:cur.bg, padding:'48px 20px 40px', textAlign:'center', transition:'background 0.8s ease' }}>
+        <div style={{ fontSize:60, marginBottom:12 }}>{cur.emoji}</div>
+        <h1 style={{ fontSize:26, fontWeight:800, color:'#fff', margin:'0 0 10px', lineHeight:1.2 }}>{cur.h}</h1>
+        <p style={{ fontSize:14, color:'rgba(255,255,255,0.8)', margin:'0 0 24px', lineHeight:1.6 }}>{cur.sub}</p>
+        <div style={{ display:'flex', gap:10, justifyContent:'center', flexWrap:'wrap' }}>
+          <button onClick={() => go('customer-login')} style={{ padding:'12px 22px', background:'#fff', color:'#6b21a8', border:'none', borderRadius:24, fontSize:14, fontWeight:700, cursor:'pointer' }}>Book a Ride</button>
+          <button onClick={() => go('driver-signup')} style={{ padding:'12px 22px', background:'transparent', color:'#fff', border:'2px solid rgba(255,255,255,0.5)', borderRadius:24, fontSize:14, fontWeight:600, cursor:'pointer' }}>Drive With Us</button>
+        </div>
+        <div style={{ display:'flex', gap:6, justifyContent:'center', marginTop:24 }}>
+          {slides.map((_, i) => (
+            <button key={i} onClick={() => setSlide(i)}
+              style={{ width:i===slide?22:6, height:6, borderRadius:3, border:'none', background:i===slide?'#fff':'rgba(255,255,255,0.35)', cursor:'pointer', transition:'all 0.3s', padding:0 }}/>
           ))}
         </div>
       </div>
 
-      {/* Quick features */}
-      <div style={{ display:'flex', gap:0, borderBottom:'1px solid #f0f0f0', overflowX:'auto', scrollbarWidth:'none' }}>
-        {[['✅','Verified Drivers'],['📍','GPS Tracking'],['🆘','SOS Emergency'],['💵','Cash Payment'],['🏝️','Local Service']].map(([icon,label],i) => (
-          <div key={i} style={{ flexShrink:0, padding:'14px 16px', textAlign:'center', borderRight:'1px solid #f0f0f0' }}>
+      {/* ── QUICK FEATURES ── */}
+      <div style={{ display:'flex', overflowX:'auto', borderBottom:'1px solid #f0f0f0', scrollbarWidth:'none' }}>
+        {[['✅','Verified'],['📍','GPS Tracked'],['🆘','SOS Button'],['💵','Cash Pay'],['🏝️','Local']].map(([icon,label],i) => (
+          <div key={i} style={{ flexShrink:0, padding:'14px 16px', textAlign:'center', borderRight:'1px solid #f0f0f0', minWidth:80 }}>
             <div style={{ fontSize:20, marginBottom:4 }}>{icon}</div>
             <div style={{ fontSize:10, fontWeight:600, color:'#1a1a2e', whiteSpace:'nowrap' }}>{label}</div>
           </div>
         ))}
       </div>
 
-      {/* How it works */}
-      <div style={{ padding:'32px 16px', background:'#f9f5ff' }}>
-        <div style={{ textAlign:'center', marginBottom:20 }}>
-          <div style={{ fontSize:11, color:'#6b21a8', fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', marginBottom:6 }}>Simple</div>
-          <h2 style={{ fontSize:20, fontWeight:800, color:'#1a1a2e', margin:0 }}>How It Works</h2>
-        </div>
-        {[
-          ['1','📍','Pin Your Location','Drop your pickup and destination on the map'],
+      {/* ── HOW IT WORKS ── */}
+      <div style={{ padding:'28px 16px', background:'#f9f5ff' }}>
+        <div style={{ fontSize:11, color:'#6b21a8', fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', marginBottom:6, textAlign:'center' }}>Simple Steps</div>
+        <h2 style={{ fontSize:20, fontWeight:800, color:'#1a1a2e', textAlign:'center', margin:'0 0 16px' }}>How It Works</h2>
+        {[['1','📍','Pin Your Location','Set your pickup and destination on the map'],
           ['2','🚗','Choose Your Ride','Select VilleRide, VilleXL, or VilleMoto'],
           ['3','📲','Track Your Driver','Watch your driver arrive in real time'],
-          ['4','💵','Pay Cash & Arrive','Pay your driver directly. Safe. Simple.'],
-        ].map(([step, icon, title, desc], i) => (
-          <div key={i} style={{ display:'flex', gap:12, background:'#ffffff', borderRadius:14, padding:'14px 16px', marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.05)', alignItems:'flex-start' }}>
-            <div style={{ width:32, height:32, borderRadius:'50%', background:'#6b21a8', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:800, flexShrink:0 }}>{step}</div>
+          ['4','💵','Pay & Arrive','Pay cash directly to your driver. Simple.']
+        ].map(([n,icon,title,desc],i) => (
+          <div key={i} style={{ display:'flex', gap:12, background:'#fff', borderRadius:14, padding:'13px 15px', marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.05)', alignItems:'flex-start' }}>
+            <div style={{ width:30, height:30, borderRadius:'50%', background:'#6b21a8', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, fontWeight:800, flexShrink:0 }}>{n}</div>
             <div>
-              <div style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>{icon} {title}</div>
+              <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>{icon} {title}</div>
               <div style={{ fontSize:12, color:'#555770', marginTop:2 }}>{desc}</div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Why VilleCabs */}
-      <div style={{ padding:'32px 16px' }}>
-        <div style={{ textAlign:'center', marginBottom:20 }}>
-          <div style={{ fontSize:11, color:'#6b21a8', fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', marginBottom:6 }}>Our Promise</div>
-          <h2 style={{ fontSize:20, fontWeight:800, color:'#1a1a2e', margin:0 }}>Why VilleCabs?</h2>
-        </div>
+      {/* ── WHY VILLECABS ── */}
+      <div style={{ padding:'28px 16px' }}>
+        <div style={{ fontSize:11, color:'#6b21a8', fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', marginBottom:6, textAlign:'center' }}>Our Promise</div>
+        <h2 style={{ fontSize:20, fontWeight:800, color:'#1a1a2e', textAlign:'center', margin:'0 0 16px' }}>Why VilleCabs?</h2>
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-          {[
-            ['🏝️','Built for Mandeville','Made by locals for locals'],
-            ['👤','Trusted Local Drivers','Verified before they drive'],
-            ['💰','Clear Estimated Fares','No hidden charges'],
-            ['🛡️','Safety-First Features','SOS, GPS, share trip'],
+          {[['🏝️','Built for Mandeville','Made by locals for locals'],
+            ['👤','Trusted Drivers','Verified before they drive'],
+            ['💰','Clear Fares','No hidden charges'],
+            ['🛡️','Safety First','SOS, GPS, share trip'],
             ['📱','Easy Booking','Book in under 2 minutes'],
-            ['🤝','Local Support','We are here when you need us'],
+            ['🤝','Local Support','Here when you need us']
           ].map(([icon,title,desc],i) => (
             <div key={i} style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:14, padding:'14px 12px', textAlign:'center' }}>
-              <div style={{ fontSize:28, marginBottom:6 }}>{icon}</div>
+              <div style={{ fontSize:26, marginBottom:6 }}>{icon}</div>
               <div style={{ fontSize:12, fontWeight:700, color:'#1a1a2e', marginBottom:3 }}>{title}</div>
               <div style={{ fontSize:10, color:'#555770', lineHeight:1.4 }}>{desc}</div>
             </div>
@@ -6092,77 +6078,97 @@ function PublicLanding({ go }) {
         </div>
       </div>
 
-      {/* Safety slideshow */}
-      <div style={{ padding:'32px 16px', background:'#1a1a2e' }}>
-        <div style={{ textAlign:'center', marginBottom:20 }}>
-          <div style={{ fontSize:11, color:'#d8b4fe', fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', marginBottom:6 }}>Trust</div>
-          <h2 style={{ fontSize:20, fontWeight:800, color:'#ffffff', margin:0 }}>Your Safety Comes First</h2>
+      {/* ── EXPLORE MANDEVILLE ── */}
+      <div style={{ padding:'28px 0' }}>
+        <div style={{ padding:'0 16px', marginBottom:14 }}>
+          <div style={{ fontSize:11, color:'#6b21a8', fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', marginBottom:4 }}>Mandeville</div>
+          <h2 style={{ fontSize:20, fontWeight:800, color:'#1a1a2e', margin:0 }}>Explore Mandeville</h2>
+          <p style={{ fontSize:12, color:'#666', margin:'4px 0 0' }}>Popular places riders visit around Manchester.</p>
         </div>
-        <div style={{ maxWidth:480, margin:'0 auto' }}>
-          <div key={safetySlide} style={{ animation:'fadeUp 0.5s ease', background:'rgba(255,255,255,0.06)', border:'1px solid rgba(167,139,250,0.3)', borderRadius:16, padding:'20px', textAlign:'center', marginBottom:14 }}>
-            <div style={{ fontSize:36, marginBottom:10 }}>{(safetyTips[safetySlide]||safetyTips[0]).icon}</div>
-            <div style={{ fontSize:16, fontWeight:700, color:'#d8b4fe', marginBottom:8 }}>{(safetyTips[safetySlide]||safetyTips[0]).title}</div>
-            <div style={{ fontSize:13, color:'rgba(255,255,255,0.75)', lineHeight:1.6 }}>{(safetyTips[safetySlide]||safetyTips[0]).desc}</div>
-          </div>
-          <div style={{ display:'flex', gap:5, justifyContent:'center' }}>
-            {safetyTips.map((_,i) => (
-              <button key={i} onClick={()=>setSafetySlide(i)} style={{ width:i===safetySlide?20:5, height:5, borderRadius:3, border:'none', background:i===safetySlide?'#a855f7':'rgba(255,255,255,0.25)', cursor:'pointer', transition:'all 0.3s', padding:0 }}/>
-            ))}
-          </div>
+        <div style={{ display:'flex', gap:12, overflowX:'auto', padding:'4px 16px 8px', scrollbarWidth:'none' }}>
+          {[['🏨','Hotels','Comfortable stays around Mandeville'],
+            ['🍽️','Restaurants','Get to your favourite food spots'],
+            ['🎭','Attractions','Explore local landmarks and parks'],
+            ['🛍️','Shopping','Plazas and supermarkets'],
+            ['🌙','Nightlife','Safe rides to clubs and events'],
+            ['🏥','Hospitals','Reliable medical appointment rides']
+          ].map(([icon,title,desc],i) => (
+            <div key={i} style={{ flexShrink:0, width:150, background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:14, padding:'14px 12px', textAlign:'center' }}>
+              <div style={{ fontSize:28, marginBottom:6 }}>{icon}</div>
+              <div style={{ fontSize:12, fontWeight:700, color:'#1a1a2e', marginBottom:4 }}>{title}</div>
+              <div style={{ fontSize:10, color:'#555', lineHeight:1.4, marginBottom:10 }}>{desc}</div>
+              <button onClick={() => go('customer-login')}
+                style={{ width:'100%', padding:'7px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:700, cursor:'pointer' }}>
+                Book a Ride
+              </button>
+            </div>
+          ))}
+        </div>
+        <div style={{ padding:'8px 16px' }} onClick={() => go('partner-with-us')}>
+          <span style={{ fontSize:12, color:'#6b21a8', cursor:'pointer' }}>🤝 Own a business? <strong>Become a VilleCabs Partner →</strong></span>
         </div>
       </div>
 
-      {/* Featured Mandeville */}
-      <FeaturedMandeville go={go}/>
+      {/* ── SAFETY ── */}
+      <div style={{ padding:'28px 16px', background:'#1a1a2e' }}>
+        <div style={{ fontSize:11, color:'#d8b4fe', fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', marginBottom:6, textAlign:'center' }}>Trust</div>
+        <h2 style={{ fontSize:20, fontWeight:800, color:'#fff', textAlign:'center', margin:'0 0 16px' }}>Your Safety Comes First</h2>
+        {[['✅','Verified Drivers','Every driver is approved before they receive ride requests.'],
+          ['📍','GPS Tracked Rides','All rides are monitored live.'],
+          ['🆘','SOS Emergency','Hold SOS 5 seconds for immediate emergency support.'],
+          ['📲','Share Your Trip','Send live ride details to someone you trust.']
+        ].map(([icon,title,desc],i) => (
+          <div key={i} style={{ display:'flex', gap:12, background:'rgba(255,255,255,0.06)', border:'1px solid rgba(167,139,250,0.2)', borderRadius:14, padding:'13px 15px', marginBottom:10 }}>
+            <div style={{ fontSize:24, flexShrink:0 }}>{icon}</div>
+            <div>
+              <div style={{ fontSize:13, fontWeight:700, color:'#d8b4fe', marginBottom:3 }}>{title}</div>
+              <div style={{ fontSize:12, color:'rgba(255,255,255,0.65)', lineHeight:1.5 }}>{desc}</div>
+            </div>
+          </div>
+        ))}
+      </div>
 
-      {/* For Drivers */}
-      <div style={{ padding:'32px 16px', background:'linear-gradient(135deg, #6b21a8 0%, #4c1d95 100%)' }}>
-        <div style={{ textAlign:'center', marginBottom:20 }}>
-          <div style={{ fontSize:11, color:'rgba(255,255,255,0.7)', fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', marginBottom:6 }}>Earn With Us</div>
-          <h2 style={{ fontSize:22, fontWeight:800, color:'#ffffff', margin:'0 0 10px' }}>Drive With VilleCabs</h2>
-          <p style={{ fontSize:13, color:'rgba(255,255,255,0.8)', margin:'0 0 20px', lineHeight:1.6 }}>Use your vehicle, set your own schedule, and keep 85% of every fare.</p>
-        </div>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:20 }}>
-          {[['⏰','Flexible Hours'],['💰','Keep 85%'],['🚗','Use Your Vehicle'],['🚀','Join Early']].map(([icon,label],i) => (
-            <div key={i} style={{ background:'rgba(255,255,255,0.1)', borderRadius:12, padding:'12px', textAlign:'center' }}>
-              <div style={{ fontSize:22, marginBottom:4 }}>{icon}</div>
+      {/* ── FOR DRIVERS ── */}
+      <div style={{ padding:'28px 16px', background:'#6b21a8' }}>
+        <div style={{ fontSize:11, color:'rgba(255,255,255,0.7)', fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', marginBottom:6, textAlign:'center' }}>Earn</div>
+        <h2 style={{ fontSize:20, fontWeight:800, color:'#fff', textAlign:'center', margin:'0 0 8px' }}>Drive With VilleCabs</h2>
+        <p style={{ fontSize:13, color:'rgba(255,255,255,0.8)', textAlign:'center', margin:'0 0 18px', lineHeight:1.6 }}>Use your vehicle, set your own schedule, and keep 85% of every fare.</p>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:18 }}>
+          {[['⏰','Flexible Hours'],['💰','Keep 85%'],['🚗','Your Vehicle'],['🚀','Join Early']].map(([icon,label],i) => (
+            <div key={i} style={{ background:'rgba(255,255,255,0.12)', borderRadius:12, padding:'11px', textAlign:'center' }}>
+              <div style={{ fontSize:20, marginBottom:3 }}>{icon}</div>
               <div style={{ fontSize:11, fontWeight:600, color:'rgba(255,255,255,0.9)' }}>{label}</div>
             </div>
           ))}
         </div>
-        <button onClick={() => go('driver-signup')} style={{ display:'block', width:'100%', maxWidth:320, margin:'0 auto', padding:'14px', background:'#ffffff', color:'#6b21a8', border:'none', borderRadius:24, fontSize:15, fontWeight:700, cursor:'pointer' }}>
+        <button onClick={() => go('driver-signup')} style={{ display:'block', width:'100%', maxWidth:300, margin:'0 auto', padding:'13px', background:'#fff', color:'#6b21a8', border:'none', borderRadius:22, fontSize:14, fontWeight:700, cursor:'pointer' }}>
           Become a Driver →
         </button>
       </div>
 
-      {/* For Businesses */}
-      <div style={{ padding:'32px 16px', background:'#f9f5ff' }}>
-        <div style={{ textAlign:'center', marginBottom:20 }}>
-          <div style={{ fontSize:11, color:'#6b21a8', fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', marginBottom:6 }}>Business</div>
-          <h2 style={{ fontSize:22, fontWeight:800, color:'#1a1a2e', margin:'0 0 10px' }}>Partner With VilleCabs</h2>
-          <p style={{ fontSize:13, color:'#555770', margin:'0 0 20px', lineHeight:1.6 }}>Help your customers, staff, and visitors move safely and conveniently.</p>
-        </div>
-        <button onClick={() => go('partner-with-us')} style={{ display:'block', width:'100%', maxWidth:320, margin:'0 auto', padding:'14px', background:'#6b21a8', color:'#ffffff', border:'none', borderRadius:24, fontSize:15, fontWeight:700, cursor:'pointer' }}>
+      {/* ── FOR BUSINESSES ── */}
+      <div style={{ padding:'28px 16px', background:'#f9f5ff' }}>
+        <div style={{ fontSize:11, color:'#6b21a8', fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', marginBottom:6, textAlign:'center' }}>Business</div>
+        <h2 style={{ fontSize:20, fontWeight:800, color:'#1a1a2e', textAlign:'center', margin:'0 0 8px' }}>Partner With VilleCabs</h2>
+        <p style={{ fontSize:13, color:'#555770', textAlign:'center', margin:'0 0 18px', lineHeight:1.6 }}>Help your customers, staff, and visitors move safely and conveniently.</p>
+        <button onClick={() => go('partner-with-us')} style={{ display:'block', width:'100%', maxWidth:300, margin:'0 auto', padding:'13px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:22, fontSize:14, fontWeight:700, cursor:'pointer' }}>
           Become a Partner →
         </button>
       </div>
 
-      {/* Promotions */}
-      <div style={{ padding:'32px 16px', background:'#1a1a2e' }}>
-        <div style={{ textAlign:'center', marginBottom:20 }}>
-          <div style={{ fontSize:11, color:'#d8b4fe', fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', marginBottom:6 }}>Launch Offers</div>
-          <h2 style={{ fontSize:20, fontWeight:800, color:'#ffffff', margin:0 }}>Current Promotions</h2>
-        </div>
-        <div style={{ display:'flex', gap:10, overflowX:'auto', paddingBottom:8, scrollbarWidth:'none' }}>
-          {[
-            { code:'WELCOME200', title:'J$200 Off First Ride', desc:'New riders get J$200 off their first VilleCabs booking.' },
-            { code:'VILLEFRIEND200', title:'J$200 Referral Credit', desc:'Refer a friend and both of you get J$200 credit.' },
-            { code:'AIRPORT200', title:'Beat The Rush', desc:'J$200 off rides booked during peak hours.' },
-          ].map((p, i) => (
-            <div key={i} style={{ flexShrink:0, width:220, background:'rgba(107,33,168,0.4)', border:'1px solid rgba(167,139,250,0.3)', borderRadius:14, padding:16 }}>
-              <div style={{ fontSize:10, color:'#d8b4fe', fontWeight:700, letterSpacing:1, marginBottom:4 }}>{p.code}</div>
-              <div style={{ fontSize:14, fontWeight:700, color:'#ffffff', marginBottom:6 }}>{p.title}</div>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.65)', lineHeight:1.5 }}>{p.desc}</div>
+      {/* ── PROMOTIONS ── */}
+      <div style={{ padding:'28px 16px', background:'#1a1a2e' }}>
+        <div style={{ fontSize:11, color:'#d8b4fe', fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', marginBottom:6, textAlign:'center' }}>Launch Offers</div>
+        <h2 style={{ fontSize:20, fontWeight:800, color:'#fff', textAlign:'center', margin:'0 0 14px' }}>Current Promotions</h2>
+        <div style={{ display:'flex', gap:10, overflowX:'auto', paddingBottom:4, scrollbarWidth:'none' }}>
+          {[['WELCOME200','J$200 Off First Ride','New riders get J$200 off their first VilleCabs booking.'],
+            ['VILLEFRIEND200','J$200 Referral Credit','Refer a friend and both of you get J$200 credit.'],
+            ['AIRPORT200','Beat The Rush','J$200 off rides booked during peak hours.']
+          ].map(([code,title,desc],i) => (
+            <div key={i} style={{ flexShrink:0, width:210, background:'rgba(107,33,168,0.4)', border:'1px solid rgba(167,139,250,0.3)', borderRadius:14, padding:16 }}>
+              <div style={{ fontSize:10, color:'#d8b4fe', fontWeight:700, letterSpacing:1, marginBottom:4 }}>{code}</div>
+              <div style={{ fontSize:14, fontWeight:700, color:'#fff', marginBottom:6 }}>{title}</div>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.65)', lineHeight:1.5 }}>{desc}</div>
             </div>
           ))}
         </div>
@@ -6170,7 +6176,7 @@ function PublicLanding({ go }) {
 
       {/* Driver login pill */}
       <div style={{ position:'fixed', bottom:20, right:20, zIndex:50 }}>
-        <button onClick={() => go('driver-login')} style={{ padding:'9px 16px', background:'#6b21a8', border:'none', borderRadius:22, color:'#ffffff', fontSize:11, cursor:'pointer', boxShadow:'0 4px 16px rgba(107,33,168,0.4)', fontWeight:600 }}>
+        <button onClick={() => go('driver-login')} style={{ padding:'9px 16px', background:'#6b21a8', border:'none', borderRadius:22, color:'#fff', fontSize:11, cursor:'pointer', boxShadow:'0 4px 16px rgba(107,33,168,0.4)', fontWeight:600 }}>
           🚗 Driver Login
         </button>
       </div>
@@ -6180,16 +6186,6 @@ function PublicLanding({ go }) {
   );
 }
 
-
-function LoadingScreen() {
-  return (
-    <div style={{ ...s.screen, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:16 }}>
-      <div style={{ fontSize:48 }}>🚕</div>
-      <div style={{ color:YELLOW, fontSize:16, fontWeight:500 }}>VilleCabs</div>
-      <div style={{ color:'rgba(255,255,255,0.4)', fontSize:13 }}>Loading...</div>
-    </div>
-  );
-}
 
 // ── APP ───────────────────────────────────────────────────────────────────────
 const MAP_BG_SCREENS = new Set(['splash','role','customer-signup','customer-login','otp','driver-signup','driver-pending','driver-login','customer-dash','pin-pickup','pin-dropoff','vehicle-select','booking-confirm','live-ride','driver-dash','driver-active','driver-profile','driver-settings','customer-profile','customer-settings','chat']);
