@@ -75,8 +75,8 @@ const s = {
   btnG:      { width:'100%', padding:'14px 20px', background:GREEN, color:WHITE, border:'none', borderRadius:12, fontSize:15, fontWeight:600, cursor:'pointer', marginBottom:10 },
   inp:       { width:'100%', padding:'14px', background:'#ffffff', border:'1px solid #d0d3e0', borderRadius:10, color:'#1a1a2e', fontSize:16, marginBottom:12, boxSizing:'border-box', outline:'none' },
   lbl:       { fontSize:11, color:'rgba(255,255,255,0.55)', marginBottom:4, display:'block', fontWeight:500 },
-  topBar:    { background:'#0f1a35', padding:'8px 14px', display:'flex', alignItems:'center', gap:10, borderBottom:'none', position:'sticky', top:0, zIndex:10, boxShadow:'0 2px 8px rgba(0,0,0,0.2)', minHeight:50 },
-  backBtn:   { background:'none', border:'none', color:WHITE, fontSize:22, cursor:'pointer', padding:'0 6px 0 0', lineHeight:1 },
+  topBar:    { background:'#ffffff', padding:'8px 14px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #e2e4ed', position:'sticky', top:0, zIndex:10, boxShadow:'0 1px 6px rgba(0,0,0,0.08)', minHeight:50 },
+  backBtn:   { background:'none', border:'none', color:'#1a1a2e', fontSize:22, cursor:'pointer', padding:'0 6px 0 0', lineHeight:1 },
   topTitle:  { color:WHITE, fontSize:16, fontWeight:500 },
   link:      { color:YELLOW, fontSize:13, cursor:'pointer', textAlign:'center', marginTop:8, background:'none', border:'none', width:'100%', display:'block', padding:4 },
   divLine:   { display:'flex', alignItems:'center', gap:10, margin:'8px 0 14px', color:'rgba(255,255,255,0.3)', fontSize:12 },
@@ -271,15 +271,15 @@ function TopBar({ title, onBack, go, user }) {
       {onBack && <button style={s.backBtn} onClick={onBack}>←</button>}
       <img src="/logo.png" alt="VilleCabs"
         onClick={() => go ? go(user ? 'customer-dash' : 'splash') : null}
-        style={{ height:26, width:'auto', objectFit:'contain', cursor:'pointer', flexShrink:0 }}/>
-      <span style={{ ...s.topTitle, marginLeft:6 }}>{title}</span>
+        style={{ height:32, width:'auto', objectFit:'contain', cursor:'pointer', flexShrink:0, maxWidth:140 }}/>
+      {title && <span style={{ ...s.topTitle, marginLeft:6, fontSize:12, color:'#888aaa' }}>{title}</span>}
       <div style={{ display:'flex', gap:5, marginLeft:'auto' }}>
         <button onClick={() => go && go('business')}
-          style={{ padding:'3px 9px', background:'rgba(255,255,255,0.1)', border:'1px solid rgba(255,255,255,0.2)', borderRadius:12, color:'rgba(255,255,255,0.85)', fontSize:10, fontWeight:600, cursor:'pointer' }}>
+          style={{ padding:'3px 9px', background:'#f5f6fa', border:'1px solid #e2e4ed', borderRadius:12, color:'#1a1a2e', fontSize:10, fontWeight:600, cursor:'pointer' }}>
           Business
         </button>
         <button onClick={() => go && go('featured')}
-          style={{ padding:'3px 9px', background:'rgba(255,255,255,0.1)', border:'1px solid rgba(255,255,255,0.2)', borderRadius:12, color:'rgba(255,255,255,0.85)', fontSize:10, fontWeight:600, cursor:'pointer' }}>
+          style={{ padding:'3px 9px', background:'#f5f6fa', border:'1px solid #e2e4ed', borderRadius:12, color:'#1a1a2e', fontSize:10, fontWeight:600, cursor:'pointer' }}>
           Featured
         </button>
       </div>
@@ -847,7 +847,7 @@ function OTPScreen({ go, user }) {
 }
 
 // ── CUSTOMER LOGIN ────────────────────────────────────────────────────────────
-function CustomerLogin({ go, setUser }) {
+function CustomerLogin({ go, setUser, user }) {
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading]   = useState(false);
@@ -1260,7 +1260,7 @@ function WelcomeTips({ go, user }) {
 }
 
 // ── ABOUT US ──────────────────────────────────────────────────────────────────
-function AboutUs({ go }) {
+function AboutUs({ go, user }) {
   return (
     <div style={{ ...s.content, background:'transparent' }}>
       <TopBar title="About VilleCabs" onBack={() => go('customer-dash')} go={go} user={user}/>
@@ -2370,7 +2370,7 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
 
 
 
-function PinPickup({ go, setPickupData }) {
+function PinPickup({ go, setPickupData, user }) {
   const [pinPos,      setPinPos]      = useState(MANCHESTER_CENTER);
   const [address,     setAddress]     = useState('');
   const [note,        setNote]        = useState('');
@@ -2489,7 +2489,7 @@ function PinPickup({ go, setPickupData }) {
 }
 
 // ── PIN DROPOFF ───────────────────────────────────────────────────────────────
-function PinDropoff({ go, pickupData, setDropoffData }) {
+function PinDropoff({ go, pickupData, setDropoffData, user }) {
   const [pinPos,  setPinPos]  = useState({ lat:18.02, lng:-77.48 });
   const [address, setAddress] = useState('');
   const [note,    setNote]    = useState('');
@@ -2948,7 +2948,7 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
 }
 
 // ── BOOKING CONFIRM ──────────────────────────────────────────────────────────
-function BookingConfirm({ go, bookingId }) {
+function BookingConfirm({ go, bookingId, user }) {
   const [booking,   setBooking]   = useState(null);
   const [payment,   setPayment]   = useState('cash');
   const [step,      setStep]      = useState('select'); // 'select' | 'card-form'
