@@ -394,24 +394,22 @@ function Splash({ go }) {
   const [safetySlide, setSafetySlide]   = useState(0);
   const [driverSlide, setDriverSlide]   = useState(0);
   const [partnerSlide, setPartnerSlide] = useState(0);
-  const [menuOpen, setMenuOpen]         = useState(false);
 
   // ── HERO SLIDES ─────────────────────────────────────────────────────────────
   const heroSlides = [
-    { icon:'🚕', title:'Safe rides in Mandeville', sub:'Trusted local drivers · GPS tracked · SOS protected', cta:'Book a Ride',     action:() => go('customer-login'), bg:'linear-gradient(135deg, #0f1a35 0%, #1a2744 100%)' },
-    { icon:'🚗', title:'Drive with VilleCabs',     sub:'Use your vehicle, choose your hours, earn locally',     cta:'Become a Driver', action:() => go('driver-signup'),  bg:'linear-gradient(135deg, #0a4a2a 0%, #1a9e5a 100%)' },
-    { icon:'🤝', title:'Partner with VilleCabs',    sub:'Restaurants, clubs, supermarkets — connect with more customers', cta:'Partner With Us', action:() => window.open('mailto:admin@villecabs.com?subject=VilleCabs Partnership','_blank'), bg:'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)' },
-    { icon:'✨', title:'Your city. Your ride. Your way.', sub:'Built for Mandeville & Manchester, Jamaica', cta:'Learn More', action:() => scrollTo('about'), bg:'linear-gradient(135deg, #1a0a1a 0%, #2d1b4e 100%)' },
+    { icon:'🚕', title:'Safe rides in Mandeville',         sub:'Trusted local drivers · GPS tracked · SOS protected',           cta:'Book Now',         action:() => go('customer-login'),                                                                                  bg:'linear-gradient(135deg, #0f1a35 0%, #1a2744 100%)', accent:'#e8b400' },
+    { icon:'🚗', title:'Drive with VilleCabs',             sub:'Use your vehicle, choose your hours, earn locally',             cta:'Become a Driver',  action:() => go('driver-signup'),                                                                                  bg:'linear-gradient(135deg, #0a4a2a 0%, #1a9e5a 100%)', accent:'#ffffff' },
+    { icon:'🤝', title:'Partner with VilleCabs',           sub:'Restaurants, clubs, supermarkets and hotels — connect with more customers', cta:'Partner With Us', action:() => window.open('mailto:admin@villecabs.com?subject=VilleCabs Partnership','_blank'),                          bg:'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)', accent:'#e8b400' },
+    { icon:'✨', title:'Your city. Your ride. Your way.',   sub:'Built for Mandeville & Manchester, Jamaica',                    cta:'Learn More',       action:() => go('about-us'),                                                                                       bg:'linear-gradient(135deg, #1a0a1a 0%, #2d1b4e 100%)', accent:'#e8b400' },
   ];
-
   useEffect(() => { const t=setInterval(()=>setHeroSlide(s=>(s+1)%heroSlides.length),5000); return ()=>clearInterval(t); }, [heroSlides.length]);
 
   const safetyTips = [
-    { icon:'👀', title:'Verify Your Driver',     desc:'Check licence plate, car colour, make, and driver photo before getting in.' },
-    { icon:'📲', title:'Share Your Trip',        desc:'Send your live ride details to a trusted friend or family member.' },
-    { icon:'🆘', title:'Use SOS Emergency',      desc:'Hold the SOS button for 5 seconds if you need urgent help.' },
-    { icon:'💵', title:'Confirm Your Fare',      desc:'Review your estimated fare before confirming your ride.' },
-    { icon:'🎒', title:'Cash Ready',             desc:'Have your cash ready at the end of your trip.' },
+    { icon:'👀', title:'Verify Your Driver',  desc:'Check licence plate, car colour, make, and driver photo before getting in.' },
+    { icon:'📲', title:'Share Your Trip',     desc:'Send your live ride details to a trusted friend or family member.' },
+    { icon:'🆘', title:'Use SOS Emergency',   desc:'Hold the SOS button for 5 seconds if you need urgent help.' },
+    { icon:'💵', title:'Confirm Your Fare',   desc:'Review your estimated fare before confirming your ride.' },
+    { icon:'🎒', title:'Cash Ready',          desc:'Have your cash ready at the end of your trip.' },
   ];
   useEffect(() => { const t=setInterval(()=>setSafetySlide(s=>(s+1)%safetyTips.length),4000); return ()=>clearInterval(t); }, [safetyTips.length]);
 
@@ -434,119 +432,64 @@ function Splash({ go }) {
   useEffect(() => { const t=setInterval(()=>setPartnerSlide(s=>(s+1)%partnerSlides.length),4000); return ()=>clearInterval(t); }, [partnerSlides.length]);
 
   const featuredPartners = [
-    { icon:'🍔', name:'Juici Patties',    cat:'Restaurant' },
-    { icon:'📚', name:'Bargain Books',    cat:'Bookstore' },
-    { icon:'🏨', name:'Golf View Hotel',  cat:'Hotel' },
-    { icon:'🍽️', name:'Restaurants',     cat:'Food & Dining' },
-    { icon:'🎉', name:'Clubs & Lounges', cat:'Nightlife' },
-    { icon:'🛒', name:'Supermarkets',    cat:'Grocery' },
-    { icon:'💊', name:'Pharmacies',      cat:'Health' },
-    { icon:'🎫', name:'Events',          cat:'Entertainment' },
+    { icon:'🍔', name:'Juici Patties',    cat:'Restaurant',     status:'Coming Soon' },
+    { icon:'📚', name:'Bargain Books',    cat:'Bookstore',      status:'Coming Soon' },
+    { icon:'🏨', name:'Golf View Hotel',  cat:'Hotel',          status:'Coming Soon' },
+    { icon:'🍽️', name:'Restaurants',     cat:'Food & Dining',  status:'Coming Soon' },
+    { icon:'🎉', name:'Clubs & Lounges', cat:'Nightlife',      status:'Coming Soon' },
+    { icon:'🛒', name:'Supermarkets',    cat:'Grocery',        status:'Coming Soon' },
+    { icon:'💊', name:'Pharmacies',      cat:'Health',         status:'Coming Soon' },
+    { icon:'🎫', name:'Events',          cat:'Entertainment',  status:'Coming Soon' },
   ];
-
-  const scrollTo = (id) => {
-    setMenuOpen(false);
-    const el = document.getElementById(id);
-    if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
-  };
 
   const currentHero = heroSlides[heroSlide];
-  const navItems = [
-    ['Ride',              () => go('customer-login')],
-    ['Become a Driver',   () => go('driver-signup')],
-    ['Partners',          () => scrollTo('partners')],
-    ['Explore Mandeville',() => scrollTo('explore')],
-    ['Contact',           () => go('contact-us')],
-  ];
 
   return (
-    <div style={{ minHeight:'100vh', background:'#ffffff', fontFamily:"'Segoe UI', sans-serif" }}>
-      {/* ═════════ STICKY TOP NAVBAR ═════════ */}
-      <nav style={{ position:'sticky', top:0, zIndex:100, background:'rgba(15,26,53,0.95)', backdropFilter:'blur(12px)', borderBottom:'1px solid rgba(232,180,0,0.2)', padding:'12px 20px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-        <div onClick={() => scrollTo('top')} style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
-          <img src="/villecabs-logo.png" alt="VilleCabs" style={{ width:36, height:36, borderRadius:'50%', objectFit:'cover', border:'2px solid #e8b400' }}/>
-          <span style={{ fontSize:17, fontWeight:800, color:'#ffffff', letterSpacing:0.3 }}>VilleCabs</span>
-        </div>
-        {/* Desktop nav */}
-        <div style={{ display:'none', gap:24, alignItems:'center' }} className="desktop-nav">
-          {navItems.map(([label, action], i) => (
-            <button key={i} onClick={action} style={{ background:'none', border:'none', color:'rgba(255,255,255,0.85)', fontSize:13, cursor:'pointer', fontWeight:500 }}>{label}</button>
-          ))}
-          <button onClick={() => go('customer-login')} style={{ padding:'8px 18px', background:'transparent', color:'#ffffff', border:'1px solid rgba(255,255,255,0.3)', borderRadius:20, fontSize:13, fontWeight:600, cursor:'pointer' }}>Login</button>
-          <button onClick={() => go('role')} style={{ padding:'8px 18px', background:'#e8b400', color:'#0f1a35', border:'none', borderRadius:20, fontSize:13, fontWeight:700, cursor:'pointer' }}>Sign Up</button>
-        </div>
-        {/* Mobile hamburger */}
-        <button onClick={() => setMenuOpen(true)} style={{ background:'none', border:'none', cursor:'pointer', padding:4, display:'flex', flexDirection:'column', gap:5 }} className="mobile-nav-btn">
-          <div style={{ width:22, height:2, background:'#fff', borderRadius:1 }}/>
-          <div style={{ width:18, height:2, background:'#fff', borderRadius:1 }}/>
-          <div style={{ width:22, height:2, background:'#fff', borderRadius:1 }}/>
-        </button>
-      </nav>
-
-      {/* ═════════ MOBILE MENU OVERLAY ═════════ */}
-      {menuOpen && (
-        <div onClick={() => setMenuOpen(false)} style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:200 }}>
-          <div onClick={e => e.stopPropagation()} style={{ position:'absolute', right:0, top:0, bottom:0, width:'80%', maxWidth:320, background:'#ffffff', boxShadow:'-4px 0 24px rgba(0,0,0,0.15)', display:'flex', flexDirection:'column' }}>
-            <div style={{ padding:'18px 20px', borderBottom:'1px solid #e2e4ed', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                <img src="/villecabs-logo.png" alt="VilleCabs" style={{ width:32, height:32, borderRadius:'50%' }}/>
-                <span style={{ fontSize:16, fontWeight:700, color:'#0f1a35' }}>VilleCabs</span>
-              </div>
-              <button onClick={() => setMenuOpen(false)} style={{ background:'#f0f1f5', border:'none', width:32, height:32, borderRadius:'50%', fontSize:16, cursor:'pointer', color:'#0f1a35' }}>×</button>
-            </div>
-            <div style={{ flex:1, overflowY:'auto', padding:'12px 0' }}>
-              {navItems.map(([label, action], i) => (
-                <button key={i} onClick={action} style={{ display:'block', width:'100%', textAlign:'left', padding:'14px 22px', background:'none', border:'none', cursor:'pointer', fontSize:15, color:'#1a1a2e', fontWeight:500, borderBottom:'1px solid #f0f1f5' }}>
-                  {label}
-                </button>
-              ))}
-            </div>
-            <div style={{ padding:'16px 20px', borderTop:'1px solid #e2e4ed', display:'flex', flexDirection:'column', gap:10 }}>
-              <button onClick={() => { setMenuOpen(false); go('customer-login'); }} style={{ padding:'12px', background:'#0f1a35', color:'#fff', border:'none', borderRadius:10, fontSize:14, fontWeight:600, cursor:'pointer' }}>Login</button>
-              <button onClick={() => { setMenuOpen(false); go('role'); }} style={{ padding:'12px', background:'#e8b400', color:'#0f1a35', border:'none', borderRadius:10, fontSize:14, fontWeight:700, cursor:'pointer' }}>Sign Up</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div id="top"/>
-
+    <div style={{ ...s.content, background:'#ffffff', minHeight:'100vh' }}>
       {/* ═════════ HERO SLIDESHOW ═════════ */}
-      <div style={{ position:'relative', minHeight:'85vh', overflow:'hidden', background: currentHero.bg, transition:'background 0.8s ease' }}>
+      <div style={{ position:'relative', minHeight:'90vh', overflow:'hidden', background: currentHero.bg, transition:'background 0.8s ease' }}>
         <div style={{ position:'absolute', inset:0, overflow:'hidden', pointerEvents:'none' }}>
           {[...Array(6)].map((_, i) => (
-            <div key={'pin'+i} style={{ position:'absolute', fontSize:24, opacity:0.07, top:(15+i*15)+'%', left:((i*17)%80)+'%', animation:'floatUp '+(8+i*2)+'s ease-in-out infinite', animationDelay:(i*0.7)+'s' }}>📍</div>
+            <div key={'pin'+i} style={{ position:'absolute', fontSize:24, opacity:0.06, top:(15+i*15)+'%', left:((i*17)%80)+'%', animation:'floatUp '+(8+i*2)+'s ease-in-out infinite', animationDelay:(i*0.7)+'s' }}>📍</div>
           ))}
           {[...Array(4)].map((_, i) => (
             <div key={'taxi'+i} style={{ position:'absolute', fontSize:32, opacity:0.08, top:(20+i*20)+'%', left:'-50px', animation:'driveAcross '+(15+i*3)+'s linear infinite', animationDelay:(i*2)+'s' }}>🚕</div>
           ))}
         </div>
-        <div style={{ position:'relative', zIndex:2, padding:'60px 24px 40px', textAlign:'center', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'85vh' }}>
-          <div key={heroSlide} style={{ animation:'fadeSlideIn 0.7s ease', width:'100%', maxWidth:520 }}>
-            <div style={{ fontSize:72, marginBottom:16, animation:'gentleBounce 3s ease-in-out infinite' }}>{currentHero.icon}</div>
-            <h1 style={{ fontSize:34, fontWeight:800, color:'#ffffff', margin:'0 0 14px', lineHeight:1.2, letterSpacing:-0.5 }}>{currentHero.title}</h1>
-            <p style={{ fontSize:15, color:'rgba(255,255,255,0.75)', margin:'0 0 36px', lineHeight:1.6 }}>{currentHero.sub}</p>
-            <button onClick={currentHero.action} style={{ padding:'15px 36px', background:'#e8b400', color:'#0f1a35', border:'none', borderRadius:30, fontSize:15, fontWeight:700, cursor:'pointer', boxShadow:'0 8px 24px rgba(0,0,0,0.3)', letterSpacing:0.3 }}>{currentHero.cta} →</button>
+
+        <div style={{ position:'relative', zIndex:2, padding:'24px 20px 0', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <img src="/villecabs-logo.png" alt="VilleCabs" style={{ width:42, height:42, borderRadius:'50%', objectFit:'cover', border:`2px solid ${currentHero.accent}` }}/>
+            <span style={{ fontSize:18, fontWeight:700, color:'#ffffff', letterSpacing:0.3 }}>VilleCabs</span>
           </div>
-          <div style={{ display:'flex', gap:8, marginTop:48 }}>
+          <button onClick={() => go('customer-login')} style={{ padding:'8px 18px', background:'rgba(255,255,255,0.95)', color:'#0f1a35', border:'none', borderRadius:20, fontSize:13, fontWeight:600, cursor:'pointer' }}>Log In</button>
+        </div>
+
+        <div style={{ position:'relative', zIndex:2, padding:'40px 24px 60px', textAlign:'center', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'70vh' }}>
+          <div key={heroSlide} style={{ animation:'fadeSlideIn 0.7s ease', width:'100%', maxWidth:480 }}>
+            <div style={{ fontSize:72, marginBottom:16, animation:'gentleBounce 3s ease-in-out infinite' }}>{currentHero.icon}</div>
+            <h1 style={{ fontSize:32, fontWeight:800, color:'#ffffff', margin:'0 0 12px', lineHeight:1.2, letterSpacing:-0.5 }}>{currentHero.title}</h1>
+            <p style={{ fontSize:15, color:'rgba(255,255,255,0.75)', margin:'0 0 32px', lineHeight:1.6 }}>{currentHero.sub}</p>
+            <button onClick={currentHero.action} style={{ padding:'14px 32px', background: currentHero.accent, color: currentHero.accent === '#e8b400' ? '#0f1a35' : '#1a1a2e', border:'none', borderRadius:30, fontSize:15, fontWeight:700, cursor:'pointer', boxShadow:'0 8px 24px rgba(0,0,0,0.25)', letterSpacing:0.3 }}>{currentHero.cta} →</button>
+          </div>
+          <div style={{ display:'flex', gap:8, marginTop:40 }}>
             {heroSlides.map((_, i) => (
               <button key={i} onClick={() => setHeroSlide(i)} style={{ width: i===heroSlide?30:8, height:8, borderRadius:4, border:'none', background: i===heroSlide?'#ffffff':'rgba(255,255,255,0.35)', cursor:'pointer', transition:'all 0.3s', padding:0 }}/>
             ))}
           </div>
         </div>
+
+        <div style={{ position:'relative', zIndex:2, padding:'0 24px 24px', textAlign:'center' }}>
+          <p style={{ fontSize:11, color:'rgba(255,255,255,0.5)', letterSpacing:1.5, textTransform:'uppercase', margin:0 }}>Mandeville · Christiana · Spaldings · Porus</p>
+        </div>
       </div>
 
-      {/* ═════════ ABOUT VILLECABS ═════════ */}
-      <div id="about" style={{ padding:'56px 24px', background:'#ffffff', textAlign:'center' }}>
-        <p style={{ fontSize:12, color:'#e8b400', fontWeight:700, letterSpacing:1.5, textTransform:'uppercase', margin:'0 0 8px' }}>About Us</p>
-        <h2 style={{ fontSize:28, fontWeight:800, color:'#0f1a35', margin:'0 0 16px' }}>About VilleCabs</h2>
-        <div style={{ maxWidth:560, margin:'0 auto' }}>
-          <p style={{ fontSize:15, color:'#555770', lineHeight:1.8, margin:'0 0 16px' }}>
-            VilleCabs is a homegrown ride-hailing service built right here in Mandeville, Manchester, Jamaica. We connect local riders with trusted local drivers — fast, safe, and on your terms.
-          </p>
-          <p style={{ fontSize:15, color:'#555770', lineHeight:1.8, margin:0 }}>
-            Whether you're heading to school, work, the supermarket, or a night out, VilleCabs is built for our community by people who know it.
-          </p>
+      {/* ═════════ QUICK LOG IN / SIGN UP ═════════ */}
+      <div style={{ padding:'32px 24px', background:'#ffffff', textAlign:'center' }}>
+        <p style={{ fontSize:13, color:'#888aaa', margin:'0 0 16px' }}>Ready to ride?</p>
+        <div style={{ display:'flex', gap:12, maxWidth:400, margin:'0 auto' }}>
+          <button onClick={() => go('customer-login')} style={{ flex:1, padding:'14px', background:'#111111', color:'#ffffff', border:'none', borderRadius:12, fontSize:14, fontWeight:700, cursor:'pointer' }}>Log In</button>
+          <button onClick={() => go('role')} style={{ flex:1, padding:'14px', background:'#ffffff', color:'#1a1a2e', border:'1.5px solid #d0d3e0', borderRadius:12, fontSize:14, fontWeight:600, cursor:'pointer' }}>Sign Up</button>
         </div>
       </div>
 
@@ -580,7 +523,7 @@ function Splash({ go }) {
         <div style={{ position:'relative', zIndex:1 }}>
           <div style={{ textAlign:'center', marginBottom:28 }}>
             <p style={{ fontSize:12, color:'#e8b400', fontWeight:700, letterSpacing:1.5, textTransform:'uppercase', margin:'0 0 8px' }}>Stay Safe</p>
-            <h2 style={{ fontSize:26, fontWeight:800, color:'#ffffff', margin:0 }}>Safety & Trust</h2>
+            <h2 style={{ fontSize:26, fontWeight:800, color:'#ffffff', margin:0 }}>Safety Tips</h2>
           </div>
           <div style={{ maxWidth:480, margin:'0 auto' }}>
             <div key={safetySlide} style={{ animation:'fadeSlideIn 0.5s ease', background:'rgba(255,255,255,0.06)', border:'1.5px solid rgba(232,180,0,0.4)', borderRadius:18, padding:'28px 24px', textAlign:'center' }}>
@@ -597,31 +540,8 @@ function Splash({ go }) {
         </div>
       </div>
 
-      {/* ═════════ HOW IT WORKS ═════════ */}
-      <div style={{ padding:'48px 20px', background:'#ffffff' }}>
-        <div style={{ textAlign:'center', marginBottom:32 }}>
-          <p style={{ fontSize:12, color:'#e8b400', fontWeight:700, letterSpacing:1.5, textTransform:'uppercase', margin:'0 0 8px' }}>Easy Steps</p>
-          <h2 style={{ fontSize:26, fontWeight:800, color:'#0f1a35', margin:0 }}>How VilleCabs Works</h2>
-        </div>
-        <div style={{ maxWidth:520, margin:'0 auto' }}>
-          {[
-            ['1','📍','Pin your location','Drop your pickup and drop-off on the map.'],
-            ['2','🚗','Choose your ride','Pick VilleRide, VilleXL, or VilleMoto.'],
-            ['3','✅','Ride & arrive','Track live and pay cash on arrival.'],
-          ].map(([step, icon, title, desc], i) => (
-            <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:14, padding:'16px', background:'#f5f6fa', borderRadius:14, marginBottom:12 }}>
-              <div style={{ width:36, height:36, borderRadius:'50%', background:'#e8b400', display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, fontWeight:800, color:'#0f1a35', flexShrink:0 }}>{step}</div>
-              <div>
-                <div style={{ fontSize:15, fontWeight:700, color:'#0f1a35', marginBottom:4 }}>{icon} {title}</div>
-                <div style={{ fontSize:13, color:'#555770', lineHeight:1.5 }}>{desc}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* ═════════ FEATURED PARTNERS AUTO-SCROLL ═════════ */}
-      <div id="partners" style={{ padding:'48px 0', background:'#f5f6fa' }}>
+      <div style={{ padding:'48px 0', background:'#ffffff' }}>
         <div style={{ textAlign:'center', marginBottom:28, padding:'0 20px' }}>
           <p style={{ fontSize:12, color:'#e8b400', fontWeight:700, letterSpacing:1.5, textTransform:'uppercase', margin:'0 0 8px' }}>Coming Soon</p>
           <h2 style={{ fontSize:26, fontWeight:800, color:'#0f1a35', margin:'0 0 8px' }}>Featured Partners</h2>
@@ -630,11 +550,11 @@ function Splash({ go }) {
         <div style={{ overflow:'hidden', position:'relative' }}>
           <div style={{ display:'flex', gap:14, animation:'autoScroll 30s linear infinite', width:'fit-content', padding:'0 10px' }}>
             {[...featuredPartners, ...featuredPartners].map((p, i) => (
-              <div key={i} style={{ flexShrink:0, width:170, background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:14, padding:'18px 14px', textAlign:'center', boxShadow:'0 2px 12px rgba(0,0,0,0.06)' }}>
+              <div key={i} style={{ flexShrink:0, width:160, background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:14, padding:'18px 14px', textAlign:'center', boxShadow:'0 2px 12px rgba(0,0,0,0.06)' }}>
                 <div style={{ fontSize:36, marginBottom:8 }}>{p.icon}</div>
                 <div style={{ fontSize:13, fontWeight:700, color:'#0f1a35', marginBottom:4 }}>{p.name}</div>
                 <div style={{ fontSize:10, color:'#888aaa', marginBottom:8 }}>{p.cat}</div>
-                <div style={{ fontSize:9, background:'rgba(232,180,0,0.15)', color:'#b38600', padding:'3px 8px', borderRadius:10, fontWeight:600, display:'inline-block' }}>Coming Soon</div>
+                <div style={{ fontSize:9, background:'rgba(232,180,0,0.15)', color:'#b38600', padding:'3px 8px', borderRadius:10, fontWeight:600, display:'inline-block' }}>{p.status}</div>
               </div>
             ))}
           </div>
@@ -654,7 +574,7 @@ function Splash({ go }) {
           <p style={{ fontSize:14, color:'rgba(255,255,255,0.7)', margin:0 }}>Turn your vehicle into earning opportunity.</p>
         </div>
         <div style={{ position:'relative', zIndex:1, maxWidth:480, margin:'0 auto' }}>
-          <div key={driverSlide} style={{ animation:'fadeSlideIn 0.5s ease', background:'rgba(255,255,255,0.08)', border:'1.5px solid rgba(232,180,0,0.3)', borderRadius:18, padding:24, textAlign:'center' }}>
+          <div key={driverSlide} style={{ animation:'fadeSlideIn 0.5s ease', background:'rgba(255,255,255,0.08)', border:'1.5px solid rgba(232,180,0,0.3)', borderRadius:18, padding:'24px', textAlign:'center' }}>
             <div style={{ fontSize:48, marginBottom:12 }}>{driverSlides[driverSlide].icon}</div>
             <h3 style={{ fontSize:18, fontWeight:700, color:'#e8b400', margin:'0 0 8px' }}>{driverSlides[driverSlide].title}</h3>
             <p style={{ fontSize:14, color:'rgba(255,255,255,0.85)', lineHeight:1.6, margin:0 }}>{driverSlides[driverSlide].desc}</p>
@@ -690,54 +610,6 @@ function Splash({ go }) {
         </div>
       </div>
 
-      {/* ═════════ EXPLORE MANDEVILLE ═════════ */}
-      <div id="explore" style={{ padding:'48px 20px', background:'#ffffff' }}>
-        <div style={{ textAlign:'center', marginBottom:28 }}>
-          <p style={{ fontSize:12, color:'#e8b400', fontWeight:700, letterSpacing:1.5, textTransform:'uppercase', margin:'0 0 8px' }}>Local Spots</p>
-          <h2 style={{ fontSize:26, fontWeight:800, color:'#0f1a35', margin:'0 0 8px' }}>Explore Mandeville</h2>
-          <p style={{ fontSize:14, color:'#666888', margin:0 }}>Discover the heart of Manchester, Jamaica.</p>
-        </div>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, maxWidth:600, margin:'0 auto' }}>
-          {[
-            { icon:'🏛️', title:'Mandeville Square', desc:'The heart of the parish capital' },
-            { icon:'⛳', title:'Manchester Golf Club', desc:'Historic 9-hole course' },
-            { icon:'🏞️', title:'Bamboo Avenue',      desc:'Scenic drive nearby' },
-            { icon:'🏔️', title:'Christiana',          desc:'Cool highland town' },
-          ].map((p, i) => (
-            <div key={i} style={{ background:'#f5f6fa', border:'1px solid #e2e4ed', borderRadius:14, padding:'18px 14px', textAlign:'center' }}>
-              <div style={{ fontSize:32, marginBottom:8 }}>{p.icon}</div>
-              <div style={{ fontSize:13, fontWeight:700, color:'#0f1a35', marginBottom:4 }}>{p.title}</div>
-              <div style={{ fontSize:11, color:'#666888', lineHeight:1.4 }}>{p.desc}</div>
-            </div>
-          ))}
-        </div>
-        <p style={{ textAlign:'center', fontSize:13, color:'#888aaa', marginTop:20 }}>
-          <span onClick={() => window.open('https://www.tripadvisor.com/Tourism-g1877491-Mandeville_Manchester_Parish_Jamaica-Vacations.html','_blank')} style={{ color:'#b38600', cursor:'pointer', textDecoration:'underline' }}>See more on TripAdvisor →</span>
-        </p>
-      </div>
-
-      {/* ═════════ FAQ PREVIEW ═════════ */}
-      <div style={{ padding:'48px 20px', background:'#f5f6fa' }}>
-        <div style={{ textAlign:'center', marginBottom:28 }}>
-          <p style={{ fontSize:12, color:'#e8b400', fontWeight:700, letterSpacing:1.5, textTransform:'uppercase', margin:'0 0 8px' }}>Got Questions?</p>
-          <h2 style={{ fontSize:26, fontWeight:800, color:'#0f1a35', margin:0 }}>Frequently Asked</h2>
-        </div>
-        <div style={{ maxWidth:560, margin:'0 auto' }}>
-          {[
-            ['How does VilleCabs work?', 'Sign up, pin your pickup and drop-off, choose a ride type, and get matched with a local driver. Pay cash at the end.'],
-            ['Is VilleCabs available 24/7?', 'Drivers are most active during peak hours. Some are available late at night — check the app for live drivers.'],
-            ['How much does a ride cost?', 'Fares are estimated based on distance. Estimated fares may vary based on route changes, traffic conditions, and additional stops.'],
-            ['What if I feel unsafe?', 'Use the SOS button — hold for 5 seconds and our admin team is alerted immediately with your live location.'],
-          ].map(([q, a], i) => (
-            <div key={i} style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:12, padding:16, marginBottom:10 }}>
-              <div style={{ fontSize:14, fontWeight:700, color:'#0f1a35', marginBottom:6 }}>{q}</div>
-              <div style={{ fontSize:13, color:'#555770', lineHeight:1.6 }}>{a}</div>
-            </div>
-          ))}
-          <button onClick={() => go('help')} style={{ display:'block', margin:'20px auto 0', padding:'12px 28px', background:'transparent', color:'#0f1a35', border:'1.5px solid #0f1a35', borderRadius:24, fontSize:14, fontWeight:600, cursor:'pointer' }}>See Help Center</button>
-        </div>
-      </div>
-
       {/* ═════════ FINAL CTA ═════════ */}
       <div style={{ padding:'56px 24px', background:'linear-gradient(135deg, #e8b400 0%, #b38600 100%)', textAlign:'center', position:'relative', overflow:'hidden' }}>
         <div style={{ position:'absolute', inset:0, opacity:0.1 }}>
@@ -768,8 +640,6 @@ function Splash({ go }) {
         @keyframes floatUp { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-20px) rotate(5deg); } }
         @keyframes driveAcross { 0% { transform: translateX(0); } 100% { transform: translateX(110vw); } }
         @keyframes autoScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
-        @media (min-width: 769px) { .desktop-nav { display: flex !important; } .mobile-nav-btn { display: none !important; } }
-        @media (max-width: 768px) { .desktop-nav { display: none !important; } .mobile-nav-btn { display: flex !important; } }
       `}</style>
     </div>
   );
