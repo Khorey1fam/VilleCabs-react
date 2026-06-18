@@ -266,11 +266,15 @@ function getDirections(origin, destination) {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function TopBar({ title, onBack, go, user }) {
+  const handleLogoClick = () => {
+    if (!go) return;
+    go(user ? 'customer-dash' : 'splash');
+  };
   return (
     <div style={s.topBar}>
       {onBack && <button style={s.backBtn} onClick={onBack}>←</button>}
       <img src="/logo.png" alt="VilleCabs"
-        onClick={() => go ? go(user ? 'customer-dash' : 'splash') : null}
+        onClick={handleLogoClick}
         style={{ height:32, width:'auto', objectFit:'contain', cursor:'pointer', flexShrink:0, maxWidth:140 }}/>
       {title && <span style={{ ...s.topTitle, marginLeft:6, fontSize:12, color:'#888aaa' }}>{title}</span>}
       <div style={{ display:'flex', gap:5, marginLeft:'auto' }}>
@@ -1075,7 +1079,7 @@ function DriverSignup({ go }) {
 function DriverPending({ go }) {
   return (
     <div style={s.content}>
-      <TopBar title="Application Submitted"/>
+      <TopBar title="Application Submitted" go={go} user={null}/>
       <div style={{ ...s.center, paddingTop:20 }}>
         <div style={{ width:'100%', maxWidth:380 }}>
           <div style={{ background:'rgba(232,180,0,0.1)', border:'1.5px solid rgba(232,180,0,0.4)', borderRadius:16, padding:24, textAlign:'center', marginBottom:20 }}>
