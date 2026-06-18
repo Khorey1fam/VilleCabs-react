@@ -662,7 +662,7 @@ function Splash({ go }) {
 }
 
 // ── LOGIN CHOICE ─────────────────────────────────────────────────────────────
-function LoginChoice({ go }) {
+function LoginChoice({ go, user }) {
   return (
     <div style={s.content}>
       <TopBar title="Log In" onBack={() => go('splash')} go={go} user={user}/>
@@ -701,7 +701,7 @@ function LoginChoice({ go }) {
 }
 
 // ── ROLE SELECT ───────────────────────────────────────────────────────────────
-function RoleSelect({ go }) {
+function RoleSelect({ go, user }) {
   return (
     <div style={s.content}>
       <TopBar title="Join VilleCabs" onBack={() => go('splash')} go={go} user={user}/>
@@ -726,7 +726,7 @@ function RoleSelect({ go }) {
 }
 
 // ── CUSTOMER SIGNUP ───────────────────────────────────────────────────────────
-function CustomerSignup({ go, setUser }) {
+function CustomerSignup({ go, setUser, user }) {
   const [form, setForm]       = useState({ name:'', phone:'', email:'', password:'' });
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
@@ -919,7 +919,7 @@ function CustomerLogin({ go, setUser, user }) {
 }
 
 // ── DRIVER LOGIN ──────────────────────────────────────────────────────────────
-function DriverLogin({ go, setUser }) {
+function DriverLogin({ go, setUser, user }) {
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading]   = useState(false);
@@ -967,7 +967,7 @@ function DriverLogin({ go, setUser }) {
 }
 
 // ── DRIVER SIGNUP ─────────────────────────────────────────────────────────────
-function DriverSignup({ go }) {
+function DriverSignup({ go, user }) {
   const [form, setForm]       = useState({ name:'',trn:'',dob:'',phone:'',email:'',password:'',make:'',model:'',plate:'' });
   const [docs, setDocs]       = useState({ license:null, fitness:null, registration:null });
   const [loading, setLoading] = useState(false);
@@ -1074,7 +1074,7 @@ function DriverSignup({ go }) {
 }
 
 // ── DRIVER PENDING ────────────────────────────────────────────────────────────
-function DriverPending({ go }) {
+function DriverPending({ go, user }) {
   return (
     <div style={s.content}>
       <TopBar title="Application Submitted" go={go} user={null}/>
@@ -3902,7 +3902,7 @@ function DriverWelcomeTips({ go, user }) {
 }
 
 // ── DRIVER ABOUT US ───────────────────────────────────────────────────────────
-function DriverAboutUs({ go }) {
+function DriverAboutUs({ go, user }) {
   return (
     <div style={{ ...s.content, background:'transparent' }}>
       <TopBar title="About VilleCabs" onBack={() => go('driver-dash')} go={go} user={user}/>
