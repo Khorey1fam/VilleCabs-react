@@ -667,7 +667,7 @@ function Splash({ go }) {
 function LoginChoice({ go }) {
   return (
     <div style={s.content}>
-      <TopBar title="Log In" onBack={() => go('splash')} go={go} user={user}/>
+      <TopBar title="Log In" onBack={() => go('splash')} go={go} user={null}/>
       <div style={{ ...s.center, padding:'0 24px' }}>
         <div style={{ width:'100%', maxWidth:360, textAlign:'center' }}>
           <div style={{ fontSize:40, marginBottom:16 }}>👋</div>
@@ -706,7 +706,7 @@ function LoginChoice({ go }) {
 function RoleSelect({ go }) {
   return (
     <div style={s.content}>
-      <TopBar title="Join VilleCabs" onBack={() => go('splash')} go={go} user={user}/>
+      <TopBar title="Join VilleCabs" onBack={() => go('splash')} go={go} user={null}/>
       <div style={{ ...s.center, paddingTop:40 }}>
         <p style={{ color:'rgba(255,255,255,0.6)', marginBottom:24, fontSize:14 }}>How would you like to use VilleCabs?</p>
         <div style={{ width:'100%', maxWidth:360, display:'flex', flexDirection:'column', gap:14 }}>
@@ -770,7 +770,7 @@ function CustomerSignup({ go, setUser }) {
 
   return (
     <div style={s.content}>
-      <TopBar title="Create Account" onBack={() => go('role')} go={go} user={user}/>
+      <TopBar title="Create Account" onBack={() => go('role')} go={go} user={null}/>
       <div style={{ padding:'24px 20px', maxWidth:420, margin:'0 auto' }}>
         <h2 style={{ fontSize:20, fontWeight:500, marginBottom:4 }}>Welcome to VilleCabs</h2>
         <p style={{ color:'rgba(255,255,255,0.5)', fontSize:13, marginBottom:20 }}>Create your rider account</p>
@@ -1028,7 +1028,7 @@ function DriverSignup({ go }) {
 
   return (
     <div style={s.content}>
-      <TopBar title="Driver Registration" onBack={() => go('role')} go={go} user={user}/>
+      <TopBar title="Driver Registration" onBack={() => go('role')} go={go} user={null}/>
       <div style={{ padding:'20px', maxWidth:420, margin:'0 auto' }}>
         <h2 style={{ fontSize:20, fontWeight:500, marginBottom:4 }}>Drive with VilleCabs</h2>
         <p style={{ color:'rgba(255,255,255,0.5)', fontSize:13, marginBottom:16 }}>Fill in your details to apply</p>
@@ -3122,7 +3122,7 @@ function BookingConfirm({ go, bookingId, user }) {
   if (step === 'card-form') {
     return (
       <div style={{ ...s.content, background:'transparent' }}>
-        <TopBar title="Card Payment" onBack={() => { setStep('select'); setCardError(''); }}/>
+        <TopBar title="Card Payment" go={go} user={user} onBack={() => { setStep('select'); setCardError(''); }}/>
         <div style={{ padding:16, maxWidth:420, margin:'0 auto' }}>
 
           {/* Amount banner */}
@@ -4801,7 +4801,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
 
   return (
     <div style={{ ...s.content }}>
-      <TopBar title="Active Ride" onBack={() => { if (window.confirm('You cannot leave an active ride. Please complete the ride first.\n\nPress Cancel to stay on this screen.')) {} }}/>
+      <TopBar title="Active Ride" go={go} user={user} onBack={() => { if (window.confirm('You cannot leave an active ride. Please complete the ride first.\n\nPress Cancel to stay on this screen.')) {} }}/>
       <div style={{ background:locationStatus==='tracking'?'rgba(26,158,90,0.15)':'rgba(226,75,74,0.1)', padding:'6px 16px', fontSize:11, color:locationStatus==='tracking'?'#9fe1cb':'#f09595', display:'flex', alignItems:'center', gap:6 }}>
         {locationStatus==='tracking' ? '📍 Sharing live location with passenger' :
          locationStatus==='denied' ? (
