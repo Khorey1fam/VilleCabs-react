@@ -88,7 +88,7 @@ const s = {
 
 // ── SVG fallback map (for auth screens) ──────────────────────────────────────
 function GlobalStyles() {
-  React.useEffect(() => {
+  useEffect(() => {
     // Ensure proper mobile viewport
     let meta = document.querySelector('meta[name="viewport"]');
     if (!meta) { meta = document.createElement('meta'); meta.name='viewport'; document.head.appendChild(meta); }
@@ -545,9 +545,9 @@ function Splash({ go }) {
           </div>
           <div style={{ maxWidth:480, margin:'0 auto' }}>
             <div key={safetySlide} style={{ animation:'fadeSlideIn 0.5s ease', background:'rgba(255,255,255,0.06)', border:'1.5px solid rgba(232,180,0,0.4)', borderRadius:18, padding:'28px 24px', textAlign:'center' }}>
-              <div style={{ fontSize:48, marginBottom:14 }}>{safetyTips[safetySlide].icon}</div>
-              <h3 style={{ fontSize:18, fontWeight:700, color:'#e8b400', margin:'0 0 10px' }}>{safetyTips[safetySlide].title}</h3>
-              <p style={{ fontSize:14, color:'rgba(255,255,255,0.8)', lineHeight:1.6, margin:0 }}>{safetyTips[safetySlide].desc}</p>
+              <div style={{ fontSize:48, marginBottom:14 }}>{(safetyTips[safetySlide]||safetyTips[0]).icon}</div>
+              <h3 style={{ fontSize:18, fontWeight:700, color:'#e8b400', margin:'0 0 10px' }}>{(safetyTips[safetySlide]||safetyTips[0]).title}</h3>
+              <p style={{ fontSize:14, color:'rgba(255,255,255,0.8)', lineHeight:1.6, margin:0 }}>{(safetyTips[safetySlide]||safetyTips[0]).desc}</p>
             </div>
             <div style={{ display:'flex', gap:6, justifyContent:'center', marginTop:18 }}>
               {safetyTips.map((_, i) => (
@@ -5545,11 +5545,11 @@ function FeaturedPage({ go, user }) {
 
 // ── DRIVER EARNINGS PAGE ──────────────────────────────────────────────────────
 function DriverEarnings({ go, user }) {
-  const [rides,    setRides]    = React.useState([]);
-  const [loading,  setLoading]  = React.useState(true);
-  const [period,   setPeriod]   = React.useState('week'); // today/week/month
+  const [rides,    setRides]    = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [period,   setPeriod]   = useState('week'); // today/week/month
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!user?.uid) return;
     getDocs(query(
       collection(db,'bookings'),
@@ -5647,11 +5647,11 @@ function DriverEarnings({ go, user }) {
 
 // ── DRIVER DOCUMENTS PAGE ─────────────────────────────────────────────────────
 function DriverDocuments({ go, user }) {
-  const [docs,    setDocs]    = React.useState({});
-  const [uploads, setUploads] = React.useState({});
-  const [saving,  setSaving]  = React.useState('');
+  const [docs,    setDocs]    = useState({});
+  const [uploads, setUploads] = useState({});
+  const [saving,  setSaving]  = useState('');
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!user?.uid) return;
     getDoc(doc(db,'drivers',user.uid)).then(snap => {
       if (snap.exists()) setDocs(snap.data().documents||{});
@@ -5721,11 +5721,11 @@ function DriverDocuments({ go, user }) {
 
 // ── DRIVER NOTIFICATIONS PAGE ─────────────────────────────────────────────────
 function DriverNotifications({ go, user }) {
-  const [notifs,  setNotifs]  = React.useState([]);
-  const [filter,  setFilter]  = React.useState('all');
-  const [loading, setLoading] = React.useState(true);
+  const [notifs,  setNotifs]  = useState([]);
+  const [filter,  setFilter]  = useState('all');
+  const [loading, setLoading] = useState(true);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!user?.uid) return;
     // Load notifications from Firestore
     getDocs(query(
@@ -5796,10 +5796,10 @@ function DriverNotifications({ go, user }) {
 
 // ── PARTNER WITH VILLECABS PAGE ───────────────────────────────────────────────
 function PartnerWithUs({ go, user }) {
-  const [form, setForm] = React.useState({ bizName:'', bizType:'', contact:'', phone:'', email:'', address:'', website:'', message:'' });
-  const [sent,    setSent]    = React.useState(false);
-  const [loading, setLoading] = React.useState(false);
-  const [error,   setError]   = React.useState('');
+  const [form, setForm] = useState({ bizName:'', bizType:'', contact:'', phone:'', email:'', address:'', website:'', message:'' });
+  const [sent,    setSent]    = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState('');
   const set = (k,v) => setForm(p => ({ ...p, [k]:v }));
 
   const handleSubmit = async () => {
@@ -5982,8 +5982,8 @@ function FeaturedMandeville({ go }) {
 
 // ── NEW PUBLIC LANDING PAGE ────────────────────────────────────────────────────
 function PublicLanding({ go }) {
-  const [heroSlide,   setHeroSlide]   = React.useState(0);
-  const [safetySlide, setSafetySlide] = React.useState(0);
+  const [heroSlide,   setHeroSlide]   = useState(0);
+  const [safetySlide, setSafetySlide] = useState(0);
 
   const heroSlides = [
     { icon:'🚕', bg:'#6b21a8', title:"Mandeville's Local Ride App", sub:'Fast, safe, and reliable rides across Mandeville and Manchester.' },
@@ -5991,7 +5991,7 @@ function PublicLanding({ go }) {
     { icon:'🚗', bg:'#1e1b4b', title:'Drive With VilleCabs',        sub:'Use your vehicle, set your own schedule, and keep 85% of every fare.' },
     { icon:'🤝', bg:'#2d1b69', title:'Partner With VilleCabs',      sub:'Help your customers move safely and conveniently across Manchester.' },
   ];
-  React.useEffect(() => { const t=setInterval(()=>setHeroSlide(s=>(s+1)%heroSlides.length),5000); return ()=>clearInterval(t); },[]);
+  useEffect(() => { const t=setInterval(()=>setHeroSlide(s=>(s+1)%heroSlides.length),5000); return ()=>clearInterval(t); },[]);
 
   const safetyTips = [
     { icon:'✅', title:'Verified Drivers', desc:'Every VilleCabs driver is approved before they receive ride requests.' },
@@ -6000,9 +6000,9 @@ function PublicLanding({ go }) {
     { icon:'📲', title:'Share Your Trip', desc:'Send live ride details to someone you trust at any time.' },
     { icon:'👀', title:'Driver Verification', desc:'Check driver name, photo, vehicle make, colour, and plate before entering.' },
   ];
-  React.useEffect(() => { const t=setInterval(()=>setSafetySlide(s=>(s+1)%safetyTips.length),4000); return ()=>clearInterval(t); },[]);
+  useEffect(() => { const t=setInterval(()=>setSafetySlide(s=>(s+1)%safetyTips.length),4000); return ()=>clearInterval(t); },[]);
 
-  const cur = heroSlides[heroSlide];
+  const cur = heroSlides[heroSlide] || heroSlides[0];
 
   return (
     <div style={{ background:'#ffffff', minHeight:'100vh' }}>
@@ -6100,9 +6100,9 @@ function PublicLanding({ go }) {
         </div>
         <div style={{ maxWidth:480, margin:'0 auto' }}>
           <div key={safetySlide} style={{ animation:'fadeUp 0.5s ease', background:'rgba(255,255,255,0.06)', border:'1px solid rgba(167,139,250,0.3)', borderRadius:16, padding:'20px', textAlign:'center', marginBottom:14 }}>
-            <div style={{ fontSize:36, marginBottom:10 }}>{safetyTips[safetySlide].icon}</div>
-            <div style={{ fontSize:16, fontWeight:700, color:'#d8b4fe', marginBottom:8 }}>{safetyTips[safetySlide].title}</div>
-            <div style={{ fontSize:13, color:'rgba(255,255,255,0.75)', lineHeight:1.6 }}>{safetyTips[safetySlide].desc}</div>
+            <div style={{ fontSize:36, marginBottom:10 }}>{(safetyTips[safetySlide]||safetyTips[0]).icon}</div>
+            <div style={{ fontSize:16, fontWeight:700, color:'#d8b4fe', marginBottom:8 }}>{(safetyTips[safetySlide]||safetyTips[0]).title}</div>
+            <div style={{ fontSize:13, color:'rgba(255,255,255,0.75)', lineHeight:1.6 }}>{(safetyTips[safetySlide]||safetyTips[0]).desc}</div>
           </div>
           <div style={{ display:'flex', gap:5, justifyContent:'center' }}>
             {safetyTips.map((_,i) => (
@@ -6176,11 +6176,6 @@ function PublicLanding({ go }) {
       </div>
 
       <Footer go={go}/>
-      <style>{`
-        @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
-        @keyframes gentleBounce { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-8px); } }
-        @keyframes autoScroll { 0% { transform:translateX(0); } 100% { transform:translateX(-50%); } }
-      `}</style>
     </div>
   );
 }
