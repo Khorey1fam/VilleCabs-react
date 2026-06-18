@@ -2561,44 +2561,58 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
   ];
 
   // ── VilleCabs Fare Formula ──────────────────────────────────────────────────
-  // Base fare: J$751 covers the first 1km (flat rate within 1km radius)
-  // Beyond 1km: J$200 added per every 100m extra
-  // Vehicle multipliers: VilleRide x1.0, VilleXL x1.3, VilleMoto x0.7
-  const BASE_FARE    = 751;
-  const BASE_KM      = 1.0;
-  const RATE_PER_100M= 15;
-  const _hour = new Date().getHours();
-  const isSurge = _hour >= 17 && _hour < 20;
-  const SURGE_MULTIPLIER = isSurge ? 1.5 : 1.0;
+  // Band fares (0.1–1.0 km), then J$751 + J$10.44 per 100m beyond 1km
+  const FARE_BANDS = [
+    [0.1, 0.2, 500], [0.2, 0.3, 525], [0.3, 0.4, 550], [0.4, 0.5, 575],
+    [0.5, 0.6, 600], [0.6, 0.7, 650], [0.7, 0.8, 700], [0.8, 0.9, 725],
+    [0.9, 1.0, 751],
+  ];
+  const OVER_1KM_BASE = 751;
+  const OVER_1KM_PER_100M = 10.44;
 
-  const RATE_UNDER_1KM = 180; // J$ per 100m when distance < 1km
-  const calcPrice = (v) => {
-    let fare;
-    if (dist <= BASE_KM) {
-      // Under 1km: J$180 per 100m
-      const meters = dist * 1000;
-      const per100m = Math.ceil(meters / 100);
-      fare = per100m * RATE_UNDER_1KM;
-    } else {
-      // Over 1km: BASE_FARE + J$15 per 100m beyond 1km
-      fare = BASE_FARE;
-      const extraMeters = (dist - BASE_KM) * 1000;
-      const per100m     = Math.ceil(extraMeters / 100);
-      fare += per100m * RATE_PER_100M;
+  // ── Surcharge Logic (highest only, no stacking) ───────────────────────────
+  const getSurcharge = () => {
+    const now   = new Date();
+    const h     = now.getHours();
+    const dow   = now.getDay(); // 0=Sun, 6=Sat
+    // Public holidays 2025-2026 Jamaica (month is 0-indexed)
+    const holidays = [
+      '1-1','3-3','4-18','5-23','8-1','8-6','10-20','12-25','12-26',
+    ].map(s => { const [m,d] = s.split('-'); return `${m}-${d}`; });
+    const dateKey = `${now.getMonth()+1}-${now.getDate()}`;
+    const isHoliday = holidays.includes(dateKey);
+    const isPeak    = dow >= 1 && dow <= 5 && h >= 17 && h < 19; // Mon–Fri 5–7pm
+    const isNight   = h >= 22 || h < 5;  // 10pm–5am
+    if (isHoliday) return { pct:20, label:'Holiday Fee Applied (+20%)', key:'holiday' };
+    if (isNight)   return { pct:15, label:'Night Fee Applied (+15%)',   key:'night'   };
+    if (isPeak)    return { pct:10, label:'Peak Hour Fee Applied (+10%)',key:'peak'    };
+    return null;
+  };
+  const surcharge = getSurcharge();
+  const SURCHARGE_MULT = surcharge ? 1 + surcharge.pct / 100 : 1.0;
+
+  const baseFare = (km) => {
+    if (km < 0.1) return 500; // minimum
+    for (const [lo, hi, fare] of FARE_BANDS) {
+      if (km >= lo && km < hi) return fare;
     }
-    return Math.round(fare * v.multiplier * SURGE_MULTIPLIER);
+    // Over 1km
+    const extra100m = Math.ceil((km - 1.0) / 0.1);
+    return Math.round(OVER_1KM_BASE + extra100m * OVER_1KM_PER_100M);
+  };
+
+  const calcPrice = (v) => {
+    const base = baseFare(dist);
+    return Math.round(base * v.multiplier * SURCHARGE_MULT);
   };
 
   const fareBreakdown = (v) => {
-    if (dist <= BASE_KM) {
-      return { base: BASE_FARE, extra: 0, extraMeters: 0, per100m: 0 };
-    }
-    const extraMeters = (dist - BASE_KM) * 1000;
-    const per100m     = Math.ceil(extraMeters / 100);
-    const extra       = per100m * RATE_PER_100M;
-    return { base: BASE_FARE, extra, extraMeters: Math.round(extraMeters), per100m };
+    const base  = baseFare(dist);
+    const after = Math.round(base * v.multiplier);
+    const surchargeAmt = Math.round(after * (surcharge ? surcharge.pct/100 : 0));
+    const total = after + surchargeAmt;
+    return { baseFare: after, surchargeAmt, total, surchargeLabel: surcharge?.label || null };
   };
-
   // Haversine formula for straight-line distance fallback
   const haversine = (p1, p2) => {
     const R = 6371;
@@ -2731,37 +2745,33 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
             <div style={{ fontSize:15, fontWeight:500, color:WHITE }}>J${calcPrice(veh).toLocaleString()}</div>
           </div>
         ))}
-        {isSurge && (
-          <div style={{ background:'rgba(226,75,74,0.15)', border:'1.5px solid rgba(226,75,74,0.4)', borderRadius:10, padding:'10px 14px', marginBottom:10, display:'flex', alignItems:'center', gap:8 }}>
-            <span style={{ fontSize:18 }}>⚡</span>
+        {surcharge && (
+          <div style={{ background:'rgba(226,75,74,0.12)', border:'1.5px solid rgba(226,75,74,0.4)', borderRadius:10, padding:'10px 14px', marginBottom:10, display:'flex', alignItems:'center', gap:8 }}>
+            <span style={{ fontSize:18 }}>{surcharge.key==='night'?'🌙':surcharge.key==='holiday'?'🎉':'⚡'}</span>
             <div>
-              <div style={{ fontSize:13, fontWeight:600, color:'#f09595' }}>Peak Hours</div>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Peak hours rate may apply</div>
+              <div style={{ fontSize:13, fontWeight:600, color:'#f09595' }}>{surcharge.label}</div>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Added to your estimated fare</div>
             </div>
           </div>
         )}
-        <div style={{ background:'#111111', borderRadius:12, padding:14, margin:'10px 0' }}>
-          <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:6 }}>
-            <span>Base (first 1km)</span>
-            <span style={{ color:WHITE, fontWeight:500 }}>J$751</span>
-          </div>
-          {dist > 1 && (
-            <>
-              <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:6 }}>
-                <span>Fare Based on Distance</span>
-                <span style={{ color:WHITE, fontWeight:500 }}>J${(calcPrice({...v, multiplier:1}) - 751).toLocaleString()}</span>
+        {(() => { const bd = fareBreakdown(v); return (
+          <div style={{ background:'#111111', borderRadius:12, padding:14, margin:'10px 0' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:6 }}>
+              <span>Base Fare ({dist} km)</span>
+              <span style={{ color:WHITE, fontWeight:500 }}>J${bd.baseFare.toLocaleString()}</span>
+            </div>
+            {bd.surchargeAmt > 0 && (
+              <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:6 }}>
+                <span style={{ color:'#f09595' }}>{bd.surchargeLabel}</span>
+                <span style={{ color:'#f09595', fontWeight:500 }}>+J${bd.surchargeAmt.toLocaleString()}</span>
               </div>
-              <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:6 }}>
-                <span>Service fee</span>
-                <span>J$0</span>
-              </div>
-            </>
-          )}
-          <div style={{ display:'flex', justifyContent:'space-between', fontSize:15, fontWeight:600, color:'#e8b400', borderTop:'0.5px solid rgba(255,255,255,0.15)', paddingTop:8, marginTop:4 }}>
-            <span>Total</span>
-            <span>J${calcPrice(v).toLocaleString()}</span>
+            )}
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:15, fontWeight:600, color:'#e8b400', borderTop:'0.5px solid rgba(255,255,255,0.15)', paddingTop:8, marginTop:4 }}>
+              <span>Estimated Fare</span>
+              <span>J${bd.total.toLocaleString()}</span>
+            </div>
           </div>
-        </div>
+        ); })()}
         {/* Referral Code */}
         <div style={{ background:'rgba(15,20,40,0.6)', border:'0.5px solid rgba(168,139,250,0.2)', borderRadius:12, padding:12, marginBottom:10 }}>
           <div style={{ fontSize:12, color:'rgba(168,139,250,0.9)', marginBottom:8, fontWeight:500 }}>🎁 Have a referral code?</div>
