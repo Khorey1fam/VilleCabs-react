@@ -1415,6 +1415,144 @@ function HelpScreen({ go, user }) {
 }
 
 // ── CUSTOMER DASHBOARD ────────────────────────────────────────────────────────
+// ── DASH HERO SLIDER ──────────────────────────────────────────────────────────
+function DashHeroSlider({ go }) {
+  const [slide, setSlide] = useState(0);
+  const slides = [
+    { bg:'#111111', icon:'🚕', title:'Safe rides in Manchester',  sub:'Trusted local drivers · GPS tracked · SOS protected',    accent:'#1a9e5a' },
+    { bg:'#0f1a35', icon:'📍', title:'Book rides across Mandeville', sub:'Fast, simple, and built for your city',             accent:'#e8b400' },
+    { bg:'#1a0a2a', icon:'🛡️', title:'Your safety comes first',  sub:'Verify your driver, share your trip, and use SOS anytime', accent:'#e8b400' },
+    { bg:'#0a2a1a', icon:'✨', title:'VilleCabs is growing',      sub:'More drivers, more routes, more convenience',           accent:'#1a9e5a' },
+  ];
+  useEffect(() => { const t=setInterval(()=>setSlide(s=>(s+1)%slides.length),5000); return ()=>clearInterval(t); }, [slides.length]);
+  const cur = slides[slide];
+  return (
+    <div style={{ margin:'16px 16px 0', borderRadius:16, overflow:'hidden', position:'relative', minHeight:130, background: cur.bg, transition:'background 0.8s ease', display:'flex', alignItems:'center', padding:'16px 20px' }}>
+      {/* Floating taxis */}
+      {[...Array(3)].map((_, i) => (
+        <div key={i} style={{ position:'absolute', fontSize:20, opacity:0.08, top:(20+i*25)+'%', left:'-30px', animation:'driveAcross '+(12+i*3)+'s linear infinite', animationDelay:(i*2)+'s', pointerEvents:'none' }}>🚕</div>
+      ))}
+      <div key={slide} style={{ animation:'fadeSlideIn 0.5s ease', flex:1, position:'relative', zIndex:1 }}>
+        <div style={{ fontSize:32, marginBottom:6 }}>{cur.icon}</div>
+        <div style={{ fontSize:17, fontWeight:700, color:'#ffffff', marginBottom:4, lineHeight:1.3 }}>{cur.title}</div>
+        <div style={{ fontSize:11, color:'rgba(255,255,255,0.65)', marginBottom:12, lineHeight:1.5 }}>{cur.sub}</div>
+        <button onClick={() => go('pin-pickup')} style={{ padding:'7px 18px', background: cur.accent, border:'none', borderRadius:20, color: cur.accent==='#e8b400'?'#0f1a35':'#ffffff', fontSize:12, fontWeight:700, cursor:'pointer' }}>Book Now →</button>
+      </div>
+      {/* Slide dots */}
+      <div style={{ position:'absolute', bottom:10, right:14, display:'flex', gap:5 }}>
+        {slides.map((_, i) => (
+          <button key={i} onClick={() => setSlide(i)} style={{ width: i===slide?20:5, height:5, borderRadius:3, border:'none', background: i===slide?'#ffffff':'rgba(255,255,255,0.3)', cursor:'pointer', transition:'all 0.3s', padding:0 }}/>
+        ))}
+      </div>
+      <style>{`
+        @keyframes driveAcross { 0% { transform: translateX(0); } 100% { transform: translateX(110vw); } }
+        @keyframes fadeSlideIn { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
+      `}</style>
+    </div>
+  );
+}
+
+// ── DASH SAFETY SLIDER ─────────────────────────────────────────────────────────
+function DashSafetySlider() {
+  const [slide, setSlide] = useState(0);
+  const tips = [
+    { icon:'👀', title:'Verify Your Driver',  desc:'Check plate number, car colour, vehicle make, and driver photo.' },
+    { icon:'📲', title:'Share Your Trip',     desc:'Send live ride details to a trusted friend or family member.' },
+    { icon:'🆘', title:'Use SOS Emergency',   desc:'Hold SOS for 5 seconds if you need urgent help.' },
+    { icon:'💵', title:'Cash Ready',          desc:'Have your cash ready at the end of your ride.' },
+    { icon:'⭐', title:'Rate Your Driver',    desc:'Your feedback helps keep VilleCabs safe and reliable.' },
+  ];
+  useEffect(() => { const t=setInterval(()=>setSlide(s=>(s+1)%tips.length),4000); return ()=>clearInterval(t); }, [tips.length]);
+  return (
+    <div style={{ padding:'20px 16px 0' }}>
+      <div style={{ fontSize:12, fontWeight:700, color:'#999bbb', marginBottom:12, textTransform:'uppercase', letterSpacing:0.8 }}>Safety Tips</div>
+      <div style={{ background:'#0f1a35', borderRadius:16, padding:'20px', position:'relative', overflow:'hidden', minHeight:140 }}>
+        <div style={{ position:'absolute', top:-30, right:-30, width:120, height:120, borderRadius:'50%', background:'radial-gradient(circle, rgba(232,180,0,0.15) 0%, transparent 70%)', pointerEvents:'none' }}/>
+        <div key={slide} style={{ animation:'fadeSlideIn 0.5s ease', position:'relative', zIndex:1, display:'flex', gap:14, alignItems:'flex-start' }}>
+          <div style={{ fontSize:36, flexShrink:0 }}>{tips[slide].icon}</div>
+          <div>
+            <div style={{ fontSize:15, fontWeight:700, color:'#e8b400', marginBottom:6 }}>{tips[slide].title}</div>
+            <div style={{ fontSize:13, color:'rgba(255,255,255,0.75)', lineHeight:1.6 }}>{tips[slide].desc}</div>
+          </div>
+        </div>
+        <div style={{ display:'flex', gap:5, marginTop:16, position:'relative', zIndex:1 }}>
+          {tips.map((_, i) => (
+            <button key={i} onClick={() => setSlide(i)} style={{ width: i===slide?20:5, height:5, borderRadius:3, border:'none', background: i===slide?'#e8b400':'rgba(255,255,255,0.25)', cursor:'pointer', transition:'all 0.3s', padding:0 }}/>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── DASH DRIVER SLIDER ─────────────────────────────────────────────────────────
+function DashDriverSlider({ go }) {
+  const [slide, setSlide] = useState(0);
+  const slides = [
+    { icon:'💰', title:'Earn With Your Vehicle', desc:'Keep 85% of every fare.' },
+    { icon:'⏰', title:'Flexible Hours',          desc:'Drive when it works for you.' },
+    { icon:'📍', title:'Local Trips',             desc:'Serve Mandeville and Manchester.' },
+    { icon:'🚀', title:'Join Early',              desc:'Be part of a growing local platform.' },
+    { icon:'🤝', title:'Driver Support',          desc:'Get onboarding and support from VilleCabs.' },
+  ];
+  useEffect(() => { const t=setInterval(()=>setSlide(s=>(s+1)%slides.length),4000); return ()=>clearInterval(t); }, [slides.length]);
+  return (
+    <div style={{ margin:'20px 16px 0', background:'#111111', border:'1px solid rgba(232,180,0,0.3)', borderRadius:16, padding:'20px', position:'relative', overflow:'hidden' }}>
+      <div style={{ position:'absolute', right:-20, top:-20, opacity:0.06, fontSize:100 }}>💰</div>
+      <div style={{ fontSize:11, color:'#e8b400', fontWeight:700, textTransform:'uppercase', letterSpacing:1, marginBottom:6 }}>For Drivers</div>
+      <div style={{ fontSize:17, fontWeight:700, color:'#ffffff', marginBottom:14 }}>Drive With VilleCabs</div>
+      <div key={slide} style={{ animation:'fadeSlideIn 0.5s ease', background:'rgba(255,255,255,0.06)', borderRadius:12, padding:'14px', marginBottom:14, display:'flex', gap:12, alignItems:'flex-start' }}>
+        <div style={{ fontSize:28, flexShrink:0 }}>{slides[slide].icon}</div>
+        <div>
+          <div style={{ fontSize:14, fontWeight:700, color:'#e8b400', marginBottom:4 }}>{slides[slide].title}</div>
+          <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', lineHeight:1.5 }}>{slides[slide].desc}</div>
+        </div>
+      </div>
+      <div style={{ display:'flex', gap:5, marginBottom:14 }}>
+        {slides.map((_, i) => (
+          <button key={i} onClick={() => setSlide(i)} style={{ width: i===slide?20:5, height:5, borderRadius:3, border:'none', background: i===slide?'#e8b400':'rgba(255,255,255,0.2)', cursor:'pointer', transition:'all 0.3s', padding:0 }}/>
+        ))}
+      </div>
+      <button onClick={() => go('driver-signup')} style={{ padding:'10px 22px', background:'#e8b400', border:'none', borderRadius:20, color:'#0f1a35', fontSize:13, fontWeight:700, cursor:'pointer' }}>Become a Driver →</button>
+    </div>
+  );
+}
+
+// ── DASH PARTNERS SLIDER ───────────────────────────────────────────────────────
+function DashPartnersSlider() {
+  const partners = [
+    { icon:'🍔', name:'Juici Patties',   cat:'Restaurant' },
+    { icon:'📚', name:'Bargain Books',   cat:'Bookstore'  },
+    { icon:'🏨', name:'Golf View Hotel', cat:'Hotel'      },
+    { icon:'🍽️', name:'Restaurants',    cat:'Food'       },
+    { icon:'🎉', name:'Clubs & Lounges', cat:'Nightlife'  },
+    { icon:'🛒', name:'Supermarkets',   cat:'Grocery'    },
+    { icon:'💊', name:'Pharmacies',     cat:'Health'     },
+    { icon:'🎫', name:'Events',         cat:'Events'     },
+  ];
+  return (
+    <div style={{ padding:'20px 0 20px' }}>
+      <div style={{ padding:'0 16px', marginBottom:12 }}>
+        <div style={{ fontSize:12, fontWeight:700, color:'#999bbb', textTransform:'uppercase', letterSpacing:0.8, marginBottom:2 }}>Featured Partners</div>
+        <div style={{ fontSize:11, color:'#aaa', }}>Local businesses connected with VilleCabs.</div>
+      </div>
+      <div style={{ overflow:'hidden', position:'relative' }}>
+        <div style={{ display:'flex', gap:10, animation:'autoScroll 28s linear infinite', width:'fit-content', padding:'0 16px' }}>
+          {[...partners, ...partners].map((p, i) => (
+            <div key={i} style={{ flexShrink:0, width:130, background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:12, padding:'14px 10px', textAlign:'center', boxShadow:'0 2px 8px rgba(0,0,0,0.05)' }}>
+              <div style={{ fontSize:28, marginBottom:6 }}>{p.icon}</div>
+              <div style={{ fontSize:11, fontWeight:700, color:'#1a1a2e', marginBottom:2 }}>{p.name}</div>
+              <div style={{ fontSize:9, color:'#888aaa', marginBottom:6 }}>{p.cat}</div>
+              <div style={{ fontSize:8, background:'rgba(232,180,0,0.15)', color:'#b38600', padding:'2px 7px', borderRadius:8, fontWeight:600, display:'inline-block' }}>Coming Soon</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <style>{`@keyframes autoScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }`}</style>
+    </div>
+  );
+}
+
 function CustomerDash({ go, user, setUser }) {
   const [tab,        setTab]        = useState('book');
   const [menuOpen,   setMenuOpen]   = useState(false);
@@ -1687,70 +1825,53 @@ function CustomerDash({ go, user, setUser }) {
           {/* ── REDESIGNED HOME DASHBOARD ── */}
           <div style={{ flex:1, overflowY:'auto', background:'#f5f6fa' }}>
 
-            {/* Hero greeting + Book a Ride */}
-            <div style={{ background:'#ffffff', padding:'32px 20px 28px', textAlign:'center', position:'relative', overflow:'hidden' }}>
-              {/* Background glow */}
-              <div style={{ position:'absolute', top:-40, left:'50%', transform:'translateX(-50%)', width:400, height:300, background:'radial-gradient(circle, rgba(232,180,0,0.08) 0%, transparent 70%)', pointerEvents:'none' }}/>
-
-              {/* Big greeting */}
-              <div style={{ fontSize:28, fontWeight:800, color:'#1a1a2e', marginBottom:4, lineHeight:1.2 }}>
+            {/* Greeting + Book a Ride */}
+            <div style={{ background:'#ffffff', padding:'28px 20px 24px', textAlign:'center', position:'relative', overflow:'hidden' }}>
+              <div style={{ position:'absolute', top:-40, left:'50%', transform:'translateX(-50%)', width:400, height:300, background:'radial-gradient(circle, rgba(232,180,0,0.07) 0%, transparent 70%)', pointerEvents:'none' }}/>
+              <div style={{ fontSize:26, fontWeight:800, color:'#1a1a2e', marginBottom:4, lineHeight:1.2 }}>
                 Good day, {user?.name?.split(' ')[0]||'Rider'} 👋
               </div>
-
-              {/* Car image + Book a Ride button */}
               <button onClick={() => go('pin-pickup')}
-                style={{ background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', margin:'16px auto 0', padding:0 }}>
-                <div style={{ width:200, height:200, borderRadius:'50%', background:'#ffffff', boxShadow:'0 8px 40px rgba(0,0,0,0.15), 0 0 0 6px rgba(232,180,0,0.2)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', position:'relative', overflow:'hidden' }}>
+                style={{ background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', margin:'14px auto 0', padding:0 }}>
+                <div style={{ width:190, height:190, borderRadius:'50%', background:'#ffffff', boxShadow:'0 8px 40px rgba(0,0,0,0.15), 0 0 0 6px rgba(232,180,0,0.2)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', position:'relative', overflow:'hidden' }}>
                   <div style={{ position:'absolute', inset:0, background:'radial-gradient(circle at 50% 60%, rgba(232,180,0,0.12) 0%, transparent 70%)' }}/>
-                  <div style={{ fontSize:80, lineHeight:1, position:'relative', zIndex:1 }}>🚕</div>
-                  <div style={{ fontSize:14, fontWeight:800, color:'#1a1a2e', marginTop:8, letterSpacing:0.3, position:'relative', zIndex:1 }}>Book a Ride</div>
+                  <div style={{ fontSize:76, lineHeight:1, position:'relative', zIndex:1 }}>🚕</div>
+                  <div style={{ fontSize:13, fontWeight:800, color:'#1a1a2e', marginTop:6, letterSpacing:0.3, position:'relative', zIndex:1 }}>Book a Ride</div>
                 </div>
               </button>
-
-              {/* Where are you going — below button */}
-              <div style={{ fontSize:15, color:'#888aaa', marginTop:14 }}>Where are you going today?</div>
+              <div style={{ fontSize:14, color:'#888aaa', marginTop:12 }}>Where are you going today?</div>
             </div>
 
-            {/* Banner — Safe rides in Manchester */}
-            <div style={{ margin:'16px 16px 0', borderRadius:16, overflow:'hidden', position:'relative', height:120, background:'#111111', display:'flex', alignItems:'center', padding:'0 20px' }}>
-              <div style={{ position:'absolute', right:0, top:0, bottom:0, width:'50%', background:'linear-gradient(to left, rgba(26,158,90,0.15), transparent)' }}/>
-              <div style={{ position:'absolute', right:16, top:'50%', transform:'translateY(-50%)', opacity:0.15 }}>
-                <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
-                  <circle cx="40" cy="40" r="38" stroke="#1a9e5a" strokeWidth="2"/>
-                  <path d="M20 40 L30 28 L60 28 L65 40 L60 52 L20 52 Z" fill="#1a9e5a"/>
-                </svg>
-              </div>
-              <div>
-                <div style={{ fontSize:18, fontWeight:700, color:WHITE, marginBottom:4 }}>Safe rides in Manchester</div>
-                <div style={{ fontSize:12, color:'rgba(255,255,255,0.6)', lineHeight:1.5 }}>Trusted local drivers · GPS tracked · SOS protected</div>
-                <button onClick={() => go('pin-pickup')} style={{ marginTop:10, padding:'6px 16px', background:GREEN, border:'none', borderRadius:20, color:WHITE, fontSize:12, fontWeight:600, cursor:'pointer' }}>
-                  Book Now →
-                </button>
-              </div>
-            </div>
+            {/* ── HERO BANNER SLIDESHOW ── */}
+            <DashHeroSlider go={go}/>
 
-            {/* Feature highlights */}
+            {/* ── WHY VILLECABS — horizontal scroll ── */}
             <div style={{ padding:'20px 16px 0' }}>
-              <div style={{ fontSize:13, fontWeight:600, color:'#999bbb', marginBottom:12, textTransform:'uppercase', letterSpacing:0.8 }}>Why VilleCabs</div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10 }}>
+              <div style={{ fontSize:12, fontWeight:700, color:'#999bbb', marginBottom:12, textTransform:'uppercase', letterSpacing:0.8 }}>Why VilleCabs</div>
+              <div style={{ display:'flex', gap:10, overflowX:'auto', paddingBottom:8, scrollbarWidth:'none' }}>
                 {[
                   ['⚡','Fast','Rides in minutes, not hours'],
                   ['🛡️','Safe','Vetted drivers + SOS button'],
-                  ['💰','Affordable','Fair fares, confirm before riding'],
+                  ['💰','Affordable','Clear estimated fares'],
+                  ['📍','Local','Built for Mandeville & Manchester'],
+                  ['📱','Easy','Simple booking from your phone'],
                 ].map(([icon, title, desc], i) => (
-                  <div key={i} style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:14, padding:'14px 10px', textAlign:'center', boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}>
-                    <div style={{ fontSize:24, marginBottom:6 }}>{icon}</div>
-                    <div style={{ fontSize:13, fontWeight:600, color:'#1a1a2e', marginBottom:4 }}>{title}</div>
+                  <div key={i} style={{ flexShrink:0, width:130, background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:14, padding:'14px 12px', textAlign:'center', boxShadow:'0 2px 8px rgba(0,0,0,0.05)' }}>
+                    <div style={{ fontSize:26, marginBottom:6 }}>{icon}</div>
+                    <div style={{ fontSize:12, fontWeight:700, color:'#1a1a2e', marginBottom:4 }}>{title}</div>
                     <div style={{ fontSize:10, color:'#666888', lineHeight:1.4 }}>{desc}</div>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* How it works */}
+            {/* ── SAFETY TIPS SLIDESHOW ── */}
+            <DashSafetySlider/>
+
+            {/* ── HOW IT WORKS ── */}
             <div style={{ padding:'20px 16px 0' }}>
-              <div style={{ fontSize:13, fontWeight:600, color:'#999bbb', marginBottom:12, textTransform:'uppercase', letterSpacing:0.8 }}>How it works</div>
-              <div style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:16, padding:'16px', boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}>
+              <div style={{ fontSize:12, fontWeight:700, color:'#999bbb', marginBottom:12, textTransform:'uppercase', letterSpacing:0.8 }}>How it works</div>
+              <div style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:16, padding:'16px', boxShadow:'0 2px 8px rgba(0,0,0,0.05)' }}>
                 {[
                   ['1','📍','Pin your location','Drop your pickup & drop-off on the map'],
                   ['2','🚗','Choose your ride','Pick VilleRide, XL or Moto'],
@@ -1767,24 +1888,11 @@ function CustomerDash({ go, user, setUser }) {
               </div>
             </div>
 
-            {/* Driver promo banner */}
-            <div style={{ margin:'20px 16px 20px', background:'#111111', border:'1px solid rgba(232,180,0,0.3)', borderRadius:16, padding:'20px', position:'relative', overflow:'hidden' }}>
-              <div style={{ position:'absolute', right:-10, top:-10, opacity:0.06 }}>
-                <svg width="120" height="120" viewBox="0 0 120 120" fill="none">
-                  <circle cx="60" cy="60" r="58" stroke={YELLOW} strokeWidth="3"/>
-                  <text x="60" y="75" textAnchor="middle" fontSize="50" fill={YELLOW}>💰</text>
-                </svg>
-              </div>
-              <div style={{ fontSize:11, color:YELLOW, fontWeight:600, textTransform:'uppercase', letterSpacing:1, marginBottom:6 }}>For Drivers</div>
-              <div style={{ fontSize:18, fontWeight:700, color:WHITE, marginBottom:6 }}>Earn with VilleCabs</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.55)', lineHeight:1.6, marginBottom:14 }}>
-                Join our growing network of drivers in Manchester. Keep 85% of every fare. Flexible hours, real earnings.
-              </div>
-              <button onClick={() => go('driver-signup')}
-                style={{ padding:'9px 20px', background:YELLOW, border:'none', borderRadius:20, color:DARK, fontSize:13, fontWeight:700, cursor:'pointer' }}>
-                Become a Driver →
-              </button>
-            </div>
+            {/* ── DRIVER PROMO SLIDESHOW ── */}
+            <DashDriverSlider go={go}/>
+
+            {/* ── FEATURED PARTNERS ── */}
+            <DashPartnersSlider/>
 
           </div>
 
@@ -1792,7 +1900,8 @@ function CustomerDash({ go, user, setUser }) {
         </div>
       )}
 
-      {/* HISTORY TAB */}
+      
+{/* HISTORY TAB */}
       {tab === 'history' && (
         <div style={{ flex:1, display:'flex', flexDirection:'column' }}>
           <div style={{ flex:1, overflowY:'auto', padding:16 }}>
