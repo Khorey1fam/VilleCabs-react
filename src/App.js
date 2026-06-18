@@ -5670,11 +5670,10 @@ function DriverDocuments({ go, user }) {
     if (!file || !user?.uid) return;
     setSaving(key);
     try {
-      const { ref, uploadBytes, getDownloadURL } = await import('https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js').catch(()=>({}));
-      // Fallback: just store filename reference
-      const url = URL.createObjectURL(file);
-      const newDocs = { ...docs, [key]:{ url, status:'pending', uploadedAt: new Date().toISOString(), name:file.name } };
-      await updateDoc(doc(db,'drivers',user.uid), { [`documents.${key}`]: { status:'pending', name:file.name, uploadedAt: new Date().toISOString() } });
+      const newDocs = { ...docs, [key]:{ status:'pending', uploadedAt: new Date().toISOString(), name:file.name } };
+      await updateDoc(doc(db,'drivers',user.uid), {
+        [`documents.${key}`]: { status:'pending', name:file.name, uploadedAt: new Date().toISOString() }
+      });
       setDocs(newDocs);
     } catch(e) { console.error(e); }
     setSaving('');
