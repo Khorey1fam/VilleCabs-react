@@ -3010,39 +3010,10 @@ function BookingConfirm({ go, bookingId, user }) {
   useEffect(() => {
     if (step !== 'card-form' || !stripeKey || !stripeKey.startsWith('pk_')) return;
     const loadStripeElements = async () => {
-      console.log('Stripe not available'); return; }
-
-        // Step 2: Confirm payment using Stripe Elements card
-        const cardElement = elements.getElement('card');
-        const { error, paymentIntent } = await stripe.confirmCardPayment(data.clientSecret, {
-          payment_method: { card: cardElement },
-        });
-
-        if (error) { setCardError(error.message); setProcessing(false); return; }
-
-        if (paymentIntent.status === 'succeeded') {
-          await updateDoc(doc(db,'bookings',bookingId), {
-            paymentMethod: 'card',
-            paymentStatus: 'paid',
-            chargedUsd:    data.amountUsd,
-            paidAt:        serverTimestamp(),
-          });
-          setCardPaid(true);
-        }
-
-      } else {
-        // ── Demo mode ────────────────────────────────────────────────────────
-        await new Promise(r => setTimeout(r, 2000));
-        await updateDoc(doc(db,'bookings',bookingId), {
-          paymentMethod: 'card',
-          paymentStatus: 'demo_paid',
-          paidAt:        serverTimestamp(),
-        });
-        setCardPaid(true);
-      }
-    } catch(err) { setCardError('Payment failed: ' + err.message); }
-    setProcessing(false);
-  };
+      console.log('Stripe not available');
+    };
+    loadStripeElements();
+  }, [step, stripeKey]);
 
   // ── Payment success ───────────────────────────────────────────────────────
   if (cardPaid) {
