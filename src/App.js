@@ -2174,9 +2174,141 @@ function CustomerSettings({ go, user, setUser }) {
 }
 
 // ── PIN PICKUP ────────────────────────────────────────────────────────────────
+// ── ADDRESS AUTOCOMPLETE INPUT ────────────────────────────────────────────────
+// Biased to Mandeville, Manchester, Jamaica
+const MANDEVILLE_BIAS = { lat:18.0417, lng:-77.5071 };
+const BIAS_RADIUS_METERS = 25000;
+
+function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder }) {
+  const [query,       setQuery]       = useState(value||'');
+  const [suggestions, setSuggestions] = useState([]);
+  const [loading,     setLoading]     = useState(false);
+  const [showDrop,    setShowDrop]    = useState(false);
+  const debounceRef = useRef(null);
+  const sessionToken = useRef(null);
+
+  // Initialise Places service
+  const getService = () => {
+    if (!window.google) return null;
+    return new window.google.maps.places.AutocompleteService();
+  };
+  const getDetails = () => {
+    if (!window.google) return null;
+    return new window.google.maps.places.PlacesService(document.createElement('div'));
+  };
+
+  // Session token for billing efficiency
+  useEffect(() => {
+    if (window.google) {
+      sessionToken.current = new window.google.maps.places.AutocompleteSessionToken();
+    }
+  }, []);
+
+  const fetchSuggestions = (input) => {
+    if (!input || input.length < 2) { setSuggestions([]); return; }
+    const svc = getService();
+    if (!svc) return;
+    setLoading(true);
+    svc.getPlacePredictions({
+      input,
+      sessionToken: sessionToken.current,
+      location: new window.google.maps.LatLng(MANDEVILLE_BIAS.lat, MANDEVILLE_BIAS.lng),
+      radius: BIAS_RADIUS_METERS,
+      componentRestrictions: { country: 'jm' },
+      types: ['geocode', 'establishment'],
+    }, (results, status) => {
+      setLoading(false);
+      if (status === 'OK' && results) {
+        setSuggestions(results.slice(0, 6));
+        setShowDrop(true);
+      } else {
+        setSuggestions([]);
+      }
+    });
+  };
+
+  const handleChange = (e) => {
+    const val = e.target.value;
+    setQuery(val);
+    if (onChange) onChange(val);
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => fetchSuggestions(val), 350);
+  };
+
+  const handleSelect = (prediction) => {
+    const svc = getDetails();
+    if (!svc) return;
+    setQuery(prediction.description);
+    setSuggestions([]);
+    setShowDrop(false);
+    svc.getDetails({
+      placeId: prediction.place_id,
+      sessionToken: sessionToken.current,
+      fields: ['name','formatted_address','geometry','place_id'],
+    }, (place, status) => {
+      if (status === 'OK' && place) {
+        const result = {
+          name:             place.name,
+          formattedAddress: place.formatted_address,
+          placeId:          place.place_id,
+          lat:              place.geometry.location.lat(),
+          lng:              place.geometry.location.lng(),
+        };
+        setQuery(place.formatted_address || place.name);
+        if (onChange) onChange(place.formatted_address || place.name);
+        if (onPlaceSelect) onPlaceSelect(result);
+        // Reset session token after selection
+        if (window.google) {
+          sessionToken.current = new window.google.maps.places.AutocompleteSessionToken();
+        }
+      }
+    });
+  };
+
+  return (
+    <div style={{ position:'relative', zIndex:20 }}>
+      <div style={{ position:'relative' }}>
+        <span style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', fontSize:16, pointerEvents:'none' }}>🔍</span>
+        <input
+          type="text"
+          value={query}
+          onChange={handleChange}
+          onFocus={() => { if (suggestions.length > 0) setShowDrop(true); }}
+          onBlur={() => setTimeout(() => setShowDrop(false), 200)}
+          placeholder={placeholder || 'Search address, road or landmark'}
+          style={{ width:'100%', padding:'12px 12px 12px 38px', background:'#ffffff', border:'1.5px solid #d0d3e0', borderRadius:10, fontSize:14, color:'#1a1a2e', boxSizing:'border-box', outline:'none', boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}
+        />
+        {loading && <span style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', fontSize:12, color:'#888' }}>…</span>}
+      </div>
+      {showDrop && suggestions.length > 0 && (
+        <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, right:0, background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:10, boxShadow:'0 8px 24px rgba(0,0,0,0.12)', overflow:'hidden', zIndex:30 }}>
+          {suggestions.map((p, i) => (
+            <div key={i} onMouseDown={() => handleSelect(p)}
+              style={{ padding:'11px 14px', cursor:'pointer', borderBottom: i < suggestions.length-1 ? '1px solid #f0f1f5' : 'none', display:'flex', alignItems:'flex-start', gap:10 }}
+              onMouseEnter={e => e.currentTarget.style.background='#f5f6fa'}
+              onMouseLeave={e => e.currentTarget.style.background='#ffffff'}>
+              <span style={{ fontSize:14, flexShrink:0, marginTop:1 }}>📍</span>
+              <div>
+                <div style={{ fontSize:13, fontWeight:600, color:'#1a1a2e' }}>{p.structured_formatting?.main_text || p.description.split(',')[0]}</div>
+                <div style={{ fontSize:11, color:'#888aaa', marginTop:1 }}>{p.structured_formatting?.secondary_text || p.description}</div>
+              </div>
+            </div>
+          ))}
+          <div style={{ padding:'8px 14px', fontSize:10, color:'#bbb', textAlign:'right', borderTop:'1px solid #f0f1f5' }}>Powered by Google</div>
+        </div>
+      )}
+      {showDrop && query.length > 2 && suggestions.length === 0 && !loading && (
+        <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, right:0, background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:10, padding:'12px 14px', fontSize:13, color:'#888aaa', zIndex:30 }}>
+          No results — try a road, landmark, or district name
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PinPickup({ go, setPickupData }) {
   const [pinPos,      setPinPos]      = useState(MANCHESTER_CENTER);
-  const [address,     setAddress]     = useState('Manchester, Jamaica');
+  const [address,     setAddress]     = useState('');
   const [note,        setNote]        = useState('');
   const [loading,     setLoading]     = useState(false);
   const [passengers,  setPassengers]  = useState(1);
@@ -2191,6 +2323,11 @@ function PinPickup({ go, setPickupData }) {
     setLoading(false);
   }, []);
 
+  const handlePlaceSelect = (place) => {
+    setPinPos({ lat: place.lat, lng: place.lng });
+    setAddress(place.formattedAddress || place.name);
+  };
+
   const handleConfirm = () => {
     const finalAddress = note.trim() ? `${address} — ${note.trim()}` : address;
     setPickupData({ coords:pinPos, address: finalAddress, passengers });
@@ -2200,7 +2337,16 @@ function PinPickup({ go, setPickupData }) {
   return (
     <div style={{ ...s.content, background:'transparent' }}>
       <TopBar title="Pin Pickup Location" onBack={() => go('customer-dash')}/>
-      <VilleMap height={300} center={MANCHESTER_CENTER} zoom={14} onClick={handleMapClick}
+      {/* Address search autocomplete */}
+      <div style={{ padding:'10px 14px', background:'#ffffff', borderBottom:'1px solid #e2e4ed' }}>
+        <AddressAutocompleteInput
+          value={address}
+          onChange={setAddress}
+          onPlaceSelect={handlePlaceSelect}
+          placeholder="Search pickup address, road or landmark"
+        />
+      </div>
+      <VilleMap height={300} center={pinPos||MANCHESTER_CENTER} zoom={14} onClick={handleMapClick}
         markers={[{ position:pinPos, title:'Pickup' }]} expandable={true}/>
       <div style={{ padding:16 }}>
         <div style={{ background:'rgba(26,158,90,0.1)', border:'0.5px solid rgba(26,158,90,0.3)', borderRadius:8, padding:'8px 12px', marginBottom:12, fontSize:12, color:'#9fe1cb' }}>
@@ -2285,7 +2431,13 @@ function PinDropoff({ go, pickupData, setDropoffData }) {
   const [address, setAddress] = useState('');
   const [note,    setNote]    = useState('');
   const [loading, setLoading] = useState(false);
-  const suggestions = [
+
+  const handlePlaceSelect = (place) => {
+    setPinPos({ lat: place.lat, lng: place.lng });
+    setAddress(place.formattedAddress || place.name);
+  };
+
+  const suggestions_legacy = [
     { address:'Manchester Market, Mandeville', coords:{ lat:18.0416, lng:-77.5036 } },
     { address:'Spaldings, Manchester',          coords:{ lat:18.1102, lng:-77.4608 } },
     { address:'Christiana, Manchester',         coords:{ lat:18.1667, lng:-77.5000 } },
@@ -2318,6 +2470,15 @@ function PinDropoff({ go, pickupData, setDropoffData }) {
   return (
     <div style={{ ...s.content, background:'transparent' }}>
       <TopBar title="Pin Drop-off Location" onBack={() => go('pin-pickup')}/>
+      {/* Address search autocomplete */}
+      <div style={{ padding:'10px 14px', background:'#ffffff', borderBottom:'1px solid #e2e4ed' }}>
+        <AddressAutocompleteInput
+          value={address}
+          onChange={setAddress}
+          onPlaceSelect={handlePlaceSelect}
+          placeholder="Where are you going? Search address or landmark"
+        />
+      </div>
       <div style={{ background:'#111111', padding:'12px 16px', display:'flex', gap:10, alignItems:'flex-start' }}>
         <span style={{ fontSize:18, flexShrink:0 }}>🛡️</span>
         <div>
@@ -2339,7 +2500,7 @@ function PinDropoff({ go, pickupData, setDropoffData }) {
           </div>
         )}
         <div style={{ background:'rgba(15,20,40,0.6)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:12, overflow:'hidden', marginBottom:14 }}>
-          {suggestions.map((sug,i) => (
+          {(suggestions_legacy||[]).map((sug,i) => (
             <div key={i} onClick={() => { const fa = note.trim() ? `${sug.address} — ${note.trim()}` : sug.address; setDropoffData({ coords:sug.coords, address:fa }); go('vehicle-select'); }}
               style={{ padding:'11px 14px', fontSize:13, color:'rgba(255,255,255,0.8)', borderBottom:i<suggestions.length-1?'0.5px solid rgba(255,255,255,0.08)':'none', cursor:'pointer' }}>
               📍 {sug.address}
@@ -3081,6 +3242,33 @@ function BookingConfirm({ go, bookingId }) {
 
 
 // ── LIVE RIDE ─────────────────────────────────────────────────────────────────
+// ── SEARCHING ANIMATION ───────────────────────────────────────────────────────
+function SearchingAnimation({ onCancel }) {
+  const [msgIdx, setMsgIdx] = useState(0);
+  const msgs = ['Checking nearby drivers…','Sending your request…','Almost there…','Searching Mandeville area…'];
+  useEffect(() => {
+    const t = setInterval(() => setMsgIdx(i => (i+1) % msgs.length), 2500);
+    return () => clearInterval(t);
+  }, [msgs.length]);
+  return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'32px 20px', textAlign:'center' }}>
+      <div style={{ position:'relative', width:80, height:80, marginBottom:20 }}>
+        <div style={{ position:'absolute', inset:0, borderRadius:'50%', border:'3px solid rgba(232,180,0,0.2)', animation:'pulse 2s ease-in-out infinite' }}/>
+        <div style={{ position:'absolute', inset:6, borderRadius:'50%', border:'2px solid rgba(232,180,0,0.4)', animation:'pulse 2s ease-in-out infinite', animationDelay:'0.3s' }}/>
+        <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:36 }}>🚕</div>
+      </div>
+      <div style={{ fontSize:17, fontWeight:700, color:'#1a1a2e', marginBottom:6 }}>Finding your driver…</div>
+      <div key={msgIdx} style={{ fontSize:13, color:'#888aaa', marginBottom:6, animation:'fadeSlideIn 0.4s ease' }}>{msgs[msgIdx]}</div>
+      <div style={{ fontSize:12, color:'#aaa', marginBottom:24 }}>Searching nearby VilleCabs drivers in Mandeville</div>
+      <button onClick={onCancel} style={{ padding:'10px 24px', background:'#fff0f0', border:'1px solid #ffcccc', borderRadius:20, color:'#cc2222', fontSize:13, cursor:'pointer', fontWeight:500 }}>Cancel Ride</button>
+      <style>{`
+        @keyframes pulse { 0%, 100% { transform: scale(1); opacity:0.6; } 50% { transform: scale(1.15); opacity:1; } }
+        @keyframes fadeSlideIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+      `}</style>
+    </div>
+  );
+}
+
 function LiveRide({ go, bookingId, user }) {
   const [booking,   setBooking]   = useState(null);
   const [rating,    setRating]    = useState(0);
