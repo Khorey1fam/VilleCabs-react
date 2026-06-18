@@ -2184,38 +2184,36 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
   const [suggestions, setSuggestions] = useState([]);
   const [loading,     setLoading]     = useState(false);
   const [showDrop,    setShowDrop]    = useState(false);
-  const debounceRef = useRef(null);
-  const sessionToken = useRef(null);
+  const [googleReady, setGoogleReady] = useState(false);
+  const debounceRef   = useRef(null);
+  const svcRef        = useRef(null);
+  const detailSvcRef  = useRef(null);
+  const tokenRef      = useRef(null);
 
-  // Initialise Places service
-  const getService = () => {
-    if (!window.google) return null;
-    return new window.google.maps.places.AutocompleteService();
-  };
-  const getDetails = () => {
-    if (!window.google) return null;
-    return new window.google.maps.places.PlacesService(document.createElement('div'));
-  };
-
-  // Session token for billing efficiency
+  // Wait for Google Maps to be available
   useEffect(() => {
-    if (window.google) {
-      sessionToken.current = new window.google.maps.places.AutocompleteSessionToken();
-    }
+    const check = () => {
+      if (window.google?.maps?.places) {
+        svcRef.current      = new window.google.maps.places.AutocompleteService();
+        detailSvcRef.current= new window.google.maps.places.PlacesService(document.createElement('div'));
+        tokenRef.current    = new window.google.maps.places.AutocompleteSessionToken();
+        setGoogleReady(true);
+      } else {
+        setTimeout(check, 300);
+      }
+    };
+    check();
   }, []);
 
   const fetchSuggestions = (input) => {
-    if (!input || input.length < 2) { setSuggestions([]); return; }
-    const svc = getService();
-    if (!svc) return;
+    if (!input || input.length < 2 || !svcRef.current) { setSuggestions([]); return; }
     setLoading(true);
-    svc.getPlacePredictions({
+    svcRef.current.getPlacePredictions({
       input,
-      sessionToken: sessionToken.current,
-      location: new window.google.maps.LatLng(MANDEVILLE_BIAS.lat, MANDEVILLE_BIAS.lng),
-      radius: BIAS_RADIUS_METERS,
+      sessionToken: tokenRef.current,
+      location: new window.google.maps.LatLng(18.0417, -77.5071),
+      radius: 25000,
       componentRestrictions: { country: 'jm' },
-      types: ['geocode', 'establishment'],
     }, (results, status) => {
       setLoading(false);
       if (status === 'OK' && results) {
@@ -2236,14 +2234,13 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
   };
 
   const handleSelect = (prediction) => {
-    const svc = getDetails();
-    if (!svc) return;
+    if (!detailSvcRef.current) return;
     setQuery(prediction.description);
     setSuggestions([]);
     setShowDrop(false);
-    svc.getDetails({
+    detailSvcRef.current.getDetails({
       placeId: prediction.place_id,
-      sessionToken: sessionToken.current,
+      sessionToken: tokenRef.current,
       fields: ['name','formatted_address','geometry','place_id'],
     }, (place, status) => {
       if (status === 'OK' && place) {
@@ -2257,9 +2254,8 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
         setQuery(place.formatted_address || place.name);
         if (onChange) onChange(place.formatted_address || place.name);
         if (onPlaceSelect) onPlaceSelect(result);
-        // Reset session token after selection
-        if (window.google) {
-          sessionToken.current = new window.google.maps.places.AutocompleteSessionToken();
+        if (window.google?.maps?.places) {
+          tokenRef.current = new window.google.maps.places.AutocompleteSessionToken();
         }
       }
     });
@@ -2275,7 +2271,7 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
           onChange={handleChange}
           onFocus={() => { if (suggestions.length > 0) setShowDrop(true); }}
           onBlur={() => setTimeout(() => setShowDrop(false), 200)}
-          placeholder={placeholder || 'Search address, road or landmark'}
+          placeholder={!googleReady ? 'Loading search...' : (placeholder || 'Search address, road or landmark')}
           style={{ width:'100%', padding:'12px 12px 12px 38px', background:'#ffffff', border:'1.5px solid #d0d3e0', borderRadius:10, fontSize:14, color:'#1a1a2e', boxSizing:'border-box', outline:'none', boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}
         />
         {loading && <span style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', fontSize:12, color:'#888' }}>…</span>}
@@ -2294,7 +2290,7 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
               </div>
             </div>
           ))}
-          <div style={{ padding:'8px 14px', fontSize:10, color:'#bbb', textAlign:'right', borderTop:'1px solid #f0f1f5' }}>Powered by Google</div>
+          <div style={{ padding:'6px 14px', fontSize:10, color:'#bbb', textAlign:'right', borderTop:'1px solid #f0f1f5' }}>Powered by Google</div>
         </div>
       )}
       {showDrop && query.length > 2 && suggestions.length === 0 && !loading && (
@@ -2305,6 +2301,8 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
     </div>
   );
 }
+
+
 
 function PinPickup({ go, setPickupData }) {
   const [pinPos,      setPinPos]      = useState(MANCHESTER_CENTER);
@@ -2502,7 +2500,7 @@ function PinDropoff({ go, pickupData, setDropoffData }) {
         <div style={{ background:'rgba(15,20,40,0.6)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:12, overflow:'hidden', marginBottom:14 }}>
           {(suggestions_legacy||[]).map((sug,i) => (
             <div key={i} onClick={() => { const fa = note.trim() ? `${sug.address} — ${note.trim()}` : sug.address; setDropoffData({ coords:sug.coords, address:fa }); go('vehicle-select'); }}
-              style={{ padding:'11px 14px', fontSize:13, color:'rgba(255,255,255,0.8)', borderBottom:i<suggestions.length-1?'0.5px solid rgba(255,255,255,0.08)':'none', cursor:'pointer' }}>
+              style={{ padding:'11px 14px', fontSize:13, color:'rgba(255,255,255,0.8)', borderBottom:'0.5px solid rgba(255,255,255,0.08)', cursor:'pointer' }}>
               📍 {sug.address}
             </div>
           ))}
