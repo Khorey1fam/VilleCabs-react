@@ -6295,8 +6295,10 @@ export default function App() {
   const props = { go:setScreen, user, setUser, bookingId, setBookingId, pickupData, setPickupData, dropoffData, setDropoffData };
 
   const screens = {
-    splash:           <PublicLanding {...props}/>,
+    splash:           <Splash {...props}/>,
     'splash-old':     <Splash {...props}/>,
+    landing:          <PublicLanding {...props}/>,
+    'login-choice':   <LoginChoice {...props}/>,
     role:             <RoleSelect {...props}/>,
     'customer-signup':<CustomerSignup {...props}/>,
     'customer-login': <CustomerLogin {...props}/>,
@@ -6304,6 +6306,8 @@ export default function App() {
     terms:            <TermsScreen {...props}/>,
     'welcome-tips':   <WelcomeTips {...props}/>,
     'about-us':       <AboutUs {...props}/>,
+    'help':           <HelpScreen {...props}/>,
+    terms:            <TermsScreen {...props}/>,
     'contact-us':     <ContactUs {...props}/>,
     help:             <HelpScreen {...props}/>,
     'customer-dash':  <CustomerDash {...props}/>,
