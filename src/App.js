@@ -1177,7 +1177,7 @@ function WelcomeTips({ go, user }) {
     {
       icon: '💬',
       title: 'Chat With Your Driver',
-      desc: 'Once a driver accepts your ride you can chat with them directly in the app. Use this to share extra directions, landmark details, or to negotiate your fare.',
+      desc: 'Once a driver accepts your ride you can chat with them directly in the app. Use this to share extra directions, landmark details, or to confirm your estimated fare.',
       color: '#a78bfa',
     },
     {
@@ -2415,7 +2415,7 @@ function PinPickup({ go, setPickupData }) {
         {/* Tip 4: Chat */}
         <div style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:16, padding:'18px', marginBottom:14, boxShadow:'0 2px 8px rgba(0,0,0,0.05)' }}>
           <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:10 }}>💬 Chat With Your Driver</div>
-          <div style={{ fontSize:12, color:'#666888', lineHeight:1.7 }}>Once a driver accepts your ride, you can chat directly with them in the app to share extra directions, confirm your spot, or negotiate your fare before the ride starts.</div>
+          <div style={{ fontSize:12, color:'#666888', lineHeight:1.7 }}>Once a driver accepts your ride, you can chat directly with them in the app to share extra directions, confirm your spot, or confirm your estimated fare before the ride starts.</div>
         </div>
       </div>
     <Footer go={go}/>
@@ -2549,6 +2549,7 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
   const [error,      setError]      = useState('');
   const [dist,       setDist]       = useState(8.2);
   const [directions, setDirections] = useState(null);
+  const [completed,  setCompleted]  = useState(false);
   const [promoCode,  setPromoCode]  = useState('');
   const [promoMsg,   setPromoMsg]   = useState('');
   const [promoData,  setPromoData]  = useState(null); // { id, discount, code }
@@ -3788,7 +3789,7 @@ function DriverTermsScreen({ go, user }) {
           {[
             ['1. Independent Contractor', 'You are an independent contractor, not an employee of VilleCabs. You are responsible for your own taxes, insurance, and vehicle maintenance.'],
             ['2. Service Fee', 'VilleCabs charges a 15% platform service fee on your monthly earnings. This means you keep 85% of every fare. For example: if you earn J$100,000 in a month, J$15,000 goes to VilleCabs and you keep J$85,000.'],
-            ['3. Fare Negotiation', 'The app calculates a suggested fare based on distance. You are allowed to negotiate the final fare directly with the passenger via the in-app chat before or during the ride. Both parties must agree on the final amount.'],
+            ['3. Estimated Fares', 'Fare estimates are calculated by the VilleCabs platform based on distance, time, route, and applicable fees. Final fares may vary because of route changes, traffic conditions, waiting time, tolls, or additional stops.'],
             ['4. Vehicle Standards', 'Your vehicle must be roadworthy, properly licensed, and maintain a valid fitness certificate at all times. VilleCabs reserves the right to suspend drivers whose vehicles do not meet standards.'],
             ['5. Conduct', 'You must treat all passengers with respect and professionalism. Abusive, dangerous, or discriminatory behaviour will result in immediate suspension and possible removal from the platform.'],
             ['6. Safety', 'You are responsible for safe driving at all times. Speeding, driving under the influence, or dangerous driving will result in permanent removal from VilleCabs.'],
@@ -3842,7 +3843,7 @@ function DriverWelcomeTips({ go, user }) {
     {
       icon: '💬',
       title: 'Negotiate Fares With Customers',
-      desc: "The app shows a suggested fare based on distance. You can chat with the customer directly in the app to negotiate the final fare before or during the ride. Always agree before starting.",
+      desc: "The app shows a suggested fare based on distance. You can chat with the customer directly in the app to confirm the estimated fare before or during the ride. Always agree before starting.",
       color: YELLOW,
     },
     {
@@ -4235,25 +4236,94 @@ function DriverDash({ go, user, setUser, setBookingId }) {
         </div>
       )}
 
-      {/* HOME tab — offline screen */}
+      {/* HOME tab — offline/online dashboard */}
       {driverTab === 'home' && (
-        <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'40px 24px', textAlign:'center' }}>
-          <div style={{ marginBottom:24 }}>
-            <img src="/villecabs-logo.png" alt="V" style={{ width:90, height:90, borderRadius:'50%', objectFit:'cover', border:'3px solid rgba(255,255,255,0.1)', marginBottom:16 }}/>
-            <div style={{ fontSize:22, fontWeight:600, color:WHITE, marginBottom:6 }}>You are Offline</div>
-            <div style={{ fontSize:14, color:'rgba(255,255,255,0.5)', lineHeight:1.6 }}>Tap Go Online to start receiving ride requests from customers in Manchester</div>
+        <div style={{ flex:1, overflowY:'auto', paddingBottom:80 }}>
+          {/* Greeting header */}
+          <div style={{ background:'linear-gradient(135deg, #0f1a35 0%, #1a2744 100%)', padding:'24px 20px 20px' }}>
+            <div style={{ fontSize:13, color:'rgba(255,255,255,0.55)', marginBottom:2 }}>Good day,</div>
+            <div style={{ fontSize:22, fontWeight:800, color:'#ffffff', marginBottom:16 }}>{user?.name?.split(' ')[0] || 'Driver'} 👋</div>
+
+            {/* Status badge */}
+            <div style={{ display:'inline-flex', alignItems:'center', gap:8, background: isOnline ? 'rgba(26,158,90,0.2)' : 'rgba(255,255,255,0.08)', border:`1px solid ${isOnline?'rgba(26,158,90,0.5)':'rgba(255,255,255,0.15)'}`, borderRadius:20, padding:'6px 14px' }}>
+              <div style={{ width:8, height:8, borderRadius:'50%', background: isOnline ? '#1a9e5a' : '#888', animation: isOnline ? 'pulse 2s ease-in-out infinite' : 'none' }}/>
+              <span style={{ fontSize:12, fontWeight:600, color: isOnline ? '#1a9e5a' : 'rgba(255,255,255,0.5)' }}>{isOnline ? 'Online — Receiving requests' : 'Offline'}</span>
+            </div>
           </div>
-          <div style={{ background:'rgba(15,20,40,0.7)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:16, padding:20, marginBottom:32, width:'100%', maxWidth:340, textAlign:'left' }}>
-            <div style={{ fontSize:13, fontWeight:500, color:YELLOW, marginBottom:12 }}>💰 Your earnings today</div>
-            <div style={{ fontSize:28, fontWeight:700, color:WHITE }}>J${earnings.today.toLocaleString()}</div>
-            <div style={{ fontSize:12, color:'rgba(255,255,255,0.4)', marginTop:4 }}>{earnings.todayRides} ride{earnings.todayRides!==1?'s':''} completed today</div>
-            <div style={{ height:'0.5px', background:'rgba(255,255,255,0.08)', margin:'12px 0' }}/>
-            <div style={{ fontSize:12, color:'rgba(255,255,255,0.4)' }}>This week: <span style={{ color:GREEN, fontWeight:500 }}>J${earnings.week.toLocaleString()}</span></div>
+
+          {/* Earnings stats */}
+          <div style={{ padding:'16px 16px 0' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
+              <div style={{ background:'rgba(232,180,0,0.1)', border:'1px solid rgba(232,180,0,0.25)', borderRadius:14, padding:'14px 16px' }}>
+                <div style={{ fontSize:10, color:'rgba(255,255,255,0.5)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:4 }}>Today</div>
+                <div style={{ fontSize:22, fontWeight:700, color:'#e8b400' }}>J${earnings.today.toLocaleString()}</div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:2 }}>{earnings.todayRides} ride{earnings.todayRides!==1?'s':''}</div>
+              </div>
+              <div style={{ background:'rgba(26,158,90,0.1)', border:'1px solid rgba(26,158,90,0.25)', borderRadius:14, padding:'14px 16px' }}>
+                <div style={{ fontSize:10, color:'rgba(255,255,255,0.5)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:4 }}>This Week</div>
+                <div style={{ fontSize:22, fontWeight:700, color:'#1a9e5a' }}>J${earnings.week.toLocaleString()}</div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:2 }}>{earnings.weekRides} ride{earnings.weekRides!==1?'s':''}</div>
+              </div>
+            </div>
+
+            {/* Rating + total */}
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
+              <div style={{ background:'rgba(255,255,255,0.05)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:14, padding:'14px 16px' }}>
+                <div style={{ fontSize:10, color:'rgba(255,255,255,0.5)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:4 }}>Rating</div>
+                <div style={{ fontSize:22, fontWeight:700, color:'#ffffff' }}>⭐ {earnings.totalRides > 0 ? '5.0' : '--'}</div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:2 }}>{earnings.totalRides} total rides</div>
+              </div>
+              <div style={{ background:'rgba(255,255,255,0.05)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:14, padding:'14px 16px' }}>
+                <div style={{ fontSize:10, color:'rgba(255,255,255,0.5)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:4 }}>All Time</div>
+                <div style={{ fontSize:20, fontWeight:700, color:'#ffffff' }}>J${earnings.total.toLocaleString()}</div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:2 }}>Net earnings (85%)</div>
+              </div>
+            </div>
           </div>
-          <button onClick={goOnline} style={{ ...s.btnG, maxWidth:320, width:'100%', padding:'18px 24px', fontSize:17, fontWeight:700, borderRadius:16, boxShadow:'0 0 30px rgba(26,158,90,0.4)' }}>
-            ● Go Online
-          </button>
-          <p style={{ fontSize:12, color:'rgba(255,255,255,0.3)', marginTop:16 }}>You will start receiving ride requests immediately</p>
+
+          {/* Peak hours card */}
+          {(() => { const h=new Date().getHours(),d=new Date().getDay(); const isPeak=d>=1&&d<=5&&h>=17&&h<19; return isPeak ? (
+            <div style={{ margin:'0 16px 12px', background:'rgba(232,180,0,0.12)', border:'1px solid rgba(232,180,0,0.3)', borderRadius:14, padding:'12px 16px', display:'flex', alignItems:'center', gap:12 }}>
+              <div style={{ fontSize:24 }}>⚡</div>
+              <div>
+                <div style={{ fontSize:13, fontWeight:700, color:'#e8b400' }}>Peak Hours Active</div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.6)', marginTop:2 }}>More riders may be requesting trips right now.</div>
+              </div>
+            </div>
+          ) : null; })()}
+
+          {/* Tip cards */}
+          <div style={{ padding:'0 16px', display:'flex', gap:10, overflowX:'auto', paddingBottom:8, scrollbarWidth:'none', marginBottom:12 }}>
+            {[
+              { icon:'📍', text:'Stay near Mandeville town for faster pickups' },
+              { icon:'🔋', text:'Keep your phone charged while online' },
+              { icon:'👋', text:'Greet your passenger by name on arrival' },
+              { icon:'🛡️', text:'Always use in-app chat before riding' },
+            ].map((tip, i) => (
+              <div key={i} style={{ flexShrink:0, maxWidth:200, background:'rgba(255,255,255,0.05)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:12, padding:'10px 14px' }}>
+                <div style={{ fontSize:20, marginBottom:4 }}>{tip.icon}</div>
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.7)', lineHeight:1.4 }}>{tip.text}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Go Online / Go Offline button */}
+          <div style={{ padding:'8px 16px 0' }}>
+            {isOnline ? (
+              <button onClick={goOffline} style={{ width:'100%', padding:'16px', background:'rgba(226,75,74,0.15)', border:'1.5px solid rgba(226,75,74,0.4)', borderRadius:14, color:'#f09595', fontSize:15, fontWeight:700, cursor:'pointer' }}>
+                ○ Go Offline
+              </button>
+            ) : (
+              <button onClick={goOnline} style={{ width:'100%', padding:'18px', background:'#1a9e5a', border:'none', borderRadius:14, color:'#ffffff', fontSize:16, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 20px rgba(26,158,90,0.4)' }}>
+                ● Go Online
+              </button>
+            )}
+            <p style={{ fontSize:11, color:'rgba(255,255,255,0.3)', textAlign:'center', marginTop:10 }}>
+              {isOnline ? 'You are receiving ride requests in Manchester' : 'You will start receiving ride requests immediately'}
+            </p>
+          </div>
+
+          <style>{`@keyframes pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.6; transform:scale(1.3); } }`}</style>
         </div>
       )}
 
@@ -4290,16 +4360,50 @@ function DriverDash({ go, user, setUser, setBookingId }) {
             <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginBottom:12 }}>{rides.length} ride request{rides.length!==1?'s':''} in Manchester</div>
             {rides.map(r => (
               <div key={r.id} style={{ border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:12, padding:14, marginBottom:10, background:'rgba(255,255,255,0.03)' }}>
-                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
-                  <span style={{ fontSize:14, fontWeight:500, color:WHITE }}>👤 {r.customerName}</span>
-                  <span style={{ fontSize:16, fontWeight:500, color:GREEN }}>J${r.fare?.toLocaleString()}</span>
+                {/* NEW RIDE REQUEST CARD */}
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
+                  <div>
+                    <div style={{ fontSize:10, color:'#e8b400', fontWeight:700, textTransform:'uppercase', letterSpacing:1, marginBottom:4 }}>🔔 New Ride Request</div>
+                    <div style={{ fontSize:16, fontWeight:700, color:WHITE }}>{r.customerName}</div>
+                    <div style={{ fontSize:11, color:'rgba(255,255,255,0.45)', marginTop:2 }}>✓ Verified Rider · 👥 {r.passengers||1} passenger{(r.passengers||1)>1?'s':''}</div>
+                  </div>
+                  <div style={{ textAlign:'right' }}>
+                    <div style={{ fontSize:20, fontWeight:800, color:'#e8b400' }}>J${r.fare?.toLocaleString()}</div>
+                    <div style={{ fontSize:11, color:'rgba(26,158,90,0.9)', fontWeight:600 }}>You earn: J${Math.round((r.fare||0)*0.85).toLocaleString()}</div>
+                  </div>
                 </div>
-                <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', marginBottom:4 }}>📍 {r.pickup?.address}</div>
-                <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', marginBottom:6 }}>🏁 {r.dropoff?.address}</div>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,0.35)', marginBottom:10 }}>🚗 {r.vehicleType} · {r.distanceKm} km · Cash · ~{Math.ceil((r.distanceKm||5)/0.5)} min ETA · 👥 {r.passengers||1} passenger{(r.passengers||1)>1?'s':''}</div>
-                <div style={{ display:'flex', gap:8 }}>
-                  <button onClick={() => acceptRide(r.id)} style={{ flex:1, background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:10, fontSize:13, fontWeight:500, cursor:'pointer' }}>✓ Accept</button>
-                  <button onClick={() => declineRide(r.id)} style={{ flex:1, background:'rgba(15,20,40,0.65)', color:'rgba(255,255,255,0.5)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:8, padding:10, fontSize:13, cursor:'pointer' }}>Decline</button>
+                <div style={{ background:'rgba(255,255,255,0.04)', borderRadius:10, padding:'10px 12px', marginBottom:10 }}>
+                  <div style={{ display:'flex', gap:8, marginBottom:6, alignItems:'flex-start' }}>
+                    <div style={{ width:9, height:9, borderRadius:'50%', background:'#1a9e5a', flexShrink:0, marginTop:3 }}/>
+                    <div>
+                      <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', marginBottom:1 }}>PICKUP</div>
+                      <div style={{ fontSize:12, color:WHITE }}>{r.pickup?.address}</div>
+                    </div>
+                  </div>
+                  <div style={{ width:1, height:12, background:'rgba(255,255,255,0.1)', marginLeft:4, marginBottom:6 }}/>
+                  <div style={{ display:'flex', gap:8, alignItems:'flex-start' }}>
+                    <div style={{ width:9, height:9, borderRadius:'50%', background:'#e8b400', flexShrink:0, marginTop:3 }}/>
+                    <div>
+                      <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', marginBottom:1 }}>DROP-OFF</div>
+                      <div style={{ fontSize:12, color:WHITE }}>{r.dropoff?.address}</div>
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display:'flex', gap:8, marginBottom:12, flexWrap:'wrap' }}>
+                  {[
+                    ['🚗', r.vehicleType],
+                    ['📏', `${r.distanceKm||'?'} km`],
+                    ['⏱️', `~${Math.ceil((r.distanceKm||5)/0.5)} min ETA`],
+                    ['💵', 'Cash'],
+                  ].map(([icon, val], i) => (
+                    <div key={i} style={{ background:'rgba(255,255,255,0.06)', borderRadius:8, padding:'4px 10px', fontSize:11, color:'rgba(255,255,255,0.7)', display:'flex', alignItems:'center', gap:4 }}>
+                      {icon} {val}
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display:'flex', gap:10 }}>
+                  <button onClick={() => acceptRide(r.id)} style={{ flex:2, background:'#1a9e5a', color:'#ffffff', border:'none', borderRadius:12, padding:'13px', fontSize:15, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 12px rgba(26,158,90,0.4)' }}>✓ Accept Ride</button>
+                  <button onClick={() => declineRide(r.id)} style={{ flex:1, background:'rgba(255,255,255,0.06)', color:'rgba(255,255,255,0.5)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:12, padding:'13px', fontSize:14, cursor:'pointer' }}>Decline</button>
                 </div>
               </div>
             ))}
@@ -4335,9 +4439,21 @@ function DriverDash({ go, user, setUser, setBookingId }) {
             </div>
           </div>
 
-          {/* Platform fee note */}
-          <div style={{ background:'rgba(15,20,40,0.6)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:10, padding:'10px 14px', marginBottom:16, fontSize:12, color:'rgba(255,255,255,0.45)', display:'flex', alignItems:'center', gap:8 }}>
-            ℹ️ Earnings shown after 15% VilleCabs platform fee
+          {/* Platform fee breakdown */}
+          <div style={{ background:'rgba(232,180,0,0.08)', border:'1px solid rgba(232,180,0,0.2)', borderRadius:12, padding:'12px 14px', marginBottom:16 }}>
+            <div style={{ fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:8, fontWeight:600 }}>💰 Earnings Breakdown</div>
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:4 }}>
+              <span style={{ color:'rgba(255,255,255,0.5)' }}>Total Fare Collected</span>
+              <span style={{ color:WHITE }}>J${Math.round(earnings.total / 0.85).toLocaleString()}</span>
+            </div>
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:4 }}>
+              <span style={{ color:'#f09595' }}>VilleCabs Fee (15%)</span>
+              <span style={{ color:'#f09595' }}>−J${Math.round(earnings.total * 0.15 / 0.85).toLocaleString()}</span>
+            </div>
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, fontWeight:700, borderTop:'0.5px solid rgba(255,255,255,0.1)', paddingTop:6, marginTop:4 }}>
+              <span style={{ color:'#1a9e5a' }}>Your Net Earnings (85%)</span>
+              <span style={{ color:'#1a9e5a' }}>J${earnings.total.toLocaleString()}</span>
+            </div>
           </div>
 
           {/* Ride history */}
@@ -4370,6 +4486,22 @@ function DriverDash({ go, user, setUser, setBookingId }) {
       )}
 
 
+      {/* ── BOTTOM NAV ── */}
+      <div style={{ position:'fixed', bottom:0, left:0, right:0, background:'#0f1a35', borderTop:'1px solid rgba(255,255,255,0.1)', display:'flex', zIndex:50, paddingBottom:'env(safe-area-inset-bottom)' }}>
+        {[
+          { icon:'🏠', label:'Home',     tab:'home'     },
+          { icon:'🚗', label:'Rides',    tab:'rides'    },
+          { icon:'💰', label:'Earnings', tab:'earnings' },
+          { icon:'👤', label:'Profile',  tab:'profile'  },
+        ].map(({ icon, label, tab }) => (
+          <button key={tab} onClick={() => { if(tab==='profile') go('driver-profile'); else setDriverTab(tab); }}
+            style={{ flex:1, padding:'10px 0', background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
+            <div style={{ fontSize:20, opacity: driverTab===tab ? 1 : 0.4 }}>{icon}</div>
+            <div style={{ fontSize:10, color: driverTab===tab ? '#e8b400' : 'rgba(255,255,255,0.4)', fontWeight: driverTab===tab ? 700 : 400 }}>{label}</div>
+            {driverTab===tab && <div style={{ width:4, height:4, borderRadius:'50%', background:'#e8b400', marginTop:1 }}/>}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -4384,6 +4516,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
   const [sosHolding,    setSosHolding]    = useState(false);
   const [sosCount,      setSosCount]      = useState(5);
   const [directions, setDirections] = useState(null);
+  const [completed,  setCompleted]  = useState(false);
   const watchRef = useRef(null);
   const sosRef   = useRef(null);
 
@@ -4562,8 +4695,38 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
     await updateDoc(doc(db,'bookings',booking.id), { status:'completed', completedAt:serverTimestamp() });
     try { await updateDoc(doc(db,'drivers',user.uid), { isOnline:false, currentLocation:null }); } catch(e) {}
-    go('driver-dash');
+    // Show completion summary before going back
+    setCompleted(true);
   };
+
+  // ── Completed screen ──
+  if (completed) {
+    const fare = booking?.fare || 0;
+    const fee  = Math.round(fare * 0.15);
+    const earn = Math.round(fare * 0.85);
+    return (
+      <div style={{ ...s.content, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24, minHeight:'100vh' }}>
+        <div style={{ width:80, height:80, borderRadius:'50%', background:'rgba(26,158,90,0.15)', border:'2px solid #1a9e5a', display:'flex', alignItems:'center', justifyContent:'center', fontSize:36, marginBottom:16 }}>✅</div>
+        <div style={{ fontSize:22, fontWeight:800, color:WHITE, marginBottom:4 }}>Ride Completed!</div>
+        <div style={{ fontSize:13, color:'rgba(255,255,255,0.5)', marginBottom:24 }}>Thank you for driving with VilleCabs</div>
+        <div style={{ background:'rgba(15,20,40,0.8)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:18, padding:20, width:'100%', maxWidth:380, marginBottom:20 }}>
+          {[
+            ['Total Fare', `J$${fare.toLocaleString()}`, WHITE],
+            ['VilleCabs Fee (15%)', `−J$${fee.toLocaleString()}`, '#f09595'],
+            ['Your Earnings (85%)', `J$${earn.toLocaleString()}`, '#1a9e5a'],
+            ['Payment', booking?.paymentMethod || 'Cash', YELLOW],
+          ].map(([label, val, col], i) => (
+            <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'10px 0', borderBottom: i<3 ? '0.5px solid rgba(255,255,255,0.07)' : 'none' }}>
+              <span style={{ fontSize:13, color:'rgba(255,255,255,0.55)' }}>{label}</span>
+              <span style={{ fontSize:14, fontWeight:700, color:col }}>{val}</span>
+            </div>
+          ))}
+        </div>
+        <button onClick={() => go('driver-dash')} style={{ width:'100%', maxWidth:380, padding:'15px', background:'#1a9e5a', border:'none', borderRadius:14, color:'#fff', fontSize:15, fontWeight:700, cursor:'pointer', marginBottom:10 }}>🟢 Back Online</button>
+        <button onClick={() => { go('driver-dash'); }} style={{ width:'100%', maxWidth:380, padding:'12px', background:'rgba(255,255,255,0.06)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:14, color:'rgba(255,255,255,0.5)', fontSize:13, cursor:'pointer' }}>Go Offline</button>
+      </div>
+    );
+  }
 
   const pickupCoords  = booking?.pickup       ? { lat:booking.pickup.lat,         lng:booking.pickup.lng         } : MANCHESTER_CENTER;
   const dropoffCoords = booking?.dropoff       ? { lat:booking.dropoff.lat,        lng:booking.dropoff.lng        } : null;
@@ -4598,18 +4761,38 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
               <div style={{ display:'flex', gap:8, alignItems:'center' }}><div style={{ width:9, height:9, borderRadius:'50%', background:GREEN }}/><div style={{ fontSize:13, color:WHITE }}>{booking.pickup?.address}</div></div>
             </div>
 
-            {/* I Have Arrived button */}
+            {/* Ride Progress Stepper */}
+            <div style={{ background:'rgba(255,255,255,0.04)', borderRadius:12, padding:'12px 14px', marginBottom:12, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              {[
+                { label:'Accepted', done:true  },
+                { label:'Arrived',  done:arrived },
+                { label:'Started',  done:enroute },
+                { label:'Done',     done:false  },
+              ].map((step, i, arr) => (
+                <React.Fragment key={i}>
+                  <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
+                    <div style={{ width:22, height:22, borderRadius:'50%', background:step.done?'#1a9e5a':'rgba(255,255,255,0.12)', border:`2px solid ${step.done?'#1a9e5a':'rgba(255,255,255,0.2)'}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11 }}>
+                      {step.done ? '✓' : ''}
+                    </div>
+                    <div style={{ fontSize:9, color:step.done?'#1a9e5a':'rgba(255,255,255,0.35)', fontWeight:step.done?600:400 }}>{step.label}</div>
+                  </div>
+                  {i < arr.length-1 && <div style={{ flex:1, height:2, background:step.done?'#1a9e5a':'rgba(255,255,255,0.1)', margin:'0 4px', marginBottom:14 }}/>}
+                </React.Fragment>
+              ))}
+            </div>
+
+            {/* Action buttons — only show relevant one */}
             {!arrived ? (
               <button onClick={notifyArrived}
-                style={{ width:'100%', padding:'13px', background:'rgba(26,158,90,0.2)', border:'1.5px solid rgba(26,158,90,0.6)', borderRadius:12, color:GREEN, fontSize:14, fontWeight:600, cursor:'pointer', marginBottom:12, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
-                📍 I Have Arrived at Pickup
+                style={{ width:'100%', padding:'15px', background:'#1a9e5a', border:'none', borderRadius:14, color:'#ffffff', fontSize:15, fontWeight:700, cursor:'pointer', marginBottom:12, boxShadow:'0 4px 16px rgba(26,158,90,0.4)', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+                📍 Arrived at Pickup
               </button>
             ) : (
-              <div style={{ background:'rgba(26,158,90,0.15)', border:'1.5px solid rgba(26,158,90,0.4)', borderRadius:12, padding:'12px 16px', marginBottom:12, display:'flex', alignItems:'center', gap:10 }}>
-                <div style={{ fontSize:22 }}>✅</div>
+              <div style={{ background:'rgba(26,158,90,0.12)', border:'1px solid rgba(26,158,90,0.35)', borderRadius:12, padding:'11px 14px', marginBottom:12, display:'flex', alignItems:'center', gap:10 }}>
+                <div style={{ fontSize:20 }}>✅</div>
                 <div>
-                  <div style={{ fontSize:13, fontWeight:500, color:GREEN }}>Customer notified!</div>
-                  <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Passenger knows you have arrived</div>
+                  <div style={{ fontSize:13, fontWeight:600, color:'#1a9e5a' }}>Customer Notified</div>
+                  <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:1 }}>Passenger knows you have arrived</div>
                 </div>
               </div>
             )}
@@ -4663,23 +4846,27 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
               </div>
             )}
 
-            {/* On my way to drop-off button — shows after passenger picked up */}
+            {/* Start Trip / En route button */}
             {arrived && !enroute && (
               <button onClick={notifyEnroute}
-                style={{ width:'100%', padding:'13px', background:'rgba(232,180,0,0.2)', border:'1.5px solid rgba(232,180,0,0.6)', borderRadius:12, color:YELLOW, fontSize:14, fontWeight:600, cursor:'pointer', marginBottom:12, display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
-                🚗 On My Way to Drop-off
+                style={{ width:'100%', padding:'15px', background:'#e8b400', border:'none', borderRadius:14, color:'#0f1a35', fontSize:15, fontWeight:700, cursor:'pointer', marginBottom:12, boxShadow:'0 4px 16px rgba(232,180,0,0.35)', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+                🚗 Start Trip — On My Way to Drop-off
               </button>
             )}
             {arrived && enroute && (
-              <div style={{ background:'rgba(232,180,0,0.12)', border:'1.5px solid rgba(232,180,0,0.4)', borderRadius:12, padding:'12px 16px', marginBottom:12, display:'flex', alignItems:'center', gap:10 }}>
-                <div style={{ fontSize:22 }}>🚗</div>
+              <div style={{ background:'rgba(232,180,0,0.1)', border:'1px solid rgba(232,180,0,0.3)', borderRadius:12, padding:'11px 14px', marginBottom:12, display:'flex', alignItems:'center', gap:10 }}>
+                <div style={{ fontSize:20 }}>🚗</div>
                 <div>
-                  <div style={{ fontSize:13, fontWeight:500, color:YELLOW }}>En route to drop-off!</div>
-                  <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Customer notified — live tracking active</div>
+                  <div style={{ fontSize:13, fontWeight:600, color:'#e8b400' }}>Trip in Progress</div>
+                  <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:1 }}>En route to drop-off — customer tracking active</div>
                 </div>
               </div>
             )}
-            <button style={s.btnG} onClick={completeRide}>Complete Ride ✓</button>
+            {arrived && (
+              <button onClick={completeRide} style={{ width:'100%', padding:'15px', background:'#0f1a35', border:'1.5px solid rgba(232,180,0,0.4)', borderRadius:14, color:'#e8b400', fontSize:15, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 12px rgba(0,0,0,0.3)' }}>
+                ✅ Complete Ride
+              </button>
+            )}
           </>
         ) : (
           <div style={{ textAlign:'center', padding:40, color:'rgba(255,255,255,0.4)' }}>Loading ride details...</div>
