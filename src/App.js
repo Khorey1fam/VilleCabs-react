@@ -78,9 +78,9 @@ const s = {
   btnG:      { width:'100%', padding:'14px 20px', background:GREEN, color:WHITE, border:'none', borderRadius:12, fontSize:15, fontWeight:600, cursor:'pointer', marginBottom:10 },
   inp:       { width:'100%', padding:'14px', background:'#ffffff', border:'1px solid #d0d3e0', borderRadius:10, color:'#1a1a2e', fontSize:16, marginBottom:12, boxSizing:'border-box', outline:'none' },
   lbl:       { fontSize:11, color:'rgba(255,255,255,0.55)', marginBottom:4, display:'block', fontWeight:500 },
-  topBar:    { background:'#0f1a35', padding:'8px 14px', display:'flex', alignItems:'center', gap:10, borderBottom:'none', position:'sticky', top:0, zIndex:10, boxShadow:'0 2px 8px rgba(0,0,0,0.2)', minHeight:50 },
-  backBtn:   { background:'none', border:'none', color:WHITE, fontSize:22, cursor:'pointer', padding:'0 6px 0 0', lineHeight:1 },
-  topTitle:  { color:WHITE, fontSize:16, fontWeight:500 },
+  topBar:    { background:'#ffffff', padding:'8px 14px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #e5e7eb', position:'sticky', top:0, zIndex:10, boxShadow:'0 1px 4px rgba(0,0,0,0.06)', minHeight:50 },
+  backBtn:   { background:'none', border:'none', color:'#1a1a2e', fontSize:22, cursor:'pointer', padding:'0 6px 0 0', lineHeight:1 },
+  topTitle:  { color:'#1a1a2e', fontSize:13, fontWeight:600 },
   link:      { color:YELLOW, fontSize:13, cursor:'pointer', textAlign:'center', marginTop:8, background:'none', border:'none', width:'100%', display:'block', padding:4 },
   divLine:   { display:'flex', alignItems:'center', gap:10, margin:'8px 0 14px', color:'rgba(255,255,255,0.3)', fontSize:12 },
   errBox:    { background:'#fff0f0', border:'1px solid #ffcccc', borderRadius:10, padding:'10px 14px', marginBottom:12, fontSize:13, color:'#cc2222' },
@@ -257,15 +257,14 @@ function TopBar({ title, onBack, go, user }) {
       {onBack && <button style={s.backBtn} onClick={onBack}>←</button>}
       <img src="/logo.png" alt="VilleCabs"
         onClick={() => go ? go(user ? 'customer-dash' : 'splash') : null}
-        style={{ height:26, width:'auto', objectFit:'contain', cursor:'pointer', flexShrink:0 }}/>
-      <span style={{ ...s.topTitle, marginLeft:6 }}>{title}</span>
+        style={{ height:32, width:'auto', objectFit:'contain', cursor:'pointer', flexShrink:0, maxWidth:160 }}/>
       <div style={{ display:'flex', gap:5, marginLeft:'auto' }}>
-        <button onClick={() => go && go('business')}
-          style={{ padding:'3px 9px', background:'rgba(255,255,255,0.1)', border:'1px solid rgba(255,255,255,0.2)', borderRadius:12, color:'rgba(255,255,255,0.85)', fontSize:10, fontWeight:600, cursor:'pointer' }}>
+        <button onClick={() => go && go('partner-with-us')}
+          style={{ padding:'4px 10px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, color:'#6b21a8', fontSize:10, fontWeight:600, cursor:'pointer' }}>
           Business
         </button>
         <button onClick={() => go && go('featured')}
-          style={{ padding:'3px 9px', background:'rgba(255,255,255,0.1)', border:'1px solid rgba(255,255,255,0.2)', borderRadius:12, color:'rgba(255,255,255,0.85)', fontSize:10, fontWeight:600, cursor:'pointer' }}>
+          style={{ padding:'4px 10px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, color:'#6b21a8', fontSize:10, fontWeight:600, cursor:'pointer' }}>
           Featured
         </button>
       </div>
