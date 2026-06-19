@@ -2162,47 +2162,66 @@ const MANDEVILLE_BIAS = { lat:18.0417, lng:-77.5071 };
 const BIAS_RADIUS_METERS = 25000;
 
 function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder }) {
-  const [query,       setQuery]       = useState(value||'');
-  const [suggestions, setSuggestions] = useState([]);
-  const [loading,     setLoading]     = useState(false);
-  const [showDrop,    setShowDrop]    = useState(false);
-  const [googleReady, setGoogleReady] = useState(false);
-  const debounceRef   = useRef(null);
-  const svcRef        = useRef(null);
-  const detailSvcRef  = useRef(null);
-  const tokenRef      = useRef(null);
+  const [query,      setQuery]      = useState(value || '');
+  const [results,    setResults]    = useState([]);
+  const [loading,    setLoading]    = useState(false);
+  const [open,       setOpen]       = useState(false);
+  const [ready,      setReady]      = useState(false);
+  const debounce     = useRef(null);
+  const autocomplete = useRef(null);
+  const details      = useRef(null);
+  const token        = useRef(null);
+  const inputRef     = useRef(null);
 
-  // Wait for Google Maps to be available
+  // Mandeville center + radius
+  const BIAS_LAT = 18.0417;
+  const BIAS_LNG = -77.5071;
+  const RADIUS   = 25000; // 25km covers all of Manchester Parish
+
+  // Poll until Google Maps Places is ready
   useEffect(() => {
-    const check = () => {
-      if (window.google?.maps?.places) {
-        svcRef.current      = new window.google.maps.places.AutocompleteService();
-        detailSvcRef.current= new window.google.maps.places.PlacesService(document.createElement('div'));
-        tokenRef.current    = new window.google.maps.places.AutocompleteSessionToken();
-        setGoogleReady(true);
-      } else {
-        setTimeout(check, 300);
+    let attempts = 0;
+    const check = setInterval(() => {
+      attempts++;
+      if (window.google && window.google.maps && window.google.maps.places) {
+        clearInterval(check);
+        try {
+          autocomplete.current = new window.google.maps.places.AutocompleteService();
+          details.current      = new window.google.maps.places.PlacesService(document.createElement('div'));
+          token.current        = new window.google.maps.places.AutocompleteSessionToken();
+          setReady(true);
+        } catch(e) { console.warn('Places init error:', e); }
       }
-    };
-    check();
+      if (attempts > 30) clearInterval(check); // stop after 15s
+    }, 500);
+    return () => clearInterval(check);
   }, []);
 
-  const fetchSuggestions = (input) => {
-    if (!input || input.length < 2 || !svcRef.current) { setSuggestions([]); return; }
+  // Sync external value changes
+  useEffect(() => {
+    if (value !== query) setQuery(value || '');
+  }, [value]);
+
+  const search = (text) => {
+    if (!text || text.length < 2 || !autocomplete.current) {
+      setResults([]); setOpen(false); return;
+    }
     setLoading(true);
-    svcRef.current.getPlacePredictions({
-      input,
-      sessionToken: tokenRef.current,
-      location: new window.google.maps.LatLng(18.0417, -77.5071),
-      radius: 25000,
+    autocomplete.current.getPlacePredictions({
+      input: text,
+      sessionToken: token.current,
+      location: new window.google.maps.LatLng(BIAS_LAT, BIAS_LNG),
+      radius: RADIUS,
       componentRestrictions: { country: 'jm' },
-    }, (results, status) => {
+      types: ['geocode', 'establishment'],
+    }, (preds, status) => {
       setLoading(false);
-      if (status === 'OK' && results) {
-        setSuggestions(results.slice(0, 6));
-        setShowDrop(true);
+      if (status === 'OK' && preds && preds.length > 0) {
+        setResults(preds.slice(0, 6));
+        setOpen(true);
       } else {
-        setSuggestions([]);
+        setResults([]);
+        setOpen(text.length > 2);
       }
     });
   };
@@ -2211,22 +2230,24 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
     const val = e.target.value;
     setQuery(val);
     if (onChange) onChange(val);
-    clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => fetchSuggestions(val), 350);
+    clearTimeout(debounce.current);
+    debounce.current = setTimeout(() => search(val), 300);
   };
 
-  const handleSelect = (prediction) => {
-    if (!detailSvcRef.current) return;
-    setQuery(prediction.description);
-    setSuggestions([]);
-    setShowDrop(false);
-    detailSvcRef.current.getDetails({
-      placeId: prediction.place_id,
-      sessionToken: tokenRef.current,
-      fields: ['name','formatted_address','geometry','place_id'],
+  const handleSelect = (pred) => {
+    if (!details.current) return;
+    const name = pred.structured_formatting?.main_text || pred.description;
+    setQuery(pred.description);
+    setOpen(false);
+    setResults([]);
+    if (onChange) onChange(pred.description);
+    details.current.getDetails({
+      placeId: pred.place_id,
+      sessionToken: token.current,
+      fields: ['name', 'formatted_address', 'geometry', 'place_id'],
     }, (place, status) => {
-      if (status === 'OK' && place) {
-        const result = {
+      if (status === 'OK' && place && place.geometry) {
+        const selected = {
           name:             place.name,
           formattedAddress: place.formatted_address,
           placeId:          place.place_id,
@@ -2235,55 +2256,95 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
         };
         setQuery(place.formatted_address || place.name);
         if (onChange) onChange(place.formatted_address || place.name);
-        if (onPlaceSelect) onPlaceSelect(result);
+        if (onPlaceSelect) onPlaceSelect(selected);
+        // New session token after selection
         if (window.google?.maps?.places) {
-          tokenRef.current = new window.google.maps.places.AutocompleteSessionToken();
+          token.current = new window.google.maps.places.AutocompleteSessionToken();
         }
       }
     });
   };
 
+  const handleBlur = () => {
+    // Delay so tap on suggestion registers first
+    setTimeout(() => setOpen(false), 200);
+  };
+
   return (
-    <div style={{ position:'relative', zIndex:20 }}>
-      <div style={{ position:'relative' }}>
-        <span style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', fontSize:16, pointerEvents:'none' }}>🔍</span>
+    <div style={{ position:'relative', zIndex:50 }}>
+      {/* Input */}
+      <div style={{ position:'relative', display:'flex', alignItems:'center' }}>
+        <span style={{ position:'absolute', left:12, fontSize:16, color:'#6b21a8', pointerEvents:'none' }}>🔍</span>
         <input
+          ref={inputRef}
           type="text"
           value={query}
           onChange={handleChange}
-          onFocus={() => { if (suggestions.length > 0) setShowDrop(true); }}
-          onBlur={() => setTimeout(() => setShowDrop(false), 200)}
-          placeholder={!googleReady ? 'Loading search...' : (placeholder || 'Search address, road or landmark')}
-          style={{ width:'100%', padding:'12px 12px 12px 38px', background:'#ffffff', border:'1.5px solid #d0d3e0', borderRadius:10, fontSize:14, color:'#1a1a2e', boxSizing:'border-box', outline:'none', boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}
+          onFocus={() => { if (results.length > 0) setOpen(true); }}
+          onBlur={handleBlur}
+          placeholder={ready ? (placeholder || 'Search address or landmark') : 'Loading search...'}
+          autoComplete="off"
+          style={{
+            width:'100%', padding:'13px 40px 13px 38px',
+            background:'#ffffff', border:'2px solid #e9d5ff',
+            borderRadius:12, fontSize:14, color:'#1a1a2e',
+            boxSizing:'border-box', outline:'none',
+            boxShadow:'0 2px 8px rgba(107,33,168,0.1)',
+          }}
         />
-        {loading && <span style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', fontSize:12, color:'#888' }}>…</span>}
+        {loading && (
+          <span style={{ position:'absolute', right:12, fontSize:12, color:'#6b21a8' }}>⏳</span>
+        )}
+        {query.length > 0 && !loading && (
+          <span onMouseDown={() => { setQuery(''); setOpen(false); if(onChange) onChange(''); }}
+            style={{ position:'absolute', right:12, fontSize:16, color:'#aaa', cursor:'pointer' }}>✕</span>
+        )}
       </div>
-      {showDrop && suggestions.length > 0 && (
-        <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, right:0, background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:10, boxShadow:'0 8px 24px rgba(0,0,0,0.12)', overflow:'hidden', zIndex:30 }}>
-          {suggestions.map((p, i) => (
-            <div key={i} onMouseDown={() => handleSelect(p)}
-              style={{ padding:'11px 14px', cursor:'pointer', borderBottom: i < suggestions.length-1 ? '1px solid #f0f1f5' : 'none', display:'flex', alignItems:'flex-start', gap:10 }}
-              onMouseEnter={e => e.currentTarget.style.background='#f5f6fa'}
-              onMouseLeave={e => e.currentTarget.style.background='#ffffff'}>
-              <span style={{ fontSize:14, flexShrink:0, marginTop:1 }}>📍</span>
-              <div>
-                <div style={{ fontSize:13, fontWeight:600, color:'#1a1a2e' }}>{p.structured_formatting?.main_text || p.description.split(',')[0]}</div>
-                <div style={{ fontSize:11, color:'#888aaa', marginTop:1 }}>{p.structured_formatting?.secondary_text || p.description}</div>
+
+      {/* Dropdown */}
+      {open && (
+        <div style={{
+          position:'absolute', top:'calc(100% + 4px)', left:0, right:0,
+          background:'#ffffff', border:'1px solid #e9d5ff', borderRadius:12,
+          boxShadow:'0 8px 24px rgba(107,33,168,0.15)', overflow:'hidden', zIndex:100,
+        }}>
+          {results.length > 0 ? (
+            <>
+              {results.map((p, i) => (
+                <div key={i} onMouseDown={() => handleSelect(p)}
+                  style={{
+                    padding:'12px 14px', cursor:'pointer',
+                    borderBottom: i < results.length-1 ? '1px solid #f5f0ff' : 'none',
+                    display:'flex', alignItems:'flex-start', gap:10,
+                    background:'#ffffff',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background='#f9f5ff'}
+                  onMouseLeave={e => e.currentTarget.style.background='#ffffff'}>
+                  <span style={{ fontSize:16, flexShrink:0, marginTop:2, color:'#6b21a8' }}>📍</span>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                      {p.structured_formatting?.main_text || p.description.split(',')[0]}
+                    </div>
+                    <div style={{ fontSize:11, color:'#888', marginTop:2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+                      {p.structured_formatting?.secondary_text || p.description}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <div style={{ padding:'6px 14px', fontSize:10, color:'#bbb', textAlign:'right', background:'#fafafa' }}>
+                Powered by Google
               </div>
+            </>
+          ) : (
+            <div style={{ padding:'14px', fontSize:13, color:'#888', textAlign:'center' }}>
+              No results — try a road, area or landmark in Mandeville
             </div>
-          ))}
-          <div style={{ padding:'6px 14px', fontSize:10, color:'#bbb', textAlign:'right', borderTop:'1px solid #f0f1f5' }}>Powered by Google</div>
-        </div>
-      )}
-      {showDrop && query.length > 2 && suggestions.length === 0 && !loading && (
-        <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, right:0, background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:10, padding:'12px 14px', fontSize:13, color:'#888aaa', zIndex:30 }}>
-          No results — try a road, landmark, or district name
+          )}
         </div>
       )}
     </div>
   );
 }
-
 
 
 function PinPickup({ go, setPickupData, user }) {
@@ -2304,7 +2365,8 @@ function PinPickup({ go, setPickupData, user }) {
   }, []);
 
   const handlePlaceSelect = (place) => {
-    setPinPos({ lat: place.lat, lng: place.lng });
+    const pos = { lat: place.lat, lng: place.lng };
+    setPinPos(pos);
     setAddress(place.formattedAddress || place.name);
   };
 
@@ -2412,7 +2474,8 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
   const [loading, setLoading] = useState(false);
 
   const handlePlaceSelect = (place) => {
-    setPinPos({ lat: place.lat, lng: place.lng });
+    const pos = { lat: place.lat, lng: place.lng };
+    setPinPos(pos);
     setAddress(place.formattedAddress || place.name);
   };
 
@@ -2465,7 +2528,7 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
           <div style={{ fontSize:11, color:'rgba(255,255,255,0.65)', lineHeight:1.5 }}>Pin your drop-off as precisely as possible. Use the "Additional Details" field to add landmarks — e.g. "Blue gate, top of hill." Your driver will appreciate it!</div>
         </div>
       </div>
-      <VilleMap height={300} center={MANCHESTER_CENTER} zoom={12} onClick={handleMapClick} markers={markers} expandable={true}/>
+      <VilleMap height={300} center={pinPos||MANCHESTER_CENTER} zoom={12} onClick={handleMapClick} markers={markers} expandable={true}/>
       <div style={{ padding:16 }}>
         <div style={{ background:'rgba(232,180,0,0.08)', border:'0.5px solid rgba(232,180,0,0.25)', borderRadius:8, padding:'8px 12px', marginBottom:12, fontSize:12, color:'rgba(232,180,0,0.9)' }}>
           🏁 Tap the map or choose a location below
