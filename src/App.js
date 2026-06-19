@@ -4058,39 +4058,38 @@ function DriverDash({ go, user, setUser, setBookingId }) {
       }).catch(() => setLoading(false));
   }, [user]);
 
-  // ── Listen for incoming ride requests ─────────────────────────────────────
+  // ── Poll for incoming ride requests every 5s ────────────────────────────
   useEffect(() => {
     if (!user?.uid) return;
-    const q = query(collection(db,'bookings'),
-      where('status','==','searching')
-    );
-    const unsub = onSnapshot(q, snap => {
+    const poll = async () => {
       try {
-      const open = snap.docs
-        .map(d => ({ id:d.id, ...d.data() }))
-        .filter(r => !r.driverId && !(r.declinedBy||[]).includes(user.uid))
-        .sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
-      // Bell sound on new request (silent fail)
-      if (open.length > prevCountRef.current && prevCountRef.current >= 0) {
-        try {
-          const AC = window.AudioContext || window.webkitAudioContext;
-          if (AC) {
-            const ctx = new AC();
-            const osc = ctx.createOscillator(); const gain = ctx.createGain();
-            osc.connect(gain); gain.connect(ctx.destination);
-            osc.frequency.value = 880; osc.type = 'sine';
-            gain.gain.setValueAtTime(0.3, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
-            osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.8);
-            setTimeout(() => ctx.close(), 1000);
-          }
-        } catch(e) { /* audio not available */ }
-      }
-      prevCountRef.current = open.length;
-      setPendingRides(open);
-      } catch(e) { console.error('Snapshot error:', e); }
-    }, e => console.error('onSnapshot error:', e));
-    return () => unsub();
+        const snap = await getDocs(query(collection(db,'bookings'), where('status','==','searching')));
+        const open = snap.docs
+          .map(d => ({ id:d.id, ...d.data() }))
+          .filter(r => !r.driverId && !(r.declinedBy||[]).includes(user.uid))
+          .sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+        if (open.length > prevCountRef.current && prevCountRef.current >= 0) {
+          try {
+            const AC = window.AudioContext || window.webkitAudioContext;
+            if (AC) {
+              const ctx = new AC();
+              const osc = ctx.createOscillator(); const g = ctx.createGain();
+              osc.connect(g); g.connect(ctx.destination);
+              osc.frequency.value = 880; osc.type = 'sine';
+              g.gain.setValueAtTime(0.3, ctx.currentTime);
+              g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+              osc.start(); osc.stop(ctx.currentTime + 0.6);
+              setTimeout(() => ctx.close(), 1000);
+            }
+          } catch(e) {}
+        }
+        prevCountRef.current = open.length;
+        setPendingRides(open);
+      } catch(e) { console.warn('Poll error:', e.message); }
+    };
+    poll();
+    const interval = setInterval(poll, 5000);
+    return () => clearInterval(interval);
   }, [user]);
 
   const goOnline = async () => {
@@ -6100,6 +6099,8 @@ export default function App() {
     'driver-earnings':        <DriverEarnings {...props}/>,
     'driver-documents':       <DriverDocuments {...props}/>,
     'driver-notifications':   <DriverNotifications {...props}/>,
+    'login':                  <CustomerLogin {...props}/>,
+    'login-choice':           <CustomerLogin {...props}/>,
   };
 
   return (
