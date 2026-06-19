@@ -2163,83 +2163,57 @@ const MANDEVILLE_BIAS = { lat:18.0417, lng:-77.5071 };
 const BIAS_RADIUS_METERS = 25000;
 
 function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder }) {
-  const [query,      setQuery]      = useState(value || '');
-  const [results,    setResults]    = useState([]);
-  const [loading,    setLoading]    = useState(false);
-  const [open,       setOpen]       = useState(false);
-  const [ready,      setReady]      = useState(false);
-  const debounce     = useRef(null);
-  const autocomplete = useRef(null);
-  const details      = useRef(null);
-  const token        = useRef(null);
-  const inputRef     = useRef(null);
+  const [query,   setQuery]   = useState(value || '');
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [open,    setOpen]    = useState(false);
+  const debounce  = useRef(null);
+  const svcRef    = useRef(null);
+  const detailRef = useRef(null);
+  const tokenRef  = useRef(null);
+  const ready     = useRef(false);
 
-  // Mandeville center + radius
-  const BIAS_LAT = 18.0417;
-  const BIAS_LNG = -77.5071;
-  const RADIUS   = 25000; // 25km covers all of Manchester Parish
-
-  // Load Google Maps if not loaded, then init Places
-  useEffect(() => {
-    const initPlaces = () => {
-      try {
-        if (window.google?.maps?.places) {
-          autocomplete.current = new window.google.maps.places.AutocompleteService();
-          details.current      = new window.google.maps.places.PlacesService(document.createElement('div'));
-          token.current        = new window.google.maps.places.AutocompleteSessionToken();
-          setReady(true);
-          return true;
-        }
-      } catch(e) { console.warn('Places init error:', e); }
-      return false;
-    };
-
-    // Try immediately
-    if (initPlaces()) return;
-
-    // Load Maps script if not present
-    if (!document.querySelector('script[src*="maps.googleapis.com"]')) {
-      const script = document.createElement('script');
-      script.src = 'https://maps.googleapis.com/maps/api/js?key=' + GOOGLE_MAPS_KEY + '&libraries=places';
-      script.async = true;
-      script.onload = () => initPlaces();
-      document.head.appendChild(script);
-    } else {
-      // Script loading - poll until ready
-      let attempts = 0;
-      const poll = setInterval(() => {
-        attempts++;
-        if (initPlaces() || attempts > 40) clearInterval(poll);
-      }, 500);
-      return () => clearInterval(poll);
-    }
+  // Init Places service - retry until Google Maps is loaded by VilleMap
+  const tryInit = useCallback(() => {
+    if (ready.current) return true;
+    if (!window.google?.maps?.places) return false;
+    try {
+      svcRef.current    = new window.google.maps.places.AutocompleteService();
+      detailRef.current = new window.google.maps.places.PlacesService(document.createElement('div'));
+      tokenRef.current  = new window.google.maps.places.AutocompleteSessionToken();
+      ready.current     = true;
+      return true;
+    } catch(e) { return false; }
   }, []);
 
-  // Sync external value changes
   useEffect(() => {
-    if (value !== query) setQuery(value || '');
-  }, [value]);
+    if (tryInit()) return;
+    const iv = setInterval(() => { if (tryInit()) clearInterval(iv); }, 300);
+    return () => clearInterval(iv);
+  }, [tryInit]);
+
+  // Sync value prop
+  useEffect(() => { if (value !== query) setQuery(value || ''); }, [value]);
 
   const search = (text) => {
-    if (!text || text.length < 2 || !autocomplete.current) {
-      setResults([]); setOpen(false); return;
-    }
+    if (!text || text.length < 2) { setResults([]); setOpen(false); return; }
+    if (!tryInit()) return; // not ready yet
     setLoading(true);
-    autocomplete.current.getPlacePredictions({
+    svcRef.current.getPlacePredictions({
       input: text,
-      sessionToken: token.current,
-      location: new window.google.maps.LatLng(BIAS_LAT, BIAS_LNG),
-      radius: RADIUS,
+      sessionToken: tokenRef.current,
+      location: new window.google.maps.LatLng(18.0417, -77.5071),
+      radius: 25000,
       componentRestrictions: { country: 'jm' },
       types: ['geocode', 'establishment'],
     }, (preds, status) => {
       setLoading(false);
-      if (status === 'OK' && preds && preds.length > 0) {
+      if (status === 'OK' && preds?.length) {
         setResults(preds.slice(0, 6));
         setOpen(true);
       } else {
         setResults([]);
-        setOpen(text.length > 2);
+        setOpen(text.length > 1);
       }
     });
   };
@@ -2249,22 +2223,22 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
     setQuery(val);
     if (onChange) onChange(val);
     clearTimeout(debounce.current);
-    debounce.current = setTimeout(() => search(val), 300);
+    debounce.current = setTimeout(() => search(val), 350);
   };
 
   const handleSelect = (pred) => {
-    if (!details.current) return;
-    const name = pred.structured_formatting?.main_text || pred.description;
-    setQuery(pred.description);
+    const desc = pred.description || '';
+    setQuery(desc);
     setOpen(false);
     setResults([]);
-    if (onChange) onChange(pred.description);
-    details.current.getDetails({
+    if (onChange) onChange(desc);
+    if (!detailRef.current) return;
+    detailRef.current.getDetails({
       placeId: pred.place_id,
-      sessionToken: token.current,
-      fields: ['name', 'formatted_address', 'geometry', 'place_id'],
+      sessionToken: tokenRef.current,
+      fields: ['name','formatted_address','geometry','place_id'],
     }, (place, status) => {
-      if (status === 'OK' && place && place.geometry) {
+      if (status === 'OK' && place?.geometry) {
         const selected = {
           name:             place.name,
           formattedAddress: place.formatted_address,
@@ -2272,92 +2246,59 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
           lat:              place.geometry.location.lat(),
           lng:              place.geometry.location.lng(),
         };
-        setQuery(place.formatted_address || place.name);
-        if (onChange) onChange(place.formatted_address || place.name);
+        const addr = place.formatted_address || place.name;
+        setQuery(addr);
+        if (onChange) onChange(addr);
         if (onPlaceSelect) onPlaceSelect(selected);
-        // New session token after selection
+        // Reset session token
         if (window.google?.maps?.places) {
-          token.current = new window.google.maps.places.AutocompleteSessionToken();
+          tokenRef.current = new window.google.maps.places.AutocompleteSessionToken();
         }
       }
     });
   };
 
-  const handleBlur = () => {
-    // Delay so tap on suggestion registers first
-    setTimeout(() => setOpen(false), 200);
-  };
-
   return (
     <div style={{ position:'relative', zIndex:50 }}>
-      {/* Input */}
-      <div style={{ position:'relative', display:'flex', alignItems:'center' }}>
-        <span style={{ position:'absolute', left:12, fontSize:16, color:'#6b21a8', pointerEvents:'none' }}>🔍</span>
+      <div style={{ position:'relative' }}>
+        <span style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', fontSize:16, color:'#6b21a8', pointerEvents:'none' }}>🔍</span>
         <input
-          ref={inputRef}
           type="text"
           value={query}
           onChange={handleChange}
           onFocus={() => { if (results.length > 0) setOpen(true); }}
-          onBlur={handleBlur}
-          placeholder={ready ? (placeholder || 'Search address or landmark') : 'Loading search...'}
+          onBlur={() => setTimeout(() => setOpen(false), 200)}
+          placeholder={placeholder || 'Search address, road or landmark'}
           autoComplete="off"
-          style={{
-            width:'100%', padding:'13px 40px 13px 38px',
-            background:'#ffffff', border:'2px solid #e9d5ff',
-            borderRadius:12, fontSize:14, color:'#1a1a2e',
-            boxSizing:'border-box', outline:'none',
-            boxShadow:'0 2px 8px rgba(107,33,168,0.1)',
-          }}
+          style={{ width:'100%', padding:'13px 36px 13px 38px', background:'#ffffff', border:'2px solid #e9d5ff', borderRadius:12, fontSize:14, color:'#1a1a2e', boxSizing:'border-box', outline:'none', boxShadow:'0 2px 8px rgba(107,33,168,0.1)' }}
         />
-        {loading && (
-          <span style={{ position:'absolute', right:12, fontSize:12, color:'#6b21a8' }}>⏳</span>
-        )}
-        {query.length > 0 && !loading && (
-          <span onMouseDown={() => { setQuery(''); setOpen(false); if(onChange) onChange(''); }}
-            style={{ position:'absolute', right:12, fontSize:16, color:'#aaa', cursor:'pointer' }}>✕</span>
+        {loading && <span style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)', fontSize:13 }}>⏳</span>}
+        {!loading && query.length > 0 && (
+          <span onMouseDown={() => { setQuery(''); setOpen(false); if (onChange) onChange(''); }}
+            style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)', fontSize:16, color:'#aaa', cursor:'pointer' }}>✕</span>
         )}
       </div>
-
-      {/* Dropdown */}
       {open && (
-        <div style={{
-          position:'absolute', top:'calc(100% + 4px)', left:0, right:0,
-          background:'#ffffff', border:'1px solid #e9d5ff', borderRadius:12,
-          boxShadow:'0 8px 24px rgba(107,33,168,0.15)', overflow:'hidden', zIndex:100,
-        }}>
-          {results.length > 0 ? (
-            <>
-              {results.map((p, i) => (
-                <div key={i} onMouseDown={() => handleSelect(p)}
-                  style={{
-                    padding:'12px 14px', cursor:'pointer',
-                    borderBottom: i < results.length-1 ? '1px solid #f5f0ff' : 'none',
-                    display:'flex', alignItems:'flex-start', gap:10,
-                    background:'#ffffff',
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background='#f9f5ff'}
-                  onMouseLeave={e => e.currentTarget.style.background='#ffffff'}>
-                  <span style={{ fontSize:16, flexShrink:0, marginTop:2, color:'#6b21a8' }}>📍</span>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-                      {p.structured_formatting?.main_text || p.description.split(',')[0]}
-                    </div>
-                    <div style={{ fontSize:11, color:'#888', marginTop:2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-                      {p.structured_formatting?.secondary_text || p.description}
-                    </div>
-                  </div>
+        <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, right:0, background:'#fff', border:'1px solid #e9d5ff', borderRadius:12, boxShadow:'0 8px 24px rgba(107,33,168,0.15)', overflow:'hidden', zIndex:100 }}>
+          {results.length > 0 ? results.map((p, i) => (
+            <div key={i} onMouseDown={() => handleSelect(p)}
+              style={{ padding:'12px 14px', cursor:'pointer', borderBottom:i<results.length-1?'1px solid #f5f0ff':'none', display:'flex', alignItems:'flex-start', gap:10 }}
+              onMouseEnter={e => e.currentTarget.style.background='#f9f5ff'}
+              onMouseLeave={e => e.currentTarget.style.background='#fff'}>
+              <span style={{ color:'#6b21a8', fontSize:16, flexShrink:0, marginTop:2 }}>📍</span>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                  {p.structured_formatting?.main_text || p.description?.split(',')[0]}
                 </div>
-              ))}
-              <div style={{ padding:'6px 14px', fontSize:10, color:'#bbb', textAlign:'right', background:'#fafafa' }}>
-                Powered by Google
+                <div style={{ fontSize:11, color:'#888', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                  {p.structured_formatting?.secondary_text || p.description}
+                </div>
               </div>
-            </>
-          ) : (
-            <div style={{ padding:'14px', fontSize:13, color:'#888', textAlign:'center' }}>
-              No results — try a road, area or landmark in Mandeville
             </div>
+          )) : (
+            <div style={{ padding:'14px', fontSize:13, color:'#888', textAlign:'center' }}>No results — try a road, area or landmark</div>
           )}
+          <div style={{ padding:'5px 12px', fontSize:10, color:'#bbb', textAlign:'right', background:'#fafafa' }}>Powered by Google</div>
         </div>
       )}
     </div>
@@ -5526,6 +5467,379 @@ function FeaturedPage({ go, user }) {
   );
 }
 
+
+// ── ADMIN DASHBOARD ───────────────────────────────────────────────────────────
+const ADMIN_EMAILS = ['daviskeneile@gmail.com', 'admin@villecabs.com'];
+
+function AdminDash({ go, user }) {
+  const [tab,          setTab]          = useState('overview');
+  const [stats,        setStats]        = useState({ customers:0, drivers:0, pendingDrivers:0, activeDrivers:0, rides:0, completed:0, cancelled:0, totalFare:0, partnerRequests:0 });
+  const [drivers,      setDrivers]      = useState([]);
+  const [customers,    setCustomers]    = useState([]);
+  const [rides,        setRides]        = useState([]);
+  const [partners,     setPartners]     = useState([]);
+  const [messages,     setMessages]     = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [rideFilter,   setRideFilter]   = useState('all');
+  const [driverFilter, setDriverFilter] = useState('all');
+  const [selected,     setSelected]     = useState(null);
+
+  // ── Guard: admin only ──────────────────────────────────────────────────────
+  if (!user || !ADMIN_EMAILS.includes(user.email)) {
+    return (
+      <div style={{ minHeight:'100vh', background:'#f5f6fa', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24 }}>
+        <div style={{ fontSize:48, marginBottom:16 }}>🔒</div>
+        <div style={{ fontSize:18, fontWeight:700, color:'#1a1a2e', marginBottom:8 }}>Admin Access Only</div>
+        <div style={{ fontSize:13, color:'#888', marginBottom:20 }}>You do not have permission to view this page.</div>
+        <button onClick={() => go('splash')} style={{ padding:'12px 24px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:12, fontSize:14, fontWeight:700, cursor:'pointer' }}>Go Home</button>
+      </div>
+    );
+  }
+
+  // ── Load all data ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const [dSnap, cSnap, rSnap, pSnap, mSnap] = await Promise.all([
+          getDocs(collection(db, 'drivers')),
+          getDocs(collection(db, 'customers')),
+          getDocs(collection(db, 'bookings')),
+          getDocs(collection(db, 'partnerRequests')),
+          getDocs(collection(db, 'contactMessages')),
+        ]);
+        const driversData   = dSnap.docs.map(d => ({ id:d.id, ...d.data() }));
+        const customersData = cSnap.docs.map(d => ({ id:d.id, ...d.data() }));
+        const ridesData     = rSnap.docs.map(d => ({ id:d.id, ...d.data() })).sort((a,b) => (b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+        const partnersData  = pSnap.docs.map(d => ({ id:d.id, ...d.data() })).sort((a,b) => (b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+        const messagesData  = mSnap.docs.map(d => ({ id:d.id, ...d.data() })).sort((a,b) => (b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+        const completed = ridesData.filter(r => r.status==='completed');
+        const totalFare = completed.reduce((s,r) => s+(r.fare||0), 0);
+        setDrivers(driversData);
+        setCustomers(customersData);
+        setRides(ridesData);
+        setPartners(partnersData);
+        setMessages(messagesData);
+        setStats({
+          customers:      customersData.length,
+          drivers:        driversData.length,
+          pendingDrivers: driversData.filter(d => d.status==='pending').length,
+          activeDrivers:  driversData.filter(d => d.isOnline).length,
+          rides:          ridesData.length,
+          completed:      completed.length,
+          cancelled:      ridesData.filter(r => r.status==='cancelled').length,
+          totalFare,
+          partnerRequests: partnersData.filter(p => p.status==='new').length,
+        });
+        setLoading(false);
+      } catch(e) { console.error(e); setLoading(false); }
+    };
+    load();
+  }, []);
+
+  const updateDriver = async (id, data) => {
+    await updateDoc(doc(db,'drivers',id), data);
+    setDrivers(prev => prev.map(d => d.id===id ? {...d,...data} : d));
+  };
+  const updatePartner = async (id, data) => {
+    await updateDoc(doc(db,'partnerRequests',id), data);
+    setPartners(prev => prev.map(p => p.id===id ? {...p,...data} : p));
+  };
+  const updateMessage = async (id, data) => {
+    await updateDoc(doc(db,'contactMessages',id), data);
+    setMessages(prev => prev.map(m => m.id===id ? {...m,...data} : m));
+  };
+
+  const vcRevenue  = Math.round(stats.totalFare * 0.15);
+  const driverPay  = Math.round(stats.totalFare * 0.85);
+
+  const statusBadge = (status, map) => {
+    const cfg = map[status] || { label:status||'Unknown', bg:'#f3f4f6', color:'#555' };
+    return <span style={{ fontSize:10, background:cfg.bg, color:cfg.color, padding:'2px 8px', borderRadius:8, fontWeight:600 }}>{cfg.label}</span>;
+  };
+  const driverStatusMap = {
+    approved:  { label:'✅ Approved',  bg:'#f0fff4', color:'#1a9e5a' },
+    pending:   { label:'⏳ Pending',   bg:'#fffbeb', color:'#b45309' },
+    rejected:  { label:'❌ Rejected',  bg:'#fff0f0', color:'#dc2626' },
+    suspended: { label:'🚫 Suspended', bg:'#fdf2f8', color:'#9333ea' },
+  };
+  const rideStatusMap = {
+    completed:  { label:'✅ Done',     bg:'#f0fff4', color:'#1a9e5a' },
+    active:     { label:'🚗 Active',   bg:'#eff6ff', color:'#2563eb' },
+    searching:  { label:'🔍 Searching',bg:'#fffbeb', color:'#b45309' },
+    cancelled:  { label:'❌ Cancelled',bg:'#fff0f0', color:'#dc2626' },
+  };
+  const partnerStatusMap = {
+    new:       { label:'🆕 New',       bg:'#f9f5ff', color:'#6b21a8' },
+    contacted: { label:'📞 Contacted', bg:'#eff6ff', color:'#2563eb' },
+    approved:  { label:'✅ Approved',  bg:'#f0fff4', color:'#1a9e5a' },
+    featured:  { label:'⭐ Featured',  bg:'#fffbeb', color:'#b45309' },
+    rejected:  { label:'❌ Rejected',  bg:'#fff0f0', color:'#dc2626' },
+  };
+
+  const filteredRides   = rideFilter==='all'   ? rides   : rides.filter(r => r.status===rideFilter);
+  const filteredDrivers = driverFilter==='all' ? drivers : drivers.filter(d => d.status===driverFilter);
+
+  if (loading) return (
+    <div style={{ minHeight:'100vh', background:'#f5f6fa', display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:14 }}>
+      <div style={{ width:40, height:40, border:'3px solid #e9d5ff', borderTop:'3px solid #6b21a8', borderRadius:'50%', animation:'spin 0.8s linear infinite' }}/>
+      <div style={{ fontSize:13, color:'#888' }}>Loading admin data...</div>
+    </div>
+  );
+
+  return (
+    <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
+
+      {/* ── HEADER ── */}
+      <div style={{ background:'#ffffff', padding:'12px 16px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', position:'sticky', top:0, zIndex:10, boxShadow:'0 1px 4px rgba(0,0,0,0.06)' }}>
+        <img src="/logo.png" alt="VilleCabs" style={{ height:28, objectFit:'contain' }}/>
+        <div>
+          <div style={{ fontSize:14, fontWeight:800, color:'#1a1a2e' }}>Admin Dashboard</div>
+          <div style={{ fontSize:11, color:'#888' }}>VilleCabs · Mandeville, Jamaica</div>
+        </div>
+        <button onClick={() => go('splash')} style={{ marginLeft:'auto', padding:'6px 14px', background:'#f5f0ff', color:'#6b21a8', border:'1px solid #e9d5ff', borderRadius:10, fontSize:12, fontWeight:600, cursor:'pointer' }}>← Exit</button>
+      </div>
+
+      {/* ── TAB NAV ── */}
+      <div style={{ display:'flex', gap:0, background:'#ffffff', borderBottom:'1px solid #eee', overflowX:'auto', scrollbarWidth:'none' }}>
+        {[['overview','📊 Overview'],['drivers','🚗 Drivers'],['customers','👤 Customers'],['rides','🚕 Rides'],['partners','🤝 Partners'],['revenue','💰 Revenue'],['messages','📬 Messages']].map(([key,label]) => (
+          <button key={key} onClick={() => setTab(key)}
+            style={{ flexShrink:0, padding:'12px 16px', background:'none', border:'none', borderBottom:tab===key?'2px solid #6b21a8':'2px solid transparent', color:tab===key?'#6b21a8':'#888', fontSize:12, fontWeight:tab===key?700:400, cursor:'pointer', whiteSpace:'nowrap' }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ padding:'14px', paddingBottom:40 }}>
+
+        {/* ══════════ OVERVIEW ══════════ */}
+        {tab==='overview' && (
+          <div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14 }}>
+              {[
+                ['👤 Customers',    stats.customers,      '#6b21a8', '#f9f5ff'],
+                ['🚗 Drivers',      stats.drivers,        '#1a9e5a', '#f0fff4'],
+                ['⏳ Pending Apps', stats.pendingDrivers, '#b45309', '#fffbeb'],
+                ['🟢 Online Now',   stats.activeDrivers,  '#2563eb', '#eff6ff'],
+                ['🚕 Total Rides',  stats.rides,          '#1a1a2e', '#ffffff'],
+                ['✅ Completed',    stats.completed,      '#1a9e5a', '#f0fff4'],
+                ['❌ Cancelled',    stats.cancelled,      '#dc2626', '#fff0f0'],
+                ['🤝 New Partners', stats.partnerRequests,'#9333ea', '#fdf2f8'],
+              ].map(([label, value, color, bg], i) => (
+                <div key={i} style={{ background:bg, border:'1px solid #e5e7eb', borderRadius:14, padding:'14px' }}>
+                  <div style={{ fontSize:10, color:'#888', marginBottom:4 }}>{label}</div>
+                  <div style={{ fontSize:24, fontWeight:800, color }}>{value}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ background:'#fff', borderRadius:14, padding:16, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
+              <div style={{ fontSize:13, fontWeight:700, color:'#6b21a8', marginBottom:12 }}>💰 Revenue Summary</div>
+              {[
+                ['Total Fare Collected', `J$${stats.totalFare.toLocaleString()}`, '#1a1a2e'],
+                ['VilleCabs Revenue (15%)', `J$${vcRevenue.toLocaleString()}`, '#6b21a8'],
+                ['Driver Payouts (85%)', `J$${driverPay.toLocaleString()}`, '#1a9e5a'],
+                ['Completed Rides', stats.completed, '#555'],
+                ['Avg Fare', stats.completed ? `J$${Math.round(stats.totalFare/stats.completed).toLocaleString()}` : 'J$0', '#555'],
+              ].map(([l,v,c],i) => (
+                <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'9px 0', borderBottom:i<4?'1px solid #f5f5f5':'none' }}>
+                  <span style={{ fontSize:12, color:'#888' }}>{l}</span>
+                  <span style={{ fontSize:13, fontWeight:700, color:c }}>{v}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ══════════ DRIVERS ══════════ */}
+        {tab==='drivers' && (
+          <div>
+            <div style={{ display:'flex', gap:6, marginBottom:12, overflowX:'auto', scrollbarWidth:'none' }}>
+              {[['all','All'],['pending','Pending'],['approved','Approved'],['rejected','Rejected'],['suspended','Suspended']].map(([k,l]) => (
+                <button key={k} onClick={() => setDriverFilter(k)}
+                  style={{ flexShrink:0, padding:'6px 14px', borderRadius:20, border:'none', background:driverFilter===k?'#6b21a8':'#f3f4f6', color:driverFilter===k?'#fff':'#555', fontSize:11, fontWeight:600, cursor:'pointer' }}>
+                  {l} {k==='all'?`(${drivers.length})`:k==='pending'?`(${drivers.filter(d=>d.status===k).length})`:''}
+                </button>
+              ))}
+            </div>
+            {filteredDrivers.length===0 && <div style={{ textAlign:'center', padding:30, color:'#888' }}>No drivers found</div>}
+            {filteredDrivers.map((d,i) => (
+              <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:8 }}>
+                  <div>
+                    <div style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>👤 {d.name||'—'}</div>
+                    <div style={{ fontSize:11, color:'#888', marginTop:2 }}>{d.email||'—'} · {d.phone||'—'}</div>
+                    <div style={{ fontSize:11, color:'#888', marginTop:1 }}>🚗 {d.vehicleMake||'—'} {d.vehicleModel||''} · {d.licensePlate||'—'}</div>
+                  </div>
+                  {statusBadge(d.status, driverStatusMap)}
+                </div>
+                <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                  {d.status!=='approved' && (
+                    <button onClick={() => updateDriver(d.id, { status:'approved' })}
+                      style={{ padding:'6px 12px', background:'#1a9e5a', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>
+                      ✅ Approve
+                    </button>
+                  )}
+                  {d.status!=='rejected' && (
+                    <button onClick={() => updateDriver(d.id, { status:'rejected' })}
+                      style={{ padding:'6px 12px', background:'#fff0f0', color:'#dc2626', border:'1px solid #fca5a5', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>
+                      ❌ Reject
+                    </button>
+                  )}
+                  {d.status!=='suspended' && (
+                    <button onClick={() => updateDriver(d.id, { status:'suspended' })}
+                      style={{ padding:'6px 12px', background:'#fdf2f8', color:'#9333ea', border:'1px solid #e9d5ff', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>
+                      🚫 Suspend
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ══════════ CUSTOMERS ══════════ */}
+        {tab==='customers' && (
+          <div>
+            <div style={{ fontSize:11, color:'#888', marginBottom:12 }}>{customers.length} total customers</div>
+            {customers.length===0 && <div style={{ textAlign:'center', padding:30, color:'#888' }}>No customers yet</div>}
+            {customers.map((c,i) => {
+              const cRides = rides.filter(r => r.customerId===c.id);
+              const spent  = cRides.filter(r=>r.status==='completed').reduce((s,r)=>s+(r.fare||0),0);
+              return (
+                <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
+                  <div style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginBottom:4 }}>👤 {c.name||'—'}</div>
+                  <div style={{ fontSize:11, color:'#888', marginBottom:6 }}>{c.email||'—'} · {c.phone||'—'}</div>
+                  <div style={{ display:'flex', gap:8 }}>
+                    <span style={{ fontSize:10, background:'#f9f5ff', color:'#6b21a8', padding:'2px 8px', borderRadius:8 }}>{cRides.length} rides</span>
+                    <span style={{ fontSize:10, background:'#f0fff4', color:'#1a9e5a', padding:'2px 8px', borderRadius:8 }}>J${spent.toLocaleString()} spent</span>
+                    {c.createdAt && <span style={{ fontSize:10, background:'#f3f4f6', color:'#555', padding:'2px 8px', borderRadius:8 }}>Joined {new Date((c.createdAt.seconds||0)*1000).toLocaleDateString()}</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ══════════ RIDES ══════════ */}
+        {tab==='rides' && (
+          <div>
+            <div style={{ display:'flex', gap:6, marginBottom:12, overflowX:'auto', scrollbarWidth:'none' }}>
+              {[['all','All'],['searching','Searching'],['active','Active'],['completed','Completed'],['cancelled','Cancelled']].map(([k,l]) => (
+                <button key={k} onClick={() => setRideFilter(k)}
+                  style={{ flexShrink:0, padding:'6px 14px', borderRadius:20, border:'none', background:rideFilter===k?'#6b21a8':'#f3f4f6', color:rideFilter===k?'#fff':'#555', fontSize:11, fontWeight:600, cursor:'pointer' }}>
+                  {l}
+                </button>
+              ))}
+            </div>
+            {filteredRides.length===0 && <div style={{ textAlign:'center', padding:30, color:'#888' }}>No rides found</div>}
+            {filteredRides.map((r,i) => {
+              const d = new Date((r.createdAt?.seconds||0)*1000);
+              return (
+                <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>👤 {r.customerName||'—'}</div>
+                    <div style={{ fontSize:14, fontWeight:800, color:'#6b21a8' }}>J${(r.fare||0).toLocaleString()}</div>
+                  </div>
+                  <div style={{ fontSize:11, color:'#888', marginBottom:2 }}>Driver: {r.driverName||'Not assigned'}</div>
+                  <div style={{ fontSize:11, color:'#555', marginBottom:2 }}>📍 {(r.pickup?.address||'').split(',')[0]}</div>
+                  <div style={{ fontSize:11, color:'#555', marginBottom:8 }}>🏁 {(r.dropoff?.address||'').split(',')[0]}</div>
+                  <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                    {statusBadge(r.status, rideStatusMap)}
+                    <span style={{ fontSize:10, background:'#f3f4f6', color:'#555', padding:'2px 8px', borderRadius:8 }}>💵 {r.paymentMethod||'Cash'}</span>
+                    {r.distanceKm && <span style={{ fontSize:10, background:'#f3f4f6', color:'#555', padding:'2px 8px', borderRadius:8 }}>📏 {r.distanceKm} km</span>}
+                    <span style={{ fontSize:10, background:'#f3f4f6', color:'#555', padding:'2px 8px', borderRadius:8 }}>{d.toLocaleDateString()}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ══════════ PARTNERS ══════════ */}
+        {tab==='partners' && (
+          <div>
+            {partners.length===0 && <div style={{ textAlign:'center', padding:30, color:'#888' }}>No partner requests yet</div>}
+            {partners.map((p,i) => (
+              <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:8 }}>
+                  <div>
+                    <div style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>{p.bizName||'—'}</div>
+                    <div style={{ fontSize:11, color:'#888', marginTop:2 }}>{p.bizType||'—'} · {p.contact||'—'}</div>
+                    <div style={{ fontSize:11, color:'#888', marginTop:1 }}>{p.email||'—'} · {p.phone||'—'}</div>
+                    {p.message && <div style={{ fontSize:11, color:'#555', marginTop:4, fontStyle:'italic' }}>"{p.message}"</div>}
+                  </div>
+                  {statusBadge(p.status, partnerStatusMap)}
+                </div>
+                <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                  {[
+                    ['Contacted', 'contacted', '#2563eb', '#eff6ff', '#bfdbfe'],
+                    ['Approve',   'approved',  '#1a9e5a', '#f0fff4', '#86efac'],
+                    ['Feature',   'featured',  '#b45309', '#fffbeb', '#fde047'],
+                    ['Reject',    'rejected',  '#dc2626', '#fff0f0', '#fca5a5'],
+                  ].map(([label, status, color, bg, border]) => (
+                    p.status !== status &&
+                    <button key={status} onClick={() => updatePartner(p.id, { status })}
+                      style={{ padding:'5px 10px', background:bg, color, border:'1px solid '+border, borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ══════════ REVENUE ══════════ */}
+        {tab==='revenue' && (
+          <div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14 }}>
+              {[
+                ['Total Fare',      `J$${stats.totalFare.toLocaleString()}`, '#1a1a2e', '#fff'],
+                ['VC Revenue 15%',  `J$${vcRevenue.toLocaleString()}`,       '#6b21a8', '#f9f5ff'],
+                ['Driver Payout',   `J$${driverPay.toLocaleString()}`,       '#1a9e5a', '#f0fff4'],
+                ['Completed Rides', stats.completed,                         '#2563eb', '#eff6ff'],
+                ['Avg Fare',        stats.completed?`J$${Math.round(stats.totalFare/stats.completed).toLocaleString()}`:'J$0', '#b45309', '#fffbeb'],
+                ['Cancelled',       stats.cancelled,                         '#dc2626', '#fff0f0'],
+              ].map(([l,v,c,bg],i) => (
+                <div key={i} style={{ background:bg, border:'1px solid #e5e7eb', borderRadius:14, padding:'14px' }}>
+                  <div style={{ fontSize:10, color:'#888', marginBottom:4 }}>{l}</div>
+                  <div style={{ fontSize:20, fontWeight:800, color:c }}>{v}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:12, padding:'12px 14px', fontSize:12, color:'#6b21a8' }}>
+              VilleCabs earns 15% of every completed fare. Drivers keep 85%.
+            </div>
+          </div>
+        )}
+
+        {/* ══════════ MESSAGES ══════════ */}
+        {tab==='messages' && (
+          <div>
+            {messages.length===0 && <div style={{ textAlign:'center', padding:30, color:'#888' }}>No messages yet</div>}
+            {messages.map((m,i) => (
+              <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)', borderLeft:m.status==='new'?'3px solid #6b21a8':'3px solid transparent' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>📬 {m.name||'—'}</div>
+                  <span style={{ fontSize:10, background:m.status==='resolved'?'#f0fff4':m.status==='in-progress'?'#eff6ff':'#f9f5ff', color:m.status==='resolved'?'#1a9e5a':m.status==='in-progress'?'#2563eb':'#6b21a8', padding:'2px 8px', borderRadius:8, fontWeight:600 }}>
+                    {m.status==='resolved'?'✅ Resolved':m.status==='in-progress'?'🔄 In Progress':'🆕 New'}
+                  </span>
+                </div>
+                <div style={{ fontSize:11, color:'#888', marginBottom:4 }}>{m.email||'—'} · {m.subject||'—'}</div>
+                <div style={{ fontSize:12, color:'#555', marginBottom:10, lineHeight:1.5 }}>{m.message||'—'}</div>
+                <div style={{ display:'flex', gap:6 }}>
+                  {m.status!=='in-progress' && <button onClick={() => updateMessage(m.id,{status:'in-progress'})} style={{ padding:'5px 10px', background:'#eff6ff', color:'#2563eb', border:'1px solid #bfdbfe', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>🔄 In Progress</button>}
+                  {m.status!=='resolved'    && <button onClick={() => updateMessage(m.id,{status:'resolved'})}    style={{ padding:'5px 10px', background:'#f0fff4', color:'#1a9e5a', border:'1px solid #86efac', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>✅ Resolve</button>}
+                  {m.email && <a href={'mailto:'+m.email} style={{ padding:'5px 10px', background:'#f9f5ff', color:'#6b21a8', border:'1px solid #e9d5ff', borderRadius:8, fontSize:11, fontWeight:600, textDecoration:'none' }}>📧 Reply</a>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
 
 
 
