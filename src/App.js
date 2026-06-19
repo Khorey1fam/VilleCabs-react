@@ -586,7 +586,7 @@ function Splash({ go }) {
 function LoginChoice({ go, user }) {
   return (
     <div style={s.content}>
-      <TopBar title="Log In" onBack={() => go('splash')} go={go} user={user}/>
+      <TopBar title="Log In" go={go} user={user}/>
       <div style={{ ...s.center, padding:'0 24px' }}>
         <div style={{ width:'100%', maxWidth:360, textAlign:'center' }}>
           <div style={{ fontSize:40, marginBottom:16 }}>👋</div>
@@ -625,7 +625,7 @@ function LoginChoice({ go, user }) {
 function RoleSelect({ go, user }) {
   return (
     <div style={s.content}>
-      <TopBar title="Join VilleCabs" onBack={() => go('splash')} go={go} user={user}/>
+      <TopBar title="Join VilleCabs" go={go} user={user}/>
       <div style={{ ...s.center, paddingTop:40 }}>
         <p style={{ color:'rgba(255,255,255,0.6)', marginBottom:24, fontSize:14 }}>How would you like to use VilleCabs?</p>
         <div style={{ width:'100%', maxWidth:360, display:'flex', flexDirection:'column', gap:14 }}>
@@ -689,7 +689,7 @@ function CustomerSignup({ go, setUser, user }) {
 
   return (
     <div style={s.content}>
-      <TopBar title="Create Account" onBack={() => go('role')} go={go} user={user}/>
+      <TopBar title="Create Account" go={go} user={user}/>
       <div style={{ padding:'24px 20px', maxWidth:420, margin:'0 auto' }}>
         <h2 style={{ fontSize:20, fontWeight:500, marginBottom:4 }}>Welcome to VilleCabs</h2>
         <p style={{ color:'rgba(255,255,255,0.5)', fontSize:13, marginBottom:20 }}>Create your rider account</p>
@@ -736,7 +736,7 @@ function OTPScreen({ go, user }) {
 
   return (
     <div style={s.content}>
-      <TopBar title="Verify Email" onBack={() => go(user?.role==='driver'?'driver-signup':'customer-signup')} go={go} user={user}/>
+      <TopBar title="Verify Email" go={go} user={user}/>
       <div style={{ ...s.center, paddingTop:40 }}>
         <div style={{ fontSize:56, marginBottom:16 }}>📧</div>
         <h2 style={{ fontSize:20, fontWeight:500, marginBottom:6 }}>Check your inbox</h2>
@@ -820,7 +820,7 @@ function CustomerLogin({ go, setUser, user }) {
 
   return (
     <div style={s.content}>
-      <TopBar title="Log In" onBack={() => go('customer-signup')} go={go} user={user}/>
+      <TopBar title="Log In" go={go} user={user}/>
       <div style={{ padding:'32px 20px', maxWidth:420, margin:'0 auto' }}>
         <h2 style={{ fontSize:20, fontWeight:500, marginBottom:4 }}>Welcome back</h2>
         <p style={{ color:'rgba(255,255,255,0.5)', fontSize:13, marginBottom:20 }}>Log in to book a VilleCabs ride</p>
@@ -871,7 +871,7 @@ function DriverLogin({ go, setUser, user }) {
 
   return (
     <div style={s.content}>
-      <TopBar title="Driver Login" onBack={() => go('splash')} go={go} user={user}/>
+      <TopBar title="Driver Login" go={go} user={user}/>
       <div style={{ padding:'32px 20px', maxWidth:420, margin:'0 auto' }}>
         <h2 style={{ fontSize:20, fontWeight:500, marginBottom:4 }}>Welcome back</h2>
         <p style={{ color:'rgba(255,255,255,0.5)', fontSize:13, marginBottom:20 }}>Sign in to your driver account</p>
@@ -947,7 +947,7 @@ function DriverSignup({ go, user }) {
 
   return (
     <div style={s.content}>
-      <TopBar title="Driver Registration" onBack={() => go('role')} go={go} user={user}/>
+      <TopBar title="Driver Registration" go={go} user={user}/>
       <div style={{ padding:'20px', maxWidth:420, margin:'0 auto' }}>
         <h2 style={{ fontSize:20, fontWeight:500, marginBottom:4 }}>Drive with VilleCabs</h2>
         <p style={{ color:'rgba(255,255,255,0.5)', fontSize:13, marginBottom:16 }}>Fill in your details to apply</p>
@@ -1186,7 +1186,7 @@ function WelcomeTips({ go, user }) {
 function AboutUs({ go, user }) {
   return (
     <div style={{ ...s.content, background:'transparent' }}>
-      <TopBar title="About VilleCabs" onBack={() => go('customer-dash')} go={go} user={user}/>
+      <TopBar title="About VilleCabs" go={go} user={user}/>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:40 }}>
         <div style={{ textAlign:'center', marginBottom:24 }}>
           <img src="/villecabs-logo.png" alt="VilleCabs" style={{ width:80, height:80, borderRadius:'50%', objectFit:'cover', border:'2px solid rgba(232,180,0,0.4)', marginBottom:12 }}/>
@@ -1342,7 +1342,7 @@ function HelpScreen({ go, user }) {
 
   return (
     <div style={{ ...s.content, background:'transparent' }}>
-      <TopBar title="Help & Info" onBack={() => go('customer-dash')} go={go} user={user}/>
+      <TopBar title="Help & Info" go={go} user={user}/>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto' }}>
         {[
           { icon:'📋', title:'Terms & Agreements', desc:'View VilleCabs terms of service and privacy policy', action:() => setSection('terms') },
@@ -2095,7 +2095,7 @@ function CustomerSettings({ go, user, setUser }) {
 
   return (
     <div style={{ ...s.content, background:'transparent' }}>
-      <TopBar title="Settings" onBack={() => go('customer-dash')} go={go} user={user}/>
+      <TopBar title="Settings" go={go} user={user}/>
       <div style={{ padding:20, maxWidth:420, margin:'0 auto' }}>
 
         {/* Change Password */}
@@ -3815,7 +3815,7 @@ function DriverWelcomeTips({ go, user }) {
 function DriverAboutUs({ go, user }) {
   return (
     <div style={{ ...s.content, background:'transparent' }}>
-      <TopBar title="About VilleCabs" onBack={() => go('driver-dash')} go={go} user={user}/>
+      <TopBar title="About VilleCabs" go={go} user={user}/>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:40 }}>
         <div style={{ textAlign:'center', marginBottom:24 }}>
           <img src="/villecabs-logo.png" alt="VilleCabs" style={{ width:80, height:80, borderRadius:'50%', objectFit:'cover', border:'2px solid rgba(232,180,0,0.4)', marginBottom:12 }}/>
@@ -3875,7 +3875,7 @@ function DriverContactUs({ go, user }) {
 
   return (
     <div style={{ ...s.content, background:'transparent' }}>
-      <TopBar title="Contact Us" onBack={() => go('driver-dash')} go={go} user={user}/>
+      <TopBar title="Contact Us" go={go} user={user}/>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:40 }}>
         <div style={{ background:'rgba(232,180,0,0.08)', border:'0.5px solid rgba(232,180,0,0.2)', borderRadius:12, padding:14, marginBottom:20, display:'flex', alignItems:'center', gap:12 }}>
           <span style={{ fontSize:28 }}>💬</span>
@@ -3904,7 +3904,7 @@ function DriverHelp({ go, user }) {
   if (section === 'tips')  return <DriverWelcomeTips go={() => setSection(null)} user={user}/>;
   return (
     <div style={{ ...s.content, background:'transparent' }}>
-      <TopBar title="Help & Info" onBack={() => go('driver-dash')} go={go} user={user}/>
+      <TopBar title="Help & Info" go={go} user={user}/>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto' }}>
         {[
           { icon:'📋', title:'Driver Agreement', desc:'View VilleCabs driver terms and service fee details', action:() => setSection('terms') },
@@ -4973,7 +4973,7 @@ function DriverSettings({ go, user, setUser }) {
 
   return (
     <div style={{ ...s.content, background:'transparent' }}>
-      <TopBar title="Settings" onBack={() => go('driver-dash')} go={go} user={user}/>
+      <TopBar title="Settings" go={go} user={user}/>
       <div style={{ padding:20, maxWidth:420, margin:'0 auto' }}>
 
         {/* Change Password */}
@@ -5388,7 +5388,7 @@ function SafetyCentre({ go }) {
 function BusinessPage({ go, user }) {
   return (
     <div style={{ ...s.content, background:'#f5f6fa' }}>
-      <TopBar title="Business" onBack={() => go(user?'customer-dash':'splash')} go={go} user={user}/>
+      <TopBar title="Business" go={go} user={user}/>
       <div style={{ padding:'40px 24px', textAlign:'center', maxWidth:480, margin:'0 auto' }}>
         <div style={{ fontSize:48, marginBottom:16 }}>🤝</div>
         <h2 style={{ fontSize:22, fontWeight:700, color:'#1a1a2e', marginBottom:8 }}>VilleCabs Business</h2>
@@ -5420,7 +5420,7 @@ function FeaturedPage({ go, user }) {
   ];
   return (
     <div style={{ ...s.content, background:'#f5f6fa' }}>
-      <TopBar title="Featured" onBack={() => go(user?'customer-dash':'splash')} go={go} user={user}/>
+      <TopBar title="Featured" go={go} user={user}/>
       <div style={{ padding:20 }}>
         <p style={{ fontSize:13, color:'#666888', marginBottom:16 }}>Local businesses connected with VilleCabs in Mandeville & Manchester.</p>
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
