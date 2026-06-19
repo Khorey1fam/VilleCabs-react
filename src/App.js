@@ -4016,7 +4016,8 @@ function DriverHelp({ go, user }) {
   );
 }
 
-// ── DRIVER DASHBOARD ──────────────────────────────────────────────────────────function DriverDash({ go, user, setUser, setBookingId }) {
+// ── DRIVER DASHBOARD ──────────────────────────────────────────────────────────
+function DriverDash({ go, user, setUser, setBookingId }) {
   const [rides,       setRides]       = useState([]);
   const [driverTab,   setDriverTab]   = useState('home');
   const [menuOpen,    setMenuOpen]    = useState(false);
