@@ -5844,6 +5844,266 @@ function AdminDash({ go, user }) {
 
 
 
+// ── PARTNER WITH VILLECABS PAGE ───────────────────────────────────────────────
+function PartnerWithUs({ go, user }) {
+  const [form, setForm] = useState({ bizName:'', bizType:'', contact:'', phone:'', email:'', address:'', website:'', message:'' });
+  const [sent, setSent] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const set = (k,v) => setForm(p => ({...p,[k]:v}));
+  const submit = async () => {
+    if (!form.bizName||!form.email||!form.phone) { setError('Please fill in all required fields.'); return; }
+    setSaving(true); setError('');
+    try {
+      await addDoc(collection(db,'partnerRequests'), {...form, status:'new', createdAt:serverTimestamp()});
+      setSent(true);
+    } catch(e) { setError('Failed to submit. Please try again.'); }
+    setSaving(false);
+  };
+  return (
+    <div style={{ background:'#ffffff', minHeight:'100vh' }}>
+      <div style={{ background:'#ffffff', padding:'10px 16px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', position:'sticky', top:0, zIndex:10 }}>
+        <button onClick={() => go(user?'customer-dash':'splash')} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#1a1a2e' }}>←</button>
+        <img src="/logo.png" style={{ height:28, objectFit:'contain' }} alt="VilleCabs"/>
+        <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:6 }}>Partner With VilleCabs</span>
+      </div>
+      <div style={{ background:'linear-gradient(135deg,#6b21a8,#4c1d95)', padding:'32px 20px', textAlign:'center' }}>
+        <h1 style={{ fontSize:24, fontWeight:800, color:'#fff', margin:'0 0 8px' }}>Partner With VilleCabs</h1>
+        <p style={{ fontSize:13, color:'rgba(255,255,255,0.8)', margin:'0 0 20px' }}>Grow your business. We will drive the customers.</p>
+        <div style={{ display:'flex', gap:10, justifyContent:'center', flexWrap:'wrap' }}>
+          <button onClick={() => document.getElementById('pform')?.scrollIntoView({behavior:'smooth'})} style={{ padding:'11px 20px', background:'#fff', color:'#6b21a8', border:'none', borderRadius:22, fontSize:13, fontWeight:700, cursor:'pointer' }}>Become a Partner</button>
+          <button onClick={() => go('contact-us')} style={{ padding:'11px 20px', background:'transparent', color:'#fff', border:'2px solid rgba(255,255,255,0.4)', borderRadius:22, fontSize:13, fontWeight:600, cursor:'pointer' }}>Contact Us</button>
+        </div>
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, padding:'20px 16px' }}>
+        {['🏨 Hotels','🍽️ Restaurants','🏡 Guest Houses','🎭 Attractions','🏢 Businesses','🎉 Clubs','🛒 Supermarkets','🎫 Events'].map((c,i) => (
+          <div key={i} style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:12, padding:'12px', textAlign:'center', fontSize:13, fontWeight:600, color:'#1a1a2e' }}>{c}</div>
+        ))}
+      </div>
+      <div id="pform" style={{ padding:'16px 16px 40px' }}>
+        <h2 style={{ fontSize:18, fontWeight:700, color:'#1a1a2e', margin:'0 0 14px' }}>Submit Partner Request</h2>
+        {sent ? (
+          <div style={{ textAlign:'center', padding:24 }}>
+            <div style={{ fontSize:40, marginBottom:12 }}>🎉</div>
+            <div style={{ fontSize:16, fontWeight:700, color:'#1a1a2e', marginBottom:6 }}>Request Received!</div>
+            <div style={{ fontSize:13, color:'#555' }}>Thank you. VilleCabs will contact you about partnership opportunities.</div>
+          </div>
+        ) : (
+          <div>
+            {error && <div style={{ background:'#fff0f0', border:'1px solid #fca5a5', borderRadius:10, padding:'10px 14px', fontSize:13, color:'#dc2626', marginBottom:12 }}>{error}</div>}
+            {[['Business Name *','bizName','e.g. Golf View Hotel'],['Business Type *','bizType','e.g. Hotel, Restaurant'],['Contact Person','contact','Full name'],['Phone *','phone','876-XXX-XXXX'],['Email *','email','your@email.com'],['Address','address','Mandeville, Manchester'],['Website','website','Optional']].map(([l,k,p]) => (
+              <div key={k}>
+                <label style={{ fontSize:12, fontWeight:600, color:'#555', display:'block', marginBottom:4 }}>{l}</label>
+                <input value={form[k]||''} onChange={e=>set(k,e.target.value)} placeholder={p} style={{ width:'100%', padding:'11px 13px', border:'1.5px solid #e2e4ed', borderRadius:10, fontSize:14, marginBottom:12, boxSizing:'border-box', outline:'none', color:'#1a1a2e' }}/>
+              </div>
+            ))}
+            <label style={{ fontSize:12, fontWeight:600, color:'#555', display:'block', marginBottom:4 }}>Message</label>
+            <textarea value={form.message} onChange={e=>set('message',e.target.value)} rows={3} placeholder="Tell us about your business..." style={{ width:'100%', padding:'11px 13px', border:'1.5px solid #e2e4ed', borderRadius:10, fontSize:14, marginBottom:14, boxSizing:'border-box', outline:'none', resize:'vertical', color:'#1a1a2e' }}/>
+            <button onClick={submit} disabled={saving} style={{ width:'100%', padding:'13px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:12, fontSize:14, fontWeight:700, cursor:'pointer', opacity:saving?0.7:1 }}>{saving?'Submitting...':'Submit Partner Request'}</button>
+            <p style={{ textAlign:'center', fontSize:12, color:'#888', marginTop:12 }}>📧 admin@villecabs.com · 📞 876-280-4292</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── DRIVER EARNINGS PAGE ──────────────────────────────────────────────────────
+function DriverEarnings({ go, user }) {
+  const [rides, setRides] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [period, setPeriod] = useState('week');
+  const [detail, setDetail] = useState(null);
+  useEffect(() => {
+    if (!user?.uid) return;
+    getDocs(query(collection(db,'bookings'), where('driverId','==',user.uid), where('status','==','completed')))
+      .then(snap => { setRides(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0))); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [user]);
+  const now=new Date(), todayStart=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  const weekStart=new Date(todayStart.getTime()-6*86400000), monthStart=new Date(now.getFullYear(),now.getMonth(),1);
+  const filtered=rides.filter(r=>{const d=new Date((r.createdAt?.seconds||0)*1000);return period==='today'?d>=todayStart:period==='week'?d>=weekStart:d>=monthStart;});
+  const totalFare=filtered.reduce((s,r)=>s+(r.fare||0),0);
+  const driverNet=Math.round(totalFare*0.85), vcFee=Math.round(totalFare*0.15), avgFare=filtered.length?Math.round(totalFare/filtered.length):0;
+  if (detail) {
+    const fare=detail.fare||0;
+    return (
+      <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
+        <div style={{ background:'#fff', padding:'10px 16px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', position:'sticky', top:0, zIndex:10 }}>
+          <button onClick={() => setDetail(null)} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#1a1a2e' }}>←</button>
+          <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>Ride Details</span>
+        </div>
+        <div style={{ padding:16 }}>
+          <div style={{ background:'#fff', borderRadius:16, padding:18, boxShadow:'0 2px 10px rgba(0,0,0,0.07)', marginBottom:12 }}>
+            {[['Total Fare',`J$${fare.toLocaleString()}`,'#1a1a2e'],['VilleCabs Fee (15%)',`-J$${Math.round(fare*0.15).toLocaleString()}`,'#dc2626'],['You Earned (85%)',`J$${Math.round(fare*0.85).toLocaleString()}`,'#6b21a8']].map(([l,v,c],i)=>(
+              <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'10px 0', borderBottom:i<2?'1px solid #f0f0f0':'none' }}>
+                <span style={{ fontSize:13, color:'#555' }}>{l}</span><span style={{ fontSize:14, fontWeight:700, color:c }}>{v}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ background:'#fff', borderRadius:16, padding:18, boxShadow:'0 2px 10px rgba(0,0,0,0.07)' }}>
+            {[['Passenger',detail.customerName||'—'],['Pickup',(detail.pickup?.address||'—')],['Drop-off',(detail.dropoff?.address||'—')],['Distance',detail.distanceKm?detail.distanceKm+' km':'—'],['Payment',detail.paymentMethod||'Cash'],['Date',new Date((detail.createdAt?.seconds||0)*1000).toLocaleString()]].map(([l,v],i)=>(
+              <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'9px 0', borderBottom:i<5?'1px solid #f5f5f5':'none', gap:12 }}>
+                <span style={{ fontSize:12, color:'#888', flexShrink:0 }}>{l}</span><span style={{ fontSize:12, fontWeight:600, color:'#1a1a2e', textAlign:'right' }}>{v}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
+      <div style={{ background:'#fff', padding:'10px 16px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', position:'sticky', top:0, zIndex:10 }}>
+        <button onClick={() => go('driver-dash')} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#1a1a2e' }}>←</button>
+        <img src="/logo.png" style={{ height:26, objectFit:'contain' }} alt="VilleCabs"/>
+        <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:4 }}>Earnings</span>
+      </div>
+      <div style={{ display:'flex', gap:8, padding:'12px 16px', background:'#fff', borderBottom:'1px solid #f0f0f0' }}>
+        {[['today','Today'],['week','This Week'],['month','This Month']].map(([k,l])=>(
+          <button key={k} onClick={()=>setPeriod(k)} style={{ flex:1, padding:'8px', borderRadius:20, border:'none', background:period===k?'#6b21a8':'#f3f4f6', color:period===k?'#fff':'#555', fontSize:12, fontWeight:600, cursor:'pointer' }}>{l}</button>
+        ))}
+      </div>
+      <div style={{ padding:'14px 14px 0' }}>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+          <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:14, padding:'14px' }}>
+            <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', marginBottom:4 }}>You Earned</div>
+            <div style={{ fontSize:24, fontWeight:800, color:'#6b21a8' }}>J${driverNet.toLocaleString()}</div>
+            <div style={{ fontSize:11, color:'#888', marginTop:2 }}>{filtered.length} trips · Avg J${avgFare.toLocaleString()}</div>
+          </div>
+          <div style={{ background:'#fff', border:'1px solid #e5e7eb', borderRadius:14, padding:'14px' }}>
+            <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', marginBottom:4 }}>Total Fares</div>
+            <div style={{ fontSize:24, fontWeight:800, color:'#1a1a2e' }}>J${totalFare.toLocaleString()}</div>
+            <div style={{ fontSize:11, color:'#dc2626', marginTop:2 }}>Fee: J${vcFee.toLocaleString()}</div>
+          </div>
+        </div>
+        <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:10, padding:'10px 14px', fontSize:12, color:'#6b21a8', marginBottom:14 }}>Drivers keep <strong>85%</strong> of every completed fare.</div>
+      </div>
+      <div style={{ padding:'0 14px 90px' }}>
+        {loading&&<div style={{ textAlign:'center', color:'#888', padding:24 }}>Loading...</div>}
+        {!loading&&filtered.length===0&&<div style={{ textAlign:'center', color:'#888', padding:24 }}>No rides in this period</div>}
+        {filtered.map((r,i)=>{
+          const d=new Date((r.createdAt?.seconds||0)*1000), net=Math.round((r.fare||0)*0.85);
+          return (<div key={i} onClick={()=>setDetail(r)} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)', cursor:'pointer' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
+              <div><div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>👤 {r.customerName||'Passenger'}</div><div style={{ fontSize:11, color:'#888', marginTop:2 }}>{d.toLocaleDateString()}</div></div>
+              <div style={{ textAlign:'right' }}><div style={{ fontSize:16, fontWeight:800, color:'#6b21a8' }}>J${net.toLocaleString()}</div><div style={{ fontSize:10, color:'#aaa' }}>of J${(r.fare||0).toLocaleString()}</div></div>
+            </div>
+            <div style={{ fontSize:11, color:'#555' }}>📍 {(r.pickup?.address||'').split(',')[0]}</div>
+          </div>);
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── DRIVER DOCUMENTS PAGE ─────────────────────────────────────────────────────
+function DriverDocuments({ go, user }) {
+  const [docs, setDocs] = useState({});
+  const [saving, setSaving] = useState('');
+  const [msg, setMsg] = useState('');
+  useEffect(() => {
+    if (!user?.uid) return;
+    getDoc(doc(db,'drivers',user.uid)).then(snap => { if (snap.exists()) setDocs(snap.data().documents||{}); });
+  }, [user]);
+  const docTypes = [
+    {key:'licence',label:"Driver's Licence",icon:'🪪',required:true},
+    {key:'fitness',label:'Vehicle Fitness',icon:'📋',required:true},
+    {key:'registration',label:'Vehicle Registration',icon:'📄',required:true},
+    {key:'insurance',label:'Insurance Certificate',icon:'🛡️',required:false},
+    {key:'vehiclePhoto',label:'Vehicle Photo',icon:'🚗',required:false},
+  ];
+  const handleUpload = async (key, file) => {
+    if (!file||!user?.uid) return;
+    setSaving(key);
+    try {
+      const docData={status:'pending',name:file.name,uploadedAt:new Date().toISOString()};
+      await updateDoc(doc(db,'drivers',user.uid), {['documents.'+key]:docData});
+      setDocs(prev=>({...prev,[key]:docData}));
+      setMsg('Document uploaded — pending review');
+      setTimeout(()=>setMsg(''),3000);
+    } catch(e) { console.error(e); }
+    setSaving('');
+  };
+  const cfg={approved:{label:'✅ Approved',color:'#1a9e5a'},pending:{label:'⏳ Pending Review',color:'#b45309'},rejected:{label:'❌ Needs Update',color:'#dc2626'},missing:{label:'📤 Not Uploaded',color:'#6b7280'}};
+  return (
+    <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
+      <div style={{ background:'#fff', padding:'10px 16px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', position:'sticky', top:0, zIndex:10 }}>
+        <button onClick={()=>go('driver-dash')} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#1a1a2e' }}>←</button>
+        <img src="/logo.png" style={{ height:26, objectFit:'contain' }} alt="VilleCabs"/>
+        <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:4 }}>My Documents</span>
+      </div>
+      <div style={{ padding:'14px 14px 90px' }}>
+        {msg&&<div style={{ background:'#f0fff4', border:'1px solid #86efac', borderRadius:10, padding:'10px 14px', fontSize:13, color:'#1a9e5a', marginBottom:12 }}>{msg}</div>}
+        <div style={{ background:'#fefce8', border:'1px solid #fde047', borderRadius:12, padding:'10px 14px', fontSize:12, color:'#854d0e', marginBottom:12 }}>VilleCabs reviews all documents to keep riders safe.</div>
+        {docTypes.map(({key,label,icon,required})=>{
+          const d=docs[key], status=d?.status||'missing', c=cfg[status]||cfg.missing;
+          return (<div key={key} style={{ background:'#fff', borderRadius:14, padding:16, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+              <span style={{ fontSize:26 }}>{icon}</span>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>{label}{required&&<span style={{ fontSize:9, background:'#fee2e2', color:'#dc2626', padding:'1px 6px', borderRadius:6, marginLeft:6 }}>Required</span>}</div>
+                <div style={{ fontSize:11, color:c.color, fontWeight:600, marginTop:2 }}>{c.label}</div>
+              </div>
+            </div>
+            <label style={{ display:'block', padding:'9px', background:status==='approved'?'#f9f5ff':'#6b21a8', color:status==='approved'?'#6b21a8':'#fff', borderRadius:10, fontSize:12, fontWeight:600, cursor:saving===key?'default':'pointer', textAlign:'center', opacity:saving===key?0.7:1 }}>
+              {saving===key?'Uploading...':status==='approved'?'Replace Document':'Upload Document'}
+              <input type="file" accept="image/*,.pdf" style={{ display:'none' }} onChange={e=>handleUpload(key,e.target.files[0])} disabled={saving===key}/>
+            </label>
+          </div>);
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── DRIVER NOTIFICATIONS PAGE ─────────────────────────────────────────────────
+function DriverNotifications({ go, user }) {
+  const [notifs, setNotifs] = useState([
+    {id:'1',type:'account',title:'Welcome to VilleCabs!',message:'Complete your profile and documents to start receiving ride requests.',time:'Today',read:false},
+    {id:'2',type:'account',title:'Application Received',message:'Your VilleCabs driver application is being reviewed by our team.',time:'Today',read:false},
+  ]);
+  const [filter, setFilter] = useState('all');
+  const icons={ride:'🚕',account:'👤',safety:'🛡️',payment:'💰',system:'⚙️'};
+  const colors={ride:'#6b21a8',account:'#1a9e5a',safety:'#dc2626',payment:'#b45309',system:'#374151'};
+  const filtered=filter==='all'?notifs:filter==='unread'?notifs.filter(n=>!n.read):notifs.filter(n=>n.type===filter);
+  const unread=notifs.filter(n=>!n.read).length;
+  return (
+    <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
+      <div style={{ background:'#fff', padding:'10px 16px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', position:'sticky', top:0, zIndex:10 }}>
+        <button onClick={()=>go('driver-dash')} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#1a1a2e' }}>←</button>
+        <img src="/logo.png" style={{ height:26, objectFit:'contain' }} alt="VilleCabs"/>
+        <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:4 }}>Notifications</span>
+        {unread>0&&<div style={{ background:'#6b21a8', color:'#fff', borderRadius:10, fontSize:10, fontWeight:700, padding:'2px 7px' }}>{unread}</div>}
+        <button onClick={()=>setNotifs(p=>p.map(n=>({...n,read:true})))} style={{ marginLeft:'auto', background:'none', border:'none', fontSize:11, color:'#6b21a8', cursor:'pointer', fontWeight:600 }}>Mark all read</button>
+      </div>
+      <div style={{ display:'flex', gap:6, padding:'10px 14px', background:'#fff', borderBottom:'1px solid #f0f0f0', overflowX:'auto' }}>
+        {[['all','All'],['unread','Unread'],['ride','Rides'],['account','Account'],['safety','Safety']].map(([k,l])=>(
+          <button key={k} onClick={()=>setFilter(k)} style={{ flexShrink:0, padding:'5px 12px', borderRadius:20, border:'none', background:filter===k?'#6b21a8':'#f3f4f6', color:filter===k?'#fff':'#555', fontSize:11, fontWeight:600, cursor:'pointer' }}>{l}</button>
+        ))}
+      </div>
+      <div style={{ padding:'12px 14px 90px' }}>
+        {filtered.length===0&&<div style={{ textAlign:'center', padding:40 }}><div style={{ fontSize:40, marginBottom:12 }}>🔔</div><div style={{ fontSize:14, color:'#888' }}>No notifications</div></div>}
+        {filtered.map((n,i)=>(
+          <div key={i} onClick={()=>setNotifs(p=>p.map(x=>x.id===n.id?{...x,read:true}:x))}
+            style={{ background:n.read?'#fff':'#f9f5ff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)', borderLeft:n.read?'3px solid transparent':`3px solid ${colors[n.type]||'#6b21a8'}`, cursor:'pointer' }}>
+            <div style={{ display:'flex', gap:12 }}>
+              <div style={{ width:36, height:36, borderRadius:10, background:`${colors[n.type]||'#6b21a8'}18`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>{icons[n.type]||'🔔'}</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:3 }}>{n.title}</div>
+                <div style={{ fontSize:12, color:'#555', lineHeight:1.5 }}>{n.message}</div>
+                <div style={{ fontSize:10, color:'#aaa', marginTop:4 }}>{n.time}</div>
+              </div>
+              {!n.read&&<div style={{ width:8, height:8, borderRadius:'50%', background:'#6b21a8', flexShrink:0, marginTop:4 }}/>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
 function LoadingScreen() {
   return (
     <div style={{ minHeight:'100vh', background:'#ffffff', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16 }}>
