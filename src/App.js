@@ -66,8 +66,8 @@ const MAP_STYLE = [
 ];
 
 const s = {
-  screen:    { minHeight:'100vh', fontFamily:"'Segoe UI', sans-serif", background:'#f5f6fa', color:'#1a1a2e', position:'relative' },
-  mapBg:     { position:'fixed', inset:0, zIndex:0, background:DARK },
+  screen:    { minHeight:'100vh', fontFamily:"'Segoe UI', sans-serif", background:'#ffffff', color:'#1a1a2e', position:'relative', zIndex:1 },
+  mapBg:     { display:'none' },
   overlay:   { position:'fixed', inset:0, zIndex:1, background:'rgba(15,25,50,0.72)', backdropFilter:'blur(4px)' },
   content:   { position:'relative', zIndex:2, minHeight:'100vh', background:'#f5f6fa' },
   center:    { display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'100vh', padding:'0 24px', background:'#f5f6fa' },
@@ -117,50 +117,15 @@ function GlobalStyles() {
     document.body.style.height = '100%';
     document.body.style.overscrollBehavior = 'none';
     const style = document.createElement('style');
-    style.innerHTML = `
-      * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-      html, body { margin:0; padding:0; overflow-x:hidden; font-size:16px; background:#f5f6fa; }
-      button:hover:not(:disabled) { filter:brightness(1.15); transform:translateY(-1px); transition:all 0.15s ease; }
-      button:active:not(:disabled) { transform:translateY(0) scale(0.98); filter:brightness(0.95); }
-      button { transition:all 0.15s ease; -webkit-appearance:none; }
-      a:hover { opacity:0.8; transition:opacity 0.15s; }
-      input, textarea, select { font-size:16px !important; } /* Prevent iOS zoom on focus */
-      input:focus, textarea:focus, select:focus { border-color:rgba(232,180,0,0.6)!important; box-shadow:0 0 0 2px rgba(232,180,0,0.15); transition:all 0.2s; }
-      ::-webkit-scrollbar { width:4px; }
-      ::-webkit-scrollbar-track { background:rgba(255,255,255,0.03); }
-      ::-webkit-scrollbar-thumb { background:rgba(232,180,0,0.3); border-radius:4px; }
-      ::-webkit-scrollbar-thumb:hover { background:rgba(232,180,0,0.5); }
-      /* Responsive font sizes */
-      @media (max-width: 380px) { html { font-size:14px; } }
-      @media (min-width: 768px) { html { font-size:17px; } }
-      /* Full screen map overlay */
-      .map-fullscreen { position:fixed !important; top:0; left:0; right:0; bottom:0; z-index:200; }
-      .map-fullscreen > div { height:100% !important; }
-    `;
+    style.innerHTML = '* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; } html, body { margin:0; padding:0; overflow-x:hidden; font-size:16px; background:#f5f6fa; } button { transition:all 0.15s ease; -webkit-appearance:none; } input, textarea, select { font-size:16px !important; } ::-webkit-scrollbar { width:4px; } ::-webkit-scrollbar-thumb { background:rgba(107,33,168,0.3); border-radius:4px; }';
     document.head.appendChild(style);
     return () => { if (style.parentNode) style.parentNode.removeChild(style); };
   }, []);
   return null;
 }
 
-function MapBg() {
-  return (
-    <>
-      <div style={{
-        position:'fixed', inset:0, zIndex:0,
-        backgroundImage:"url('/bg.jpg')",
-        backgroundSize:'cover',
-        backgroundPosition:'center',
-        backgroundRepeat:'no-repeat',
-        filter:'blur(6px)',
-        transform:'scale(1.05)', // prevent blur edge white borders
-      }}/>
-      <div style={{ position:'fixed', inset:0, zIndex:1, background:'rgba(10,15,30,0.72)' }}/>
-    </>
-  );
-}
+function MapBg() { return null; }
 
-// ── Google Map component ──────────────────────────────────────────────────────
 function VilleMap({ height = 260, center = MANCHESTER_CENTER, zoom = 14, onClick, markers = [], directions = null, children, expandable = false }) {
   const [expanded, setExpanded] = useState(false);
   const { isLoaded } = useJsApiLoader({
@@ -5819,6 +5784,27 @@ export default function App() {
     });
     return () => unsub();
   }, []);
+
+  // ── 10-minute idle logout ─────────────────────────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+    let idleTimer;
+    const resetTimer = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(async () => {
+        try { await signOut(auth); } catch(e) {}
+        setUser(null);
+        setScreen('splash');
+      }, 10 * 60 * 1000); // 10 minutes
+    };
+    const events = ['mousedown','mousemove','keydown','scroll','touchstart','click'];
+    events.forEach(e => window.addEventListener(e, resetTimer, { passive:true }));
+    resetTimer();
+    return () => {
+      clearTimeout(idleTimer);
+      events.forEach(e => window.removeEventListener(e, resetTimer));
+    };
+  }, [user]);
 
   if (loading) return <LoadingScreen/>;
 
