@@ -5980,7 +5980,7 @@ export default function App() {
         // Skip if user already manually logged in
         if (_manualNavDone) { setLoading(false); return; }
         // Safety timeout - never stay stuck on loading screen
-        const safetyTimer = setTimeout(() => { setLoading(false); setScreen('splash'); }, 8000);
+        const safetyTimer = setTimeout(() => { setLoading(false); setScreen('splash'); }, 3000);
         try {
           const [cSnap, dSnap] = await Promise.all([
             getDoc(doc(db,'customers',fu.uid)),
@@ -6025,8 +6025,8 @@ export default function App() {
               } catch(e) { setScreen('customer-dash'); }
             }
           }
-        } catch(e) { console.error('Auth restore error:', e); }
-        finally { clearTimeout(safetyTimer); }
+        } catch(e) { console.error('Auth restore error:', e); setScreen('splash'); }
+        finally { clearTimeout(safetyTimer); setLoading(false); }
       } else {
         setTimeout(() => setLoading(false), 800);
         return;
