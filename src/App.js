@@ -96,6 +96,24 @@ function GlobalStyles() {
     if (!meta) { meta = document.createElement('meta'); meta.name='viewport'; document.head.appendChild(meta); }
     meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
     document.documentElement.style.height = '100%';
+    // Inject all keyframe animations
+    const styleId = 'villecabs-keyframes';
+    if (!document.getElementById(styleId)) {
+      const el = document.createElement('style');
+      el.id = styleId;
+      el.textContent = `
+        @keyframes fadeSlideIn { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes gentleBounce { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-8px); } }
+        @keyframes floatUp { 0%,100% { transform:translateY(0) rotate(0deg); } 50% { transform:translateY(-20px) rotate(5deg); } }
+        @keyframes driveAcross { 0% { transform:translateX(0); } 100% { transform:translateX(110vw); } }
+        @keyframes autoScroll { 0% { transform:translateX(0); } 100% { transform:translateX(-50%); } }
+        @keyframes slideInLeft { from { transform:translateX(-100%); opacity:0; } to { transform:translateX(0); opacity:1; } }
+        @keyframes pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.6; transform:scale(1.3); } }
+        @keyframes spin { to { transform:rotate(360deg); } }
+      `;
+      document.head.appendChild(el);
+    }
     document.body.style.height = '100%';
     document.body.style.overscrollBehavior = 'none';
     const style = document.createElement('style');
@@ -649,14 +667,6 @@ function Splash({ go }) {
       </div>
 
       <Footer go={go}/>
-
-      <style>{`
-        @keyframes fadeSlideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes gentleBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
-        @keyframes floatUp { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-20px) rotate(5deg); } }
-        @keyframes driveAcross { 0% { transform: translateX(0); } 100% { transform: translateX(110vw); } }
-        @keyframes autoScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
-      `}</style>
     </div>
   );
 }
@@ -1474,10 +1484,6 @@ function DashHeroSlider({ go }) {
           <button key={i} onClick={() => setSlide(i)} style={{ width: i===slide?20:5, height:5, borderRadius:3, border:'none', background: i===slide?'#ffffff':'rgba(255,255,255,0.3)', cursor:'pointer', transition:'all 0.3s', padding:0 }}/>
         ))}
       </div>
-      <style>{`
-        @keyframes driveAcross { 0% { transform: translateX(0); } 100% { transform: translateX(110vw); } }
-        @keyframes fadeSlideIn { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
-      `}</style>
     </div>
   );
 }
@@ -1578,7 +1584,6 @@ function DashPartnersSlider() {
           ))}
         </div>
       </div>
-      <style>{`@keyframes autoScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }`}</style>
     </div>
   );
 }
@@ -1823,8 +1828,6 @@ function CustomerDash({ go, user, setUser }) {
           </div>
         </div>
       )}
-
-      <style>{`@keyframes slideInLeft { from { transform:translateX(-100%); opacity:0; } to { transform:translateX(0); opacity:1; } }`}</style>
 
       {/* BOOK TAB */}
       {/* BOOK TAB */}
@@ -3256,10 +3259,6 @@ function SearchingAnimation({ onCancel }) {
       <div key={msgIdx} style={{ fontSize:13, color:'#888aaa', marginBottom:6, animation:'fadeSlideIn 0.4s ease' }}>{msgs[msgIdx]}</div>
       <div style={{ fontSize:12, color:'#aaa', marginBottom:24 }}>Searching nearby VilleCabs drivers in Mandeville</div>
       <button onClick={onCancel} style={{ padding:'10px 24px', background:'#fff0f0', border:'1px solid #ffcccc', borderRadius:20, color:'#cc2222', fontSize:13, cursor:'pointer', fontWeight:500 }}>Cancel Ride</button>
-      <style>{`
-        @keyframes pulse { 0%, 100% { transform: scale(1); opacity:0.6; } 50% { transform: scale(1.15); opacity:1; } }
-        @keyframes fadeSlideIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
-      `}</style>
     </div>
   );
 }
@@ -4035,7 +4034,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
         const d = snap.data();
         setIsOnline(d.isOnline || false);
       }
-    });
+    }).catch(e => console.error('Driver load error:', e));
     getDocs(query(collection(db,'bookings'), where('driverId','==',user.uid), where('status','==','completed')))
       .then(snap => {
         const history = snap.docs.map(d => ({ id:d.id, ...d.data() }))
@@ -4063,29 +4062,34 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   useEffect(() => {
     if (!user?.uid) return;
     const q = query(collection(db,'bookings'),
-      where('status','==','searching'),
-      where('declinedBy','not-in',[[user.uid]])
+      where('status','==','searching')
     );
     const unsub = onSnapshot(q, snap => {
+      try {
       const open = snap.docs
         .map(d => ({ id:d.id, ...d.data() }))
-        .filter(r => !r.driverId)
+        .filter(r => !r.driverId && !(r.declinedBy||[]).includes(user.uid))
         .sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
-      // Bell sound on new request
+      // Bell sound on new request (silent fail)
       if (open.length > prevCountRef.current && prevCountRef.current >= 0) {
         try {
-          const ctx = new (window.AudioContext || window.webkitAudioContext)();
-          const osc = ctx.createOscillator(); const gain = ctx.createGain();
-          osc.connect(gain); gain.connect(ctx.destination);
-          osc.frequency.value = 880; osc.type = 'sine';
-          gain.gain.setValueAtTime(0.3, ctx.currentTime);
-          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
-          osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.8);
-        } catch(e) {}
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (AC) {
+            const ctx = new AC();
+            const osc = ctx.createOscillator(); const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.frequency.value = 880; osc.type = 'sine';
+            gain.gain.setValueAtTime(0.3, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
+            osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.8);
+            setTimeout(() => ctx.close(), 1000);
+          }
+        } catch(e) { /* audio not available */ }
       }
       prevCountRef.current = open.length;
       setPendingRides(open);
-    });
+      } catch(e) { console.error('Snapshot error:', e); }
+    }, e => console.error('onSnapshot error:', e));
     return () => unsub();
   }, [user]);
 
