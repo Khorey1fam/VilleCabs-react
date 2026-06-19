@@ -4016,7 +4016,45 @@ function DriverHelp({ go, user }) {
   );
 }
 
-// ── DRIVER DASHBOARD ──────────────────────────────────────────────────────────
+// ── DRIVER DASHBOARD ──────────────────────────────────────────────────────────driverTab === 'rides' && (
+        <div style={{ flex:1, overflowY:'auto', paddingBottom:90, background:'#f5f6fa' }}>
+          <div style={{ padding:'14px 14px 10px' }}>
+            <div style={{ fontSize:14, fontWeight:800, color:'#1a1a2e', marginBottom:12 }}>Ride History</div>
+            {rides.length === 0 && (
+              <div style={{ textAlign:'center', padding:40 }}>
+                <div style={{ fontSize:40, marginBottom:12 }}>🚕</div>
+                <div style={{ fontSize:14, color:'#888' }}>No completed rides yet</div>
+                <div style={{ fontSize:12, color:'#aaa', marginTop:4 }}>Go online to start receiving ride requests</div>
+              </div>
+            )}
+            {rides.filter(r=>r.status==='completed').sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0)).map((r,i) => {
+              const d   = new Date((r.createdAt?.seconds||0)*1000);
+              const net = Math.round((r.fare||0)*0.85);
+              return (
+                <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
+                    <div>
+                      <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>👤 {r.customerName||'Passenger'}</div>
+                      <div style={{ fontSize:11, color:'#888', marginTop:1 }}>{d.toLocaleDateString()} · {d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div>
+                    </div>
+                    <div style={{ textAlign:'right' }}>
+                      <div style={{ fontSize:16, fontWeight:800, color:'#6b21a8' }}>J${net.toLocaleString()}</div>
+                      <div style={{ fontSize:10, color:'#aaa' }}>Fare: J${(r.fare||0).toLocaleString()}</div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize:11, color:'#555', marginBottom:2 }}>📍 {(r.pickup?.address||'').split(',')[0]}</div>
+                  <div style={{ fontSize:11, color:'#555', marginBottom:8 }}>🏁 {(r.dropoff?.address||'').split(',')[0]}</div>
+                  <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                    {r.distanceKm && <span style={{ fontSize:10, background:'#f3f4f6', color:'#555', padding:'2px 8px', borderRadius:8 }}>📏 {r.distanceKm} km</span>}
+                    <span style={{ fontSize:10, background:'#f0fff4', color:'#1a9e5a', padding:'2px 8px', borderRadius:8 }}>💵 {r.paymentMethod||'Cash'}</span>
+                    <span style={{ fontSize:10, background:'#f9f5ff', color:'#6b21a8', padding:'2px 8px', borderRadius:8 }}>✅ Completed</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 function DriverDash({ go, user, setUser, setBookingId }) {
   const [rides,       setRides]       = useState([]);
   const [driverTab,   setDriverTab]   = useState('home');
@@ -4159,13 +4197,23 @@ function DriverDash({ go, user, setUser, setBookingId }) {
 
   return (
     <div style={{ ...s.content, background:'transparent', minHeight:'100vh' }}>
-      {/* Hamburger top bar */}
-      <div style={{ background:'#0f1a35', padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'none', boxShadow:'0 2px 10px rgba(0,0,0,0.15)' }}>
-        <button onClick={() => setMenuOpen(true)} style={{ background:'none', border:'none', cursor:'pointer', padding:4, display:'flex', flexDirection:'column', gap:5 }}>
-          <div style={{ width:24, height:2.5, background:WHITE, borderRadius:2 }}/>
-          <div style={{ width:18, height:2.5, background:WHITE, borderRadius:2 }}/>
-          <div style={{ width:24, height:2.5, background:WHITE, borderRadius:2 }}/>
+      {/* Top header — white */}
+      <div style={{ background:'#ffffff', padding:'8px 14px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', boxShadow:'0 1px 6px rgba(0,0,0,0.06)', position:'sticky', top:0, zIndex:10 }}>
+        <button onClick={() => setMenuOpen(true)} style={{ background:'none', border:'none', cursor:'pointer', padding:'3px 5px', display:'flex', flexDirection:'column', gap:4, flexShrink:0 }}>
+          <div style={{ width:22, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+          <div style={{ width:16, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+          <div style={{ width:22, height:2, background:'#1a1a2e', borderRadius:1 }}/>
         </button>
+        <img src="/logo.png" alt="VilleCabs" style={{ height:28, objectFit:'contain', flexShrink:0 }}/>
+        <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:8 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:5, padding:'4px 10px', borderRadius:20, background:isOnline?'rgba(26,158,90,0.1)':'rgba(150,150,150,0.1)', border:`1px solid ${isOnline?'rgba(26,158,90,0.4)':'rgba(150,150,150,0.3)'}` }}>
+            <div style={{ width:7, height:7, borderRadius:'50%', background:isOnline?'#1a9e5a':'#999' }}/>
+            <span style={{ fontSize:11, fontWeight:700, color:isOnline?'#1a9e5a':'#888' }}>{isOnline?'Online':'Offline'}</span>
+          </div>
+        </div>
+      </div>
+      {/* Spacer removed — using position sticky now */}
+      <div style={{ display:'none' }}>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           <img src="/logo.png" alt="VilleCabs" onClick={() => setTab('book')} style={{ height:26, width:'auto', objectFit:'contain', cursor:'pointer' }}/>
         </div>
@@ -4222,96 +4270,417 @@ function DriverDash({ go, user, setUser, setBookingId }) {
 
       {/* HOME tab — offline/online dashboard */}
       {driverTab === 'home' && (
-        <div style={{ flex:1, overflowY:'auto', paddingBottom:80 }}>
-          {/* Greeting header */}
-          <div style={{ background:'linear-gradient(135deg, #0f1a35 0%, #1a2744 100%)', padding:'24px 20px 20px' }}>
-            <div style={{ fontSize:13, color:'rgba(255,255,255,0.55)', marginBottom:2 }}>Good day,</div>
-            <div style={{ fontSize:22, fontWeight:800, color:'#ffffff', marginBottom:16 }}>{user?.name?.split(' ')[0] || 'Driver'} 👋</div>
+        <div style={{ flex:1, overflowY:'auto', paddingBottom:90, background:'#f5f6fa' }}>
 
-            {/* Status badge */}
-            <div style={{ display:'inline-flex', alignItems:'center', gap:8, background: isOnline ? 'rgba(26,158,90,0.2)' : 'rgba(255,255,255,0.08)', border:`1px solid ${isOnline?'rgba(26,158,90,0.5)':'rgba(255,255,255,0.15)'}`, borderRadius:20, padding:'6px 14px' }}>
-              <div style={{ width:8, height:8, borderRadius:'50%', background: isOnline ? '#1a9e5a' : '#888', animation: isOnline ? 'pulse 2s ease-in-out infinite' : 'none' }}/>
-              <span style={{ fontSize:12, fontWeight:600, color: isOnline ? '#1a9e5a' : 'rgba(255,255,255,0.5)' }}>{isOnline ? 'Online — Receiving requests' : 'Offline'}</span>
+          {/* ── GREETING + STATUS ── */}
+          <div style={{ background:'#ffffff', padding:'16px 16px 14px', borderBottom:'1px solid #f0f0f0' }}>
+            <div style={{ fontSize:12, color:'#888', marginBottom:2 }}>Good day,</div>
+            <div style={{ fontSize:22, fontWeight:800, color:'#1a1a2e', marginBottom:12 }}>{user?.name?.split(' ')[0]||'Driver'} 👋</div>
+            <div style={{ display:'inline-flex', alignItems:'center', gap:8, padding:'6px 14px', borderRadius:20, background:isOnline?'#f0fff4':'#f5f5f5', border:`1px solid ${isOnline?'#86efac':'#e5e7eb'}` }}>
+              <div style={{ width:8, height:8, borderRadius:'50%', background:isOnline?'#1a9e5a':'#9ca3af' }}/>
+              <span style={{ fontSize:12, fontWeight:700, color:isOnline?'#1a9e5a':'#6b7280' }}>{isOnline?'Online — Receiving Requests':'Offline'}</span>
             </div>
           </div>
 
-          {/* Earnings stats */}
-          <div style={{ padding:'16px 16px 0' }}>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
-              <div style={{ background:'rgba(232,180,0,0.1)', border:'1px solid rgba(232,180,0,0.25)', borderRadius:14, padding:'14px 16px' }}>
-                <div style={{ fontSize:10, color:'rgba(255,255,255,0.5)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:4 }}>Today</div>
-                <div style={{ fontSize:22, fontWeight:700, color:'#e8b400' }}>J${earnings.today.toLocaleString()}</div>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:2 }}>{earnings.todayRides} ride{earnings.todayRides!==1?'s':''}</div>
-              </div>
-              <div style={{ background:'rgba(26,158,90,0.1)', border:'1px solid rgba(26,158,90,0.25)', borderRadius:14, padding:'14px 16px' }}>
-                <div style={{ fontSize:10, color:'rgba(255,255,255,0.5)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:4 }}>This Week</div>
-                <div style={{ fontSize:22, fontWeight:700, color:'#1a9e5a' }}>J${earnings.week.toLocaleString()}</div>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:2 }}>{earnings.weekRides} ride{earnings.weekRides!==1?'s':''}</div>
-              </div>
+          {/* ── STATS GRID ── */}
+          <div style={{ padding:'14px 14px 0' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+              {[
+                { label:'Today's Earnings', value:`J$${earnings.today.toLocaleString()}`, sub:`${earnings.todayRides} ride${earnings.todayRides!==1?'s':''}`, color:'#6b21a8', bg:'#f9f5ff', border:'#e9d5ff' },
+                { label:'This Week',         value:`J$${earnings.week.toLocaleString()}`,  sub:`${earnings.weekRides} ride${earnings.weekRides!==1?'s':''}`,  color:'#1a9e5a', bg:'#f0fff4', border:'#86efac' },
+              ].map((card,i) => (
+                <div key={i} style={{ background:card.bg, border:`1px solid ${card.border}`, borderRadius:14, padding:'14px' }}>
+                  <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', letterSpacing:0.6, marginBottom:4 }}>{card.label}</div>
+                  <div style={{ fontSize:22, fontWeight:800, color:card.color }}>{card.value}</div>
+                  <div style={{ fontSize:11, color:'#888', marginTop:2 }}>{card.sub}</div>
+                </div>
+              ))}
             </div>
-
-            {/* Rating + total */}
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
-              <div style={{ background:'rgba(255,255,255,0.05)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:14, padding:'14px 16px' }}>
-                <div style={{ fontSize:10, color:'rgba(255,255,255,0.5)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:4 }}>Rating</div>
-                <div style={{ fontSize:22, fontWeight:700, color:'#ffffff' }}>⭐ {earnings.totalRides > 0 ? '5.0' : '--'}</div>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:2 }}>{earnings.totalRides} total rides</div>
-              </div>
-              <div style={{ background:'rgba(255,255,255,0.05)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:14, padding:'14px 16px' }}>
-                <div style={{ fontSize:10, color:'rgba(255,255,255,0.5)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:4 }}>All Time</div>
-                <div style={{ fontSize:20, fontWeight:700, color:'#ffffff' }}>J${earnings.total.toLocaleString()}</div>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:2 }}>Net earnings (85%)</div>
-              </div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:14 }}>
+              {[
+                { label:'All Time',      value:`J$${earnings.total.toLocaleString()}` },
+                { label:'Total Rides',   value:earnings.totalRides },
+                { label:'Rating',        value:earnings.totalRides>0?'⭐ 5.0':'—' },
+              ].map((c,i) => (
+                <div key={i} style={{ background:'#fff', border:'1px solid #e5e7eb', borderRadius:12, padding:'12px 10px', textAlign:'center' }}>
+                  <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', letterSpacing:0.5, marginBottom:4 }}>{c.label}</div>
+                  <div style={{ fontSize:16, fontWeight:700, color:'#1a1a2e' }}>{c.value}</div>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Peak hours card */}
-          {(() => { const h=new Date().getHours(),d=new Date().getDay(); const isPeak=d>=1&&d<=5&&h>=17&&h<19; return isPeak ? (
-            <div style={{ margin:'0 16px 12px', background:'rgba(232,180,0,0.12)', border:'1px solid rgba(232,180,0,0.3)', borderRadius:14, padding:'12px 16px', display:'flex', alignItems:'center', gap:12 }}>
-              <div style={{ fontSize:24 }}>⚡</div>
+          {/* ── PEAK HOURS BANNER ── */}
+          {(() => { const h=new Date().getHours(),d=new Date().getDay(); return d>=1&&d<=5&&h>=17&&h<19 ? (
+            <div style={{ margin:'0 14px 10px', background:'#fefce8', border:'1px solid #fde047', borderRadius:12, padding:'10px 14px', display:'flex', alignItems:'center', gap:10 }}>
+              <span style={{ fontSize:20 }}>⚡</span>
               <div>
-                <div style={{ fontSize:13, fontWeight:700, color:'#e8b400' }}>Peak Hours Active</div>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,0.6)', marginTop:2 }}>More riders may be requesting trips right now.</div>
+                <div style={{ fontSize:13, fontWeight:700, color:'#854d0e' }}>Peak Hours Active</div>
+                <div style={{ fontSize:11, color:'#92400e', marginTop:1 }}>More riders requesting trips right now.</div>
               </div>
             </div>
           ) : null; })()}
 
-          {/* Tip cards */}
-          <div style={{ padding:'0 16px', display:'flex', gap:10, overflowX:'auto', paddingBottom:8, scrollbarWidth:'none', marginBottom:12 }}>
-            {[
-              { icon:'📍', text:'Stay near Mandeville town for faster pickups' },
-              { icon:'🔋', text:'Keep your phone charged while online' },
-              { icon:'👋', text:'Greet your passenger by name on arrival' },
-              { icon:'🛡️', text:'Always use in-app chat before riding' },
-            ].map((tip, i) => (
-              <div key={i} style={{ flexShrink:0, maxWidth:200, background:'rgba(255,255,255,0.05)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:12, padding:'10px 14px' }}>
-                <div style={{ fontSize:20, marginBottom:4 }}>{tip.icon}</div>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,0.7)', lineHeight:1.4 }}>{tip.text}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Go Online / Go Offline button */}
-          <div style={{ padding:'8px 16px 0' }}>
+          {/* ── ONLINE / OFFLINE BUTTON ── */}
+          <div style={{ padding:'0 14px 14px' }}>
             {isOnline ? (
-              <button onClick={goOffline} style={{ width:'100%', padding:'16px', background:'rgba(226,75,74,0.15)', border:'1.5px solid rgba(226,75,74,0.4)', borderRadius:14, color:'#f09595', fontSize:15, fontWeight:700, cursor:'pointer' }}>
-                ○ Go Offline
-              </button>
+              <div>
+                <div style={{ background:'#f0fff4', border:'1px solid #86efac', borderRadius:14, padding:'14px', marginBottom:10, textAlign:'center' }}>
+                  <div style={{ fontSize:14, fontWeight:700, color:'#1a9e5a', marginBottom:4 }}>🟢 Waiting for ride requests</div>
+                  <div style={{ fontSize:12, color:'#166534' }}>New bookings appear here instantly</div>
+                </div>
+                <button onClick={goOffline} style={{ width:'100%', padding:'14px', background:'#fff', border:'1.5px solid #fca5a5', borderRadius:12, color:'#dc2626', fontSize:14, fontWeight:700, cursor:'pointer' }}>
+                  Go Offline
+                </button>
+              </div>
             ) : (
-              <button onClick={goOnline} style={{ width:'100%', padding:'18px', background:'#1a9e5a', border:'none', borderRadius:14, color:'#ffffff', fontSize:16, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 20px rgba(26,158,90,0.4)' }}>
-                ● Go Online
+              <button onClick={goOnline} style={{ width:'100%', padding:'16px', background:'#6b21a8', border:'none', borderRadius:14, color:'#fff', fontSize:15, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 14px rgba(107,33,168,0.35)' }}>
+                Go Online
               </button>
             )}
-            <p style={{ fontSize:11, color:'rgba(255,255,255,0.3)', textAlign:'center', marginTop:10 }}>
-              {isOnline ? 'You are receiving ride requests in Manchester' : 'You will start receiving ride requests immediately'}
-            </p>
           </div>
 
-          <style>{`@keyframes pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.6; transform:scale(1.3); } }`}</style>
+          {/* ── DRIVER TIPS ── */}
+          <div style={{ padding:'0 14px 14px' }}>
+            <div style={{ fontSize:11, fontWeight:700, color:'#888', textTransform:'uppercase', letterSpacing:0.6, marginBottom:8 }}>Driver Tips</div>
+            <div style={{ display:'flex', gap:10, overflowX:'auto', paddingBottom:4, scrollbarWidth:'none' }}>
+              {[
+                { icon:'🔋', tip:'Keep your phone charged while online' },
+                { icon:'👤', tip:'Confirm passenger name before starting trip' },
+                { icon:'📱', tip:'Use app buttons to update your ride status' },
+                { icon:'🛡️', tip:'Contact support if something feels unsafe' },
+                { icon:'📍', tip:'Stay near Mandeville town for faster pickups' },
+              ].map((t,i) => (
+                <div key={i} style={{ flexShrink:0, width:180, background:'#fff', border:'1px solid #e5e7eb', borderRadius:12, padding:'12px' }}>
+                  <div style={{ fontSize:20, marginBottom:6 }}>{t.icon}</div>
+                  <div style={{ fontSize:11, color:'#374151', lineHeight:1.5 }}>{t.tip}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* ── QUICK LINKS ── */}
+          <div style={{ padding:'0 14px 14px' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+              {[
+                { icon:'💰', label:'Earnings',      action:() => go('driver-earnings') },
+                { icon:'📋', label:'My Documents',  action:() => go('driver-documents') },
+                { icon:'🔔', label:'Notifications', action:() => go('driver-notifications') },
+                { icon:'👤', label:'My Profile',    action:() => go('driver-profile') },
+              ].map((item,i) => (
+                <button key={i} onClick={item.action} style={{ background:'#fff', border:'1px solid #e5e7eb', borderRadius:12, padding:'14px 12px', display:'flex', alignItems:'center', gap:10, cursor:'pointer', textAlign:'left' }}>
+                  <span style={{ fontSize:22 }}>{item.icon}</span>
+                  <span style={{ fontSize:13, fontWeight:600, color:'#1a1a2e' }}>{item.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+        </div>
+      )}
+function DriverDash({ go, user, setUser, setBookingId }) {
+  const [rides,       setRides]       = useState([]);
+  const [driverTab,   setDriverTab]   = useState('home');
+  const [menuOpen,    setMenuOpen]    = useState(false);
+  const [isOnline,    setIsOnline]    = useState(false);
+  const [notifStatus, setNotifStatus] = useState("idle");
+  const [loading,     setLoading]     = useState(true);
+  const [earnings,    setEarnings]    = useState({ today:0, week:0, month:0, total:0, todayRides:0, weekRides:0, monthRides:0, totalRides:0, history:[] });
+  const handleLogout = async () => { _manualNavDone = false; await signOut(auth); setUser(null); go('splash'); };
+
+  const goOnline = async () => {
+    setIsOnline(true);
+    setDriverTab('rides');
+    try { await updateDoc(doc(db,'drivers',user.uid), { isOnline:true, lastOnline:serverTimestamp() }); } catch(e) {}
+    if (notifStatus === 'idle') requestNotifPermission();
+  };
+
+  const goOffline = async () => {
+    setIsOnline(false);
+    setDriverTab('home');
+    try { await updateDoc(doc(db,'drivers',user.uid), { isOnline:false }); } catch(e) {}
+  };
+
+  useEffect(() => {
+    const q = query(collection(db,'bookings'), where('status','==','searching'));
+    let prevCount = 0;
+    const unsub = onSnapshot(q, snap => {
+      const all = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+      const filtered = all.filter(r =>
+        r.status === 'searching' &&
+        !r.declinedBy?.includes(user?.uid) &&
+        !r.driverId
+      );
+      filtered.sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+      if (filtered.length > prevCount && prevCount > 0) {
+        try {
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const playBell = (freq, time) => {
+            const osc = ctx.createOscillator(); const gain = ctx.createGain();
+            osc.connect(gain); gain.connect(ctx.destination);
+            osc.frequency.value = freq; osc.type = 'sine';
+            gain.gain.setValueAtTime(0.3, ctx.currentTime + time);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + time + 0.8);
+            osc.start(ctx.currentTime + time); osc.stop(ctx.currentTime + time + 0.8);
+          };
+          playBell(880,0); playBell(1100,0.2); playBell(1320,0.4);
+        } catch(e) {}
+      }
+      prevCount = filtered.length;
+      setRides(filtered);
+      setLoading(false);
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    const q = query(collection(db,'bookings'), where('driverId','==',user.uid));
+    const unsub = onSnapshot(q, snap => {
+      const completed = snap.docs.map(d => ({ id:d.id, ...d.data() })).filter(b => b.status === 'completed');
+      const now   = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const week  = new Date(today); week.setDate(today.getDate() - 7);
+      const month = new Date(today); month.setDate(today.getDate() - 30);
+      const inRange = (b, from) => b.completedAt?.toDate ? b.completedAt.toDate() >= from : false;
+      const todayRides  = completed.filter(b => inRange(b, today));
+      const weekRides   = completed.filter(b => inRange(b, week));
+      const monthRides  = completed.filter(b => inRange(b, month));
+      const sum = arr => arr.reduce((s,b) => s + (b.fare||0), 0);
+      // Driver gets 85% after 15% platform fee
+      const driverCut = n => Math.round(n * 0.85);
+      setEarnings({
+        today:      driverCut(sum(todayRides)),
+        week:       driverCut(sum(weekRides)),
+        month:      driverCut(sum(monthRides)),
+        total:      driverCut(sum(completed)),
+        todayRides: todayRides.length,
+        weekRides:  weekRides.length,
+        monthRides: monthRides.length,
+        totalRides: completed.length,
+        history:    completed.sort((a,b) => (b.completedAt?.toDate?.()?.getTime()||0) - (a.completedAt?.toDate?.()?.getTime()||0)).slice(0,20),
+      });
+    });
+    return () => unsub();
+  }, [user]);
+
+  const requestNotifPermission = async () => {
+    setNotifStatus("requesting");
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission === "granted") {
+        const token = await getToken(messaging, { vapidKey: process.env.REACT_APP_VAPID_KEY });
+        if (token) {
+          await setDoc(doc(db,"drivers",user.uid), { fcmToken: token }, { merge: true });
+          setNotifStatus("enabled");
+          onMessage(messaging, payload => {
+            const n = new Notification(payload.notification.title, { body: payload.notification.body, icon: "/favicon.ico" });
+          });
+        }
+      } else { setNotifStatus("denied"); }
+    } catch(err) { console.error(err); setNotifStatus("error"); }
+  };
+
+  const declineRide = async (rideId) => {
+    try {
+      // (statically imported)
+      await updateDoc(doc(db,'bookings',rideId), { declinedBy: arrayUnion(user.uid) });
+    } catch(err) { console.error('Decline error:', err); }
+  };
+
+  const acceptRide = async (rideId) => {
+    try {
+      const rideSnap = await getDoc(doc(db,'bookings',rideId));
+      if (!rideSnap.exists() || rideSnap.data().status !== 'searching' || rideSnap.data().driverId) {
+        alert('Sorry, this ride was already accepted by another driver.'); return;
+      }
+      // Fetch driver vehicle info to save on booking for customer safety
+      const dSnap = await getDoc(doc(db,'drivers',user.uid));
+      const dData = dSnap.exists() ? dSnap.data() : {};
+      // Write driverId first to claim the ride atomically
+      await updateDoc(doc(db,'bookings',rideId), { driverId: user.uid });
+      // Verify we got it (no one else claimed it in the same instant)
+      const verifySnap = await getDoc(doc(db,'bookings',rideId));
+      if (verifySnap.data()?.driverId !== user.uid) {
+        alert('Sorry, this ride was already accepted by another driver.'); return;
+      }
+      await updateDoc(doc(db,'bookings',rideId), {
+        driverName:   user.name,
+        vehicleMake:  dData.vehicleMake  || '',
+        vehicleModel: dData.vehicleModel || '',
+        licensePlate: dData.licensePlate || '',
+        driverRating: dData.rating       || null,
+        status:       'active',
+        acceptedAt:   serverTimestamp(),
+      });
+      setBookingId(rideId);
+      go('driver-active');
+    } catch(err) { console.error(err); }
+  };
+
+  return (
+    <div style={{ ...s.content, background:'transparent', minHeight:'100vh' }}>
+      {/* Top header — white */}
+      <div style={{ background:'#ffffff', padding:'8px 14px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', boxShadow:'0 1px 6px rgba(0,0,0,0.06)', position:'sticky', top:0, zIndex:10 }}>
+        <button onClick={() => setMenuOpen(true)} style={{ background:'none', border:'none', cursor:'pointer', padding:'3px 5px', display:'flex', flexDirection:'column', gap:4, flexShrink:0 }}>
+          <div style={{ width:22, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+          <div style={{ width:16, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+          <div style={{ width:22, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+        </button>
+        <img src="/logo.png" alt="VilleCabs" style={{ height:28, objectFit:'contain', flexShrink:0 }}/>
+        <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:8 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:5, padding:'4px 10px', borderRadius:20, background:isOnline?'rgba(26,158,90,0.1)':'rgba(150,150,150,0.1)', border:`1px solid ${isOnline?'rgba(26,158,90,0.4)':'rgba(150,150,150,0.3)'}` }}>
+            <div style={{ width:7, height:7, borderRadius:'50%', background:isOnline?'#1a9e5a':'#999' }}/>
+            <span style={{ fontSize:11, fontWeight:700, color:isOnline?'#1a9e5a':'#888' }}>{isOnline?'Online':'Offline'}</span>
+          </div>
+        </div>
+      </div>
+      {/* Spacer removed — using position sticky now */}
+      <div style={{ display:'none' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <img src="/logo.png" alt="VilleCabs" onClick={() => setTab('book')} style={{ height:26, width:'auto', objectFit:'contain', cursor:'pointer' }}/>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <div style={{ background:isOnline?GREEN:'#e8eaf0', borderRadius:20, padding:'5px 12px', fontSize:11, color:isOnline?WHITE:'#555770', fontWeight:500 }}>
+            {isOnline ? '● Online' : '○ Offline'}
+          </div>
+        </div>
+      </div>
+
+      {/* Side drawer */}
+      {menuOpen && (
+        <div style={{ position:'fixed', inset:0, zIndex:100 }}>
+          <div onClick={() => setMenuOpen(false)} style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.6)' }}/>
+          <div style={{ position:'absolute', left:0, top:0, bottom:0, width:280, background:'#ffffff', borderRight:'1px solid #e2e4ed', display:'flex', flexDirection:'column', boxShadow:'4px 0 24px rgba(0,0,0,0.12)' }}>
+            <div style={{ padding:'24px 18px 16px', borderBottom:'1px solid #e2e4ed' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
+                <img src="/villecabs-logo.png" alt="V" style={{ width:48, height:48, borderRadius:'50%', objectFit:'cover', border:'2px solid rgba(232,180,0,0.4)' }}/>
+                <button onClick={() => setMenuOpen(false)} style={{ background:'#f0f1f5', border:'1px solid #e2e4ed', color:'#1a1a2e', width:32, height:32, borderRadius:'50%', cursor:'pointer', fontSize:16 }}>✕</button>
+              </div>
+              <div style={{ fontSize:16, fontWeight:600, color:'#1a1a2e' }}>{user?.name}</div>
+              <div style={{ fontSize:12, color:'#888aaa', marginTop:2 }}>{user?.email}</div>
+              <div style={{ display:'inline-block', marginTop:8, background:'rgba(26,158,90,0.15)', color:GREEN, borderRadius:20, padding:'3px 12px', fontSize:11, fontWeight:500 }}>✓ Approved Driver</div>
+            </div>
+            <div style={{ flex:1, overflowY:'auto', padding:'8px 0' }}>
+              {[
+                ['🏠','Home',           () => { setDriverTab('home');     setMenuOpen(false); }],
+                ['💰','Earnings',       () => { setDriverTab('earnings'); setMenuOpen(false); }],
+                ['👤','My Profile',     () => { go('driver-profile');     setMenuOpen(false); }],
+                ['⚙️','Settings',       () => { go('driver-settings');    setMenuOpen(false); }],
+                ['ℹ️','About VilleCabs',() => { go('driver-about');       setMenuOpen(false); }],
+                ['📬','Contact Us',     () => { go('driver-contact');     setMenuOpen(false); }],
+                ['❓','Help & Info',    () => { go('driver-help');        setMenuOpen(false); }],
+              ].map(([icon,label,action],i) => (
+                <div key={i} onClick={action}
+                  onMouseEnter={e => { e.currentTarget.style.background='rgba(255,255,255,0.07)'; e.currentTarget.style.paddingLeft='22px'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background='transparent'; e.currentTarget.style.paddingLeft='18px'; }}
+                  style={{ padding:'13px 18px', display:'flex', alignItems:'center', gap:14, cursor:'pointer', transition:'all 0.15s ease' }}>
+                  <span style={{ fontSize:20, width:28, textAlign:'center' }}>{icon}</span>
+                  <span style={{ fontSize:14, color:'#1a1a2e' }}>{label}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{ padding:16, borderTop:'1px solid #e2e4ed', display:'flex', flexDirection:'column', gap:8 }}>
+              {isOnline
+                ? <button onClick={() => { goOffline(); setMenuOpen(false); }} style={{ width:'100%', padding:11, background:'rgba(255,255,255,0.06)', border:'0.5px solid rgba(255,255,255,0.15)', borderRadius:10, color:'rgba(255,255,255,0.6)', fontSize:13, cursor:'pointer' }}>○ Go Offline</button>
+                : <button onClick={() => { goOnline(); setMenuOpen(false); }} style={{ width:'100%', padding:11, background:GREEN, border:'none', borderRadius:10, color:WHITE, fontSize:13, fontWeight:600, cursor:'pointer' }}>● Go Online</button>
+              }
+              <button onClick={handleLogout} style={{ width:'100%', padding:11, background:'rgba(226,75,74,0.12)', border:'0.5px solid rgba(226,75,74,0.3)', borderRadius:10, color:'#f09595', fontSize:13, cursor:'pointer' }}>🚪 Log Out</button>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Rides tab */}
+      {/* HOME tab — offline/online dashboard */}
+      {driverTab === 'home' && (
+        <div style={{ flex:1, overflowY:'auto', paddingBottom:90, background:'#f5f6fa' }}>
+
+          {/* Greeting header */}
+          <div style={{ background:'#ffffff', padding:'18px 16px 16px', borderBottom:'1px solid #f0f0f0' }}>
+            <div style={{ fontSize:13, color:'#888', marginBottom:2 }}>Good day,</div>
+            <div style={{ fontSize:22, fontWeight:800, color:'#1a1a2e', marginBottom:14 }}>{user?.name?.split(' ')[0]||'Driver'} 👋</div>
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <div style={{ width:10, height:10, borderRadius:'50%', background:isOnline?'#1a9e5a':'#9ca3af', animation:isOnline?'pulse 2s ease-in-out infinite':'none' }}/>
+              <span style={{ fontSize:13, fontWeight:600, color:isOnline?'#1a9e5a':'#9ca3af' }}>{isOnline?'Online — Accepting requests':'Offline'}</span>
+            </div>
+          </div>
+
+          {/* Stats grid */}
+          <div style={{ padding:'14px 16px 0' }}>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+              <div style={{ background:'#fff', borderRadius:14, padding:'14px 16px', boxShadow:'0 1px 6px rgba(0,0,0,0.06)', borderLeft:'3px solid #6b21a8' }}>
+                <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', letterSpacing:0.5, marginBottom:4 }}>Today's Earnings</div>
+                <div style={{ fontSize:22, fontWeight:800, color:'#6b21a8' }}>J${earnings.today.toLocaleString()}</div>
+                <div style={{ fontSize:11, color:'#aaa', marginTop:2 }}>{earnings.todayRides} ride{earnings.todayRides!==1?'s':''}</div>
+              </div>
+              <div style={{ background:'#fff', borderRadius:14, padding:'14px 16px', boxShadow:'0 1px 6px rgba(0,0,0,0.06)', borderLeft:'3px solid #1a9e5a' }}>
+                <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', letterSpacing:0.5, marginBottom:4 }}>This Week</div>
+                <div style={{ fontSize:22, fontWeight:800, color:'#1a9e5a' }}>J${earnings.week.toLocaleString()}</div>
+                <div style={{ fontSize:11, color:'#aaa', marginTop:2 }}>{earnings.weekRides} ride{earnings.weekRides!==1?'s':''}</div>
+              </div>
+              <div style={{ background:'#fff', borderRadius:14, padding:'14px 16px', boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
+                <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', letterSpacing:0.5, marginBottom:4 }}>Rating</div>
+                <div style={{ fontSize:22, fontWeight:800, color:'#1a1a2e' }}>⭐ {earnings.totalRides>0?'5.0':'—'}</div>
+                <div style={{ fontSize:11, color:'#aaa', marginTop:2 }}>{earnings.totalRides} total rides</div>
+              </div>
+              <div style={{ background:'#fff', borderRadius:14, padding:'14px 16px', boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
+                <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', letterSpacing:0.5, marginBottom:4 }}>All Time</div>
+                <div style={{ fontSize:20, fontWeight:800, color:'#1a1a2e' }}>J${earnings.total.toLocaleString()}</div>
+                <div style={{ fontSize:11, color:'#aaa', marginTop:2 }}>Net (85%)</div>
+              </div>
+            </div>
+
+            {/* Peak hours alert */}
+            {(()=>{ const h=new Date().getHours(),d=new Date().getDay(); return d>=1&&d<=5&&h>=17&&h<19; })() && (
+              <div style={{ background:'#fffbeb', border:'1px solid #fde68a', borderRadius:12, padding:'11px 14px', marginBottom:10, display:'flex', alignItems:'center', gap:10 }}>
+                <span style={{ fontSize:20 }}>⚡</span>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:700, color:'#b45309' }}>Peak Hours Active</div>
+                  <div style={{ fontSize:11, color:'#92400e', marginTop:1 }}>More riders may be requesting trips right now.</div>
+                </div>
+              </div>
+            )}
+
+            {/* Go online/offline */}
+            {isOnline ? (
+              <div>
+                <div style={{ background:'#f0fff4', border:'1px solid #9de', borderRadius:14, padding:'16px', marginBottom:10, textAlign:'center' }}>
+                  <div style={{ fontSize:14, fontWeight:700, color:'#1a7a45', marginBottom:4 }}>🟢 You are Online</div>
+                  <div style={{ fontSize:12, color:'#555', marginBottom:0 }}>Waiting for ride requests · New bookings appear here instantly</div>
+                </div>
+                <button onClick={goOffline} style={{ width:'100%', padding:'14px', background:'#fff', border:'1.5px solid #e2e4ed', borderRadius:14, color:'#555', fontSize:14, fontWeight:700, cursor:'pointer', marginBottom:10 }}>
+                  ○ Go Offline
+                </button>
+              </div>
+            ) : (
+              <button onClick={goOnline} style={{ width:'100%', padding:'16px', background:'#1a9e5a', border:'none', borderRadius:14, color:'#ffffff', fontSize:16, fontWeight:800, cursor:'pointer', marginBottom:10, boxShadow:'0 4px 14px rgba(26,158,90,0.4)' }}>
+                ● Go Online
+              </button>
+            )}
+          </div>
+
+          {/* Tips */}
+          <div style={{ padding:'0 16px' }}>
+            <div style={{ fontSize:11, fontWeight:700, color:'#888', textTransform:'uppercase', letterSpacing:0.5, marginBottom:10 }}>Driver Tips</div>
+            <div style={{ display:'flex', gap:10, overflowX:'auto', paddingBottom:6 }}>
+              {[
+                { icon:'🔋', tip:'Keep your phone charged while online' },
+                { icon:'👋', tip:'Greet passengers by name on arrival' },
+                { icon:'📍', tip:'Confirm pickup before starting trip' },
+                { icon:'🛡️', tip:'Contact support if something feels unsafe' },
+                { icon:'⭐', tip:'Great service earns better ratings' },
+              ].map((t,i)=>(
+                <div key={i} style={{ flexShrink:0, width:180, background:'#fff', border:'1px solid #e9d5ff', borderRadius:12, padding:'12px 14px', boxShadow:'0 1px 4px rgba(0,0,0,0.04)' }}>
+                  <div style={{ fontSize:20, marginBottom:6 }}>{t.icon}</div>
+                  <div style={{ fontSize:11, color:'#555770', lineHeight:1.5 }}>{t.tip}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+        </div>
+      )}
+
       {driverTab === 'rides' && <>
       <VilleMap height={200} center={MANCHESTER_CENTER} zoom={12}/>
       <div style={{ padding:14 }}>
@@ -4476,10 +4845,10 @@ function DriverDash({ go, user, setUser, setBookingId }) {
           { icon:'🏠', label:'Home',     tab:'home'     },
           { icon:'🚗', label:'Rides',    tab:'rides'    },
           { icon:'💰', label:'Earnings', tab:'earnings' },
-          { icon:'🔔', label:'Alerts',   tab:'notifs'   },
+          { icon:'📋', label:'Docs',     tab:'docs'     },
           { icon:'👤', label:'Profile',  tab:'profile'  },
         ].map(({ icon, label, tab }) => (
-          <button key={tab} onClick={() => { if(tab==='profile') go('driver-profile'); else if(tab==='earnings') go('driver-earnings'); else if(tab==='notifs') go('driver-notifications'); else setDriverTab(tab); }}
+          <button key={tab} onClick={() => { if(tab==='profile') go('driver-profile'); else if(tab==='earnings') go('driver-earnings'); else if(tab==='docs') go('driver-documents'); else setDriverTab(tab); }}
             style={{ flex:1, padding:'10px 0', background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
             <div style={{ fontSize:20, opacity: driverTab===tab ? 1 : 0.4 }}>{icon}</div>
             <div style={{ fontSize:10, color: driverTab===tab ? '#e8b400' : 'rgba(255,255,255,0.4)', fontWeight: driverTab===tab ? 700 : 400 }}>{label}</div>
@@ -4862,62 +5231,173 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
 }
 
 // ── DRIVER PROFILE ───────────────────────────────────────────────────────────
-function DriverProfile({ go, user, setUser }) {
-  const [form, setForm]       = useState({ name: user?.name||'', phone: '', email: user?.email||'' });
-  const [loading, setLoading] = useState(false);
-  const [msg, setMsg]         = useState('');
-  const [error, setError]     = useState('');
-  const set = (k,v) => setForm(p => ({ ...p, [k]:v }));
+function DriverProfile({ go, user }) {
+  const [profile, setProfile] = useState(null);
+  const [rides,   setRides]   = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [form,    setForm]    = useState({});
+  const [saving,  setSaving]  = useState(false);
+  const [msg,     setMsg]     = useState('');
+  const set = (k,v) => setForm(p => ({...p,[k]:v}));
 
   useEffect(() => {
     if (!user?.uid) return;
-    getDoc(doc(db,'drivers',user.uid)).then(snap => {
-      if (snap.exists()) {
-        const d = snap.data();
-        setForm({ name:d.name||'', phone:d.phone||'', email:user.email||'' });
+    Promise.all([
+      getDoc(doc(db,'drivers',user.uid)),
+      getDocs(query(collection(db,'bookings'), where('driverId','==',user.uid), where('status','==','completed'))),
+    ]).then(([dSnap, rSnap]) => {
+      if (dSnap.exists()) {
+        const d = dSnap.data();
+        setProfile(d);
+        setForm({ name:d.name||'', phone:d.phone||'', email:d.email||user?.email||'', vehicleMake:d.vehicleMake||'', vehicleModel:d.vehicleModel||'', vehicleColor:d.vehicleColor||'', licensePlate:d.licensePlate||'', vehicleYear:d.vehicleYear||'' });
       }
-    });
+      setRides(rSnap.docs.map(d=>d.data()));
+      setLoading(false);
+    }).catch(() => setLoading(false));
   }, [user]);
 
   const handleSave = async () => {
-    setError(''); setMsg(''); setLoading(true);
+    if (!user?.uid) return;
+    setSaving(true); setMsg('');
     try {
-      await updateDoc(doc(db,'drivers',user.uid), { name:form.name, phone:form.phone });
-      setUser(prev => ({ ...prev, name:form.name }));
-      setMsg('Profile updated successfully!');
-    } catch(err) { setError('Failed to update profile.'); }
-    setLoading(false);
+      await updateDoc(doc(db,'drivers',user.uid), form);
+      setProfile(prev => ({...prev,...form}));
+      setMsg('Profile updated!');
+      setEditing(false);
+    } catch(e) { setMsg('Failed to save.'); }
+    setSaving(false);
   };
 
+  if (loading) return <div style={{ minHeight:'100vh', background:'#f5f6fa', display:'flex', alignItems:'center', justifyContent:'center', color:'#888' }}>Loading...</div>;
+
+  const totalEarned = rides.reduce((s,r) => s+(r.fare||0), 0);
+  const isVerified  = profile?.status === 'approved';
+  const isFounding  = true; // early drivers get founding badge
+  const isTop       = rides.length >= 50;
+
   return (
-    <div style={{ ...s.content, background:'transparent' }}>
-      <TopBar title="My Profile" onBack={() => go('driver-dash')} go={go} user={user}/>
-      <div style={{ padding:20, maxWidth:420, margin:'0 auto' }}>
-        <div style={{ textAlign:'center', marginBottom:24 }}>
-          <div style={{ width:72, height:72, borderRadius:'50%', background:'rgba(232,180,0,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:32, margin:'0 auto 10px' }}>👤</div>
-          <div style={{ fontSize:16, fontWeight:500, color:'#1a1a2e' }}>{user?.name}</div>
-          <div style={{ fontSize:12, color:'rgba(255,255,255,0.45)' }}>{user?.email}</div>
-          <div style={{ display:'inline-block', marginTop:6, background:'rgba(26,158,90,0.15)', color:'#1a9e5a', borderRadius:20, padding:'3px 12px', fontSize:11, fontWeight:500 }}>✓ Approved Driver</div>
-        </div>
-        {msg   && <div style={s.successBox}>{msg}</div>}
-        {error && <div style={s.errBox}>{error}</div>}
-        <label style={s.lbl}>Full Name</label>
-        <input style={s.inp} value={form.name} onChange={e => set('name',e.target.value)} placeholder="Your full name"/>
-        <label style={s.lbl}>Phone Number</label>
-        <input style={s.inp} value={form.phone} onChange={e => set('phone',e.target.value)} placeholder="+1 (876) 555-0100"/>
-        <label style={s.lbl}>Email Address</label>
-        <input style={{ ...s.inp, opacity:0.5 }} value={form.email} disabled placeholder="Email cannot be changed here"/>
-        <p style={{ fontSize:11, color:'rgba(255,255,255,0.35)', marginBottom:16 }}>To change your email go to Settings</p>
-        <button style={{ ...s.btnY, opacity:loading?0.7:1 }} onClick={handleSave} disabled={loading}>
-          {loading ? 'Saving...' : 'Save Changes'}
+    <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
+      {/* Header */}
+      <div style={{ background:'#fff', padding:'10px 16px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', position:'sticky', top:0, zIndex:10 }}>
+        <button onClick={() => go('driver-dash')} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#1a1a2e' }}>←</button>
+        <img src="/logo.png" style={{ height:26, objectFit:'contain' }} alt="VilleCabs"/>
+        <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:4 }}>My Profile</span>
+        <button onClick={() => setEditing(!editing)} style={{ marginLeft:'auto', padding:'6px 14px', background:editing?'#f3f4f6':'#6b21a8', color:editing?'#555':'#fff', border:'none', borderRadius:20, fontSize:12, fontWeight:600, cursor:'pointer' }}>
+          {editing ? 'Cancel' : '✏️ Edit'}
         </button>
-        <button style={s.btnO} onClick={() => go('driver-settings')}>Go to Settings</button>
+      </div>
+
+      {/* Hero card */}
+      <div style={{ background:'linear-gradient(135deg,#6b21a8,#4c1d95)', padding:'28px 20px 24px', textAlign:'center' }}>
+        <div style={{ width:72, height:72, borderRadius:'50%', background:'rgba(255,255,255,0.15)', border:'3px solid rgba(255,255,255,0.4)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:32, margin:'0 auto 12px' }}>
+          👤
+        </div>
+        <div style={{ fontSize:20, fontWeight:800, color:'#fff', marginBottom:4 }}>{profile?.name||user?.name||'Driver'}</div>
+        <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginBottom:14 }}>{profile?.email||user?.email||''}</div>
+        {/* Badges */}
+        <div style={{ display:'flex', gap:6, justifyContent:'center', flexWrap:'wrap' }}>
+          {isVerified && <div style={{ background:'rgba(26,158,90,0.2)', border:'1px solid rgba(26,158,90,0.5)', borderRadius:20, padding:'4px 12px', fontSize:11, color:'#86efac', fontWeight:600 }}>✅ Verified Driver</div>}
+          {isFounding && <div style={{ background:'rgba(232,180,0,0.2)', border:'1px solid rgba(232,180,0,0.5)', borderRadius:20, padding:'4px 12px', fontSize:11, color:'#fde047', fontWeight:600 }}>🌟 Founding Driver</div>}
+          {isTop      && <div style={{ background:'rgba(255,255,255,0.15)', border:'1px solid rgba(255,255,255,0.3)', borderRadius:20, padding:'4px 12px', fontSize:11, color:'#fff', fontWeight:600 }}>🏆 Top Driver</div>}
+          {!isVerified && <div style={{ background:'rgba(255,200,0,0.15)', border:'1px solid rgba(255,200,0,0.4)', borderRadius:20, padding:'4px 12px', fontSize:11, color:'#fde047', fontWeight:600 }}>⏳ Pending Approval</div>}
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:1, background:'#e5e7eb', marginBottom:12 }}>
+        {[
+          ['Rides',      rides.length],
+          ['Earned',     `J$${Math.round(totalEarned*0.85).toLocaleString()}`],
+          ['Rating',     rides.length>0?'⭐ 5.0':'—'],
+        ].map(([l,v],i) => (
+          <div key={i} style={{ background:'#fff', padding:'14px', textAlign:'center' }}>
+            <div style={{ fontSize:18, fontWeight:800, color:'#1a1a2e' }}>{v}</div>
+            <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', letterSpacing:0.5, marginTop:2 }}>{l}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ padding:'0 14px 90px' }}>
+        {msg && <div style={{ background:msg.includes('!')? '#f0fff4':'#fff0f0', border:`1px solid ${msg.includes('!')?'#86efac':'#fca5a5'}`, borderRadius:10, padding:'10px 14px', fontSize:13, color:msg.includes('!')?'#1a9e5a':'#dc2626', marginBottom:12 }}>{msg}</div>}
+
+        {/* Personal info */}
+        <div style={{ background:'#fff', borderRadius:14, padding:16, marginBottom:12, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
+          <div style={{ fontSize:12, fontWeight:700, color:'#6b21a8', textTransform:'uppercase', letterSpacing:0.8, marginBottom:12 }}>Personal Information</div>
+          {editing ? (
+            <div>
+              {[['Full Name','name','Your legal name'],['Phone','phone','876-XXX-XXXX'],['Email','email','your@email.com']].map(([l,k,p]) => (
+                <div key={k}>
+                  <label style={{ fontSize:11, color:'#888', fontWeight:600, display:'block', marginBottom:3 }}>{l}</label>
+                  <input value={form[k]||''} onChange={e=>set(k,e.target.value)} placeholder={p} style={{ width:'100%', padding:'10px 12px', border:'1.5px solid #e2e4ed', borderRadius:10, fontSize:14, marginBottom:10, boxSizing:'border-box', outline:'none', color:'#1a1a2e' }}/>
+                </div>
+              ))}
+            </div>
+          ) : (
+            [['👤 Name', profile?.name||'—'],['📞 Phone', profile?.phone||'—'],['📧 Email', profile?.email||user?.email||'—']].map(([l,v],i) => (
+              <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'9px 0', borderBottom:i<2?'1px solid #f5f5f5':'none' }}>
+                <span style={{ fontSize:12, color:'#888' }}>{l}</span>
+                <span style={{ fontSize:13, fontWeight:600, color:'#1a1a2e' }}>{v}</span>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Vehicle info */}
+        <div style={{ background:'#fff', borderRadius:14, padding:16, marginBottom:12, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
+          <div style={{ fontSize:12, fontWeight:700, color:'#6b21a8', textTransform:'uppercase', letterSpacing:0.8, marginBottom:12 }}>Vehicle Information</div>
+          {editing ? (
+            <div>
+              {[['Make','vehicleMake','e.g. Toyota'],['Model','vehicleModel','e.g. Corolla'],['Year','vehicleYear','e.g. 2019'],['Color','vehicleColor','e.g. White'],['Licence Plate','licensePlate','e.g. 1234 AB']].map(([l,k,p]) => (
+                <div key={k}>
+                  <label style={{ fontSize:11, color:'#888', fontWeight:600, display:'block', marginBottom:3 }}>{l}</label>
+                  <input value={form[k]||''} onChange={e=>set(k,e.target.value)} placeholder={p} style={{ width:'100%', padding:'10px 12px', border:'1.5px solid #e2e4ed', borderRadius:10, fontSize:14, marginBottom:10, boxSizing:'border-box', outline:'none', color:'#1a1a2e' }}/>
+                </div>
+              ))}
+            </div>
+          ) : (
+            [
+              ['🚗 Make/Model', `${profile?.vehicleMake||'—'} ${profile?.vehicleModel||''}`.trim()],
+              ['📅 Year',        profile?.vehicleYear||'—'],
+              ['🎨 Color',       profile?.vehicleColor||'—'],
+              ['🔢 Plate',       profile?.licensePlate||'—'],
+            ].map(([l,v],i) => (
+              <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'9px 0', borderBottom:i<3?'1px solid #f5f5f5':'none' }}>
+                <span style={{ fontSize:12, color:'#888' }}>{l}</span>
+                <span style={{ fontSize:13, fontWeight:600, color:'#1a1a2e' }}>{v}</span>
+              </div>
+            ))
+          )}
+        </div>
+
+        {editing && (
+          <button onClick={handleSave} disabled={saving} style={{ width:'100%', padding:'14px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:12, fontSize:15, fontWeight:700, cursor:'pointer', marginBottom:10, opacity:saving?0.7:1 }}>
+            {saving?'Saving...':'Save Changes'}
+          </button>
+        )}
+
+        {/* Quick links */}
+        {!editing && (
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+            {[
+              ['📋','Documents',    () => go('driver-documents')],
+              ['💰','Earnings',     () => go('driver-earnings')],
+              ['⚙️','Settings',    () => go('driver-settings')],
+              ['🔔','Notifications',() => go('driver-notifications')],
+            ].map(([icon,label,action],i) => (
+              <button key={i} onClick={action} style={{ background:'#fff', border:'1px solid #e5e7eb', borderRadius:12, padding:'13px 12px', display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
+                <span style={{ fontSize:20 }}>{icon}</span>
+                <span style={{ fontSize:13, fontWeight:600, color:'#1a1a2e' }}>{label}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// ── DRIVER SETTINGS ───────────────────────────────────────────────────────────
+
 function DriverSettings({ go, user, setUser }) {
   const [newPassword,    setNewPassword]    = useState('');
   const [confirmPassword,setConfirmPassword] = useState('');
@@ -5562,61 +6042,159 @@ function PartnerWithUs({ go, user }) {
 
 // ── DRIVER EARNINGS PAGE ──────────────────────────────────────────────────────
 function DriverEarnings({ go, user }) {
-  const [rides, setRides] = useState([]);
+  const [rides,   setRides]   = useState([]);
   const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState('week');
+  const [period,  setPeriod]  = useState('week');
+  const [detail,  setDetail]  = useState(null);
+
   useEffect(() => {
     if (!user?.uid) return;
     getDocs(query(collection(db,'bookings'), where('driverId','==',user.uid), where('status','==','completed')))
-      .then(snap => { setRides(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0))); setLoading(false); })
-      .catch(() => setLoading(false));
+      .then(snap => {
+        setRides(snap.docs.map(d => ({id:d.id,...d.data()}))
+          .sort((a,b) => (b.createdAt?.seconds||0)-(a.createdAt?.seconds||0)));
+        setLoading(false);
+      }).catch(() => setLoading(false));
   }, [user]);
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const weekAgo = new Date(today.getTime() - 7*86400000);
+
+  const now        = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const weekStart  = new Date(todayStart.getTime() - 6*86400000);
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const filtered = rides.filter(r => { const d = new Date((r.createdAt?.seconds||0)*1000); return period==='today'?d>=today:period==='week'?d>=weekAgo:d>=monthStart; });
-  const totalFare = filtered.reduce((s,r)=>s+(r.fare||0),0);
-  const driverNet = Math.round(totalFare*0.85);
-  const vcFee = Math.round(totalFare*0.15);
+
+  const filtered = rides.filter(r => {
+    const d = new Date((r.createdAt?.seconds||0)*1000);
+    if (period==='today') return d >= todayStart;
+    if (period==='week')  return d >= weekStart;
+    return d >= monthStart;
+  });
+
+  const totalFare = filtered.reduce((s,r) => s+(r.fare||0), 0);
+  const driverNet = Math.round(totalFare * 0.85);
+  const vcFee     = Math.round(totalFare * 0.15);
+  const avgFare   = filtered.length ? Math.round(totalFare/filtered.length) : 0;
+
+  // Detail modal
+  if (detail) {
+    const fare = detail.fare||0;
+    return (
+      <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
+        <div style={{ background:'#fff', padding:'10px 16px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', position:'sticky', top:0, zIndex:10 }}>
+          <button onClick={() => setDetail(null)} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#1a1a2e' }}>←</button>
+          <img src="/logo.png" style={{ height:26, objectFit:'contain' }} alt="VilleCabs"/>
+          <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:4 }}>Ride Details</span>
+        </div>
+        <div style={{ padding:16 }}>
+          <div style={{ background:'#fff', borderRadius:16, padding:18, boxShadow:'0 2px 10px rgba(0,0,0,0.07)', marginBottom:12 }}>
+            <div style={{ fontSize:11, color:'#6b21a8', fontWeight:700, textTransform:'uppercase', letterSpacing:0.8, marginBottom:12 }}>Fare Breakdown</div>
+            {[
+              ['Total Fare',          `J$${fare.toLocaleString()}`,                    '#1a1a2e'],
+              ['VilleCabs Fee (15%)', `-J$${Math.round(fare*0.15).toLocaleString()}`,  '#dc2626'],
+              ['You Earned (85%)',    `J$${Math.round(fare*0.85).toLocaleString()}`,   '#6b21a8'],
+            ].map(([l,v,c],i) => (
+              <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'10px 0', borderBottom:i<2?'1px solid #f0f0f0':'none' }}>
+                <span style={{ fontSize:13, color:'#555' }}>{l}</span>
+                <span style={{ fontSize:14, fontWeight:700, color:c }}>{v}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ background:'#fff', borderRadius:16, padding:18, boxShadow:'0 2px 10px rgba(0,0,0,0.07)', marginBottom:12 }}>
+            <div style={{ fontSize:11, color:'#6b21a8', fontWeight:700, textTransform:'uppercase', letterSpacing:0.8, marginBottom:12 }}>Ride Details</div>
+            {[
+              ['Passenger',  detail.customerName||'—'],
+              ['Pickup',     detail.pickup?.address||'—'],
+              ['Drop-off',   detail.dropoff?.address||'—'],
+              ['Distance',   detail.distanceKm ? detail.distanceKm+' km' : '—'],
+              ['Payment',    detail.paymentMethod||'Cash'],
+              ['Status',     'Completed'],
+              ['Date',       new Date((detail.createdAt?.seconds||0)*1000).toLocaleString()],
+            ].map(([l,v],i) => (
+              <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'9px 0', borderBottom:i<6?'1px solid #f0f0f0':'none', gap:12 }}>
+                <span style={{ fontSize:12, color:'#888', flexShrink:0 }}>{l}</span>
+                <span style={{ fontSize:12, fontWeight:600, color:'#1a1a2e', textAlign:'right' }}>{v}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
       <div style={{ background:'#fff', padding:'10px 16px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', position:'sticky', top:0, zIndex:10 }}>
         <button onClick={() => go('driver-dash')} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#1a1a2e' }}>←</button>
-        <img src="/logo.png" style={{ height:28, objectFit:'contain' }} alt="VilleCabs"/>
+        <img src="/logo.png" style={{ height:26, objectFit:'contain' }} alt="VilleCabs"/>
         <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:4 }}>Earnings</span>
       </div>
+
+      {/* Period selector */}
       <div style={{ display:'flex', gap:8, padding:'12px 16px', background:'#fff', borderBottom:'1px solid #f0f0f0' }}>
         {[['today','Today'],['week','This Week'],['month','This Month']].map(([k,l]) => (
-          <button key={k} onClick={() => setPeriod(k)} style={{ flex:1, padding:'8px', borderRadius:20, border:'none', background:period===k?'#6b21a8':'#f0f0f5', color:period===k?'#fff':'#555', fontSize:12, fontWeight:600, cursor:'pointer' }}>{l}</button>
+          <button key={k} onClick={() => setPeriod(k)}
+            style={{ flex:1, padding:'8px', borderRadius:20, border:'none', background:period===k?'#6b21a8':'#f3f4f6', color:period===k?'#fff':'#555', fontSize:12, fontWeight:600, cursor:'pointer' }}>
+            {l}
+          </button>
         ))}
       </div>
-      <div style={{ padding:'14px 16px 0' }}>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
-          {[['You Earned','J$'+driverNet.toLocaleString(),'#6b21a8'],['Total Fare','J$'+totalFare.toLocaleString(),'#1a1a2e'],['VilleCabs Fee','J$'+vcFee.toLocaleString(),'#ef4444'],['Trips',filtered.length.toString(),'#1a9e5a']].map(([l,v,c],i) => (
-            <div key={i} style={{ background:'#fff', borderRadius:14, padding:'14px', boxShadow:'0 1px 6px rgba(0,0,0,0.07)' }}>
-              <div style={{ fontSize:10, color:'#888', marginBottom:4, textTransform:'uppercase' }}>{l}</div>
-              <div style={{ fontSize:20, fontWeight:800, color:c }}>{v}</div>
-            </div>
-          ))}
+
+      {/* Summary cards */}
+      <div style={{ padding:'14px 14px 0' }}>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+          <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:14, padding:'14px' }}>
+            <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', letterSpacing:0.6, marginBottom:4 }}>You Earned</div>
+            <div style={{ fontSize:24, fontWeight:800, color:'#6b21a8' }}>J${driverNet.toLocaleString()}</div>
+            <div style={{ fontSize:11, color:'#888', marginTop:2 }}>{filtered.length} trips</div>
+          </div>
+          <div style={{ background:'#fff', border:'1px solid #e5e7eb', borderRadius:14, padding:'14px' }}>
+            <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', letterSpacing:0.6, marginBottom:4 }}>Total Fares</div>
+            <div style={{ fontSize:24, fontWeight:800, color:'#1a1a2e' }}>J${totalFare.toLocaleString()}</div>
+            <div style={{ fontSize:11, color:'#888', marginTop:2 }}>Avg J${avgFare.toLocaleString()}</div>
+          </div>
         </div>
-        <div style={{ background:'#f5f0ff', border:'1px solid #d8b4fe', borderRadius:12, padding:'10px 14px', fontSize:12, color:'#6b21a8', marginBottom:14 }}>
-          Drivers keep <strong>85%</strong> of every completed fare.
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
+          <div style={{ background:'#fff0f0', border:'1px solid #fca5a5', borderRadius:12, padding:'12px' }}>
+            <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', letterSpacing:0.6, marginBottom:4 }}>VilleCabs Fee</div>
+            <div style={{ fontSize:18, fontWeight:700, color:'#dc2626' }}>J${vcFee.toLocaleString()}</div>
+          </div>
+          <div style={{ background:'#f0fff4', border:'1px solid #86efac', borderRadius:12, padding:'12px' }}>
+            <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', letterSpacing:0.6, marginBottom:4 }}>Completed Trips</div>
+            <div style={{ fontSize:18, fontWeight:700, color:'#1a9e5a' }}>{filtered.length}</div>
+          </div>
+        </div>
+        <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:10, padding:'10px 14px', fontSize:12, color:'#6b21a8', marginBottom:14 }}>
+          💜 Drivers keep <strong>85%</strong> of every completed fare. VilleCabs keeps 15%.
         </div>
       </div>
-      <div style={{ padding:'0 16px 80px' }}>
-        {loading && <div style={{ textAlign:'center', color:'#888', padding:20 }}>Loading...</div>}
-        {!loading && filtered.length===0 && <div style={{ textAlign:'center', color:'#888', padding:20 }}>No rides in this period</div>}
+
+      {/* Ride list */}
+      <div style={{ padding:'0 14px 90px' }}>
+        <div style={{ fontSize:11, fontWeight:700, color:'#888', textTransform:'uppercase', letterSpacing:0.6, marginBottom:10 }}>Completed Rides</div>
+        {loading && <div style={{ textAlign:'center', color:'#888', padding:24 }}>Loading...</div>}
+        {!loading && filtered.length===0 && <div style={{ textAlign:'center', color:'#888', padding:24 }}>No rides in this period</div>}
         {filtered.map((r,i) => {
-          const d = new Date((r.createdAt?.seconds||0)*1000);
+          const d   = new Date((r.createdAt?.seconds||0)*1000);
+          const net = Math.round((r.fare||0)*0.85);
           return (
-            <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
-              <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
-                <div style={{ fontSize:11, color:'#888' }}>{d.toLocaleDateString()}</div>
-                <div style={{ fontSize:14, fontWeight:700, color:'#6b21a8' }}>J${Math.round((r.fare||0)*0.85).toLocaleString()}</div>
+            <div key={i} onClick={() => setDetail(r)}
+              style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)', cursor:'pointer' }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:6 }}>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>👤 {r.customerName||'Passenger'}</div>
+                  <div style={{ fontSize:11, color:'#888', marginTop:2 }}>{d.toLocaleDateString()} · {d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div>
+                </div>
+                <div style={{ textAlign:'right' }}>
+                  <div style={{ fontSize:16, fontWeight:800, color:'#6b21a8' }}>J${net.toLocaleString()}</div>
+                  <div style={{ fontSize:10, color:'#888' }}>of J${(r.fare||0).toLocaleString()}</div>
+                </div>
               </div>
-              <div style={{ fontSize:12, color:'#1a1a2e', marginBottom:4 }}>👤 {r.customerName||'Passenger'}</div>
-              <div style={{ fontSize:11, color:'#666' }}>📍 {(r.pickup?.address||'').split(',')[0]}</div>
+              <div style={{ fontSize:11, color:'#555', marginBottom:2 }}>📍 {(r.pickup?.address||'').split(',')[0]}</div>
+              <div style={{ fontSize:11, color:'#555', marginBottom:8 }}>🏁 {(r.dropoff?.address||'').split(',')[0]}</div>
+              <div style={{ display:'flex', gap:6 }}>
+                <span style={{ fontSize:10, background:'#f9f5ff', color:'#6b21a8', padding:'2px 8px', borderRadius:8 }}>Fee: J${Math.round((r.fare||0)*0.15).toLocaleString()}</span>
+                <span style={{ fontSize:10, background:'#f0fff4', color:'#1a9e5a', padding:'2px 8px', borderRadius:8 }}>💵 {r.paymentMethod||'Cash'}</span>
+                <span style={{ fontSize:10, color:'#6b21a8', marginLeft:'auto' }}>View →</span>
+              </div>
             </div>
           );
         })}
@@ -5627,53 +6205,104 @@ function DriverEarnings({ go, user }) {
 
 // ── DRIVER DOCUMENTS PAGE ─────────────────────────────────────────────────────
 function DriverDocuments({ go, user }) {
-  const [docs, setDocs] = useState({});
+  const [docs,   setDocs]   = useState({});
   const [saving, setSaving] = useState('');
+  const [msg,    setMsg]    = useState('');
+
   useEffect(() => {
     if (!user?.uid) return;
-    getDoc(doc(db,'drivers',user.uid)).then(snap => { if (snap.exists()) setDocs(snap.data().documents||{}); });
+    getDoc(doc(db,'drivers',user.uid)).then(snap => {
+      if (snap.exists()) setDocs(snap.data().documents||{});
+    });
   }, [user]);
+
   const docTypes = [
-    {key:'licence',label:"Driver's Licence",icon:'🪪'},
-    {key:'fitness',label:'Vehicle Fitness',icon:'📋'},
-    {key:'registration',label:'Vehicle Registration',icon:'📄'},
-    {key:'insurance',label:'Insurance Certificate',icon:'🛡️'},
-    {key:'vehiclePhoto',label:'Vehicle Photo',icon:'🚗'},
+    { key:'licence',      label:"Driver's Licence",            icon:'🪪', required:true },
+    { key:'fitness',      label:'Vehicle Fitness Certificate', icon:'📋', required:true },
+    { key:'registration', label:'Vehicle Registration',        icon:'📄', required:true },
+    { key:'insurance',    label:'Insurance Certificate',       icon:'🛡️', required:false },
+    { key:'vehiclePhoto', label:'Vehicle Photo',               icon:'🚗', required:false },
+    { key:'profilePhoto', label:'Driver Profile Photo',        icon:'📸', required:false },
   ];
+
   const handleUpload = async (key, file) => {
-    if (!file||!user?.uid) return;
-    setSaving(key);
+    if (!file || !user?.uid) return;
+    setSaving(key); setMsg('');
     try {
-      const newDocs = {...docs,[key]:{status:'pending',name:file.name,uploadedAt:new Date().toISOString()}};
-      await updateDoc(doc(db,'drivers',user.uid), {['documents.'+key]:{status:'pending',name:file.name,uploadedAt:new Date().toISOString()}});
-      setDocs(newDocs);
+      const docData = { status:'pending', name:file.name, uploadedAt:new Date().toISOString() };
+      await updateDoc(doc(db,'drivers',user.uid), { [`documents.${key}`]:docData });
+      setDocs(prev => ({ ...prev, [key]:docData }));
+      setMsg('Document uploaded — pending review');
+      setTimeout(() => setMsg(''), 3000);
     } catch(e) { console.error(e); }
     setSaving('');
   };
-  const colors = {approved:'#1a9e5a',pending:'#e8b400',rejected:'#ef4444',missing:'#888'};
-  const labels = {approved:'Approved',pending:'Pending Review',rejected:'Needs Update',missing:'Upload Required'};
+
+  const statusConfig = {
+    approved:  { label:'✅ Approved',       color:'#1a9e5a', bg:'#f0fff4', border:'#86efac' },
+    pending:   { label:'⏳ Pending Review', color:'#b45309', bg:'#fffbeb', border:'#fde047' },
+    rejected:  { label:'❌ Needs Update',   color:'#dc2626', bg:'#fff0f0', border:'#fca5a5' },
+    missing:   { label:'📤 Not Uploaded',   color:'#6b7280', bg:'#f9fafb', border:'#e5e7eb' },
+  };
+
+  const allRequired = docTypes.filter(d => d.required);
+  const uploadedRequired = allRequired.filter(d => docs[d.key]?.status && docs[d.key].status !== 'missing');
+  const progress = Math.round((uploadedRequired.length / allRequired.length) * 100);
+
   return (
     <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
       <div style={{ background:'#fff', padding:'10px 16px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', position:'sticky', top:0, zIndex:10 }}>
         <button onClick={() => go('driver-dash')} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#1a1a2e' }}>←</button>
-        <img src="/logo.png" style={{ height:28, objectFit:'contain' }} alt="VilleCabs"/>
+        <img src="/logo.png" style={{ height:26, objectFit:'contain' }} alt="VilleCabs"/>
         <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:4 }}>My Documents</span>
       </div>
-      <div style={{ padding:'16px 16px 80px' }}>
-        {docTypes.map(({key,label,icon}) => {
-          const d = docs[key]; const status = d?.status||'missing';
+
+      <div style={{ padding:'14px 14px 0' }}>
+        {/* Progress bar */}
+        <div style={{ background:'#fff', borderRadius:14, padding:16, marginBottom:12, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
+          <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
+            <span style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>Document Progress</span>
+            <span style={{ fontSize:13, fontWeight:700, color:'#6b21a8' }}>{uploadedRequired.length}/{allRequired.length} required</span>
+          </div>
+          <div style={{ background:'#f3f4f6', borderRadius:10, height:8, overflow:'hidden' }}>
+            <div style={{ width:`${progress}%`, height:'100%', background:'#6b21a8', borderRadius:10, transition:'width 0.5s ease' }}/>
+          </div>
+        </div>
+
+        {msg && <div style={{ background:'#f0fff4', border:'1px solid #86efac', borderRadius:10, padding:'10px 14px', fontSize:13, color:'#1a9e5a', marginBottom:12 }}>{msg}</div>}
+
+        <div style={{ background:'#fefce8', border:'1px solid #fde047', borderRadius:12, padding:'10px 14px', fontSize:12, color:'#854d0e', marginBottom:12 }}>
+          🛡️ VilleCabs reviews all documents to help keep riders safe. Approved drivers can receive ride requests.
+        </div>
+      </div>
+
+      <div style={{ padding:'0 14px 90px' }}>
+        {docTypes.map(({ key, label, icon, required }) => {
+          const d      = docs[key];
+          const status = d?.status || 'missing';
+          const cfg    = statusConfig[status] || statusConfig.missing;
           return (
             <div key={key} style={{ background:'#fff', borderRadius:14, padding:16, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
-              <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
-                <span style={{ fontSize:26 }}>{icon}</span>
+              <div style={{ display:'flex', alignItems:'flex-start', gap:12, marginBottom:10 }}>
+                <div style={{ width:44, height:44, borderRadius:12, background:cfg.bg, border:`1px solid ${cfg.border}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, flexShrink:0 }}>{icon}</div>
                 <div style={{ flex:1 }}>
-                  <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>{label}</div>
-                  <div style={{ fontSize:11, color:colors[status]||'#888', fontWeight:600, marginTop:2 }}>{labels[status]||status}</div>
+                  <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:3 }}>
+                    <span style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>{label}</span>
+                    {required && <span style={{ fontSize:9, background:'#fee2e2', color:'#dc2626', padding:'1px 6px', borderRadius:6, fontWeight:600 }}>Required</span>}
+                  </div>
+                  <div style={{ fontSize:12, color:cfg.color, fontWeight:600 }}>{cfg.label}</div>
+                  {d?.uploadedAt && <div style={{ fontSize:10, color:'#aaa', marginTop:2 }}>Updated: {new Date(d.uploadedAt).toLocaleDateString()}</div>}
+                  {d?.name && <div style={{ fontSize:10, color:'#888', marginTop:1 }}>{d.name}</div>}
                 </div>
               </div>
-              <label style={{ display:'block', padding:'8px', background:status==='approved'?'#f0fff4':'#6b21a8', color:status==='approved'?'#1a9e5a':'#fff', borderRadius:10, fontSize:12, fontWeight:600, cursor:'pointer', textAlign:'center' }}>
-                {saving===key?'Uploading...':status==='approved'?'Replace Document':'Upload Document'}
-                <input type="file" accept="image/*,.pdf" style={{ display:'none' }} onChange={e=>handleUpload(key,e.target.files[0])} disabled={saving===key}/>
+              {status==='rejected' && (
+                <div style={{ background:'#fff0f0', border:'1px solid #fca5a5', borderRadius:8, padding:'8px 12px', fontSize:12, color:'#dc2626', marginBottom:10 }}>
+                  Please upload a clearer or updated document.
+                </div>
+              )}
+              <label style={{ display:'block', padding:'10px', background:status==='approved'?'#f9f5ff':'#6b21a8', color:status==='approved'?'#6b21a8':'#fff', borderRadius:10, fontSize:13, fontWeight:600, cursor:saving===key?'default':'pointer', textAlign:'center', opacity:saving===key?0.7:1 }}>
+                {saving===key ? '⏳ Uploading...' : status==='approved' ? '🔄 Replace Document' : '📤 Upload Document'}
+                <input type="file" accept="image/*,.pdf" style={{ display:'none' }} onChange={e => handleUpload(key, e.target.files[0])} disabled={saving===key}/>
               </label>
             </div>
           );
@@ -5686,37 +6315,67 @@ function DriverDocuments({ go, user }) {
 // ── DRIVER NOTIFICATIONS PAGE ─────────────────────────────────────────────────
 function DriverNotifications({ go, user }) {
   const [notifs, setNotifs] = useState([
-    {id:'1',type:'account',title:'Welcome to VilleCabs!',message:'Complete your profile to start receiving ride requests.',time:'Today',read:false},
-    {id:'2',type:'account',title:'Application Received',message:'Your driver application is being reviewed.',time:'Today',read:true},
+    { id:'1', type:'account', title:'Welcome to VilleCabs!',       message:'Complete your profile and documents to start receiving ride requests.', time:'Today',     read:false },
+    { id:'2', type:'account', title:'Application Received',        message:'Your VilleCabs driver application is being reviewed by our team.',      time:'Today',     read:false },
+    { id:'3', type:'safety',  title:'Safety Reminder',             message:'Always confirm passenger name before starting a trip.',                 time:'Yesterday', read:true  },
+    { id:'4', type:'system',  title:'Welcome to Manchester!',      message:'VilleCabs is now live in Mandeville. Go online to receive your first ride.', time:'This week', read:true },
   ]);
   const [filter, setFilter] = useState('all');
-  const icons = {ride:'🚕',account:'👤',safety:'🆘',payment:'💰',system:'⚙️'};
-  const filtered = filter==='all'?notifs:filter==='unread'?notifs.filter(n=>!n.read):notifs.filter(n=>n.type===filter);
+
+  const typeIcon  = { ride:'🚕', account:'👤', safety:'🛡️', payment:'💰', system:'⚙️' };
+  const typeColor = { ride:'#6b21a8', account:'#1a9e5a', safety:'#dc2626', payment:'#b45309', system:'#374151' };
+
+  const filtered = filter==='all' ? notifs
+    : filter==='unread' ? notifs.filter(n=>!n.read)
+    : notifs.filter(n=>n.type===filter);
+
+  const unreadCount = notifs.filter(n=>!n.read).length;
+
+  const markAllRead = () => setNotifs(prev => prev.map(n => ({...n, read:true})));
+  const markRead    = (id) => setNotifs(prev => prev.map(n => n.id===id ? {...n,read:true} : n));
+
   return (
     <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
       <div style={{ background:'#fff', padding:'10px 16px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', position:'sticky', top:0, zIndex:10 }}>
         <button onClick={() => go('driver-dash')} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#1a1a2e' }}>←</button>
-        <img src="/logo.png" style={{ height:28, objectFit:'contain' }} alt="VilleCabs"/>
+        <img src="/logo.png" style={{ height:26, objectFit:'contain' }} alt="VilleCabs"/>
         <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:4 }}>Notifications</span>
-        <button onClick={() => setNotifs(p=>p.map(n=>({...n,read:true})))} style={{ marginLeft:'auto', background:'none', border:'none', fontSize:11, color:'#6b21a8', cursor:'pointer', fontWeight:600 }}>Mark all read</button>
+        {unreadCount>0 && <div style={{ background:'#6b21a8', color:'#fff', borderRadius:10, fontSize:10, fontWeight:700, padding:'2px 7px', marginLeft:2 }}>{unreadCount}</div>}
+        <button onClick={markAllRead} style={{ marginLeft:'auto', background:'none', border:'none', fontSize:11, color:'#6b21a8', cursor:'pointer', fontWeight:600 }}>Mark all read</button>
       </div>
-      <div style={{ display:'flex', gap:6, padding:'10px 16px', background:'#fff', borderBottom:'1px solid #f0f0f0', overflowX:'auto' }}>
-        {[['all','All'],['unread','Unread'],['ride','Rides'],['account','Account'],['safety','Safety']].map(([k,l]) => (
-          <button key={k} onClick={() => setFilter(k)} style={{ flexShrink:0, padding:'5px 12px', borderRadius:20, border:'none', background:filter===k?'#6b21a8':'#f0f0f5', color:filter===k?'#fff':'#555', fontSize:11, fontWeight:600, cursor:'pointer' }}>{l}</button>
+
+      {/* Filters */}
+      <div style={{ display:'flex', gap:6, padding:'10px 14px', background:'#fff', borderBottom:'1px solid #f0f0f0', overflowX:'auto', scrollbarWidth:'none' }}>
+        {[['all','All'],['unread','Unread'],['ride','Rides'],['account','Account'],['safety','Safety'],['payment','Payments']].map(([k,l]) => (
+          <button key={k} onClick={() => setFilter(k)}
+            style={{ flexShrink:0, padding:'5px 12px', borderRadius:20, border:'none', background:filter===k?'#6b21a8':'#f3f4f6', color:filter===k?'#fff':'#555', fontSize:11, fontWeight:600, cursor:'pointer' }}>
+            {l}
+          </button>
         ))}
       </div>
-      <div style={{ padding:'12px 16px 80px' }}>
-        {filtered.length===0&&<div style={{ textAlign:'center', color:'#888', padding:30 }}>No notifications</div>}
+
+      <div style={{ padding:'12px 14px 90px' }}>
+        {filtered.length===0 && (
+          <div style={{ textAlign:'center', padding:40 }}>
+            <div style={{ fontSize:40, marginBottom:12 }}>🔔</div>
+            <div style={{ fontSize:14, color:'#888' }}>No notifications</div>
+          </div>
+        )}
         {filtered.map((n,i) => (
-          <div key={i} style={{ background:n.read?'#fff':'#f9f5ff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)', borderLeft:n.read?'none':'3px solid #6b21a8' }}>
+          <div key={i} onClick={() => markRead(n.id)}
+            style={{ background:n.read?'#fff':'#f9f5ff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)', borderLeft:n.read?'3px solid transparent':`3px solid ${typeColor[n.type]||'#6b21a8'}`, cursor:'pointer' }}>
             <div style={{ display:'flex', gap:12 }}>
-              <div style={{ fontSize:22 }}>{icons[n.type]||'🔔'}</div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:3 }}>{n.title}</div>
-                <div style={{ fontSize:12, color:'#555', lineHeight:1.5 }}>{n.message}</div>
-                <div style={{ fontSize:10, color:'#aaa', marginTop:4 }}>{n.time}</div>
+              <div style={{ width:38, height:38, borderRadius:10, background:`${typeColor[n.type]||'#6b21a8'}18`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>
+                {typeIcon[n.type]||'🔔'}
               </div>
-              {!n.read&&<div style={{ width:8, height:8, borderRadius:'50%', background:'#6b21a8', flexShrink:0 }}/>}
+              <div style={{ flex:1 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:3 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>{n.title}</div>
+                  {!n.read && <div style={{ width:8, height:8, borderRadius:'50%', background:'#6b21a8', flexShrink:0, marginTop:3 }}/>}
+                </div>
+                <div style={{ fontSize:12, color:'#555', lineHeight:1.5, marginBottom:4 }}>{n.message}</div>
+                <div style={{ fontSize:10, color:'#aaa' }}>{n.time}</div>
+              </div>
             </div>
           </div>
         ))}
@@ -5725,6 +6384,45 @@ function DriverNotifications({ go, user }) {
   );
 }
 
+
+function LoadingScreen() {
+  return (
+    <div style={{ ...s.screen, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:16 }}>
+      <div style={{ fontSize:48 }}>🚕</div>
+      <div style={{ color:YELLOW, fontSize:16, fontWeight:500 }}>VilleCabs</div>
+      <div style={{ color:'rgba(255,255,255,0.4)', fontSize:13 }}>Loading...</div>
+    </div>
+  );
+}
+
+// ── APP ───────────────────────────────────────────────────────────────────────
+const MAP_BG_SCREENS = new Set(['splash','role','customer-signup','customer-login','otp','driver-signup','driver-pending','driver-login','customer-dash','pin-pickup','pin-dropoff','vehicle-select','booking-confirm','live-ride','driver-dash','driver-active','driver-profile','driver-settings','customer-profile','customer-settings','chat']);
+
+// Prevent auth handler from re-navigating after manual login
+let _manualNavDone = false;
+
+// Error boundary to catch runtime crashes
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { hasError:false, error:null }; }
+  static getDerivedStateFromError(e) { return { hasError:true, error:e }; }
+  componentDidCatch(e, info) { console.error('App crash:', e, info); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ minHeight:'100vh', background:'#f5f6fa', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24, textAlign:'center' }}>
+          <div style={{ fontSize:48, marginBottom:16 }}>⚠️</div>
+          <div style={{ fontSize:18, fontWeight:700, color:'#1a1a2e', marginBottom:8 }}>Something went wrong</div>
+          <div style={{ fontSize:13, color:'#666', marginBottom:8 }}>{this.state.error?.message||'Unknown error'}</div>
+          <button onClick={() => { this.setState({ hasError:false }); window.location.reload(); }}
+            style={{ padding:'12px 24px', background:'#0f1a35', color:'#fff', border:'none', borderRadius:10, fontSize:14, cursor:'pointer', marginTop:16 }}>
+            Reload App
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function App() {
   const [screen,      setScreen]      = useState('splash');
@@ -5836,11 +6534,11 @@ export default function App() {
     'featured':         <FeaturedPage {...props}/>,
     'payments':         <PaymentsPage {...props}/>,
     'promotions':       <PromotionsPage {...props}/>,
-    'safety-centre':    <SafetyCentre {...props}/>,
-    'partner-with-us':  <PartnerWithUs {...props}/>,
-    'driver-earnings':  <DriverEarnings {...props}/>,
-    'driver-documents': <DriverDocuments {...props}/>,
-    'driver-notifications': <DriverNotifications {...props}/>,
+    'safety-centre':         <SafetyCentre {...props}/>,
+    'partner-with-us':       <PartnerWithUs {...props}/>,
+    'driver-earnings':        <DriverEarnings {...props}/>,
+    'driver-documents':       <DriverDocuments {...props}/>,
+    'driver-notifications':   <DriverNotifications {...props}/>,
   };
 
   return (
