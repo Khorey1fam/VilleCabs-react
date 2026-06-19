@@ -303,7 +303,7 @@ function Footer({ go }) {
         {/* Logo + tagline */}
         <div style={{ marginBottom:32 }}>
           <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
-            <img src="/villecabs-logo.png" alt="V" style={{ width:36, height:36, borderRadius:'50%', objectFit:'cover' }}/>
+            <img src="/logo.png" alt="V" style={{ width:36, height:36, borderRadius:'50%', objectFit:'cover' }}/>
             <span style={{ fontSize:18, fontWeight:700, color:WHITE }}>VilleCabs</span>
           </div>
           <p style={{ fontSize:13, color:'rgba(255,255,255,0.4)', margin:0 }}>Your city. Your ride. Your way.</p>
@@ -1039,7 +1039,7 @@ function TermsScreen({ go, user }) {
   return (
     <div style={{ ...s.content, background:'transparent' }}>
       <div style={{ background:'rgba(10,15,35,0.92)', padding:'16px 18px', backdropFilter:'blur(10px)', display:'flex', alignItems:'center', gap:10 }}>
-        <img src="/villecabs-logo.png" alt="V" style={{ width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
+        <img src="/logo.png" alt="V" style={{ width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
         <span style={{ color:WHITE, fontSize:16, fontWeight:600 }}>VilleCabs</span>
       </div>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:100 }}>
@@ -1145,7 +1145,7 @@ function WelcomeTips({ go, user }) {
     <div style={{ ...s.content, background:'transparent' }}>
       <div style={{ background:'rgba(10,15,35,0.92)', padding:'16px 18px', backdropFilter:'blur(10px)', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <img src="/villecabs-logo.png" alt="V" style={{ width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
+          <img src="/logo.png" alt="V" style={{ width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
           <span style={{ color:WHITE, fontSize:16, fontWeight:600 }}>VilleCabs</span>
         </div>
         <span style={{ color:'rgba(255,255,255,0.4)', fontSize:12 }}>{step+1} of {tips.length}</span>
@@ -1190,7 +1190,7 @@ function AboutUs({ go, user }) {
       <TopBar title="About VilleCabs" go={go} user={user}/>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:40 }}>
         <div style={{ textAlign:'center', marginBottom:24 }}>
-          <img src="/villecabs-logo.png" alt="VilleCabs" style={{ width:80, height:80, borderRadius:'50%', objectFit:'cover', border:'2px solid rgba(232,180,0,0.4)', marginBottom:12 }}/>
+          <img src="/logo.png" alt="VilleCabs" style={{ width:80, height:80, borderRadius:'50%', objectFit:'cover', border:'2px solid rgba(232,180,0,0.4)', marginBottom:12 }}/>
           <h2 style={{ fontSize:20, fontWeight:700, color:WHITE, marginBottom:4 }}>Welcome to VilleCabs</h2>
           <p style={{ fontSize:13, color:YELLOW, fontStyle:'italic' }}>Your city. Your ride. Your way.</p>
         </div>
@@ -1556,7 +1556,7 @@ function CustomerDash({ go, user, setUser }) {
           if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
             new Notification('🚗 Driver found!', {
               body: `${active.driverName||'Your driver'} is on the way · ${active.licensePlate||''}`,
-              icon: '/villecabs-logo.png',
+              icon: '/logo.png',
             });
           }
         }
@@ -1571,7 +1571,7 @@ function CustomerDash({ go, user, setUser }) {
           if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
             new Notification('📍 Driver has arrived!', {
               body: `${active.driverName||'Your driver'} is at your pickup location. Please come outside!`,
-              icon: '/villecabs-logo.png',
+              icon: '/logo.png',
             });
           }
         }
@@ -1583,7 +1583,7 @@ function CustomerDash({ go, user, setUser }) {
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
           new Notification('✅ Ride completed!', {
             body: `Your ride with ${completed.driverName||'your driver'} is complete. Rate your driver!`,
-            icon: '/villecabs-logo.png',
+            icon: '/logo.png',
           });
         }
       } else if (!active && !completed) {
@@ -1621,7 +1621,7 @@ function CustomerDash({ go, user, setUser }) {
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
           new Notification('📍 Driver has arrived!', {
             body: `${data.driverName||'Your driver'} is at your pickup location. Please come outside!`,
-            icon: '/villecabs-logo.png',
+            icon: '/logo.png',
           });
         }
       }
@@ -3077,14 +3077,14 @@ function LiveRide({ go, bookingId, user }) {
           if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
             new Notification('🚗 Driver found!', {
               body: `${data.driverName||'Your driver'} is on the way in a ${data.vehicleMake||''} ${data.vehicleModel||''} · ${data.licensePlate||''}`,
-              icon: '/villecabs-logo.png',
+              icon: '/logo.png',
             });
           } else if (Notification.permission === 'default') {
             Notification.requestPermission().then(perm => {
               if (perm === 'granted') {
                 new Notification('🚗 Driver found!', {
                   body: `${data.driverName||'Your driver'} is on the way!`,
-                  icon: '/villecabs-logo.png',
+                  icon: '/logo.png',
                 });
               }
             });
@@ -3096,7 +3096,7 @@ function LiveRide({ go, bookingId, user }) {
           if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
             new Notification('📍 Driver has arrived!', {
               body: `${data.driverName||'Your driver'} is at your pickup location. Please come outside!`,
-              icon: '/villecabs-logo.png',
+              icon: '/logo.png',
             });
           }
         }
@@ -3525,7 +3525,7 @@ function DriverTermsScreen({ go, user }) {
   return (
     <div style={{ ...s.content, background:'transparent' }}>
       <div style={{ background:'rgba(10,15,35,0.92)', padding:'16px 18px', backdropFilter:'blur(10px)', display:'flex', alignItems:'center', gap:10 }}>
-        <img src="/villecabs-logo.png" alt="V" style={{ width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
+        <img src="/logo.png" alt="V" style={{ width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
         <span style={{ color:WHITE, fontSize:16, fontWeight:600 }}>VilleCabs — Driver Agreement</span>
       </div>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:100 }}>
@@ -3632,7 +3632,7 @@ function DriverWelcomeTips({ go, user }) {
     <div style={{ ...s.content, background:'transparent' }}>
       <div style={{ background:'rgba(10,15,35,0.92)', padding:'16px 18px', backdropFilter:'blur(10px)', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <img src="/villecabs-logo.png" alt="V" style={{ width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
+          <img src="/logo.png" alt="V" style={{ width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
           <span style={{ color:WHITE, fontSize:16, fontWeight:600 }}>Driver Guide</span>
         </div>
         <span style={{ color:'rgba(255,255,255,0.4)', fontSize:12 }}>{step+1} of {tips.length}</span>
@@ -3671,7 +3671,7 @@ function DriverAboutUs({ go, user }) {
       <TopBar title="About VilleCabs" go={go} user={user}/>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:40 }}>
         <div style={{ textAlign:'center', marginBottom:24 }}>
-          <img src="/villecabs-logo.png" alt="VilleCabs" style={{ width:80, height:80, borderRadius:'50%', objectFit:'cover', border:'2px solid rgba(232,180,0,0.4)', marginBottom:12 }}/>
+          <img src="/logo.png" alt="VilleCabs" style={{ width:80, height:80, borderRadius:'50%', objectFit:'cover', border:'2px solid rgba(232,180,0,0.4)', marginBottom:12 }}/>
           <h2 style={{ fontSize:20, fontWeight:700, color:WHITE, marginBottom:4 }}>Welcome to VilleCabs</h2>
           <p style={{ fontSize:13, color:YELLOW, fontStyle:'italic' }}>Your city. Your ride. Your way.</p>
         </div>
@@ -5975,66 +5975,60 @@ export default function App() {
   const [loading,     setLoading]     = useState(true);
 
   useEffect(() => {
+    let done = false;
+    // Safety net - always show app within 4 seconds
+    const safety = setTimeout(() => {
+      if (!done) { done = true; setLoading(false); setScreen('splash'); }
+    }, 4000);
+
     const unsub = onAuthStateChanged(auth, async (fu) => {
-      if (fu) {
-        // Skip if user already manually logged in
-        if (_manualNavDone) { setLoading(false); return; }
-        // Safety timeout - never stay stuck on loading screen
-        const safetyTimer = setTimeout(() => { setLoading(false); setScreen('splash'); }, 3000);
-        try {
-          const [cSnap, dSnap] = await Promise.all([
-            getDoc(doc(db,'customers',fu.uid)),
-            getDoc(doc(db,'drivers',fu.uid)),
-          ]);
-          // ── DRIVER FIRST ──────────────────────────────────────────────────
-          if (dSnap.exists()) {
-            const d = dSnap.data();
-            if (d.status === 'approved') {
-              setUser({ uid:fu.uid, name:d.name, email:fu.email, role:'driver' });
-              try {
-                const activeQ = query(collection(db,'bookings'), where('driverId','==',fu.uid), where('status','==','active'));
-                const activeSnap = await getDocs(activeQ);
-                if (!activeSnap.empty) {
-                  setBookingId(activeSnap.docs[0].id);
-                  setScreen('driver-active');
-                } else if (!d.termsAccepted) { setScreen('driver-terms'); }
-                else if (!d.tipsSeen) { setScreen('driver-welcome-tips'); }
-                else { setScreen('driver-dash'); }
-              } catch(e) { setScreen('driver-dash'); }
-            } else if (d.status === 'pending') { setScreen('driver-pending'); }
-            else { setScreen('driver-login'); }
-          // ── CUSTOMER ──────────────────────────────────────────────────────
-          } else if (cSnap.exists()) {
-            const d = cSnap.data();
-            if (!fu.emailVerified && fu.providerData[0]?.providerId === 'password') {
-              setUser({ uid:fu.uid, name:d.name||fu.displayName, email:fu.email, role:'customer' });
-              setScreen('otp');
-            } else {
-              setUser({ uid:fu.uid, name:d.name||fu.displayName, email:fu.email, role:'customer' });
-              try {
-                const q1 = query(collection(db,'bookings'), where('customerId','==',fu.uid), where('status','==','searching'));
-                const q2 = query(collection(db,'bookings'), where('customerId','==',fu.uid), where('status','==','active'));
-                const [s1,s2] = await Promise.all([getDocs(q1), getDocs(q2)]);
-                const found = [...s1.docs, ...s2.docs];
-                const twoHoursAgo = Date.now() / 1000 - 7200;
-                const recentBooking = found.find(b => (b.data().createdAt?.seconds||0) > twoHoursAgo);
-                if (recentBooking) { setBookingId(recentBooking.id); setScreen('live-ride'); }
-                else if (!d.termsAccepted) { setScreen('terms'); }
-                else if (!d.tipsSeen) { setScreen('welcome-tips'); }
-                else { setScreen('customer-dash'); }
-              } catch(e) { setScreen('customer-dash'); }
-            }
-          }
-        } catch(e) { console.error('Auth restore error:', e); setScreen('splash'); }
-        finally { clearTimeout(safetyTimer); setLoading(false); }
-      } else {
-        setTimeout(() => setLoading(false), 800);
+      if (done) return;
+      if (!fu) {
+        // Not logged in - show landing
+        clearTimeout(safety);
+        done = true;
+        setTimeout(() => setLoading(false), 300);
         return;
       }
+      // Logged in - restore session
+      try {
+        const [cSnap, dSnap] = await Promise.all([
+          getDoc(doc(db, 'customers', fu.uid)),
+          getDoc(doc(db, 'drivers',   fu.uid)),
+        ]);
+        if (dSnap.exists()) {
+          const d = dSnap.data();
+          setUser({ uid:fu.uid, name:d.name||fu.displayName||'Driver', email:fu.email, role:'driver' });
+          if      (d.status === 'approved') setScreen('driver-dash');
+          else if (d.status === 'pending')  setScreen('driver-pending');
+          else                               setScreen('driver-login');
+        } else if (cSnap.exists()) {
+          const d = cSnap.data();
+          setUser({ uid:fu.uid, name:d.name||fu.displayName||'Customer', email:fu.email, role:'customer' });
+          if (!fu.emailVerified && fu.providerData?.[0]?.providerId === 'password') {
+            setScreen('otp');
+          } else if (!d.termsAccepted) {
+            setScreen('terms');
+          } else if (!d.tipsSeen) {
+            setScreen('welcome-tips');
+          } else {
+            setScreen('customer-dash');
+          }
+        } else {
+          // User in Firebase Auth but no Firestore record
+          setScreen('splash');
+        }
+      } catch(e) {
+        console.error('Auth restore error:', e);
+        setScreen('splash');
+      }
+      clearTimeout(safety);
+      done = true;
       setLoading(false);
     });
-    return () => unsub();
-  }, []);
+
+    return () => { unsub(); clearTimeout(safety); };
+  }, []););
 
   // ── 10-minute idle logout ─────────────────────────────────────────────────
   useEffect(() => {
