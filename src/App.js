@@ -6028,7 +6028,7 @@ export default function App() {
     });
 
     return () => { unsub(); clearTimeout(safety); };
-  }, []););
+  }, []);
 
   // ── 10-minute idle logout ─────────────────────────────────────────────────
   useEffect(() => {
