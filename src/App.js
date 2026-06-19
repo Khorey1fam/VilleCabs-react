@@ -43,7 +43,17 @@ const WHITE  = '#ffffff';
 
 // Manchester, Jamaica centre
 const MANCHESTER_CENTER = { lat: 18.0416, lng: -77.5036 };
-const LIBRARIES = ['places'];
+const LIBRARIES       = ['places'];
+const GOOGLE_MAPS_KEY = 'AIzaSyDwEPuCCS1fkHG3p2s1F_TvTCqKxINYq4w';
+
+const geocodeLatLng = async (lat, lng) => {
+  try {
+    const res  = await fetch('https://maps.googleapis.com/maps/api/geocode/json?latlng=' + lat + ',' + lng + '&key=' + GOOGLE_MAPS_KEY);
+    const data = await res.json();
+    if (data.results && data.results[0]) return data.results[0].formatted_address;
+  } catch(e) {}
+  return lat.toFixed(5) + ', ' + lng.toFixed(5);
+};
 
 // Dark map style matching VilleCabs theme
 const MAP_STYLE = [
