@@ -129,7 +129,7 @@ function MapBg() { return null; }
 function VilleMap({ height = 260, center = MANCHESTER_CENTER, zoom = 14, onClick, markers = [], directions = null, children, expandable = false }) {
   const [expanded, setExpanded] = useState(false);
   const { isLoaded } = useJsApiLoader({
-    googleMapsApiKey: process.env.REACT_APP_GOOGLE_MAPS_KEY,
+    googleMapsApiKey: GOOGLE_MAPS_KEY,
     libraries: LIBRARIES,
   });
 
@@ -2178,23 +2178,40 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
   const BIAS_LNG = -77.5071;
   const RADIUS   = 25000; // 25km covers all of Manchester Parish
 
-  // Poll until Google Maps Places is ready
+  // Load Google Maps if not loaded, then init Places
   useEffect(() => {
-    let attempts = 0;
-    const check = setInterval(() => {
-      attempts++;
-      if (window.google && window.google.maps && window.google.maps.places) {
-        clearInterval(check);
-        try {
+    const initPlaces = () => {
+      try {
+        if (window.google?.maps?.places) {
           autocomplete.current = new window.google.maps.places.AutocompleteService();
           details.current      = new window.google.maps.places.PlacesService(document.createElement('div'));
           token.current        = new window.google.maps.places.AutocompleteSessionToken();
           setReady(true);
-        } catch(e) { console.warn('Places init error:', e); }
-      }
-      if (attempts > 30) clearInterval(check); // stop after 15s
-    }, 500);
-    return () => clearInterval(check);
+          return true;
+        }
+      } catch(e) { console.warn('Places init error:', e); }
+      return false;
+    };
+
+    // Try immediately
+    if (initPlaces()) return;
+
+    // Load Maps script if not present
+    if (!document.querySelector('script[src*="maps.googleapis.com"]')) {
+      const script = document.createElement('script');
+      script.src = 'https://maps.googleapis.com/maps/api/js?key=' + GOOGLE_MAPS_KEY + '&libraries=places';
+      script.async = true;
+      script.onload = () => initPlaces();
+      document.head.appendChild(script);
+    } else {
+      // Script loading - poll until ready
+      let attempts = 0;
+      const poll = setInterval(() => {
+        attempts++;
+        if (initPlaces() || attempts > 40) clearInterval(poll);
+      }, 500);
+      return () => clearInterval(poll);
+    }
   }, []);
 
   // Sync external value changes
