@@ -2886,286 +2886,117 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
 }
 
 // ── BOOKING CONFIRM ──────────────────────────────────────────────────────────
-function BookingConfirm({ go, bookingId, user }) {
-  const [booking,   setBooking]   = useState(null);
-  const [payment,   setPayment]   = useState('cash');
-  const [step,      setStep]      = useState('select'); // 'select' | 'card-form'
-  const [processing,setProcessing]= useState(false);
-  const [cardError, setCardError] = useState('');
-  const [cardPaid,  setCardPaid]  = useState(false);
-  const [stripe,    setStripe]    = useState(null);
-  const [elements,  setElements]  = useState(null);
-  const cardElementRef = useRef(null);
-  const stripeKey = process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY;
-  const jmdToUsd  = (jmd) => ((jmd || 0) / 157).toFixed(2);
+function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, user }) {
+  const [booking,  setBooking]  = useState(null);
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState('');
 
+  // Load booking details
   useEffect(() => {
     if (!bookingId) return;
-    let prevStatus = null;
-    const unsub = onSnapshot(doc(db,'bookings',bookingId), snap => {
-      if (snap.exists()) {
-        const data = { id:snap.id, ...snap.data() };
-        setBooking(data);
-        // Browser notification when driver accepts
-        if (data.status === 'active' && prevStatus !== 'active') {
-          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-            new Notification('🚗 Driver found!', {
-              body: `${data.driverName||'Your driver'} is on the way in a ${data.vehicleMake||''} ${data.vehicleModel||''} · ${data.licensePlate||''}`,
-              icon: '/villecabs-logo.png',
-            });
-          } else if (Notification.permission === 'default') {
-            Notification.requestPermission().then(perm => {
-              if (perm === 'granted') {
-                new Notification('🚗 Driver found!', {
-                  body: `${data.driverName||'Your driver'} is on the way!`,
-                  icon: '/villecabs-logo.png',
-                });
-              }
-            });
-          }
-        }
-        // Browser notification when driver arrives
-        if (data.driverArrived && prevStatus !== 'arrived') {
-          prevStatus = 'arrived';
-          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-            new Notification('📍 Driver has arrived!', {
-              body: `${data.driverName||'Your driver'} is at your pickup location. Please come outside!`,
-              icon: '/villecabs-logo.png',
-            });
-          }
-        }
-        prevStatus = data.status;
-      }
-    }, err => {
-      console.error('LiveRide listener error:', err);
-    });
-    return () => unsub();
+    getDoc(doc(db,'bookings',bookingId)).then(snap => {
+      if (snap.exists()) setBooking({ id:snap.id, ...snap.data() });
+    }).catch(e => console.error(e));
   }, [bookingId]);
 
-  // Load Stripe Elements when card form is shown
-  useEffect(() => {
-    if (step !== 'card-form' || !stripeKey || !stripeKey.startsWith('pk_')) return;
-    const loadStripeElements = async () => {
-      console.log('Stripe not available');
-    };
-    loadStripeElements();
-  }, [step, stripeKey]);
+  const handleConfirm = async () => {
+    if (loading) return;
+    setLoading(true); setError('');
+    try {
+      if (bookingId) {
+        // Update booking status to searching if needed
+        await updateDoc(doc(db,'bookings',bookingId), { status:'searching', confirmedAt: serverTimestamp() });
+      }
+      go('live-ride');
+    } catch(e) {
+      setError('Failed to confirm. Please try again.');
+      setLoading(false);
+    }
+  };
 
-  // ── Payment success ───────────────────────────────────────────────────────
-  if (cardPaid) {
-    return (
-      <div style={{ ...s.content, background:'transparent', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'100vh', padding:24 }}>
-        <div style={{ fontSize:72, marginBottom:16 }}>✅</div>
-        <h2 style={{ fontSize:22, fontWeight:500, color:WHITE, marginBottom:8 }}>Payment successful!</h2>
-        <p style={{ fontSize:14, color:'rgba(255,255,255,0.5)', marginBottom:6 }}>J${booking?.fare?.toLocaleString()} (≈ ${jmdToUsd(booking?.fare)} USD) charged to your card</p>
-        <div style={{ background:'rgba(15,20,40,0.8)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:12, padding:14, marginBottom:28, width:'100%', maxWidth:320 }}>
-          <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:6 }}>
-            <span style={{ color:'rgba(255,255,255,0.5)' }}>Amount (JMD)</span>
-            <span style={{ color:WHITE }}>J${booking?.fare?.toLocaleString()}</span>
-          </div>
-          <div style={{ display:'flex', justifyContent:'space-between', fontSize:13 }}>
-            <span style={{ color:'rgba(255,255,255,0.5)' }}>Charged (USD)</span>
-            <span style={{ color:GREEN, fontWeight:500 }}>≈ ${jmdToUsd(booking?.fare)} USD</span>
-          </div>
-        </div>
-        <button style={{ ...s.btnY, maxWidth:320 }} onClick={() => go('live-ride')}>Track your ride →</button>
-      </div>
-    );
-  }
+  const fare    = booking?.fare || pickupData?.fare || 0;
+  const address = booking?.pickup?.address || pickupData?.address || '';
+  const dropoff = booking?.dropoff?.address || dropoffData?.address || '';
+  const vehicle = booking?.vehicleType || pickupData?.vehicleType || 'VilleRide';
+  const dist    = booking?.distanceKm || 0;
 
-  // ── Card form with Stripe Elements ───────────────────────────────────────
-  if (step === 'card-form') {
-    return (
-      <div style={{ ...s.content, background:'transparent' }}>
-        <TopBar title="Card Payment" onBack={() => { setStep('select'); setCardError(''); }}/>
-        <div style={{ padding:16, maxWidth:420, margin:'0 auto' }}>
-
-          {/* Amount banner */}
-          <div style={{ background:'rgba(232,180,0,0.08)', border:'0.5px solid rgba(232,180,0,0.25)', borderRadius:12, padding:14, marginBottom:16 }}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
-              <span style={{ fontSize:13, color:'rgba(255,255,255,0.7)' }}>Amount to charge</span>
-              <span style={{ fontSize:20, fontWeight:700, color:YELLOW }}>J${booking?.fare?.toLocaleString()}</span>
-            </div>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-              <span style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>Charged to your card in USD</span>
-              <span style={{ fontSize:12, color:'rgba(255,255,255,0.5)' }}>≈ ${jmdToUsd(booking?.fare)} USD</span>
-            </div>
-          </div>
-
-          {/* Mode banner */}
-          {(!stripeKey || !stripeKey.startsWith('pk_')) ? (
-            <div style={{ background:'rgba(232,180,0,0.08)', border:'0.5px solid rgba(232,180,0,0.2)', borderRadius:10, padding:'10px 14px', marginBottom:14, fontSize:12, color:'rgba(232,180,0,0.8)' }}>
-              ⚠️ Demo mode — no real charge. Add REACT_APP_STRIPE_PUBLISHABLE_KEY to Vercel to enable live payments.
-            </div>
-          ) : (
-            <div style={{ background:'rgba(26,158,90,0.08)', border:'0.5px solid rgba(26,158,90,0.2)', borderRadius:10, padding:'10px 14px', marginBottom:14, fontSize:12, color:'#9fe1cb' }}>
-              🔒 Secured by Stripe — your card details are encrypted
-            </div>
-          )}
-
-          {/* Stripe Elements card input OR demo form */}
-          <div style={{ background:'rgba(15,20,40,0.8)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:16, marginBottom:14 }}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
-              <div style={{ fontSize:14, fontWeight:500, color:WHITE }}>Card Details</div>
-              <div style={{ display:'flex', gap:6 }}>
-                {['VISA','MC','AMEX'].map(b => (
-                  <span key={b} style={{ background:'rgba(255,255,255,0.07)', borderRadius:6, padding:'3px 8px', fontSize:10, color:'rgba(255,255,255,0.5)' }}>{b}</span>
-                ))}
-              </div>
-            </div>
-
-            {cardError && <div style={s.errBox}>⚠️ {cardError}</div>}
-
-            {stripeKey && stripeKey.startsWith('pk_') ? (
-              // Real Stripe Elements input
-              <div>
-                <label style={s.lbl}>Card details</label>
-                <div ref={cardElementRef} style={{ background:'rgba(255,255,255,0.08)', border:'0.5px solid rgba(255,255,255,0.2)', borderRadius:10, padding:'14px 14px', marginBottom:14, minHeight:44 }}/>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,0.3)', marginTop:4, display:'flex', alignItems:'center', gap:4 }}>
-                  🔒 256-bit SSL encrypted · Powered by Stripe
-                </div>
-              </div>
-            ) : (
-              // Demo mode inputs
-              <div>
-                <label style={s.lbl}>Card Number (demo)</label>
-                <input style={{ ...s.inp, letterSpacing:2 }} placeholder="4242 4242 4242 4242" defaultValue="4242 4242 4242 4242"/>
-                <div style={{ display:'flex', gap:12 }}>
-                  <div style={{ flex:1 }}><label style={s.lbl}>Expiry</label><input style={s.inp} placeholder="12/28" defaultValue="12/28"/></div>
-                  <div style={{ flex:1 }}><label style={s.lbl}>CVV</label><input style={s.inp} placeholder="123" defaultValue="123"/></div>
-                </div>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,0.3)', marginTop:4 }}>⚠️ Demo mode — no real charge will be made</div>
-              </div>
-            )}
-          </div>
-
-          {/* Fare summary */}
-          <div style={{ background:DARK, borderRadius:12, padding:14, marginBottom:14 }}>
-            <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:'rgba(255,255,255,0.6)', marginBottom:6 }}>
-              <span>Ride fare</span><span>J${booking?.fare?.toLocaleString()}</span>
-            </div>
-            <div style={{ display:'flex', justifyContent:'space-between', fontSize:13, color:'rgba(255,255,255,0.6)', marginBottom:6 }}>
-              <span>Processing fee</span><span>J$0</span>
-            </div>
-            <div style={{ display:'flex', justifyContent:'space-between', fontSize:15, fontWeight:500, color:'#e8b400', borderTop:'0.5px solid rgba(255,255,255,0.15)', paddingTop:8, marginTop:4 }}>
-              <span>Total (JMD)</span><span>J${booking?.fare?.toLocaleString()}</span>
-            </div>
-            <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.4)', marginTop:4 }}>
-              <span>Charged to card (USD)</span><span>≈ ${jmdToUsd(booking?.fare)} USD</span>
-            </div>
-          </div>
-
-          <button style={{ ...s.btnY, opacity:processing?0.7:1, fontSize:15 }}
-            onClick={handleCardPay} disabled={processing}>
-            {processing ? '⏳ Processing payment...' : `Pay J$${booking?.fare?.toLocaleString()} (≈ $${jmdToUsd(booking?.fare)} USD)`}
-          </button>
-          <button style={s.btnO} onClick={() => { setStep('select'); setCardError(''); }}>
-            ← Change payment method
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ── Payment method selection ──────────────────────────────────────────────
   return (
-    <div style={{ ...s.content }}>
+    <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
       <TopBar title="Confirm Booking" onBack={() => go('vehicle-select')} go={go} user={user}/>
-      {/* What to look for */}
-      <div style={{ background:'#111111', padding:'12px 16px', display:'flex', gap:10, alignItems:'flex-start' }}>
-        <span style={{ fontSize:18, flexShrink:0 }}>👀</span>
-        <div>
-          <div style={{ fontSize:12, fontWeight:600, color:'#e8b400', marginBottom:2 }}>What to Look For</div>
-          <div style={{ fontSize:11, color:'rgba(255,255,255,0.65)', lineHeight:1.5 }}>When your driver arrives — check the <strong style={{color:'#ffffff'}}>licence plate number</strong>, <strong style={{color:'#ffffff'}}>car colour</strong>, and <strong style={{color:'#ffffff'}}>driver photo</strong> in the app before getting in. Your safety comes first!</div>
-        </div>
-      </div>
-      <div style={{ padding:16 }}>
 
-        {/* Booking summary */}
-        {booking && (
-          <div style={{ background:'rgba(15,20,40,0.65)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:14, padding:16, marginBottom:16 }}>
-            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
-              <div style={{ width:40, height:40, borderRadius:'50%', background:DARK, display:'flex', alignItems:'center', justifyContent:'center', fontSize:20 }}>🚗</div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:14, fontWeight:500, color:WHITE }}>{booking.vehicleType}</div>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)' }}>Booking #{bookingId?.slice(-6).toUpperCase()}</div>
-              </div>
-              <div style={{ fontSize:18, fontWeight:500, color:GREEN }}>J${booking.fare?.toLocaleString()}</div>
-            </div>
-            <div style={{ borderTop:'0.5px solid rgba(255,255,255,0.1)', paddingTop:12, display:'flex', flexDirection:'column', gap:8 }}>
-              <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-                <div style={{ width:9, height:9, borderRadius:'50%', background:GREEN, flexShrink:0 }}/>
-                <div style={{ fontSize:13, color:'rgba(255,255,255,0.8)' }}>{booking.pickup?.address}</div>
-              </div>
-              <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-                <div style={{ width:9, height:9, borderRadius:'50%', background:YELLOW, flexShrink:0 }}/>
-                <div style={{ fontSize:13, color:'rgba(255,255,255,0.8)' }}>{booking.dropoff?.address}</div>
-              </div>
-            </div>
-            <div style={{ marginTop:12, padding:'8px 12px', background:'rgba(26,158,90,0.1)', borderRadius:8, fontSize:12, color:'#9fe1cb' }}>
-              ✅ Booking saved — drivers are being notified
-            </div>
-          </div>
+      <div style={{ padding:16, maxWidth:520, margin:'0 auto' }}>
+
+        {error && (
+          <div style={{ background:'#fff0f0', border:'1px solid #fca5a5', borderRadius:12, padding:'12px 14px', fontSize:13, color:'#dc2626', marginBottom:14 }}>{error}</div>
         )}
 
-        <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:12, color:'#888aaa' }}>Payment method</div>
-
-        {/* Cash - active */}
-        <div style={{ border:`2px solid ${YELLOW}`, borderRadius:14, padding:'16px 14px', marginBottom:10, display:'flex', alignItems:'center', gap:14, background:'rgba(232,180,0,0.1)' }}>
-          <div style={{ fontSize:32 }}>💵</div>
-          <div style={{ flex:1 }}>
-            <div style={{ fontSize:14, fontWeight:500, color:'#1a1a2e' }}>Cash</div>
-            <div style={{ fontSize:12, color:'#555770', marginTop:2 }}>Pay your driver directly on arrival</div>
+        {/* Route card */}
+        <div style={{ background:'#fff', borderRadius:16, padding:16, marginBottom:12, boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}>
+          <div style={{ fontSize:11, fontWeight:700, color:'#6b21a8', textTransform:'uppercase', letterSpacing:0.8, marginBottom:12 }}>Your Route</div>
+          <div style={{ display:'flex', gap:10, marginBottom:8 }}>
+            <div style={{ width:10, height:10, borderRadius:'50%', background:'#1a9e5a', flexShrink:0, marginTop:3 }}/>
+            <div>
+              <div style={{ fontSize:10, color:'#888', marginBottom:1 }}>PICKUP</div>
+              <div style={{ fontSize:13, fontWeight:600, color:'#1a1a2e' }}>{address||'—'}</div>
+            </div>
           </div>
-          <div style={{ width:22, height:22, borderRadius:'50%', background:YELLOW, display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, color:DARK, fontWeight:700 }}>✓</div>
-        </div>
-
-        {/* Card - coming soon */}
-        <div style={{ border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:14, padding:'16px 14px', marginBottom:20, display:'flex', alignItems:'center', gap:14, background:'rgba(255,255,255,0.03)', opacity:0.55 }}>
-          <div style={{ fontSize:32 }}>💳</div>
-          <div style={{ flex:1 }}>
-            <div style={{ fontSize:14, fontWeight:500, color:'rgba(255,255,255,0.5)' }}>Card Payment</div>
-            <div style={{ fontSize:12, color:'rgba(255,255,255,0.35)', marginTop:2 }}>Coming soon</div>
+          <div style={{ width:1, height:14, background:'#e9d5ff', marginLeft:4, marginBottom:8 }}/>
+          <div style={{ display:'flex', gap:10 }}>
+            <div style={{ width:10, height:10, borderRadius:'50%', background:'#6b21a8', flexShrink:0, marginTop:3 }}/>
+            <div>
+              <div style={{ fontSize:10, color:'#888', marginBottom:1 }}>DROP-OFF</div>
+              <div style={{ fontSize:13, fontWeight:600, color:'#1a1a2e' }}>{dropoff||'—'}</div>
+            </div>
           </div>
-          <div style={{ background:'rgba(255,255,255,0.08)', borderRadius:20, padding:'3px 12px', fontSize:11, color:'#aaa', fontWeight:500 }}>Soon</div>
-        </div>
-
-        <div style={{ background:'#f5f6fa', border:'1px solid #e2e4ed', borderRadius:12, padding:14, marginBottom:16, fontSize:13, color:'#444', lineHeight:1.6 }}>
-          💵 You will pay <strong style={{ color:'#1a1a2e' }}>J${booking?.fare?.toLocaleString()}</strong> in cash directly to your driver when you arrive at your destination.
-        </div>
-
-        <button style={{ ...s.btnY, background:'#111111', color:'#ffffff' }} onClick={handleConfirm}>Confirm — Pay Cash</button>
-        <button style={s.btnO} onClick={() => go('customer-dash')}>Cancel</button>
-      </div>
-
-      {/* ── CONFIRM BOOKING BANNERS ── */}
-      <div style={{ padding:'16px 16px 0', background:'#f5f6fa' }}>
-        <div style={{ background:'#111111', borderRadius:16, padding:'18px', marginBottom:14, display:'flex', gap:14, alignItems:'flex-start' }}>
-          <div style={{ fontSize:28, flexShrink:0 }}>👀</div>
-          <div>
-            <div style={{ fontSize:14, fontWeight:700, color:'#e8b400', marginBottom:6 }}>Verify Your Driver</div>
-            <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', lineHeight:1.7 }}>When your driver arrives check the <strong style={{color:'#ffffff'}}>licence plate number</strong>, <strong style={{color:'#ffffff'}}>car colour and make</strong>, and <strong style={{color:'#ffffff'}}>driver photo</strong> in the app before getting in. Never enter a vehicle if these do not match.</div>
+          <div style={{ display:'flex', gap:8, marginTop:12, flexWrap:'wrap' }}>
+            {dist>0 && <div style={{ fontSize:11, background:'#f9f5ff', color:'#6b21a8', padding:'3px 10px', borderRadius:8 }}>📏 {dist} km</div>}
+            <div style={{ fontSize:11, background:'#f9f5ff', color:'#6b21a8', padding:'3px 10px', borderRadius:8 }}>🚗 {vehicle}</div>
+            <div style={{ fontSize:11, background:'#f9f5ff', color:'#6b21a8', padding:'3px 10px', borderRadius:8 }}>👥 {booking?.passengers||pickupData?.passengers||1} passenger{(booking?.passengers||1)>1?'s':''}</div>
           </div>
         </div>
-        <div style={{ background:'#111111', borderRadius:16, padding:'18px', marginBottom:14, display:'flex', gap:14, alignItems:'flex-start' }}>
-          <div style={{ fontSize:28, flexShrink:0 }}>📲</div>
-          <div>
-            <div style={{ fontSize:14, fontWeight:700, color:'#e8b400', marginBottom:6 }}>Share Your Trip</div>
-            <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', lineHeight:1.7 }}>Once your ride starts use the <strong style={{color:'#ffffff'}}>"Share Trip"</strong> button on the tracking screen to send your live ride details to a friend or family member.</div>
+
+        {/* Fare */}
+        <div style={{ background:'#fff', borderRadius:16, padding:16, marginBottom:12, boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}>
+          <div style={{ fontSize:11, fontWeight:700, color:'#6b21a8', textTransform:'uppercase', letterSpacing:0.8, marginBottom:10 }}>Estimated Fare</div>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+            <span style={{ fontSize:15, color:'#555' }}>Total</span>
+            <span style={{ fontSize:24, fontWeight:800, color:'#6b21a8' }}>J${fare.toLocaleString()}</span>
+          </div>
+          <div style={{ fontSize:11, color:'#888', marginTop:8, lineHeight:1.5 }}>
+            Fares may vary based on route changes, traffic, waiting time, or additional stops.
           </div>
         </div>
-        <div style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:16, padding:'18px', marginBottom:14, boxShadow:'0 2px 8px rgba(0,0,0,0.05)' }}>
-          <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:10 }}>💬 Confirm Fare With Your Driver</div>
-          <div style={{ fontSize:12, color:'#666888', lineHeight:1.7 }}>Estimated fares may vary based on route changes, traffic conditions, and additional stops. Use the in-app chat to confirm details with your driver.</div>
+
+        {/* Payment */}
+        <div style={{ background:'#fff', borderRadius:16, padding:16, marginBottom:16, boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}>
+          <div style={{ fontSize:11, fontWeight:700, color:'#6b21a8', textTransform:'uppercase', letterSpacing:0.8, marginBottom:10 }}>Payment</div>
+          <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+            <div style={{ fontSize:28 }}>💵</div>
+            <div>
+              <div style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>Cash Payment</div>
+              <div style={{ fontSize:12, color:'#888', marginTop:2 }}>Pay J${fare.toLocaleString()} directly to your driver on arrival.</div>
+            </div>
+          </div>
         </div>
-        <div style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:16, padding:'18px', marginBottom:14, boxShadow:'0 2px 8px rgba(0,0,0,0.05)' }}>
-          <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:10 }}>💵 Cash Payment Only</div>
-          <div style={{ fontSize:12, color:'#666888', lineHeight:1.7 }}>Pay your driver directly in cash at the end of your trip. Have the correct amount or small bills ready. Card and online payment coming soon.</div>
+
+        {/* Safety */}
+        <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:14, padding:'12px 14px', marginBottom:20 }}>
+          <div style={{ fontSize:12, fontWeight:700, color:'#6b21a8', marginBottom:4 }}>🛡️ Before You Board</div>
+          <div style={{ fontSize:12, color:'#555', lineHeight:1.6 }}>Verify the driver name, licence plate, vehicle make and colour before entering the vehicle.</div>
         </div>
-        <div style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:16, padding:'18px', marginBottom:20, boxShadow:'0 2px 8px rgba(0,0,0,0.05)' }}>
-          <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:10 }}>⭐ Rate Your Driver After</div>
-          <div style={{ fontSize:12, color:'#666888', lineHeight:1.7 }}>After your trip you will be asked to rate your driver. Your feedback helps maintain high standards on VilleCabs.</div>
-        </div>
+
+        <button onClick={handleConfirm} disabled={loading}
+          style={{ width:'100%', padding:'16px', background:loading?'#9ca3af':'#6b21a8', color:'#fff', border:'none', borderRadius:14, fontSize:16, fontWeight:700, cursor:loading?'default':'pointer', boxShadow:'0 4px 16px rgba(107,33,168,0.35)', marginBottom:10, display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
+          {loading ? (
+            <><div style={{ width:18, height:18, border:'2px solid rgba(255,255,255,0.4)', borderTop:'2px solid #fff', borderRadius:'50%', animation:'spin 0.8s linear infinite' }}/>Finding your driver...</>
+          ) : (
+            <>🚕 Confirm — Pay J${fare.toLocaleString()} Cash</>
+          )}
+        </button>
+        <button onClick={() => go('vehicle-select')} disabled={loading}
+          style={{ width:'100%', padding:'13px', background:'#fff', color:'#888', border:'1px solid #e5e7eb', borderRadius:14, fontSize:14, cursor:'pointer' }}>
+          ← Change Ride
+        </button>
       </div>
     </div>
   );
