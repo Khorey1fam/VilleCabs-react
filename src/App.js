@@ -5844,6 +5844,37 @@ function AdminDash({ go, user }) {
 
 
 
+function LoadingScreen() {
+  return (
+    <div style={{ minHeight:'100vh', background:'#ffffff', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:16 }}>
+      <img src="/logo.png" alt="VilleCabs" style={{ height:48, objectFit:'contain' }}/>
+      <div style={{ width:36, height:36, border:'3px solid #e9d5ff', borderTop:'3px solid #6b21a8', borderRadius:'50%', animation:'spin 0.8s linear infinite' }}/>
+    </div>
+  );
+}
+
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { hasError:false, error:null }; }
+  static getDerivedStateFromError(e) { return { hasError:true, error:e }; }
+  componentDidCatch(e, info) { console.error('App crash:', e, info); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ minHeight:'100vh', background:'#f5f6fa', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24, textAlign:'center' }}>
+          <div style={{ fontSize:48, marginBottom:16 }}>⚠️</div>
+          <div style={{ fontSize:18, fontWeight:700, color:'#1a1a2e', marginBottom:8 }}>Something went wrong</div>
+          <div style={{ fontSize:13, color:'#888', marginBottom:20 }}>{this.state.error?.message || 'An unexpected error occurred'}</div>
+          <button onClick={() => window.location.reload()} style={{ padding:'12px 24px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:12, fontSize:14, fontWeight:600, cursor:'pointer' }}>
+            Reload App
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+
 export default function App() {
   const [screen,      setScreen]      = useState('splash');
   const [user,        setUser]        = useState(null);
