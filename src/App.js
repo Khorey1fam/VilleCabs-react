@@ -2568,13 +2568,13 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
           </div>
         )}
 
-        {/* Drop-off label */}
-        <label style={{ fontSize:12, fontWeight:700, color:'#1a1a2e', display:'block', marginBottom:6 }}>
-          📍 Drop-off Address
-        </label>
-        <div style={{ background:'#f9f5ff', border:'1.5px solid #e9d5ff', borderRadius:10, padding:'11px 13px', fontSize:14, color: address ? '#1a1a2e' : '#9ca3af', marginBottom:14, minHeight:42 }}>
-          {address || 'Tap the map or search above to set your drop-off'}
-        </div>
+        {/* Selected address display */}
+        {address && (
+          <div style={{ display:'flex', gap:8, alignItems:'center', background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:10, padding:'10px 13px', marginBottom:14 }}>
+            <span style={{ fontSize:16, flexShrink:0 }}>🏁</span>
+            <div style={{ fontSize:13, fontWeight:600, color:'#1a1a2e' }}>{address}</div>
+          </div>
+        )}
 
         {/* Additional details */}
         <label style={{ fontSize:12, fontWeight:600, color:'#555', display:'block', marginBottom:6 }}>
