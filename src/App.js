@@ -2488,7 +2488,7 @@ function PinPickup({ go, setPickupData, user }) {
 function PinDropoff({ go, pickupData, setDropoffData, user }) {
   // Start map centered on pickup location if available, else Mandeville
   const startPos = pickupData?.coords || MANCHESTER_CENTER;
-  const [pinPos,   setPinPos]   = useState(null); // null = no dropoff pin yet
+  const [pinPos,   setPinPos]   = useState(MANCHESTER_CENTER);
   const [address,  setAddress]  = useState('');
   const [note,     setNote]     = useState('');
 
@@ -2592,9 +2592,9 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
         </div>
 
         {/* Confirm button */}
-        <button onClick={handleConfirm} disabled={!address || !pinPos}
-          style={{ width:'100%', padding:'15px', background:(address&&pinPos)?'#6b21a8':'#e5e7eb', color:(address&&pinPos)?'#ffffff':'#9ca3af', border:'none', borderRadius:14, fontSize:15, fontWeight:700, cursor:(address&&pinPos)?'pointer':'default', boxShadow:(address&&pinPos)?'0 4px 14px rgba(107,33,168,0.3)':'none' }}>
-          {address && pinPos ? 'Confirm Drop-off →' : 'Search or tap map to set drop-off'}
+        <button onClick={handleConfirm} disabled={!address}
+          style={{ width:'100%', padding:'15px', background:address?'#6b21a8':'#e5e7eb', color:address?'#ffffff':'#9ca3af', border:'none', borderRadius:14, fontSize:15, fontWeight:700, cursor:address?'pointer':'default', boxShadow:address?'0 4px 14px rgba(107,33,168,0.3)':'none' }}>
+          {address ? 'Confirm Drop-off →' : 'Search or tap map to set drop-off'}
         </button>
       </div>
     </div>
