@@ -2198,122 +2198,55 @@ function CustomerSettings({ go, user, setUser }) {
 const MANDEVILLE_BIAS = { lat:18.0417, lng:-77.5071 };
 const BIAS_RADIUS_METERS = 25000;
 
-function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder }) {
+function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder, mapsLoaded }) {
   const [query,   setQuery]   = useState(value || '');
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [open,    setOpen]    = useState(false);
+  const [ready,   setReady]   = useState(false);
   const debounce  = useRef(null);
-  const session   = useRef(Date.now().toString());
+  const svc       = useRef(null);
+  const detailSvc = useRef(null);
+  const token     = useRef(null);
 
+  // Init Places services when Google Maps is loaded
+  useEffect(() => {
+    if (!mapsLoaded && !window.google?.maps?.places) return;
+    try {
+      svc.current       = new window.google.maps.places.AutocompleteService();
+      detailSvc.current = new window.google.maps.places.PlacesService(document.createElement('div'));
+      token.current     = new window.google.maps.places.AutocompleteSessionToken();
+      setReady(true);
+    } catch(e) { console.warn('Places init failed:', e); }
+  }, [mapsLoaded]);
+
+  // Sync external value
   useEffect(() => {
     if (value !== query) setQuery(value || '');
   }, [value]);
 
-  const search = async (text) => {
-    if (!text || text.length < 2) { setResults([]); setOpen(false); return; }
+  const search = (text) => {
+    if (!text || text.length < 2 || !svc.current) {
+      setResults([]); setOpen(false); return;
+    }
     setLoading(true);
-    try {
-      // Use Google Places Autocomplete API via proxy to avoid CORS
-      const key = GOOGLE_MAPS_KEY;
-      const params = new URLSearchParams({
-        input: text,
-        key,
-        sessiontoken: session.current,
-        components: 'country:jm',
-        location: '18.0417,-77.5071',
-        radius: '25000',
-        language: 'en',
-      });
-      const res  = await fetch('https://maps.googleapis.com/maps/api/place/autocomplete/json?' + params);
-      const data = await res.json();
-      if (data.status === 'OK' && data.predictions?.length) {
-        setResults(data.predictions.slice(0, 6));
+    svc.current.getPlacePredictions({
+      input: text,
+      sessionToken: token.current,
+      location: new window.google.maps.LatLng(18.0417, -77.5071),
+      radius: 25000,
+      componentRestrictions: { country: 'jm' },
+      types: ['geocode', 'establishment'],
+    }, (preds, status) => {
+      setLoading(false);
+      if (status === window.google.maps.places.PlacesServiceStatus.OK && preds?.length) {
+        setResults(preds.slice(0, 6));
         setOpen(true);
-      } else if (window.google?.maps?.places) {
-        // Fallback to JS SDK if available
-        const svc = new window.google.maps.places.AutocompleteService();
-        svc.getPlacePredictions({
-          input: text,
-          location: new window.google.maps.LatLng(18.0417, -77.5071),
-          radius: 25000,
-          componentRestrictions: { country: 'jm' },
-        }, (preds, status) => {
-          setLoading(false);
-          if (status === 'OK' && preds?.length) {
-            setResults(preds.slice(0, 6));
-            setOpen(true);
-          } else {
-            setResults([]);
-            setOpen(false);
-          }
-        });
-        return;
       } else {
         setResults([]);
-        setOpen(false);
+        setOpen(text.length > 1);
       }
-    } catch(e) {
-      console.warn('Autocomplete error:', e);
-      // Try JS SDK fallback
-      if (window.google?.maps?.places) {
-        const svc = new window.google.maps.places.AutocompleteService();
-        svc.getPlacePredictions({
-          input: text,
-          componentRestrictions: { country: 'jm' },
-        }, (preds, status) => {
-          setLoading(false);
-          if (status === 'OK' && preds?.length) {
-            setResults(preds.slice(0, 6));
-            setOpen(true);
-          }
-        });
-        return;
-      }
-    }
-    setLoading(false);
-  };
-
-  const getDetails = async (placeId) => {
-    try {
-      const key = GOOGLE_MAPS_KEY;
-      const params = new URLSearchParams({
-        place_id: placeId,
-        key,
-        sessiontoken: session.current,
-        fields: 'name,formatted_address,geometry',
-      });
-      const res  = await fetch('https://maps.googleapis.com/maps/api/place/details/json?' + params);
-      const data = await res.json();
-      if (data.status === 'OK' && data.result?.geometry) {
-        session.current = Date.now().toString();
-        return {
-          name:             data.result.name,
-          formattedAddress: data.result.formatted_address,
-          placeId,
-          lat:              data.result.geometry.location.lat,
-          lng:              data.result.geometry.location.lng,
-        };
-      }
-    } catch(e) {}
-    // Fallback to JS SDK
-    if (window.google?.maps?.places) {
-      return new Promise((resolve) => {
-        const svc = new window.google.maps.places.PlacesService(document.createElement('div'));
-        svc.getDetails({ placeId, fields:['name','formatted_address','geometry'] }, (place, status) => {
-          if (status === 'OK' && place?.geometry) {
-            resolve({
-              name:             place.name,
-              formattedAddress: place.formatted_address,
-              placeId,
-              lat:              place.geometry.location.lat(),
-              lng:              place.geometry.location.lng(),
-            });
-          } else resolve(null);
-        });
-      });
-    }
-    return null;
+    });
   };
 
   const handleChange = (e) => {
@@ -2321,22 +2254,35 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
     setQuery(val);
     if (onChange) onChange(val);
     clearTimeout(debounce.current);
-    debounce.current = setTimeout(() => search(val), 400);
+    debounce.current = setTimeout(() => search(val), 350);
   };
 
-  const handleSelect = async (pred) => {
-    const desc = pred.description || pred.structured_formatting?.main_text || '';
+  const handleSelect = (pred) => {
+    const desc = pred.description || '';
     setQuery(desc);
     setOpen(false);
     setResults([]);
     if (onChange) onChange(desc);
-    const detail = await getDetails(pred.place_id);
-    if (detail) {
-      const addr = detail.formattedAddress || detail.name;
-      setQuery(addr);
-      if (onChange) onChange(addr);
-      if (onPlaceSelect) onPlaceSelect(detail);
-    }
+    if (!detailSvc.current) return;
+    detailSvc.current.getDetails({
+      placeId: pred.place_id,
+      sessionToken: token.current,
+      fields: ['name', 'formatted_address', 'geometry'],
+    }, (place, status) => {
+      if (status === window.google.maps.places.PlacesServiceStatus.OK && place?.geometry) {
+        const addr = place.formatted_address || place.name;
+        setQuery(addr);
+        if (onChange) onChange(addr);
+        if (onPlaceSelect) onPlaceSelect({
+          name:             place.name,
+          formattedAddress: place.formatted_address,
+          lat:              place.geometry.location.lat(),
+          lng:              place.geometry.location.lng(),
+        });
+        // Reset session token
+        token.current = new window.google.maps.places.AutocompleteSessionToken();
+      }
+    });
   };
 
   return (
@@ -2348,33 +2294,29 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
           value={query}
           onChange={handleChange}
           onFocus={() => { if (results.length > 0) setOpen(true); }}
-          onBlur={() => setTimeout(() => setOpen(false), 200)}
-          placeholder={placeholder || 'Search address, road or landmark'}
+          onBlur={() => setTimeout(() => setOpen(false), 250)}
+          placeholder={ready ? (placeholder || 'Search address or landmark') : 'Loading search...'}
           autoComplete="off"
           autoCorrect="off"
-          autoCapitalize="off"
           spellCheck="false"
-          style={{ width:'100%', padding:'13px 36px 13px 38px', background:'#ffffff', border:'2px solid #e9d5ff', borderRadius:12, fontSize:14, color:'#1a1a2e', boxSizing:'border-box', outline:'none', boxShadow:'0 2px 8px rgba(107,33,168,0.08)', WebkitAppearance:'none' }}
+          style={{ width:'100%', padding:'13px 36px 13px 38px', background:'#ffffff', border:'2px solid #e9d5ff', borderRadius:12, fontSize:14, color:'#1a1a2e', boxSizing:'border-box', outline:'none', boxShadow:'0 2px 8px rgba(107,33,168,0.08)' }}
         />
-        {loading && (
-          <span style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)', fontSize:13 }}>⏳</span>
-        )}
+        {loading && <span style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)' }}>⏳</span>}
         {!loading && query.length > 0 && (
           <span
-            onMouseDown={(e) => { e.preventDefault(); setQuery(''); setOpen(false); setResults([]); if (onChange) onChange(''); }}
+            onMouseDown={e => { e.preventDefault(); setQuery(''); setOpen(false); setResults([]); if (onChange) onChange(''); }}
             style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)', fontSize:18, color:'#aaa', cursor:'pointer', padding:4 }}>✕</span>
         )}
       </div>
-
       {open && (
         <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, right:0, background:'#fff', border:'1px solid #e9d5ff', borderRadius:12, boxShadow:'0 8px 24px rgba(107,33,168,0.15)', overflow:'hidden', zIndex:100, maxHeight:280, overflowY:'auto' }}>
           {results.length > 0 ? (
             <>
               {results.map((p, i) => (
                 <div key={i}
-                  onMouseDown={(e) => { e.preventDefault(); handleSelect(p); }}
-                  onTouchEnd={(e) => { e.preventDefault(); handleSelect(p); }}
-                  style={{ padding:'12px 14px', cursor:'pointer', borderBottom: i < results.length-1 ? '1px solid #f5f0ff' : 'none', display:'flex', alignItems:'flex-start', gap:10, background:'#fff', WebkitTapHighlightColor:'transparent' }}
+                  onMouseDown={e => { e.preventDefault(); handleSelect(p); }}
+                  onTouchEnd={e => { e.preventDefault(); handleSelect(p); }}
+                  style={{ padding:'12px 14px', cursor:'pointer', borderBottom: i < results.length-1 ? '1px solid #f5f0ff' : 'none', display:'flex', alignItems:'flex-start', gap:10, background:'#fff' }}
                   onMouseEnter={e => e.currentTarget.style.background = '#f9f5ff'}
                   onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
                   <span style={{ color:'#6b21a8', fontSize:16, flexShrink:0, marginTop:2 }}>📍</span>
@@ -2388,9 +2330,7 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
                   </div>
                 </div>
               ))}
-              <div style={{ padding:'5px 12px', fontSize:10, color:'#bbb', textAlign:'right', background:'#fafafa' }}>
-                Powered by Google
-              </div>
+              <div style={{ padding:'5px 12px', fontSize:10, color:'#bbb', textAlign:'right', background:'#fafafa' }}>Powered by Google</div>
             </>
           ) : (
             <div style={{ padding:'16px', fontSize:13, color:'#888', textAlign:'center' }}>
@@ -2443,6 +2383,7 @@ function PinPickup({ go, setPickupData, user }) {
           onChange={setAddress}
           onPlaceSelect={handlePlaceSelect}
           placeholder="Search pickup address, road or landmark"
+          mapsLoaded={isLoaded}
         />
       </div>
       <VilleMap height={300} center={pinPos||MANCHESTER_CENTER} zoom={14} onClick={handleMapClick}
@@ -2525,6 +2466,7 @@ function PinPickup({ go, setPickupData, user }) {
 
 // ── PIN DROPOFF ───────────────────────────────────────────────────────────────
 function PinDropoff({ go, pickupData, setDropoffData, user }) {
+  const { isLoaded } = useJsApiLoader({ googleMapsApiKey: GOOGLE_MAPS_KEY, libraries: LIBRARIES });
   const [pinPos,  setPinPos]  = useState({ lat:18.02, lng:-77.48 });
   const [address, setAddress] = useState('');
   const [note,    setNote]    = useState('');
@@ -2573,6 +2515,7 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
           onChange={setAddress}
           onPlaceSelect={handlePlaceSelect}
           placeholder="Where are you going? Search address or landmark"
+          mapsLoaded={isLoaded}
         />
       </div>
 
