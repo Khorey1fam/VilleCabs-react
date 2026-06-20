@@ -2204,62 +2204,116 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
   const [loading, setLoading] = useState(false);
   const [open,    setOpen]    = useState(false);
   const debounce  = useRef(null);
-  const svcRef    = useRef(null);
-  const detailRef = useRef(null);
-  const tokenRef  = useRef(null);
-  const ready     = useRef(false);
-
-  // Init Places service - retry until Google Maps is loaded by VilleMap
-  const tryInit = useCallback(() => {
-    if (ready.current) return true;
-    if (!window.google?.maps?.places) return false;
-    try {
-      svcRef.current    = new window.google.maps.places.AutocompleteService();
-      detailRef.current = new window.google.maps.places.PlacesService(document.createElement('div'));
-      tokenRef.current  = new window.google.maps.places.AutocompleteSessionToken();
-      ready.current     = true;
-      return true;
-    } catch(e) { return false; }
-  }, []);
+  const session   = useRef(Date.now().toString());
 
   useEffect(() => {
-    // Try immediately
-    if (tryInit()) return;
-    // Listen for Google Maps ready event
-    const onReady = () => tryInit();
-    window.addEventListener('google-maps-ready', onReady);
-    // Also poll as backup
-    const iv = setInterval(() => { if (tryInit()) clearInterval(iv); }, 300);
-    return () => {
-      clearInterval(iv);
-      window.removeEventListener('google-maps-ready', onReady);
-    };
-  }, [tryInit]);
+    if (value !== query) setQuery(value || '');
+  }, [value]);
 
-  // Sync value prop
-  useEffect(() => { if (value !== query) setQuery(value || ''); }, [value]);
-
-  const search = (text) => {
+  const search = async (text) => {
     if (!text || text.length < 2) { setResults([]); setOpen(false); return; }
-    if (!tryInit()) return; // not ready yet
     setLoading(true);
-    svcRef.current.getPlacePredictions({
-      input: text,
-      sessionToken: tokenRef.current,
-      location: new window.google.maps.LatLng(18.0417, -77.5071),
-      radius: 25000,
-      componentRestrictions: { country: 'jm' },
-      types: ['geocode', 'establishment'],
-    }, (preds, status) => {
-      setLoading(false);
-      if (status === 'OK' && preds?.length) {
-        setResults(preds.slice(0, 6));
+    try {
+      // Use Google Places Autocomplete API via proxy to avoid CORS
+      const key = GOOGLE_MAPS_KEY;
+      const params = new URLSearchParams({
+        input: text,
+        key,
+        sessiontoken: session.current,
+        components: 'country:jm',
+        location: '18.0417,-77.5071',
+        radius: '25000',
+        language: 'en',
+      });
+      const res  = await fetch('https://maps.googleapis.com/maps/api/place/autocomplete/json?' + params);
+      const data = await res.json();
+      if (data.status === 'OK' && data.predictions?.length) {
+        setResults(data.predictions.slice(0, 6));
         setOpen(true);
+      } else if (window.google?.maps?.places) {
+        // Fallback to JS SDK if available
+        const svc = new window.google.maps.places.AutocompleteService();
+        svc.getPlacePredictions({
+          input: text,
+          location: new window.google.maps.LatLng(18.0417, -77.5071),
+          radius: 25000,
+          componentRestrictions: { country: 'jm' },
+        }, (preds, status) => {
+          setLoading(false);
+          if (status === 'OK' && preds?.length) {
+            setResults(preds.slice(0, 6));
+            setOpen(true);
+          } else {
+            setResults([]);
+            setOpen(false);
+          }
+        });
+        return;
       } else {
         setResults([]);
-        setOpen(text.length > 1);
+        setOpen(false);
       }
-    });
+    } catch(e) {
+      console.warn('Autocomplete error:', e);
+      // Try JS SDK fallback
+      if (window.google?.maps?.places) {
+        const svc = new window.google.maps.places.AutocompleteService();
+        svc.getPlacePredictions({
+          input: text,
+          componentRestrictions: { country: 'jm' },
+        }, (preds, status) => {
+          setLoading(false);
+          if (status === 'OK' && preds?.length) {
+            setResults(preds.slice(0, 6));
+            setOpen(true);
+          }
+        });
+        return;
+      }
+    }
+    setLoading(false);
+  };
+
+  const getDetails = async (placeId) => {
+    try {
+      const key = GOOGLE_MAPS_KEY;
+      const params = new URLSearchParams({
+        place_id: placeId,
+        key,
+        sessiontoken: session.current,
+        fields: 'name,formatted_address,geometry',
+      });
+      const res  = await fetch('https://maps.googleapis.com/maps/api/place/details/json?' + params);
+      const data = await res.json();
+      if (data.status === 'OK' && data.result?.geometry) {
+        session.current = Date.now().toString();
+        return {
+          name:             data.result.name,
+          formattedAddress: data.result.formatted_address,
+          placeId,
+          lat:              data.result.geometry.location.lat,
+          lng:              data.result.geometry.location.lng,
+        };
+      }
+    } catch(e) {}
+    // Fallback to JS SDK
+    if (window.google?.maps?.places) {
+      return new Promise((resolve) => {
+        const svc = new window.google.maps.places.PlacesService(document.createElement('div'));
+        svc.getDetails({ placeId, fields:['name','formatted_address','geometry'] }, (place, status) => {
+          if (status === 'OK' && place?.geometry) {
+            resolve({
+              name:             place.name,
+              formattedAddress: place.formatted_address,
+              placeId,
+              lat:              place.geometry.location.lat(),
+              lng:              place.geometry.location.lng(),
+            });
+          } else resolve(null);
+        });
+      });
+    }
+    return null;
   };
 
   const handleChange = (e) => {
@@ -2267,39 +2321,22 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
     setQuery(val);
     if (onChange) onChange(val);
     clearTimeout(debounce.current);
-    debounce.current = setTimeout(() => search(val), 350);
+    debounce.current = setTimeout(() => search(val), 400);
   };
 
-  const handleSelect = (pred) => {
-    const desc = pred.description || '';
+  const handleSelect = async (pred) => {
+    const desc = pred.description || pred.structured_formatting?.main_text || '';
     setQuery(desc);
     setOpen(false);
     setResults([]);
     if (onChange) onChange(desc);
-    if (!detailRef.current) return;
-    detailRef.current.getDetails({
-      placeId: pred.place_id,
-      sessionToken: tokenRef.current,
-      fields: ['name','formatted_address','geometry','place_id'],
-    }, (place, status) => {
-      if (status === 'OK' && place?.geometry) {
-        const selected = {
-          name:             place.name,
-          formattedAddress: place.formatted_address,
-          placeId:          place.place_id,
-          lat:              place.geometry.location.lat(),
-          lng:              place.geometry.location.lng(),
-        };
-        const addr = place.formatted_address || place.name;
-        setQuery(addr);
-        if (onChange) onChange(addr);
-        if (onPlaceSelect) onPlaceSelect(selected);
-        // Reset session token
-        if (window.google?.maps?.places) {
-          tokenRef.current = new window.google.maps.places.AutocompleteSessionToken();
-        }
-      }
-    });
+    const detail = await getDetails(pred.place_id);
+    if (detail) {
+      const addr = detail.formattedAddress || detail.name;
+      setQuery(addr);
+      if (onChange) onChange(addr);
+      if (onPlaceSelect) onPlaceSelect(detail);
+    }
   };
 
   return (
@@ -2314,35 +2351,52 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
           onBlur={() => setTimeout(() => setOpen(false), 200)}
           placeholder={placeholder || 'Search address, road or landmark'}
           autoComplete="off"
-          style={{ width:'100%', padding:'13px 36px 13px 38px', background:'#ffffff', border:'2px solid #e9d5ff', borderRadius:12, fontSize:14, color:'#1a1a2e', boxSizing:'border-box', outline:'none', boxShadow:'0 2px 8px rgba(107,33,168,0.1)' }}
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck="false"
+          style={{ width:'100%', padding:'13px 36px 13px 38px', background:'#ffffff', border:'2px solid #e9d5ff', borderRadius:12, fontSize:14, color:'#1a1a2e', boxSizing:'border-box', outline:'none', boxShadow:'0 2px 8px rgba(107,33,168,0.08)', WebkitAppearance:'none' }}
         />
-        {loading && <span style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)', fontSize:13 }}>⏳</span>}
+        {loading && (
+          <span style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)', fontSize:13 }}>⏳</span>
+        )}
         {!loading && query.length > 0 && (
-          <span onMouseDown={() => { setQuery(''); setOpen(false); if (onChange) onChange(''); }}
-            style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)', fontSize:16, color:'#aaa', cursor:'pointer' }}>✕</span>
+          <span
+            onMouseDown={(e) => { e.preventDefault(); setQuery(''); setOpen(false); setResults([]); if (onChange) onChange(''); }}
+            style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)', fontSize:18, color:'#aaa', cursor:'pointer', padding:4 }}>✕</span>
         )}
       </div>
+
       {open && (
-        <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, right:0, background:'#fff', border:'1px solid #e9d5ff', borderRadius:12, boxShadow:'0 8px 24px rgba(107,33,168,0.15)', overflow:'hidden', zIndex:100 }}>
-          {results.length > 0 ? results.map((p, i) => (
-            <div key={i} onMouseDown={() => handleSelect(p)}
-              style={{ padding:'12px 14px', cursor:'pointer', borderBottom:i<results.length-1?'1px solid #f5f0ff':'none', display:'flex', alignItems:'flex-start', gap:10 }}
-              onMouseEnter={e => e.currentTarget.style.background='#f9f5ff'}
-              onMouseLeave={e => e.currentTarget.style.background='#fff'}>
-              <span style={{ color:'#6b21a8', fontSize:16, flexShrink:0, marginTop:2 }}>📍</span>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                  {p.structured_formatting?.main_text || p.description?.split(',')[0]}
+        <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, right:0, background:'#fff', border:'1px solid #e9d5ff', borderRadius:12, boxShadow:'0 8px 24px rgba(107,33,168,0.15)', overflow:'hidden', zIndex:100, maxHeight:280, overflowY:'auto' }}>
+          {results.length > 0 ? (
+            <>
+              {results.map((p, i) => (
+                <div key={i}
+                  onMouseDown={(e) => { e.preventDefault(); handleSelect(p); }}
+                  onTouchEnd={(e) => { e.preventDefault(); handleSelect(p); }}
+                  style={{ padding:'12px 14px', cursor:'pointer', borderBottom: i < results.length-1 ? '1px solid #f5f0ff' : 'none', display:'flex', alignItems:'flex-start', gap:10, background:'#fff', WebkitTapHighlightColor:'transparent' }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#f9f5ff'}
+                  onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
+                  <span style={{ color:'#6b21a8', fontSize:16, flexShrink:0, marginTop:2 }}>📍</span>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                      {p.structured_formatting?.main_text || p.description?.split(',')[0]}
+                    </div>
+                    <div style={{ fontSize:11, color:'#888', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                      {p.structured_formatting?.secondary_text || p.description}
+                    </div>
+                  </div>
                 </div>
-                <div style={{ fontSize:11, color:'#888', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                  {p.structured_formatting?.secondary_text || p.description}
-                </div>
+              ))}
+              <div style={{ padding:'5px 12px', fontSize:10, color:'#bbb', textAlign:'right', background:'#fafafa' }}>
+                Powered by Google
               </div>
+            </>
+          ) : (
+            <div style={{ padding:'16px', fontSize:13, color:'#888', textAlign:'center' }}>
+              No results — try a road, area or landmark in Mandeville
             </div>
-          )) : (
-            <div style={{ padding:'14px', fontSize:13, color:'#888', textAlign:'center' }}>No results — try a road, area or landmark</div>
           )}
-          <div style={{ padding:'5px 12px', fontSize:10, color:'#bbb', textAlign:'right', background:'#fafafa' }}>Powered by Google</div>
         </div>
       )}
     </div>
