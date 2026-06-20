@@ -46,6 +46,21 @@ const MANCHESTER_CENTER = { lat: 18.0416, lng: -77.5036 };
 const LIBRARIES       = ['places'];
 const GOOGLE_MAPS_KEY = process.env.REACT_APP_GOOGLE_MAPS_KEY || '';
 
+// Load Google Maps + Places API immediately at module level
+// so it's ready before any component tries to use it
+(function loadGoogleMaps() {
+  if (window.google?.maps?.places) return;
+  if (document.querySelector('script[src*="maps.googleapis.com/maps/api"]')) return;
+  const script = document.createElement('script');
+  script.src = 'https://maps.googleapis.com/maps/api/js?key=' + GOOGLE_MAPS_KEY + '&libraries=places&callback=__googleMapsReady';
+  script.async = true;
+  window.__googleMapsReady = function() {
+    window.__googleMapsLoaded = true;
+    window.dispatchEvent(new Event('google-maps-ready'));
+  };
+  document.head.appendChild(script);
+})();
+
 // Dark map style matching VilleCabs theme
 const MAP_STYLE = [
   { elementType:'geometry', stylers:[{ color:'#1a2744' }] },
@@ -2208,9 +2223,17 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
   }, []);
 
   useEffect(() => {
+    // Try immediately
     if (tryInit()) return;
+    // Listen for Google Maps ready event
+    const onReady = () => tryInit();
+    window.addEventListener('google-maps-ready', onReady);
+    // Also poll as backup
     const iv = setInterval(() => { if (tryInit()) clearInterval(iv); }, 300);
-    return () => clearInterval(iv);
+    return () => {
+      clearInterval(iv);
+      window.removeEventListener('google-maps-ready', onReady);
+    };
   }, [tryInit]);
 
   // Sync value prop
@@ -2453,47 +2476,44 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
   const [note,    setNote]    = useState('');
   const [loading, setLoading] = useState(false);
 
+  const MANCHESTER_BOUNDS = {
+    north: 18.12, south: 17.96, east: -77.38, west: -77.62,
+  };
+
   const handlePlaceSelect = (place) => {
     const pos = { lat: place.lat, lng: place.lng };
     setPinPos(pos);
     setAddress(place.formattedAddress || place.name);
   };
 
-  const suggestions_legacy = [
-    { address:'Manchester Market, Mandeville', coords:{ lat:18.0416, lng:-77.5036 } },
-    { address:'Spaldings, Manchester',          coords:{ lat:18.1102, lng:-77.4608 } },
-    { address:'Christiana, Manchester',         coords:{ lat:18.1667, lng:-77.5000 } },
-    { address:'Porus, Manchester',              coords:{ lat:18.0167, lng:-77.4167 } },
-    { address:'Mandeville Hospital',            coords:{ lat:18.0452, lng:-77.5082 } },
-    { address:'Caledonia Road, Mandeville',     coords:{ lat:18.0380, lng:-77.5120 } },
-  ];
-
-  const handleMapClick = useCallback(async (e) => {
+  const handleMapClick = async (e) => {
     const lat = e.latLng.lat();
     const lng = e.latLng.lng();
     setPinPos({ lat, lng });
-    setLoading(true);
-    const addr = await geocodeLatLng(lat, lng);
-    setAddress(addr);
-    setLoading(false);
-  }, []);
+    try {
+      const addr = await geocodeLatLng(lat, lng);
+      setAddress(addr);
+    } catch(err) {}
+  };
 
   const handleConfirm = () => {
     if (!address) return;
-    const finalAddress = note.trim() ? `${address} — ${note.trim()}` : address;
-    setDropoffData({ coords:pinPos, address: finalAddress });
+    const finalAddress = note.trim() ? address + ' — ' + note.trim() : address;
+    setDropoffData({ coords: pinPos, address: finalAddress });
     go('vehicle-select');
   };
 
-  const markers = [];
-  if (pickupData?.coords) markers.push({ position:pickupData.coords, title:'Pickup' });
-  if (address) markers.push({ position:pinPos, title:'Drop-off' });
+  const markers = [
+    { lat: pinPos.lat, lng: pinPos.lng, color: '#6b21a8' },
+    ...(pickupData?.coords ? [{ lat: pickupData.coords.lat, lng: pickupData.coords.lng, color: '#1a9e5a' }] : []),
+  ];
 
   return (
-    <div style={{ ...s.content, background:'transparent' }}>
+    <div style={{ background:'#f5f6fa', minHeight:'100vh', display:'flex', flexDirection:'column' }}>
       <TopBar title="Pin Drop-off Location" onBack={() => go('pin-pickup')} go={go} user={user}/>
-      {/* Address search autocomplete */}
-      <div style={{ padding:'10px 14px', background:'#ffffff', borderBottom:'1px solid #e2e4ed' }}>
+
+      {/* Search box */}
+      <div style={{ background:'#ffffff', padding:'12px 14px', borderBottom:'1px solid #e5e7eb' }}>
         <AddressAutocompleteInput
           value={address}
           onChange={setAddress}
@@ -2501,71 +2521,66 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
           placeholder="Where are you going? Search address or landmark"
         />
       </div>
-      <div style={{ background:'#111111', padding:'12px 16px', display:'flex', gap:10, alignItems:'flex-start' }}>
-        <span style={{ fontSize:18, flexShrink:0 }}>🛡️</span>
-        <div>
-          <div style={{ fontSize:12, fontWeight:600, color:'#e8b400', marginBottom:2 }}>Safety & Accuracy</div>
-          <div style={{ fontSize:11, color:'rgba(255,255,255,0.65)', lineHeight:1.5 }}>Pin your drop-off as precisely as possible. Use the "Additional Details" field to add landmarks — e.g. "Blue gate, top of hill." Your driver will appreciate it!</div>
-        </div>
+
+      {/* Map */}
+      <div style={{ flex:'none' }}>
+        <VilleMap height={260} center={pinPos||MANCHESTER_CENTER} zoom={14} onClick={handleMapClick} markers={markers}/>
       </div>
-      <VilleMap height={300} center={pinPos||MANCHESTER_CENTER} zoom={12} onClick={handleMapClick} markers={markers} expandable={true}/>
-      <div style={{ padding:16 }}>
-        <div style={{ background:'rgba(232,180,0,0.08)', border:'0.5px solid rgba(232,180,0,0.25)', borderRadius:8, padding:'8px 12px', marginBottom:12, fontSize:12, color:'rgba(232,180,0,0.9)' }}>
-          🏁 Tap the map or choose a location below
-        </div>
-        {address && (
-          <div style={{ marginBottom:12 }}>
-            <label style={s.lbl}>Pinned address</label>
-            <input style={s.inp} value={loading ? 'Getting address...' : address} onChange={e => setAddress(e.target.value)}/>
-            <label style={s.lbl}>District / Road / Landmark <span style={{ color:'rgba(255,255,255,0.3)', fontWeight:400 }}>(optional)</span></label>
-            <input style={s.inp} placeholder="e.g. Hatfield district, top of Caledonia Road, near the blue gate..." value={note} onChange={e => setNote(e.target.value)}/>
+
+      {/* Bottom panel */}
+      <div style={{ flex:1, background:'#ffffff', borderTop:'1px solid #e5e7eb', padding:'16px' }}>
+
+        {/* Route summary */}
+        {pickupData?.address && (
+          <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:12, padding:'12px 14px', marginBottom:14 }}>
+            <div style={{ display:'flex', gap:8, marginBottom:6 }}>
+              <div style={{ width:8, height:8, borderRadius:'50%', background:'#1a9e5a', flexShrink:0, marginTop:4 }}/>
+              <div>
+                <div style={{ fontSize:10, color:'#888', marginBottom:1 }}>FROM</div>
+                <div style={{ fontSize:12, fontWeight:600, color:'#1a1a2e' }}>{pickupData.address.split('—')[0].trim()}</div>
+              </div>
+            </div>
+            {address && (
+              <div style={{ display:'flex', gap:8 }}>
+                <div style={{ width:8, height:8, borderRadius:'50%', background:'#6b21a8', flexShrink:0, marginTop:4 }}/>
+                <div>
+                  <div style={{ fontSize:10, color:'#888', marginBottom:1 }}>TO</div>
+                  <div style={{ fontSize:12, fontWeight:600, color:'#1a1a2e' }}>{address.split(',')[0]}</div>
+                </div>
+              </div>
+            )}
           </div>
         )}
-        <div style={{ background:'rgba(15,20,40,0.6)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:12, overflow:'hidden', marginBottom:14 }}>
-          {(suggestions_legacy||[]).map((sug,i) => (
-            <div key={i} onClick={() => { const fa = note.trim() ? `${sug.address} — ${note.trim()}` : sug.address; setDropoffData({ coords:sug.coords, address:fa }); go('vehicle-select'); }}
-              style={{ padding:'11px 14px', fontSize:13, color:'rgba(255,255,255,0.8)', borderBottom:'0.5px solid rgba(255,255,255,0.08)', cursor:'pointer' }}>
-              📍 {sug.address}
-            </div>
-          ))}
-        </div>
-        <button style={{ ...s.btnY, background:'#111111', color:'#ffffff', opacity:!address?0.5:1 }} onClick={handleConfirm} disabled={!address}>Confirm Drop-off</button>
-      </div>
 
-      {/* ── DROPOFF PAGE BANNERS ── */}
-      <div style={{ padding:'20px 16px 0', background:'#f5f6fa' }}>
-
-        <div style={{ background:'#111111', borderRadius:16, padding:'18px', marginBottom:14, display:'flex', gap:14, alignItems:'flex-start' }}>
-          <div style={{ fontSize:28, flexShrink:0 }}>🗺️</div>
-          <div>
-            <div style={{ fontSize:14, fontWeight:700, color:'#e8b400', marginBottom:6 }}>Pin Your Drop-off Precisely</div>
-            <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', lineHeight:1.7 }}>Tap exactly where you want to be dropped off. The more accurate your pin, the better your driver can plan the route and the more accurate your fare will be.</div>
-          </div>
+        {/* Additional details */}
+        <div style={{ marginBottom:14 }}>
+          <label style={{ fontSize:12, fontWeight:600, color:'#555', display:'block', marginBottom:6 }}>
+            Additional Details (optional)
+          </label>
+          <input
+            value={note}
+            onChange={e => setNote(e.target.value)}
+            placeholder="e.g. Blue gate, near the school, apartment 3B..."
+            style={{ width:'100%', padding:'11px 13px', border:'1.5px solid #e2e4ed', borderRadius:10, fontSize:14, color:'#1a1a2e', boxSizing:'border-box', outline:'none', background:'#f9f9f9' }}
+          />
         </div>
 
-        <div style={{ background:'#111111', borderRadius:16, padding:'18px', marginBottom:14, display:'flex', gap:14, alignItems:'flex-start' }}>
-          <div style={{ fontSize:28, flexShrink:0 }}>✏️</div>
-          <div>
-            <div style={{ fontSize:14, fontWeight:700, color:'#e8b400', marginBottom:6 }}>Add Landmark Details</div>
-            <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', lineHeight:1.7 }}>Use the <strong style={{color:'#ffffff'}}>"Additional Details"</strong> field to describe your drop-off point — e.g. "Opposite Mandeville Regional Hospital, green building on the right." This helps your driver drop you at the right spot.</div>
-          </div>
+        {/* Safety tip */}
+        <div style={{ background:'#fefce8', border:'1px solid #fde047', borderRadius:10, padding:'10px 12px', marginBottom:14, fontSize:12, color:'#854d0e' }}>
+          📍 Tip: Tap the map to pin your exact drop-off location for better accuracy.
         </div>
 
-        <div style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:16, padding:'18px', marginBottom:14, boxShadow:'0 2px 8px rgba(0,0,0,0.05)' }}>
-          <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:10 }}>🛡️ Your Safety Matters</div>
-          <div style={{ fontSize:12, color:'#666888', lineHeight:1.7 }}>During your ride, you can use the <strong>SOS button</strong> at any time if you feel unsafe. Hold it for 5 seconds to send an emergency alert with your location to our admin team immediately.</div>
-        </div>
-
-        <div style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:16, padding:'18px', marginBottom:14, boxShadow:'0 2px 8px rgba(0,0,0,0.05)' }}>
-          <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:10 }}>💰 Negotiate Your Fare</div>
-          <div style={{ fontSize:12, color:'#666888', lineHeight:1.7 }}>Once a driver accepts, chat with them to agree on the final fare before the ride. The app shows a suggested price based on distance — but you and your driver can confirm before riding.</div>
-        </div>
+        {/* Confirm button */}
+        <button onClick={handleConfirm} disabled={!address}
+          style={{ width:'100%', padding:'15px', background:address?'#6b21a8':'#e5e7eb', color:address?'#ffffff':'#9ca3af', border:'none', borderRadius:14, fontSize:15, fontWeight:700, cursor:address?'pointer':'default', boxShadow:address?'0 4px 14px rgba(107,33,168,0.3)':'none' }}>
+          {address ? 'Confirm Drop-off →' : 'Search or tap map to set drop-off'}
+        </button>
       </div>
     </div>
   );
 }
 
-// ── VEHICLE SELECT ────────────────────────────────────────────────────────────
+
 function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
   const [sel,        setSel]        = useState(0);
   const [loading,    setLoading]    = useState(false);
