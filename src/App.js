@@ -2486,14 +2486,11 @@ function PinPickup({ go, setPickupData, user }) {
 
 // ── PIN DROPOFF ───────────────────────────────────────────────────────────────
 function PinDropoff({ go, pickupData, setDropoffData, user }) {
-  const [pinPos,  setPinPos]  = useState({ lat:18.02, lng:-77.48 });
-  const [address, setAddress] = useState('');
-  const [note,    setNote]    = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const MANCHESTER_BOUNDS = {
-    north: 18.12, south: 17.96, east: -77.38, west: -77.62,
-  };
+  // Start map centered on pickup location if available, else Mandeville
+  const startPos = pickupData?.coords || MANCHESTER_CENTER;
+  const [pinPos,   setPinPos]   = useState(null); // null = no dropoff pin yet
+  const [address,  setAddress]  = useState('');
+  const [note,     setNote]     = useState('');
 
   const handlePlaceSelect = (place) => {
     const pos = { lat: place.lat, lng: place.lng };
@@ -2512,16 +2509,19 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
   };
 
   const handleConfirm = () => {
-    if (!address) return;
+    if (!address || !pinPos) return;
     const finalAddress = note.trim() ? address + ' — ' + note.trim() : address;
     setDropoffData({ coords: pinPos, address: finalAddress });
     go('vehicle-select');
   };
 
+  // Show pickup marker (green) + dropoff marker (purple) if set
   const markers = [
-    { lat: pinPos.lat, lng: pinPos.lng, color: '#6b21a8' },
     ...(pickupData?.coords ? [{ lat: pickupData.coords.lat, lng: pickupData.coords.lng, color: '#1a9e5a' }] : []),
+    ...(pinPos ? [{ lat: pinPos.lat, lng: pinPos.lng, color: '#6b21a8' }] : []),
   ];
+
+  const mapCenter = pinPos || startPos;
 
   return (
     <div style={{ background:'#f5f6fa', minHeight:'100vh', display:'flex', flexDirection:'column' }}>
@@ -2540,7 +2540,7 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
 
       {/* Map */}
       <div style={{ flex:'none' }}>
-        <VilleMap height={260} center={pinPos||MANCHESTER_CENTER} zoom={14} onClick={handleMapClick} markers={markers}/>
+        <VilleMap height={260} center={mapCenter} zoom={14} onClick={handleMapClick} markers={markers}/>
       </div>
 
       {/* Bottom panel */}
@@ -2553,7 +2553,7 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
               <div style={{ width:8, height:8, borderRadius:'50%', background:'#1a9e5a', flexShrink:0, marginTop:4 }}/>
               <div>
                 <div style={{ fontSize:10, color:'#888', marginBottom:1 }}>FROM</div>
-                <div style={{ fontSize:12, fontWeight:600, color:'#1a1a2e' }}>{pickupData.address.split('—')[0].trim()}</div>
+                <div style={{ fontSize:12, fontWeight:600, color:'#1a1a2e' }}>{(pickupData.address||'').split('—')[0].trim()}</div>
               </div>
             </div>
             {address && (
@@ -2568,28 +2568,34 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
           </div>
         )}
 
-        {/* Additional details */}
-        <div style={{ marginBottom:14 }}>
-          <label style={{ fontSize:12, fontWeight:600, color:'#555', display:'block', marginBottom:6 }}>
-            Additional Details (optional)
-          </label>
-          <input
-            value={note}
-            onChange={e => setNote(e.target.value)}
-            placeholder="e.g. Blue gate, near the school, apartment 3B..."
-            style={{ width:'100%', padding:'11px 13px', border:'1.5px solid #e2e4ed', borderRadius:10, fontSize:14, color:'#1a1a2e', boxSizing:'border-box', outline:'none', background:'#f9f9f9' }}
-          />
+        {/* Drop-off label */}
+        <label style={{ fontSize:12, fontWeight:700, color:'#1a1a2e', display:'block', marginBottom:6 }}>
+          📍 Drop-off Address
+        </label>
+        <div style={{ background:'#f9f5ff', border:'1.5px solid #e9d5ff', borderRadius:10, padding:'11px 13px', fontSize:14, color: address ? '#1a1a2e' : '#9ca3af', marginBottom:14, minHeight:42 }}>
+          {address || 'Tap the map or search above to set your drop-off'}
         </div>
 
-        {/* Safety tip */}
+        {/* Additional details */}
+        <label style={{ fontSize:12, fontWeight:600, color:'#555', display:'block', marginBottom:6 }}>
+          Additional Details (optional)
+        </label>
+        <input
+          value={note}
+          onChange={e => setNote(e.target.value)}
+          placeholder="e.g. Blue gate, near the school, apartment 3B..."
+          style={{ width:'100%', padding:'11px 13px', border:'1.5px solid #e2e4ed', borderRadius:10, fontSize:14, color:'#1a1a2e', boxSizing:'border-box', outline:'none', background:'#f9f9f9', marginBottom:14 }}
+        />
+
+        {/* Tip */}
         <div style={{ background:'#fefce8', border:'1px solid #fde047', borderRadius:10, padding:'10px 12px', marginBottom:14, fontSize:12, color:'#854d0e' }}>
-          📍 Tip: Tap the map to pin your exact drop-off location for better accuracy.
+          📍 Tip: Tap the map to pin your exact drop-off location.
         </div>
 
         {/* Confirm button */}
-        <button onClick={handleConfirm} disabled={!address}
-          style={{ width:'100%', padding:'15px', background:address?'#6b21a8':'#e5e7eb', color:address?'#ffffff':'#9ca3af', border:'none', borderRadius:14, fontSize:15, fontWeight:700, cursor:address?'pointer':'default', boxShadow:address?'0 4px 14px rgba(107,33,168,0.3)':'none' }}>
-          {address ? 'Confirm Drop-off →' : 'Search or tap map to set drop-off'}
+        <button onClick={handleConfirm} disabled={!address || !pinPos}
+          style={{ width:'100%', padding:'15px', background:(address&&pinPos)?'#6b21a8':'#e5e7eb', color:(address&&pinPos)?'#ffffff':'#9ca3af', border:'none', borderRadius:14, fontSize:15, fontWeight:700, cursor:(address&&pinPos)?'pointer':'default', boxShadow:(address&&pinPos)?'0 4px 14px rgba(107,33,168,0.3)':'none' }}>
+          {address && pinPos ? 'Confirm Drop-off →' : 'Search or tap map to set drop-off'}
         </button>
       </div>
     </div>
