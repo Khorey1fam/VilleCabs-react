@@ -148,6 +148,12 @@ function VilleMap({ height = 260, center = MANCHESTER_CENTER, zoom = 14, onClick
     googleMapsApiKey: GOOGLE_MAPS_KEY,
     libraries: LIBRARIES,
   });
+  useEffect(() => {
+    if (isLoaded) {
+      window.__googleMapsLoaded = true;
+      window.dispatchEvent(new Event('google-maps-ready'));
+    }
+  }, [isLoaded]);
 
   // Use window height for mobile-aware sizing
   const mobileHeight = Math.min(height, window.innerHeight * 0.45);
@@ -2209,16 +2215,30 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder,
   const detailSvc = useRef(null);
   const token     = useRef(null);
 
-  // Init Places services when Google Maps is loaded
+  // Init Places services - listen for ready event + poll as backup
   useEffect(() => {
-    if (!mapsLoaded && !window.google?.maps?.places) return;
-    try {
-      svc.current       = new window.google.maps.places.AutocompleteService();
-      detailSvc.current = new window.google.maps.places.PlacesService(document.createElement('div'));
-      token.current     = new window.google.maps.places.AutocompleteSessionToken();
-      setReady(true);
-    } catch(e) { console.warn('Places init failed:', e); }
-  }, [mapsLoaded]);
+    const tryInit = () => {
+      if (!window.google?.maps?.places) return false;
+      try {
+        svc.current       = new window.google.maps.places.AutocompleteService();
+        detailSvc.current = new window.google.maps.places.PlacesService(document.createElement('div'));
+        token.current     = new window.google.maps.places.AutocompleteSessionToken();
+        setReady(true);
+        return true;
+      } catch(e) { return false; }
+    };
+    // If already loaded (e.g. page was visited before)
+    if (tryInit()) return;
+    // Listen for VilleMap to finish loading
+    const onReady = () => tryInit();
+    window.addEventListener('google-maps-ready', onReady);
+    // Poll every 200ms as fallback
+    const iv = setInterval(() => { if (tryInit()) clearInterval(iv); }, 200);
+    return () => {
+      clearInterval(iv);
+      window.removeEventListener('google-maps-ready', onReady);
+    };
+  }, []);
 
   // Sync external value
   useEffect(() => {
@@ -2383,7 +2403,7 @@ function PinPickup({ go, setPickupData, user }) {
           onChange={setAddress}
           onPlaceSelect={handlePlaceSelect}
           placeholder="Search pickup address, road or landmark"
-          mapsLoaded={isLoaded}
+          mapsLoaded={!!window.google?.maps?.places}
         />
       </div>
       <VilleMap height={300} center={pinPos||MANCHESTER_CENTER} zoom={14} onClick={handleMapClick}
@@ -2466,7 +2486,6 @@ function PinPickup({ go, setPickupData, user }) {
 
 // ── PIN DROPOFF ───────────────────────────────────────────────────────────────
 function PinDropoff({ go, pickupData, setDropoffData, user }) {
-  const { isLoaded } = useJsApiLoader({ googleMapsApiKey: GOOGLE_MAPS_KEY, libraries: LIBRARIES });
   const [pinPos,  setPinPos]  = useState({ lat:18.02, lng:-77.48 });
   const [address, setAddress] = useState('');
   const [note,    setNote]    = useState('');
@@ -2515,7 +2534,7 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
           onChange={setAddress}
           onPlaceSelect={handlePlaceSelect}
           placeholder="Where are you going? Search address or landmark"
-          mapsLoaded={isLoaded}
+          mapsLoaded={!!window.google?.maps?.places}
         />
       </div>
 
