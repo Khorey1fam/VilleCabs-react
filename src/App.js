@@ -79,8 +79,8 @@ const s = {
   inp:       { width:'100%', padding:'14px', background:'#ffffff', border:'1px solid #d0d3e0', borderRadius:10, color:'#1a1a2e', fontSize:16, marginBottom:12, boxSizing:'border-box', outline:'none' },
   lbl:       { fontSize:11, color:'rgba(255,255,255,0.55)', marginBottom:4, display:'block', fontWeight:500 },
   topBar:    { background:'#ffffff', padding:'8px 14px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #e5e7eb', position:'sticky', top:0, zIndex:10, boxShadow:'0 1px 4px rgba(0,0,0,0.06)', minHeight:50 },
-  backBtn:   { background:'none', border:'none', color:'#1a1a2e', fontSize:22, cursor:'pointer', padding:'0 6px 0 0', lineHeight:1 },
-  topTitle:  { color:'#1a1a2e', fontSize:13, fontWeight:600 },
+  backBtn:   { background:'none', border:'none', color:'#1a1a2e', fontSize:22, cursor:'pointer', padding:'0 8px 0 0', lineHeight:1, flexShrink:0 },
+  topTitle:  { color:'#1a1a2e', fontSize:13, fontWeight:600, flex:1 },
   link:      { color:YELLOW, fontSize:13, cursor:'pointer', textAlign:'center', marginTop:8, background:'none', border:'none', width:'100%', display:'block', padding:4 },
   divLine:   { display:'flex', alignItems:'center', gap:10, margin:'8px 0 14px', color:'rgba(255,255,255,0.3)', fontSize:12 },
   errBox:    { background:'#fff0f0', border:'1px solid #ffcccc', borderRadius:10, padding:'10px 14px', marginBottom:12, fontSize:13, color:'#cc2222' },
@@ -562,10 +562,10 @@ function Splash({ go }) {
       {/* FOOTER */}
       <div style={{ background:'#000', padding:'32px 20px', textAlign:'center' }}>
         <img src="/logo.png" alt="VilleCabs" style={{ height:36, objectFit:'contain', marginBottom:12 }}/>
-        <p style={{ fontSize:12, color:'rgba(255,255,255,0.5)', margin:'0 0 14px' }}>Your city. Your ride. Your way.</p>
+        <p style={{ fontSize:12, color:'#6b7280', margin:'0 0 14px' }}>Your city. Your ride. Your way.</p>
         <div style={{ display:'flex', gap:14, justifyContent:'center', flexWrap:'wrap', marginBottom:16 }}>
           {[['About',() => go('about-us')],['Contact',() => go('contact-us')],['Help',() => go('help')],['Driver Signup',() => go('driver-signup')],['Partner',() => go('partner-with-us')]].map(([l,a],i) => (
-            <span key={i} onClick={a} style={{ fontSize:12, color:'rgba(255,255,255,0.5)', cursor:'pointer' }}>{l}</span>
+            <span key={i} onClick={a} style={{ fontSize:12, color:'#6b7280', cursor:'pointer' }}>{l}</span>
           ))}
         </div>
         <p style={{ fontSize:11, color:'rgba(255,255,255,0.3)', margin:0 }}>admin@villecabs.com · 876-280-4292</p>
@@ -1047,7 +1047,7 @@ function TermsScreen({ go, user }) {
 
         {/* Terms Box */}
         <div style={{ background:'rgba(15,20,40,0.8)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:14, padding:18, marginBottom:16, maxHeight:300, overflowY:'auto' }}>
-          <div style={{ fontSize:14, fontWeight:600, color:YELLOW, marginBottom:12 }}>VilleCabs Terms of Service</div>
+          <div style={{ fontSize:16, fontWeight:800, color:'#6b21a8', marginBottom:12 }}>VilleCabs Terms of Service</div>
           {[
             ['1. Acceptance', 'By using VilleCabs you agree to these terms. If you do not agree, please do not use the service.'],
             ['2. Eligibility', 'You must be 18 years or older to use VilleCabs. By continuing you confirm you meet this requirement.'],
@@ -1203,7 +1203,7 @@ function AboutUs({ go, user }) {
         ))}
 
         <div style={{ background:'rgba(232,180,0,0.08)', border:'0.5px solid rgba(232,180,0,0.25)', borderRadius:14, padding:16, marginBottom:16 }}>
-          <div style={{ fontSize:14, fontWeight:600, color:YELLOW, marginBottom:10 }}>Why Choose VilleCabs?</div>
+          <div style={{ fontSize:16, fontWeight:800, color:'#6b21a8', marginBottom:10 }}>Why Choose VilleCabs?</div>
           {['Fast and reliable rides','Local drivers who know Mandeville','Safe and convenient transportation','Flexible earning opportunities for drivers','Built with the community in mind'].map((item,i) => (
             <div key={i} style={{ fontSize:13, color:'rgba(255,255,255,0.7)', marginBottom:6, display:'flex', gap:8 }}>
               <span style={{ color:GREEN }}>✔</span>{item}
@@ -1507,7 +1507,18 @@ function CustomerDash({ go, user, setUser }) {
   const [activeRide, setActiveRide] = useState(null);
   const [rideNotif, setRideNotif] = useState(null);
   const prevStatusRef = useRef(null);
-  const handleLogout = async () => { _manualNavDone = false; await signOut(auth); setUser(null); go('splash'); };
+  const handleLogout = async () => {
+    try {
+      setMenuOpen(false);
+      _manualNavDone = false;
+      await signOut(auth);
+      setUser(null);
+      go('splash');
+    } catch(e) {
+      console.error('Logout error:', e);
+      go('splash');
+    }
+  };
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -1672,7 +1683,7 @@ function CustomerDash({ go, user, setUser }) {
                 <button onClick={() => setMenuOpen(false)} style={{ background:'rgba(255,255,255,0.1)', border:'none', color:'#ffffff', width:34, height:34, borderRadius:'50%', cursor:'pointer', fontSize:16 }}>✕</button>
               </div>
               <div style={{ fontSize:18, fontWeight:700, color:'#ffffff', marginBottom:2 }}>{user?.name}</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', marginBottom:10 }}>{user?.email}</div>
+              <div style={{ fontSize:12, color:'#6b7280', marginBottom:10 }}>{user?.email}</div>
               <div style={{ display:'inline-flex', alignItems:'center', gap:5, background:'rgba(26,158,90,0.15)', border:'1px solid rgba(26,158,90,0.3)', borderRadius:20, padding:'4px 12px' }}>
                 <div style={{ width:6, height:6, borderRadius:'50%', background:'#1a9e5a' }}/>
                 <span style={{ fontSize:11, color:'#1a9e5a', fontWeight:600 }}>Verified Rider</span>
@@ -1936,7 +1947,7 @@ function CustomerDash({ go, user, setUser }) {
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'0.5px solid rgba(255,255,255,0.07)', paddingTop:8 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                       <span style={{ fontSize:13 }}>👤</span>
-                      <span style={{ fontSize:12, color:'rgba(255,255,255,0.5)' }}>{ride.driverName||'VilleCabs driver'}</span>
+                      <span style={{ fontSize:12, color:'#6b7280' }}>{ride.driverName||'VilleCabs driver'}</span>
                     </div>
                     <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                       {ride.distanceKm && <span style={{ fontSize:11, color:'rgba(255,255,255,0.35)' }}>{ride.distanceKm} km</span>}
@@ -1994,7 +2005,7 @@ function CustomerProfile({ go, user, setUser }) {
       <div style={{ background:'linear-gradient(135deg, #0f1a35 0%, #1a2744 100%)', padding:'24px 20px 28px', textAlign:'center' }}>
         <div style={{ width:72, height:72, borderRadius:'50%', background:'rgba(232,180,0,0.2)', border:'2px solid rgba(232,180,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:30, margin:'0 auto 12px' }}>👤</div>
         <div style={{ fontSize:20, fontWeight:700, color:'#ffffff', marginBottom:2 }}>{user?.name}</div>
-        <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', marginBottom:10 }}>{user?.email}</div>
+        <div style={{ fontSize:12, color:'#6b7280', marginBottom:10 }}>{user?.email}</div>
         <div style={{ display:'inline-flex', alignItems:'center', gap:5, background:'rgba(26,158,90,0.2)', border:'1px solid rgba(26,158,90,0.4)', borderRadius:20, padding:'4px 12px' }}>
           <div style={{ width:6, height:6, borderRadius:'50%', background:'#1a9e5a' }}/>
           <span style={{ fontSize:11, color:'#1a9e5a', fontWeight:600 }}>Verified Rider</span>
@@ -2091,7 +2102,18 @@ function CustomerSettings({ go, user, setUser }) {
     setLoadingDeact(false);
   };
 
-  const handleLogout = async () => { _manualNavDone = false; await signOut(auth); setUser(null); go('splash'); };
+  const handleLogout = async () => {
+    try {
+      setMenuOpen(false);
+      _manualNavDone = false;
+      await signOut(auth);
+      setUser(null);
+      go('splash');
+    } catch(e) {
+      console.error('Logout error:', e);
+      go('splash');
+    }
+  };
 
   return (
     <div style={{ ...s.content, background:'transparent' }}>
@@ -2720,7 +2742,7 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
   const v = vehicles[sel];
 
   return (
-    <div style={{ ...s.content, background:'transparent' }}>
+    <div style={{ ...s.content, background:'#f5f6fa' }}>
       <TopBar title="Choose Ride" onBack={() => go('pin-dropoff')} go={go} user={user}/>
       <VilleMap height={220} center={pickupData?.coords||MANCHESTER_CENTER} zoom={12} markers={markers} directions={directions} expandable={true}/>
       {/* SOS + cash reminder */}
@@ -2732,14 +2754,14 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
         </div>
       </div>
       <div style={{ padding:14 }}>
-        <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.5)', marginBottom:10 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'#6b7280', marginBottom:10 }}>
           <span>📍 {pickupData?.address?.split(',')[0]||'Pickup'} → {dropoffData?.address?.split(',')[0]||'Destination'}</span>
           <span>{dist} km</span>
         </div>
         {error && <div style={s.errBox}>⚠️ {error}</div>}
         {vehicles.map((veh,i) => (
-          <div key={i} onClick={() => setSel(i)} style={{ border:`${i===sel?'2px solid '+YELLOW:'0.5px solid rgba(255,255,255,0.12)'}`, borderRadius:12, padding:'11px 13px', marginBottom:8, display:'flex', alignItems:'center', gap:10, cursor:'pointer', background:i===sel?'rgba(232,180,0,0.08)':'rgba(255,255,255,0.04)' }}>
-            <div style={{ width:44, height:44, borderRadius:10, background:'rgba(255,255,255,0.07)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, flexShrink:0 }}>{veh.icon}</div>
+          <div key={i} onClick={() => setSel(i)} style={{ border:`${i===sel?'2px solid #6b21a8':'1.5px solid #e5e7eb'}`, borderRadius:14, padding:'13px 14px', marginBottom:10, display:'flex', alignItems:'center', gap:12, cursor:'pointer', background:i===sel?'#f5f0ff':'#ffffff', boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
+            <div style={{ width:44, height:44, borderRadius:10, background:i===sel?'#ede9fe':'#f3f4f6', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, flexShrink:0 }}>{veh.icon}</div>
             <div style={{ flex:1 }}>
               <div style={{ fontSize:14, fontWeight:500, color:WHITE }}>{veh.name}</div>
               <div style={{ fontSize:11, color:'rgba(255,255,255,0.45)' }}>{veh.eta}</div>
@@ -2748,19 +2770,19 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
           </div>
         ))}
         {surcharge && (
-          <div style={{ background:'rgba(226,75,74,0.12)', border:'1.5px solid rgba(226,75,74,0.4)', borderRadius:10, padding:'10px 14px', marginBottom:10, display:'flex', alignItems:'center', gap:8 }}>
+          <div style={{ background:'#fff0f0', border:'1.5px solid #fca5a5', borderRadius:10, padding:'10px 14px', marginBottom:10, display:'flex', alignItems:'center', gap:8 }}>
             <span style={{ fontSize:18 }}>{surcharge.key==='night'?'🌙':surcharge.key==='holiday'?'🎉':'⚡'}</span>
             <div>
-              <div style={{ fontSize:13, fontWeight:600, color:'#f09595' }}>{surcharge.label}</div>
+              <div style={{ fontSize:13, fontWeight:600, color:'#dc2626' }}>{surcharge.label}</div>
               <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Added to your estimated fare</div>
             </div>
           </div>
         )}
         {(() => { const bd = fareBreakdown(v); return (
-          <div style={{ background:'#111111', borderRadius:12, padding:14, margin:'10px 0' }}>
-            <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:6 }}>
+          <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:12, padding:14, margin:'10px 0' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'#6b7280', marginBottom:6 }}>
               <span>Base Fare ({dist} km)</span>
-              <span style={{ color:WHITE, fontWeight:500 }}>J${bd.baseFare.toLocaleString()}</span>
+              <span style={{ color:'#1a1a2e', fontWeight:500 }}>J${bd.baseFare.toLocaleString()}</span>
             </div>
             {bd.surchargeAmt > 0 && (
               <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:6 }}>
@@ -2768,7 +2790,7 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
                 <span style={{ color:'#f09595', fontWeight:500 }}>+J${bd.surchargeAmt.toLocaleString()}</span>
               </div>
             )}
-            <div style={{ display:'flex', justifyContent:'space-between', fontSize:15, fontWeight:600, color:'#e8b400', borderTop:'0.5px solid rgba(255,255,255,0.15)', paddingTop:8, marginTop:4 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:15, fontWeight:700, color:'#6b21a8', borderTop:'0.5px solid rgba(255,255,255,0.15)', paddingTop:8, marginTop:4 }}>
               <span>Estimated Fare</span>
               <span>J${bd.total.toLocaleString()}</span>
             </div>
@@ -2804,7 +2826,7 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
 
         {/* Promo Code */}
         <div style={{ background:'rgba(15,20,40,0.6)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:12, padding:12, marginBottom:10 }}>
-          <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', marginBottom:8, fontWeight:500 }}>🎟️ Promo Code</div>
+          <div style={{ fontSize:12, color:'#6b7280', marginBottom:8, fontWeight:500 }}>🎟️ Promo Code</div>
           {!promoData ? (
             <div style={{ display:'flex', gap:8 }}>
               <input
@@ -2835,7 +2857,7 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
         {promoData && (
           <div style={{ background:'rgba(26,158,90,0.1)', border:'0.5px solid rgba(26,158,90,0.3)', borderRadius:10, padding:'10px 14px', marginBottom:10, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
             <div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', textDecoration:'line-through' }}>J${calcPrice(v).toLocaleString()}</div>
+              <div style={{ fontSize:12, color:'#6b7280', textDecoration:'line-through' }}>J${calcPrice(v).toLocaleString()}</div>
               <div style={{ fontSize:15, fontWeight:700, color:GREEN }}>J${calcFinalPrice(v).toLocaleString()} after {promoData.discount}% off</div>
             </div>
             <div style={{ fontSize:22 }}>🎉</div>
@@ -3369,7 +3391,7 @@ function LiveRide({ go, bookingId, user }) {
                 </div>
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:15, fontWeight:500, color:WHITE }}>{booking.driverName||'--'}</div>
-                  <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', marginTop:2 }}>
+                  <div style={{ fontSize:12, color:'#6b7280', marginTop:2 }}>
                     {driverInfo?.rating ? `⭐ ${driverInfo.rating.toFixed(1)} · ${driverInfo.ratingCount||0} reviews` : '⭐ New driver'}
                   </div>
                 </div>
@@ -3416,7 +3438,7 @@ function LiveRide({ go, bookingId, user }) {
           <div style={{ background:'rgba(232,180,0,0.08)', border:'1px solid rgba(232,180,0,0.3)', borderRadius:12, padding:20, marginBottom:12, textAlign:'center' }}>
             <div style={{ fontSize:32, marginBottom:8 }}>🔍</div>
             <div style={{ fontSize:15, fontWeight:500, color:YELLOW, marginBottom:4 }}>Finding your driver...</div>
-            <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)' }}>Drivers in Manchester are being notified</div>
+            <div style={{ fontSize:12, color:'#6b7280' }}>Drivers in Manchester are being notified</div>
             <button onClick={cancelRide} disabled={cancelling}
               style={{ marginTop:14, padding:'9px 24px', background:'rgba(226,75,74,0.15)', border:'1px solid rgba(226,75,74,0.4)', borderRadius:10, color:'#f09595', fontSize:13, cursor:'pointer', opacity:cancelling?0.6:1 }}>
               {cancelling ? 'Cancelling...' : '✕ Cancel Ride'}
@@ -3532,7 +3554,7 @@ function DriverTermsScreen({ go, user }) {
         <p style={{ fontSize:13, color:'rgba(255,255,255,0.5)', marginBottom:20 }}>Please read carefully before driving with VilleCabs</p>
 
         <div style={{ background:'rgba(15,20,40,0.8)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:14, padding:18, marginBottom:16, maxHeight:320, overflowY:'auto' }}>
-          <div style={{ fontSize:14, fontWeight:600, color:YELLOW, marginBottom:12 }}>VilleCabs Driver Agreement</div>
+          <div style={{ fontSize:16, fontWeight:800, color:'#6b21a8', marginBottom:12 }}>VilleCabs Driver Agreement</div>
           {[
             ['1. Independent Contractor', 'You are an independent contractor, not an employee of VilleCabs. You are responsible for your own taxes, insurance, and vehicle maintenance.'],
             ['2. Service Fee', 'VilleCabs charges a 15% platform service fee on your monthly earnings. This means you keep 85% of every fare. For example: if you earn J$100,000 in a month, J$15,000 goes to VilleCabs and you keep J$85,000.'],
@@ -3679,7 +3701,7 @@ function DriverAboutUs({ go, user }) {
           "We are bringing the ease and flexibility of app-based transportation to Mandeville while supporting local drivers and creating new earning opportunities within our parish.",
         ].map((t,i) => <p key={i} style={{ fontSize:13, color:'rgba(255,255,255,0.7)', lineHeight:1.8, marginBottom:14 }}>{t}</p>)}
         <div style={{ background:'rgba(232,180,0,0.08)', border:'0.5px solid rgba(232,180,0,0.25)', borderRadius:14, padding:16, marginBottom:16 }}>
-          <div style={{ fontSize:14, fontWeight:600, color:YELLOW, marginBottom:10 }}>Driver Earnings</div>
+          <div style={{ fontSize:16, fontWeight:800, color:'#6b21a8', marginBottom:10 }}>Driver Earnings</div>
           <div style={{ fontSize:13, color:'rgba(255,255,255,0.7)', lineHeight:1.8 }}>
             You keep <strong style={{ color:GREEN }}>85%</strong> of every fare. VilleCabs charges a <strong style={{ color:YELLOW }}>15% monthly platform fee</strong> settled at the end of each month.
           </div>
@@ -4821,7 +4843,18 @@ function DriverSettings({ go, user, setUser }) {
     setLoadingDeact(false);
   };
 
-  const handleLogout = async () => { _manualNavDone = false; await signOut(auth); setUser(null); go('splash'); };
+  const handleLogout = async () => {
+    try {
+      setMenuOpen(false);
+      _manualNavDone = false;
+      await signOut(auth);
+      setUser(null);
+      go('splash');
+    } catch(e) {
+      console.error('Logout error:', e);
+      go('splash');
+    }
+  };
 
   return (
     <div style={{ ...s.content, background:'transparent' }}>
@@ -6039,7 +6072,7 @@ export default function App() {
         try { await signOut(auth); } catch(e) {}
         setUser(null);
         setScreen('splash');
-      }, 10 * 60 * 1000); // 10 minutes
+      }, 5 * 60 * 1000); // 5 minutes
     };
     const events = ['mousedown','mousemove','keydown','scroll','touchstart','click'];
     events.forEach(e => window.addEventListener(e, resetTimer, { passive:true }));
