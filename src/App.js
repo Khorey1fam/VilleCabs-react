@@ -2763,10 +2763,10 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
           <div key={i} onClick={() => setSel(i)} style={{ border:`${i===sel?'2px solid #6b21a8':'1.5px solid #e5e7eb'}`, borderRadius:14, padding:'13px 14px', marginBottom:10, display:'flex', alignItems:'center', gap:12, cursor:'pointer', background:i===sel?'#f5f0ff':'#ffffff', boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
             <div style={{ width:44, height:44, borderRadius:10, background:i===sel?'#ede9fe':'#f3f4f6', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, flexShrink:0 }}>{veh.icon}</div>
             <div style={{ flex:1 }}>
-              <div style={{ fontSize:14, fontWeight:500, color:WHITE }}>{veh.name}</div>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.45)' }}>{veh.eta}</div>
+              <div style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>{veh.name}</div>
+              <div style={{ fontSize:11, color:'#6b7280' }}>{veh.eta}</div>
             </div>
-            <div style={{ fontSize:15, fontWeight:500, color:WHITE }}>J${calcPrice(veh).toLocaleString()}</div>
+            <div style={{ fontSize:15, fontWeight:700, color:'#6b21a8' }}>J${calcPrice(veh).toLocaleString()}</div>
           </div>
         ))}
         {surcharge && (
