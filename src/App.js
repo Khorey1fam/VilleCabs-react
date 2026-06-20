@@ -2540,7 +2540,7 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
 
       {/* Map */}
       <div style={{ flex:'none' }}>
-        <VilleMap height={260} center={mapCenter} zoom={14} onClick={handleMapClick} markers={markers}/>
+        <VilleMap height={260} center={mapCenter} zoom={14} onClick={handleMapClick} markers={markers} expandable={true}/>
       </div>
 
       {/* Bottom panel */}
