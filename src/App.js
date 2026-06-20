@@ -2517,8 +2517,8 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
 
   // Show pickup marker (green) + dropoff marker (purple) if set
   const markers = [
-    ...(pickupData?.coords ? [{ lat: pickupData.coords.lat, lng: pickupData.coords.lng, color: '#1a9e5a' }] : []),
-    ...(pinPos ? [{ lat: pinPos.lat, lng: pinPos.lng, color: '#6b21a8' }] : []),
+    ...(pickupData?.coords ? [{ position:{ lat: pickupData.coords.lat, lng: pickupData.coords.lng }, label:'A', title:'Pickup' }] : []),
+    { position:{ lat: pinPos.lat, lng: pinPos.lng }, label:'B', title:'Drop-off' },
   ];
 
   const mapCenter = pinPos || startPos;
