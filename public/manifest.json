@@ -1,28 +1,42 @@
 {
   "name": "VilleCabs",
   "short_name": "VilleCabs",
-  "description": "Book rides in Mandeville, Manchester, Jamaica",
+  "description": "Your city. Your ride. Your way. Ride-hailing in Mandeville, Jamaica.",
   "start_url": "/",
   "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#6b21a8",
   "orientation": "portrait",
-  "background_color": "#1a1a2e",
-  "theme_color": "#e8b400",
+  "scope": "/",
+  "lang": "en",
   "icons": [
     {
-      "src": "/villecabs-logo.png",
+      "src": "/logo.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "/villecabs-logo.png",
+      "src": "/logo.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     }
   ],
-  "categories": ["travel", "navigation"],
-  "lang": "en-JM",
-  "scope": "/",
-  "id": "/"
+  "shortcuts": [
+    {
+      "name": "Book a Ride",
+      "short_name": "Book",
+      "description": "Book a ride now",
+      "url": "/",
+      "icons": [{ "src": "/logo.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Driver Login",
+      "short_name": "Drive",
+      "description": "Login as a driver",
+      "url": "/",
+      "icons": [{ "src": "/logo.png", "sizes": "192x192" }]
+    }
+  ]
 }
