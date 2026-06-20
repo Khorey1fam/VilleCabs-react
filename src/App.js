@@ -43,6 +43,31 @@ const WHITE  = '#ffffff';
 
 // Manchester, Jamaica centre
 const MANCHESTER_CENTER = { lat: 18.0416, lng: -77.5036 };
+
+// Send welcome email via EmailJS
+const sendWelcomeEmail = async (toEmail, toName) => {
+  try {
+    await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        service_id:  'service_h9ryisl',
+        template_id: 'template_welcome',
+        user_id:     '9-C6Nw3ZGGd5R7jto',
+        template_params: {
+          to_email:    toEmail,
+          to_name:     toName,
+          from_name:   'VilleCabs',
+          reply_to:    'admin@villecabs.com',
+          message:     'Welcome to VilleCabs! Your account is ready. Book your first ride at villecabs.com',
+        },
+      }),
+    });
+    console.log('Welcome email sent to', toEmail);
+  } catch(e) {
+    console.warn('Welcome email failed:', e);
+  }
+};
 const LIBRARIES       = ['places'];
 const GOOGLE_MAPS_KEY = process.env.REACT_APP_GOOGLE_MAPS_KEY || '';
 
@@ -684,6 +709,7 @@ function CustomerSignup({ go, setUser, user }) {
       const refCode = 'VC' + Math.random().toString(36).substring(2,7).toUpperCase();
       await setDoc(doc(db,'customers',cred.user.uid), { name:form.name, phone:form.phone, email:form.email, role:'customer', referralCode:refCode, referralCount:0, createdAt:serverTimestamp() });
       await sendEmailVerification(cred.user);
+      sendWelcomeEmail(form.email, form.name); // non-blocking
       setUser({ uid:cred.user.uid, name:form.name, email:form.email, role:'customer' });
       go('otp');
     } catch(err) { setError(err.code==='auth/email-already-in-use'?'Email already registered.':err.message); }
@@ -955,6 +981,7 @@ function DriverSignup({ go, user }) {
         docs:{ license:licenseUrl, fitness:fitnessUrl, registration:registrationUrl },
       });
       setError('');
+      sendWelcomeEmail(form.email || '', form.name || 'Driver'); // non-blocking
       go('driver-pending');
     } catch(err) {
       console.error('Signup error:', err);
