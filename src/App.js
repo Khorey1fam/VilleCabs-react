@@ -414,7 +414,7 @@ function Footer({ go }) {
         <div style={{ borderTop:'0.5px solid rgba(255,255,255,0.06)', paddingTop:20, display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10 }}>
           <p style={{ fontSize:11, color:'rgba(255,255,255,0.25)', margin:0 }}>© 2026 VilleCabs · Mandeville, Manchester, Jamaica</p>
           <div style={{ display:'flex', gap:16 }}>
-            <a href="https://wa.me/18762804292" target="_blank" rel="noopener noreferrer" style={{ fontSize:12, color:'rgba(255,255,255,0.35)', textDecoration:'none' }}
+            <a href="https://wa.me/18765158113+1876-515-8113" target="_blank" rel="noopener noreferrer" style={{ fontSize:12, color:'rgba(255,255,255,0.35)', textDecoration:'none' }}
               onMouseEnter={e => e.target.style.color=YELLOW} onMouseLeave={e => e.target.style.color='rgba(255,255,255,0.35)'}>
               💬 WhatsApp
             </a>
@@ -614,7 +614,7 @@ function Splash({ go }) {
             <span key={i} onClick={a} style={{ fontSize:12, color:'#6b7280', cursor:'pointer' }}>{l}</span>
           ))}
         </div>
-        <p style={{ fontSize:11, color:'rgba(255,255,255,0.3)', margin:0 }}>admin@villecabs.com · 876-280-4292</p>
+        <p style={{ fontSize:11, color:'rgba(255,255,255,0.3)', margin:0 }}>admin@villecabs.com · +1876-515-8113</p>
         <p style={{ fontSize:10, color:'rgba(255,255,255,0.2)', margin:'6px 0 0' }}>2026 VilleCabs · Mandeville, Manchester, Jamaica</p>
       </div>
 
@@ -1106,7 +1106,7 @@ function TermsScreen({ go, user }) {
             ['7. Conduct', 'You agree to treat drivers with respect. Abusive or dangerous behaviour may result in your account being suspended.'],
             ['8. Privacy', 'We collect your name, phone number, email and location during rides. This information is used only to provide the service and is not sold to third parties.'],
             ['9. Changes', 'VilleCabs reserves the right to update these terms at any time. Continued use of the app means you accept any changes.'],
-            ['10. Contact', 'For questions or concerns contact us via WhatsApp at 876-280-4292 or email daviskeneile@gmail.com'],
+            ['10. Contact', 'For questions or concerns contact us via WhatsApp at +1876-515-8113 or email daviskeneile@gmail.com'],
           ].map(([title, text], i) => (
             <div key={i} style={{ marginBottom:14 }}>
               <div style={{ fontSize:12, fontWeight:600, color:WHITE, marginBottom:4 }}>{title}</div>
@@ -1274,7 +1274,7 @@ function AboutUs({ go, user }) {
         <div style={{ background:'rgba(15,20,40,0.7)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, padding:14, fontSize:13, color:'rgba(255,255,255,0.6)', lineHeight:2 }}>
           <div>📍 Serving Mandeville & Manchester, Jamaica</div>
           <div>🌐 villecabs.com</div>
-          <div>📞 Call / WhatsApp: <a href="https://wa.me/18762804292" style={{ color:YELLOW, textDecoration:'none' }}>876-280-4292</a></div>
+          <div>📞 Call / WhatsApp: <a href="https://wa.me/18765158113+1876-515-8113" style={{ color:YELLOW, textDecoration:'none' }}>+1876-515-8113</a></div>
         </div>
       </div>
       <Footer go={go}/>
@@ -1333,11 +1333,11 @@ function ContactUs({ go, user }) {
 
   return (
     <div style={{ ...s.content, background:'transparent' }}>
-      <div style={s.topBar}><button style={s.backBtn} onClick={() => go('customer-dash')}>←</button><span style={s.topTitle}>Contact Support</span></div>
+      <div style={s.topBar}><span style={s.topTitle}>Contact Support</span></div>
       <div style={{ padding:'14px 16px 0' }}>
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
           {[
-            ['💬','WhatsApp',  () => window.open('https://wa.me/18762804292','_blank')],
+            ['💬','WhatsApp',  () => window.open('https://wa.me/18765158113+1876-515-8113','_blank')],
             ['📧','Email',     () => window.open('mailto:admin@villecabs.com','_blank')],
             ['🚨','Safety',    () => { document.getElementById('subj-inp')?.focus?.(); }],
             ['🚗','Ride Issue',() => { document.getElementById('subj-inp')?.focus?.(); }],
@@ -1355,8 +1355,8 @@ function ContactUs({ go, user }) {
           <span style={{ fontSize:28 }}>💬</span>
           <div>
             <div style={{ fontSize:13, color:WHITE, fontWeight:500 }}>WhatsApp us directly</div>
-            <a href="https://wa.me/18762804292" target="_blank" rel="noopener noreferrer"
-              style={{ fontSize:13, color:YELLOW, textDecoration:'none' }}>876-280-4292</a>
+            <a href="https://wa.me/18765158113+1876-515-8113" target="_blank" rel="noopener noreferrer"
+              style={{ fontSize:13, color:YELLOW, textDecoration:'none' }}>+1876-515-8113</a>
           </div>
         </div>
 
@@ -2049,7 +2049,7 @@ function CustomerProfile({ go, user, setUser }) {
 
   return (
     <div style={{ ...s.content, background:'#f5f6fa' }}>
-      <div style={s.topBar}><button style={s.backBtn} onClick={() => go('customer-dash')}>←</button><span style={s.topTitle}>My Profile</span></div>
+      <div style={s.topBar}><span style={s.topTitle}>My Profile</span></div>
       <div style={{ background:'linear-gradient(135deg, #0f1a35 0%, #1a2744 100%)', padding:'24px 20px 28px', textAlign:'center' }}>
         <div style={{ width:72, height:72, borderRadius:'50%', background:'rgba(232,180,0,0.2)', border:'2px solid rgba(232,180,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:30, margin:'0 auto 12px' }}>👤</div>
         <div style={{ fontSize:20, fontWeight:700, color:'#ffffff', marginBottom:2 }}>{user?.name}</div>
@@ -3772,7 +3772,7 @@ function DriverAboutUs({ go, user }) {
         <div style={{ background:'rgba(15,20,40,0.7)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, padding:14, fontSize:13, color:'rgba(255,255,255,0.6)', lineHeight:2 }}>
           <div>📍 Serving Mandeville & Manchester, Jamaica</div>
           <div>🌐 villecabs.com</div>
-          <div>📞 Call / WhatsApp: <a href="https://wa.me/18762804292" style={{ color:YELLOW, textDecoration:'none' }}>876-280-4292</a></div>
+          <div>📞 Call / WhatsApp: <a href="https://wa.me/18765158113+1876-515-8113" style={{ color:YELLOW, textDecoration:'none' }}>+1876-515-8113</a></div>
         </div>
       </div>
       <Footer go={go}/>
@@ -3818,7 +3818,7 @@ function DriverContactUs({ go, user }) {
           <span style={{ fontSize:28 }}>💬</span>
           <div>
             <div style={{ fontSize:13, color:WHITE, fontWeight:500 }}>WhatsApp us directly</div>
-            <a href="https://wa.me/18762804292" target="_blank" rel="noopener noreferrer" style={{ fontSize:13, color:YELLOW, textDecoration:'none' }}>876-280-4292</a>
+            <a href="https://wa.me/18765158113+1876-515-8113" target="_blank" rel="noopener noreferrer" style={{ fontSize:13, color:YELLOW, textDecoration:'none' }}>+1876-515-8113</a>
           </div>
         </div>
         {error   && <div style={s.errBox}>⚠️ {error}</div>}
@@ -4726,7 +4726,7 @@ function DriverProfile({ go, user }) {
     <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
       {/* Header */}
       <div style={{ background:'#fff', padding:'10px 16px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', position:'sticky', top:0, zIndex:10 }}>
-        <button onClick={() => go('driver-dash')} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#1a1a2e' }}>←</button>
+        
         <img src="/logo.png" style={{ height:26, objectFit:'contain' }} alt="VilleCabs"/>
         <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:4 }}>My Profile</span>
         <button onClick={() => setEditing(!editing)} style={{ marginLeft:'auto', padding:'6px 14px', background:editing?'#f3f4f6':'#6b21a8', color:editing?'#555':'#fff', border:'none', borderRadius:20, fontSize:12, fontWeight:600, cursor:'pointer' }}>
@@ -5078,7 +5078,7 @@ function ChatScreen({ go, user, bookingId }) {
 
       {/* Header */}
       <div style={{ background:DARK, padding:'12px 16px', display:'flex', alignItems:'center', gap:12, flexShrink:0, borderBottom:'0.5px solid rgba(255,255,255,0.1)' }}>
-        <button style={s.backBtn} onClick={goBack}>←</button>
+        
         <div style={{ width:38, height:38, borderRadius:'50%', background:'rgba(232,180,0,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>
           {user?.role === 'customer' ? '🚗' : '👤'}
         </div>
@@ -5179,7 +5179,7 @@ function PaymentsPage({ go }) {
   return (
     <div style={{ ...s.content, background:'#f5f6fa' }}>
       <div style={s.topBar}>
-        <button style={s.backBtn} onClick={() => go('customer-dash')}>←</button>
+        
         <span style={s.topTitle}>Payments</span>
       </div>
       <div style={{ padding:20 }}>
@@ -5234,7 +5234,7 @@ function PromotionsPage({ go, user }) {
   return (
     <div style={{ ...s.content, background:'#f5f6fa' }}>
       <div style={s.topBar}>
-        <button style={s.backBtn} onClick={() => go('customer-dash')}>←</button>
+        
         <span style={s.topTitle}>Promotions</span>
       </div>
       <div style={{ padding:20 }}>
@@ -5293,7 +5293,7 @@ function SafetyCentre({ go }) {
   return (
     <div style={{ ...s.content, background:'#f5f6fa' }}>
       <div style={s.topBar}>
-        <button style={s.backBtn} onClick={() => go('customer-dash')}>←</button>
+        
         <span style={s.topTitle}>Safety Centre</span>
       </div>
       <div style={{ padding:20 }}>
@@ -5350,7 +5350,7 @@ function BusinessPage({ go, user }) {
             Contact Us →
           </button>
         </div>
-        <p style={{ fontSize:12, color:'#888aaa' }}>📧 admin@villecabs.com · 📞 876-280-4292</p>
+        <p style={{ fontSize:12, color:'#888aaa' }}>📧 admin@villecabs.com · 📞 +1876-515-8113</p>
       </div>
     </div>
   );
@@ -5789,7 +5789,7 @@ function PartnerWithUs({ go, user }) {
   return (
     <div style={{ background:'#ffffff', minHeight:'100vh' }}>
       <div style={{ background:'#ffffff', padding:'10px 16px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', position:'sticky', top:0, zIndex:10 }}>
-        <button onClick={() => go(user?'customer-dash':'splash')} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#1a1a2e' }}>←</button>
+        
         <img src="/logo.png" style={{ height:28, objectFit:'contain' }} alt="VilleCabs"/>
         <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:6 }}>Partner With VilleCabs</span>
       </div>
@@ -5826,7 +5826,7 @@ function PartnerWithUs({ go, user }) {
             <label style={{ fontSize:12, fontWeight:600, color:'#555', display:'block', marginBottom:4 }}>Message</label>
             <textarea value={form.message} onChange={e=>set('message',e.target.value)} rows={3} placeholder="Tell us about your business..." style={{ width:'100%', padding:'11px 13px', border:'1.5px solid #e2e4ed', borderRadius:10, fontSize:14, marginBottom:14, boxSizing:'border-box', outline:'none', resize:'vertical', color:'#1a1a2e' }}/>
             <button onClick={submit} disabled={saving} style={{ width:'100%', padding:'13px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:12, fontSize:14, fontWeight:700, cursor:'pointer', opacity:saving?0.7:1 }}>{saving?'Submitting...':'Submit Partner Request'}</button>
-            <p style={{ textAlign:'center', fontSize:12, color:'#888', marginTop:12 }}>📧 admin@villecabs.com · 📞 876-280-4292</p>
+            <p style={{ textAlign:'center', fontSize:12, color:'#888', marginTop:12 }}>📧 admin@villecabs.com · 📞 +1876-515-8113</p>
           </div>
         )}
       </div>
@@ -5856,7 +5856,7 @@ function DriverEarnings({ go, user }) {
     return (
       <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
         <div style={{ background:'#fff', padding:'10px 16px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', position:'sticky', top:0, zIndex:10 }}>
-          <button onClick={() => setDetail(null)} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#1a1a2e' }}>←</button>
+          
           <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>Ride Details</span>
         </div>
         <div style={{ padding:16 }}>
@@ -5881,7 +5881,7 @@ function DriverEarnings({ go, user }) {
   return (
     <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
       <div style={{ background:'#fff', padding:'10px 16px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', position:'sticky', top:0, zIndex:10 }}>
-        <button onClick={() => go('driver-dash')} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#1a1a2e' }}>←</button>
+        
         <img src="/logo.png" style={{ height:26, objectFit:'contain' }} alt="VilleCabs"/>
         <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:4 }}>Earnings</span>
       </div>
@@ -5955,7 +5955,7 @@ function DriverDocuments({ go, user }) {
   return (
     <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
       <div style={{ background:'#fff', padding:'10px 16px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', position:'sticky', top:0, zIndex:10 }}>
-        <button onClick={()=>go('driver-dash')} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#1a1a2e' }}>←</button>
+        
         <img src="/logo.png" style={{ height:26, objectFit:'contain' }} alt="VilleCabs"/>
         <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:4 }}>My Documents</span>
       </div>
@@ -5997,7 +5997,7 @@ function DriverNotifications({ go, user }) {
   return (
     <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
       <div style={{ background:'#fff', padding:'10px 16px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', position:'sticky', top:0, zIndex:10 }}>
-        <button onClick={()=>go('driver-dash')} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#1a1a2e' }}>←</button>
+        
         <img src="/logo.png" style={{ height:26, objectFit:'contain' }} alt="VilleCabs"/>
         <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:4 }}>Notifications</span>
         {unread>0&&<div style={{ background:'#6b21a8', color:'#fff', borderRadius:10, fontSize:10, fontWeight:700, padding:'2px 7px' }}>{unread}</div>}
