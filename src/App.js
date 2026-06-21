@@ -5623,7 +5623,10 @@ function AdminDash({ go, user }) {
       } catch(e) { console.error('Admin process error:', e); }
       setLoading(false);
     };
-    load();
+    load().catch(e => { console.error('Admin load failed:', e); setLoading(false); });
+    // Safety timeout
+    const t = setTimeout(() => setLoading(false), 8000);
+    return () => clearTimeout(t);
   }, []);
 
   const updateDriver  = async (id, data) => { await updateDoc(doc(db,'drivers',id), data); setDrivers(p=>p.map(d=>d.id===id?{...d,...data}:d)); };
@@ -5701,6 +5704,9 @@ function AdminDash({ go, user }) {
         {tab === 'overview' && (
           <div>
             <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:14 }}>Overview</div>
+            <div style={{ background:'#f0fff4', border:'1px solid #86efac', borderRadius:10, padding:'8px 12px', marginBottom:12, fontSize:11, color:'#1a9e5a' }}>
+              ✅ Data loaded: {customers.length} customers · {drivers.length} drivers · {rides.length} rides · {messages.length} messages · {partners.length} partners
+            </div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))', gap:10, marginBottom:16 }}>
               {[
                 ['Total Customers',    stats.customers,       '#6b21a8','#f9f5ff','#e9d5ff'],
@@ -5820,7 +5826,11 @@ function AdminDash({ go, user }) {
                 </div>
               );
             })}
-            {customers.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}>No customers yet</div>}
+            {customers.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}>
+                <div style={{ fontSize:32, marginBottom:10 }}>👥</div>
+                <div style={{ fontSize:14, fontWeight:600, color:'#1a1a2e', marginBottom:6 }}>No customers found</div>
+                <div style={{ fontSize:12, color:'#aaa' }}>Customers will appear here after they sign up</div>
+              </div>}
           </div>
         )}
 
@@ -5967,7 +5977,11 @@ function AdminDash({ go, user }) {
                 </div>
               </div>
             ))}
-            {messages.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}>No messages yet</div>}
+            {messages.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}>
+                <div style={{ fontSize:32, marginBottom:10 }}>📩</div>
+                <div style={{ fontSize:14, fontWeight:600, color:'#1a1a2e', marginBottom:6 }}>No messages yet</div>
+                <div style={{ fontSize:12, color:'#aaa' }}>Contact form submissions will appear here</div>
+              </div>}
           </div>
         )}
 
