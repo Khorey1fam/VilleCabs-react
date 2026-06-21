@@ -5592,41 +5592,34 @@ function AdminDash({ go, user }) {
 
   useEffect(() => {
     const load = async () => {
-      // Load each collection independently so one failure doesn't break everything
-      const safe = async (fn) => { try { return await fn(); } catch(e) { console.warn('Admin load error:', e.message); return { docs:[] }; } };
-
-      const [cSnap, dSnap, rSnap, pSnap, mSnap, aSnap, uSnap, promoSnap] = await Promise.all([
-        safe(() => getDocs(collection(db,'customers'))),
-        safe(() => getDocs(collection(db,'drivers'))),
-        safe(() => getDocs(collection(db,'bookings'))),
-        safe(() => getDocs(collection(db,'partnerRequests'))),
-        safe(() => getDocs(collection(db,'contact_submissions'))),
-        safe(() => getDocs(collection(db,'sosAlerts'))),
-        safe(() => getDocs(query(collection(db,'unfulfilled_ride_requests'), orderBy('created_at','desc')))),
-        safe(() => getDocs(collection(db,'promo_codes'))),
-      ]);
-
       try {
-        const cd  = (cSnap.docs||[]).map(d=>({id:d.id,...d.data()}));
-        const dd  = (dSnap.docs||[]).map(d=>({id:d.id,...d.data()}));
-        const rd  = (rSnap.docs||[]).map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
-        const pd  = (pSnap.docs||[]).map(d=>({id:d.id,...d.data()}));
-        const md  = (mSnap.docs||[]).map(d=>({id:d.id,...d.data()}));
-        const ad2 = (aSnap.docs||[]).map(d=>({id:d.id,...d.data()}));
-        const ud  = (uSnap.docs||[]).map(d=>({id:d.id,...d.data()}));
-        const prd = (promoSnap.docs||[]).map(d=>({id:d.id,...d.data()}));
+        const [cSnap, dSnap, rSnap, pSnap, mSnap, aSnap, uSnap, promoSnap] = await Promise.all([
+          getDocs(collection(db,'customers')),
+          getDocs(collection(db,'drivers')),
+          getDocs(collection(db,'bookings')),
+          getDocs(collection(db,'partnerRequests')),
+          getDocs(collection(db,'contactMessages')),
+          getDocs(collection(db,'sosAlerts')),
+          getDocs(query(collection(db,'unfulfilled_ride_requests'), orderBy('created_at','desc'))),
+          getDocs(collection(db,'promo_codes')),
+        ]);
+        const cd = cSnap.docs.map(d=>({id:d.id,...d.data()}));
+        const dd = dSnap.docs.map(d=>({id:d.id,...d.data()}));
+        const rd = rSnap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+        const pd = pSnap.docs.map(d=>({id:d.id,...d.data()}));
+        const md = mSnap.docs.map(d=>({id:d.id,...d.data()}));
+        const ad2= aSnap.docs.map(d=>({id:d.id,...d.data()}));
+        const ud = uSnap.docs.map(d=>({id:d.id,...d.data()}));
+        const prd= promoSnap.docs.map(d=>({id:d.id,...d.data()}));
         const completed = rd.filter(r=>r.status==='completed');
         const totalFare = completed.reduce((s,r)=>s+(r.fare||0),0);
         setCustomers(cd); setDrivers(dd); setRides(rd); setPartners(pd);
         setMessages(md); setAlerts(ad2); setUnfulfilled(ud); setPromos(prd);
         setStats({ customers:cd.length, drivers:dd.length, pendingDrivers:dd.filter(d=>d.status==='pending').length, activeDrivers:dd.filter(d=>d.isOnline).length, rides:rd.length, completed:completed.length, cancelled:rd.filter(r=>r.status==='cancelled').length, totalFare, partnerRequests:pd.filter(p=>p.status==='new').length });
-      } catch(e) { console.error('Admin process error:', e); }
+      } catch(e) { console.error(e); }
       setLoading(false);
     };
-    load().catch(e => { console.error('Admin load failed:', e); setLoading(false); });
-    // Safety timeout
-    const t = setTimeout(() => setLoading(false), 8000);
-    return () => clearTimeout(t);
+    load();
   }, []);
 
   const updateDriver  = async (id, data) => { await updateDoc(doc(db,'drivers',id), data); setDrivers(p=>p.map(d=>d.id===id?{...d,...data}:d)); };
@@ -5704,9 +5697,6 @@ function AdminDash({ go, user }) {
         {tab === 'overview' && (
           <div>
             <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:14 }}>Overview</div>
-            <div style={{ background:'#f0fff4', border:'1px solid #86efac', borderRadius:10, padding:'8px 12px', marginBottom:12, fontSize:11, color:'#1a9e5a' }}>
-              ✅ Data loaded: {customers.length} customers · {drivers.length} drivers · {rides.length} rides · {messages.length} messages · {partners.length} partners
-            </div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))', gap:10, marginBottom:16 }}>
               {[
                 ['Total Customers',    stats.customers,       '#6b21a8','#f9f5ff','#e9d5ff'],
@@ -5826,11 +5816,7 @@ function AdminDash({ go, user }) {
                 </div>
               );
             })}
-            {customers.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}>
-                <div style={{ fontSize:32, marginBottom:10 }}>👥</div>
-                <div style={{ fontSize:14, fontWeight:600, color:'#1a1a2e', marginBottom:6 }}>No customers found</div>
-                <div style={{ fontSize:12, color:'#aaa' }}>Customers will appear here after they sign up</div>
-              </div>}
+            {customers.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}>No customers yet</div>}
           </div>
         )}
 
@@ -5977,11 +5963,7 @@ function AdminDash({ go, user }) {
                 </div>
               </div>
             ))}
-            {messages.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}>
-                <div style={{ fontSize:32, marginBottom:10 }}>📩</div>
-                <div style={{ fontSize:14, fontWeight:600, color:'#1a1a2e', marginBottom:6 }}>No messages yet</div>
-                <div style={{ fontSize:12, color:'#aaa' }}>Contact form submissions will appear here</div>
-              </div>}
+            {messages.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}>No messages yet</div>}
           </div>
         )}
 
@@ -6090,6 +6072,228 @@ class ErrorBoundary extends React.Component {
     }
     return this.props.children;
   }
+}
+
+
+function PartnerWithUs({ go, user }) {
+  const [form, setForm] = useState({ bizName:'', bizType:'', contact:'', phone:'', email:'', address:'', website:'', message:'' });
+  const [sent,   setSent]   = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error,  setError]  = useState('');
+  const set = (k,v) => setForm(p => ({...p,[k]:v}));
+  const submit = async () => {
+    if (!form.bizName||!form.email||!form.phone) { setError('Please fill in all required fields.'); return; }
+    setSaving(true); setError('');
+    try { await addDoc(collection(db,'partnerRequests'), {...form, status:'new', createdAt:serverTimestamp()}); setSent(true); }
+    catch(e) { setError('Failed to submit. Please try again.'); }
+    setSaving(false);
+  };
+  return (
+    <div style={{ background:'#fff', minHeight:'100vh' }}>
+      <div style={{ background:'#fff', padding:'8px 14px', display:'flex', alignItems:'center', borderBottom:'1px solid #e5e7eb', position:'sticky', top:0, zIndex:10 }}>
+        <img src="/logo.png" style={{ height:30, objectFit:'contain' }} alt="VilleCabs"/>
+        <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:8 }}>Partner With VilleCabs</span>
+      </div>
+      <div style={{ background:'linear-gradient(135deg,#6b21a8,#4c1d95)', padding:'28px 20px', textAlign:'center' }}>
+        <h1 style={{ fontSize:20, fontWeight:800, color:'#fff', margin:'0 0 8px' }}>Partner With VilleCabs</h1>
+        <p style={{ fontSize:13, color:'rgba(255,255,255,0.8)', margin:0 }}>Grow your business. We will drive the customers.</p>
+      </div>
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, padding:'16px' }}>
+        {['Hotels','Restaurants','Guest Houses','Attractions','Businesses','Clubs','Supermarkets','Events'].map((c,i) => (
+          <div key={i} style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:12, padding:'10px', textAlign:'center', fontSize:13, fontWeight:600, color:'#1a1a2e' }}>{c}</div>
+        ))}
+      </div>
+      <div style={{ padding:'0 16px 40px' }}>
+        {sent ? (
+          <div style={{ textAlign:'center', padding:24 }}>
+            <div style={{ fontSize:40, marginBottom:12 }}>🎉</div>
+            <div style={{ fontSize:16, fontWeight:700, color:'#1a1a2e' }}>Request Received!</div>
+          </div>
+        ) : (
+          <div>
+            {error && <div style={{ background:'#fff0f0', border:'1px solid #fca5a5', borderRadius:10, padding:'10px', fontSize:13, color:'#dc2626', marginBottom:12 }}>{error}</div>}
+            {[['Business Name *','bizName'],['Business Type *','bizType'],['Contact Person','contact'],['Phone *','phone'],['Email *','email'],['Address','address'],['Website','website']].map(([l,k]) => (
+              <div key={k}>
+                <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:4 }}>{l}</label>
+                <input value={form[k]||''} onChange={e=>set(k,e.target.value)} style={{ width:'100%', padding:'11px 13px', border:'1.5px solid #e2e4ed', borderRadius:10, fontSize:14, marginBottom:12, boxSizing:'border-box', outline:'none', color:'#1a1a2e' }}/>
+              </div>
+            ))}
+            <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:4 }}>Message</label>
+            <textarea value={form.message} onChange={e=>set('message',e.target.value)} rows={3} style={{ width:'100%', padding:'11px', border:'1.5px solid #e2e4ed', borderRadius:10, fontSize:14, marginBottom:14, boxSizing:'border-box', outline:'none', resize:'vertical', color:'#1a1a2e' }}/>
+            <button onClick={submit} disabled={saving} style={{ width:'100%', padding:'13px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:12, fontSize:14, fontWeight:700, cursor:'pointer', opacity:saving?0.7:1 }}>{saving?'Submitting...':'Submit Partner Request'}</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DriverEarnings({ go, user }) {
+  const [rides,   setRides]   = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [period,  setPeriod]  = useState('week');
+  const [detail,  setDetail]  = useState(null);
+  useEffect(() => {
+    if (!user?.uid) return;
+    getDocs(query(collection(db,'bookings'), where('driverId','==',user.uid), where('status','==','completed')))
+      .then(snap => { setRides(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0))); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [user]);
+  const now=new Date(), todayStart=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  const weekStart=new Date(todayStart.getTime()-6*86400000), monthStart=new Date(now.getFullYear(),now.getMonth(),1);
+  const filtered=rides.filter(r=>{const d=new Date((r.createdAt?.seconds||0)*1000);return period==='today'?d>=todayStart:period==='week'?d>=weekStart:d>=monthStart;});
+  const totalFare=filtered.reduce((s,r)=>s+(r.fare||0),0);
+  const driverNet=Math.round(totalFare*0.85), vcFee=Math.round(totalFare*0.15);
+  if (detail) {
+    const fare=detail.fare||0;
+    return (
+      <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
+        <div style={{ background:'#fff', padding:'8px 14px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #e5e7eb', position:'sticky', top:0, zIndex:10 }}>
+          <button onClick={()=>setDetail(null)} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#1a1a2e' }}>←</button>
+          <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>Ride Details</span>
+        </div>
+        <div style={{ padding:16 }}>
+          <div style={{ background:'#fff', borderRadius:14, padding:16, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
+            {[['Total Fare','J$'+fare.toLocaleString(),'#1a1a2e'],['VilleCabs Fee (15%)','-J$'+Math.round(fare*0.15).toLocaleString(),'#dc2626'],['You Earned (85%)','J$'+Math.round(fare*0.85).toLocaleString(),'#6b21a8']].map(([l,v,c],i)=>(
+              <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'10px 0', borderBottom:i<2?'1px solid #f0f0f0':'none' }}>
+                <span style={{ fontSize:13, color:'#555' }}>{l}</span><span style={{ fontSize:14, fontWeight:700, color:c }}>{v}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
+      <div style={{ background:'#fff', padding:'8px 14px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #e5e7eb', position:'sticky', top:0, zIndex:10 }}>
+        <img src="/logo.png" style={{ height:26, objectFit:'contain' }} alt="VilleCabs"/>
+        <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:4 }}>Earnings</span>
+      </div>
+      <div style={{ display:'flex', gap:8, padding:'12px 16px', background:'#fff', borderBottom:'1px solid #f0f0f0' }}>
+        {[['today','Today'],['week','This Week'],['month','This Month']].map(([k,l])=>(
+          <button key={k} onClick={()=>setPeriod(k)} style={{ flex:1, padding:'8px', borderRadius:20, border:'none', background:period===k?'#6b21a8':'#f3f4f6', color:period===k?'#fff':'#555', fontSize:12, fontWeight:600, cursor:'pointer' }}>{l}</button>
+        ))}
+      </div>
+      <div style={{ padding:'14px' }}>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+          <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:14, padding:'14px' }}>
+            <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', marginBottom:4 }}>You Earned</div>
+            <div style={{ fontSize:22, fontWeight:800, color:'#6b21a8' }}>J${driverNet.toLocaleString()}</div>
+          </div>
+          <div style={{ background:'#fff', border:'1px solid #e5e7eb', borderRadius:14, padding:'14px' }}>
+            <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', marginBottom:4 }}>Total Fares</div>
+            <div style={{ fontSize:22, fontWeight:800, color:'#1a1a2e' }}>J${totalFare.toLocaleString()}</div>
+          </div>
+        </div>
+        {loading && <div style={{ textAlign:'center', color:'#888', padding:24 }}>Loading...</div>}
+        {!loading && filtered.length===0 && <div style={{ textAlign:'center', color:'#888', padding:24 }}>No rides in this period</div>}
+        {filtered.map((r,i)=>{
+          const d=new Date((r.createdAt?.seconds||0)*1000);
+          return (<div key={i} onClick={()=>setDetail(r)} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)', cursor:'pointer' }}>
+            <div style={{ display:'flex', justifyContent:'space-between' }}>
+              <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>{r.customerName||'Passenger'}</div>
+              <div style={{ fontSize:15, fontWeight:800, color:'#6b21a8' }}>J${Math.round((r.fare||0)*0.85).toLocaleString()}</div>
+            </div>
+            <div style={{ fontSize:11, color:'#888' }}>{d.toLocaleDateString()}</div>
+          </div>);
+        })}
+      </div>
+    </div>
+  );
+}
+
+function DriverDocuments({ go, user }) {
+  const [docs,   setDocs]   = useState({});
+  const [saving, setSaving] = useState('');
+  const [msg,    setMsg]    = useState('');
+  useEffect(() => {
+    if (!user?.uid) return;
+    getDoc(doc(db,'drivers',user.uid)).then(snap => { if (snap.exists()) setDocs(snap.data().documents||{}); });
+  }, [user]);
+  const docTypes=[{key:'licence',label:"Driver Licence",icon:'🪪'},{key:'fitness',label:'Vehicle Fitness',icon:'📋'},{key:'registration',label:'Vehicle Registration',icon:'📄'},{key:'insurance',label:'Insurance',icon:'🛡️'},{key:'vehiclePhoto',label:'Vehicle Photo',icon:'🚗'}];
+  const handleUpload = async (key, file) => {
+    if (!file||!user?.uid) return;
+    setSaving(key);
+    try {
+      const docData={status:'pending',name:file.name,uploadedAt:new Date().toISOString()};
+      await updateDoc(doc(db,'drivers',user.uid), {['documents.'+key]:docData});
+      setDocs(prev=>({...prev,[key]:docData}));
+      setMsg('Uploaded — pending review'); setTimeout(()=>setMsg(''),3000);
+    } catch(e) {}
+    setSaving('');
+  };
+  return (
+    <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
+      <div style={{ background:'#fff', padding:'8px 14px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #e5e7eb', position:'sticky', top:0, zIndex:10 }}>
+        <img src="/logo.png" style={{ height:26, objectFit:'contain' }} alt="VilleCabs"/>
+        <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:4 }}>My Documents</span>
+      </div>
+      <div style={{ padding:'14px 14px 90px' }}>
+        {msg&&<div style={{ background:'#f0fff4', border:'1px solid #86efac', borderRadius:10, padding:'10px', fontSize:13, color:'#1a9e5a', marginBottom:12 }}>{msg}</div>}
+        {docTypes.map(({key,label,icon})=>{
+          const d=docs[key], status=d?.status||'missing';
+          const colors={approved:'#1a9e5a',pending:'#b45309',rejected:'#dc2626',missing:'#888'};
+          const labels={approved:'Approved',pending:'Pending Review',rejected:'Needs Update',missing:'Not Uploaded'};
+          return (<div key={key} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+              <span style={{ fontSize:24 }}>{icon}</span>
+              <div>
+                <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>{label}</div>
+                <div style={{ fontSize:11, color:colors[status], fontWeight:600 }}>{labels[status]}</div>
+              </div>
+            </div>
+            <label style={{ display:'block', padding:'9px', background:status==='approved'?'#f9f5ff':'#6b21a8', color:status==='approved'?'#6b21a8':'#fff', borderRadius:10, fontSize:12, fontWeight:600, cursor:'pointer', textAlign:'center' }}>
+              {saving===key?'Uploading...':status==='approved'?'Replace':'Upload Document'}
+              <input type="file" accept="image/*,.pdf" style={{ display:'none' }} onChange={e=>handleUpload(key,e.target.files[0])} disabled={saving===key}/>
+            </label>
+          </div>);
+        })}
+      </div>
+    </div>
+  );
+}
+
+function DriverNotifications({ go, user }) {
+  const [notifs, setNotifs] = useState([
+    {id:'1',type:'account',title:'Welcome to VilleCabs!',message:'Complete your profile to start receiving ride requests.',time:'Today',read:false},
+    {id:'2',type:'account',title:'Application Received',message:'Your application is being reviewed by our team.',time:'Today',read:true},
+  ]);
+  const [filter, setFilter] = useState('all');
+  const icons={ride:'🚕',account:'👤',safety:'🛡️',payment:'💰',system:'⚙️'};
+  const filtered=filter==='all'?notifs:filter==='unread'?notifs.filter(n=>!n.read):notifs.filter(n=>n.type===filter);
+  const unread=notifs.filter(n=>!n.read).length;
+  return (
+    <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
+      <div style={{ background:'#fff', padding:'8px 14px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #e5e7eb', position:'sticky', top:0, zIndex:10 }}>
+        <img src="/logo.png" style={{ height:26, objectFit:'contain' }} alt="VilleCabs"/>
+        <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:4 }}>Notifications</span>
+        {unread>0&&<div style={{ background:'#6b21a8', color:'#fff', borderRadius:10, fontSize:10, fontWeight:700, padding:'2px 7px' }}>{unread}</div>}
+        <button onClick={()=>setNotifs(p=>p.map(n=>({...n,read:true})))} style={{ marginLeft:'auto', background:'none', border:'none', fontSize:11, color:'#6b21a8', cursor:'pointer', fontWeight:600 }}>Mark all read</button>
+      </div>
+      <div style={{ display:'flex', gap:6, padding:'10px 14px', background:'#fff', borderBottom:'1px solid #f0f0f0', overflowX:'auto' }}>
+        {[['all','All'],['unread','Unread'],['ride','Rides'],['account','Account']].map(([k,l])=>(
+          <button key={k} onClick={()=>setFilter(k)} style={{ flexShrink:0, padding:'5px 12px', borderRadius:20, border:'none', background:filter===k?'#6b21a8':'#f3f4f6', color:filter===k?'#fff':'#555', fontSize:11, fontWeight:600, cursor:'pointer' }}>{l}</button>
+        ))}
+      </div>
+      <div style={{ padding:'12px 14px 90px' }}>
+        {filtered.length===0&&<div style={{ textAlign:'center', padding:40, color:'#888' }}>No notifications</div>}
+        {filtered.map((n,i)=>(
+          <div key={i} onClick={()=>setNotifs(p=>p.map(x=>x.id===n.id?{...x,read:true}:x))}
+            style={{ background:n.read?'#fff':'#f9f5ff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)', cursor:'pointer' }}>
+            <div style={{ display:'flex', gap:12 }}>
+              <span style={{ fontSize:22 }}>{icons[n.type]||'🔔'}</span>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:3 }}>{n.title}</div>
+                <div style={{ fontSize:12, color:'#555', lineHeight:1.5 }}>{n.message}</div>
+                <div style={{ fontSize:10, color:'#aaa', marginTop:4 }}>{n.time}</div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 
