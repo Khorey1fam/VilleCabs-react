@@ -2633,6 +2633,8 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
   const [sel,        setSel]        = useState(0);
   const [loading,    setLoading]    = useState(false);
   const [error,      setError]      = useState('');
+  const [noDrivers,  setNoDrivers]  = useState(false);
+  const [checking,   setChecking]   = useState(false);
   const [dist,       setDist]       = useState(8.2);
   const [directions, setDirections] = useState(null);
   const [completed,  setCompleted]  = useState(false);
@@ -2753,12 +2755,73 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
     return Math.round(base * (1 - promoData.discount / 100));
   };
 
-  const handleBook = async () => {
-    setLoading(true); setError('');
+  const saveUnfulfilledRequest = async (v, price, dist) => {
+    const now = new Date();
     try {
-      const v = vehicles[sel];
+      await addDoc(collection(db, 'unfulfilled_ride_requests'), {
+        customer_id:             user.uid,
+        customer_name:           user.name || '',
+        customer_email:          user.email || '',
+        pickup_address:          pickupData?.address || '',
+        pickup_lat:              pickupData?.coords?.lat || 0,
+        pickup_lng:              pickupData?.coords?.lng || 0,
+        dropoff_address:         dropoffData?.address || '',
+        dropoff_lat:             dropoffData?.coords?.lat || 0,
+        dropoff_lng:             dropoffData?.coords?.lng || 0,
+        ride_type:               v.name,
+        estimated_fare:          price,
+        estimated_distance_km:   dist,
+        estimated_duration_min:  Math.ceil(dist / 0.5),
+        passenger_count:         pickupData?.passengers || 1,
+        payment_method:          'Cash',
+        reason:                  'no_drivers_available',
+        status:                  'unfulfilled',
+        service_area:            'Mandeville',
+        day_of_week:             now.toLocaleDateString('en-US', { weekday:'long' }),
+        hour_of_day:             now.getHours(),
+        created_at:              serverTimestamp(),
+      });
+      console.log('Unfulfilled request saved');
+    } catch(e) { console.error('Failed to save unfulfilled request:', e); }
+  };
+
+  const checkDriverAvailability = async () => {
+    try {
+      const snap = await getDocs(query(
+        collection(db, 'drivers'),
+        where('status',   '==', 'approved'),
+        where('isOnline', '==', true),
+      ));
+      const available = snap.docs.filter(d => {
+        const data = d.data();
+        return !data.currentRideId && data.isOnline === true;
+      });
+      return available.length > 0;
+    } catch(e) {
+      console.warn('Driver check failed:', e);
+      return true; // fail open - allow booking if check fails
+    }
+  };
+
+  const handleBook = async () => {
+    setLoading(true); setError(''); setChecking(true);
+    try {
+      const v          = vehicles[sel];
       const price      = calcPrice(v);
       const finalPrice = calcFinalPrice(v);
+
+      // ── CHECK DRIVER AVAILABILITY ────────────────────────────────────
+      const driversAvailable = await checkDriverAvailability();
+      setChecking(false);
+
+      if (!driversAvailable) {
+        await saveUnfulfilledRequest(v, finalPrice, dist);
+        setLoading(false);
+        setNoDrivers(true);
+        return;
+      }
+      // ── DRIVERS AVAILABLE — CREATE NORMAL BOOKING ────────────────────
+
       const ref = await addDoc(collection(db,'bookings'), {
         customerId:   user.uid,
         customerName: user.name,
@@ -2966,10 +3029,39 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
         </div>
       </div>
     </div>
+
+    {/* ── NO DRIVERS AVAILABLE MODAL ── */}
+    {noDrivers && (
+      <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+        <div style={{ background:'#ffffff', borderRadius:20, padding:28, maxWidth:360, width:'100%', textAlign:'center', boxShadow:'0 20px 60px rgba(0,0,0,0.2)', border:'1px solid #e9d5ff' }}>
+          <img src="/logo.png" alt="VilleCabs" style={{ height:40, objectFit:'contain', marginBottom:16 }}/>
+          <div style={{ width:56, height:56, borderRadius:'50%', background:'#f5f0ff', border:'2px solid #e9d5ff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:28, margin:'0 auto 16px' }}>🚕</div>
+          <h2 style={{ fontSize:18, fontWeight:800, color:'#6b21a8', margin:'0 0 12px', lineHeight:1.3 }}>No Drivers Available Right Now</h2>
+          <p style={{ fontSize:14, color:'#374151', lineHeight:1.7, margin:'0 0 8px' }}>
+            Thank you for choosing VilleCabs.
+          </p>
+          <p style={{ fontSize:14, color:'#374151', lineHeight:1.7, margin:'0 0 8px' }}>
+            We are currently expanding our driver network in Mandeville. Please try again shortly.
+          </p>
+          <p style={{ fontSize:14, color:'#374151', lineHeight:1.7, margin:'0 0 20px' }}>
+            We're working hard to bring more drivers online every day.
+          </p>
+          <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:10, padding:'10px 14px', marginBottom:20, fontSize:12, color:'#6b21a8' }}>
+            📊 Your request has been saved to help us improve driver coverage in your area.
+          </div>
+          <button onClick={() => { setNoDrivers(false); go('customer-dash'); }}
+            style={{ width:'100%', padding:'14px', background:'#6b21a8', color:'#ffffff', border:'none', borderRadius:12, fontSize:15, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 14px rgba(107,33,168,0.3)' }}>
+            Got It
+          </button>
+          <button onClick={() => setNoDrivers(false)}
+            style={{ width:'100%', padding:'10px', background:'transparent', color:'#6b21a8', border:'none', borderRadius:12, fontSize:13, cursor:'pointer', marginTop:8, fontWeight:600 }}>
+            Try Again
+          </button>
+        </div>
+      </div>
+    )}
   );
 }
-
-// ── BOOKING CONFIRM ──────────────────────────────────────────────────────────
 function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, user }) {
   const [booking,  setBooking]  = useState(null);
   const [loading,  setLoading]  = useState(false);
@@ -5403,6 +5495,7 @@ function AdminDash({ go, user }) {
   const [drivers,      setDrivers]      = useState([]);
   const [customers,    setCustomers]    = useState([]);
   const [rides,        setRides]        = useState([]);
+  const [unfulfilled,  setUnfulfilled]  = useState([]);
   const [partners,     setPartners]     = useState([]);
   const [messages,     setMessages]     = useState([]);
   const [loading,      setLoading]      = useState(true);
@@ -5763,6 +5856,92 @@ function AdminDash({ go, user }) {
         )}
 
       </div>
+
+
+      {/* ── UNFULFILLED RIDE REQUESTS TAB ── */}
+      {tab === 'unfulfilled' && (
+        <div style={{ padding:16 }}>
+          <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:14 }}>
+            No Driver Requests
+          </div>
+
+          {/* Summary stats */}
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
+            {(() => {
+              const now   = new Date();
+              const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+              const week  = new Date(today.getTime() - 7*86400000);
+              const todayCount = unfulfilled.filter(r => new Date((r.created_at?.seconds||0)*1000) >= today).length;
+              const weekCount  = unfulfilled.filter(r => new Date((r.created_at?.seconds||0)*1000) >= week).length;
+              // Most requested pickup area
+              const pickups = unfulfilled.map(r => r.pickup_address?.split(',')[0]).filter(Boolean);
+              const pickupCounts = pickups.reduce((acc, p) => { acc[p]=(acc[p]||0)+1; return acc; }, {});
+              const topPickup = Object.entries(pickupCounts).sort((a,b)=>b[1]-a[1])[0]?.[0] || '—';
+              // Busiest hour
+              const hours = unfulfilled.map(r => r.hour_of_day).filter(h => h !== undefined);
+              const hourCounts = hours.reduce((acc,h) => { acc[h]=(acc[h]||0)+1; return acc; }, {});
+              const busiestHour = Object.entries(hourCounts).sort((a,b)=>b[1]-a[1])[0]?.[0];
+              const busiestLabel = busiestHour !== undefined ? `${busiestHour}:00` : '—';
+              return [
+                ['Today',         todayCount,         '#6b21a8', '#f9f5ff', '#e9d5ff'],
+                ['This Week',     weekCount,          '#1a9e5a', '#f0fff4', '#86efac'],
+                ['Total',         unfulfilled.length, '#1a1a2e', '#fff',    '#e5e7eb'],
+                ['Busiest Hour',  busiestLabel,       '#b45309', '#fffbeb', '#fde047'],
+              ].map(([l,v,c,bg,border],i) => (
+                <div key={i} style={{ background:bg, border:`1px solid ${border}`, borderRadius:12, padding:'12px 14px' }}>
+                  <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', marginBottom:4 }}>{l}</div>
+                  <div style={{ fontSize:20, fontWeight:800, color:c }}>{v}</div>
+                </div>
+              ));
+            })()}
+          </div>
+
+          {/* Top pickup area */}
+          {unfulfilled.length > 0 && (() => {
+            const pickups = unfulfilled.map(r => r.pickup_address?.split(',')[0]).filter(Boolean);
+            const counts  = pickups.reduce((acc,p) => { acc[p]=(acc[p]||0)+1; return acc; }, {});
+            const top     = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,3);
+            return (
+              <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:12, padding:'12px 14px', marginBottom:14 }}>
+                <div style={{ fontSize:12, fontWeight:700, color:'#6b21a8', marginBottom:8 }}>🔥 Most Requested Pickup Areas</div>
+                {top.map(([area, count], i) => (
+                  <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'4px 0', fontSize:12, color:'#1a1a2e' }}>
+                    <span>{area}</span>
+                    <span style={{ fontWeight:700, color:'#6b21a8' }}>{count} request{count>1?'s':''}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+
+          {/* Request list */}
+          {unfulfilled.length === 0 ? (
+            <div style={{ textAlign:'center', padding:40 }}>
+              <div style={{ fontSize:32, marginBottom:10 }}>✅</div>
+              <div style={{ fontSize:14, color:'#888' }}>No unfulfilled requests yet</div>
+            </div>
+          ) : unfulfilled.map((r, i) => {
+            const d = new Date((r.created_at?.seconds||0)*1000);
+            return (
+              <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)', borderLeft:'3px solid #e9d5ff' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>👤 {r.customer_name||'Customer'}</div>
+                  <div style={{ fontSize:12, fontWeight:700, color:'#6b21a8' }}>J${(r.estimated_fare||0).toLocaleString()}</div>
+                </div>
+                <div style={{ fontSize:11, color:'#555', marginBottom:2 }}>📍 {(r.pickup_address||'').split(',')[0]}</div>
+                <div style={{ fontSize:11, color:'#555', marginBottom:8 }}>🏁 {(r.dropoff_address||'').split(',')[0]}</div>
+                <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                  <span style={{ fontSize:10, background:'#f3f4f6', color:'#555', padding:'2px 8px', borderRadius:8 }}>🚗 {r.ride_type}</span>
+                  <span style={{ fontSize:10, background:'#f3f4f6', color:'#555', padding:'2px 8px', borderRadius:8 }}>📏 {r.estimated_distance_km} km</span>
+                  <span style={{ fontSize:10, background:'#fefce8', color:'#854d0e', padding:'2px 8px', borderRadius:8 }}>⏰ {r.day_of_week} {r.hour_of_day}:00</span>
+                  <span style={{ fontSize:10, background:'#fff0f0', color:'#dc2626', padding:'2px 8px', borderRadius:8 }}>⚠️ No drivers</span>
+                </div>
+                <div style={{ fontSize:10, color:'#aaa', marginTop:6 }}>{d.toLocaleString()}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
