@@ -5562,20 +5562,23 @@ function FeaturedPage({ go, user }) {
 const ADMIN_EMAILS = ['daviskeneile@gmail.com', 'admin@villecabs.com'];
 
 function AdminDash({ go, user }) {
-  const [tab,          setTab]          = useState('overview');
-  const [stats,        setStats]        = useState({ customers:0, drivers:0, pendingDrivers:0, activeDrivers:0, rides:0, completed:0, cancelled:0, totalFare:0, partnerRequests:0 });
-  const [drivers,      setDrivers]      = useState([]);
-  const [customers,    setCustomers]    = useState([]);
-  const [rides,        setRides]        = useState([]);
-  const [unfulfilled,  setUnfulfilled]  = useState([]);
-  const [partners,     setPartners]     = useState([]);
-  const [messages,     setMessages]     = useState([]);
-  const [loading,      setLoading]      = useState(true);
-  const [rideFilter,   setRideFilter]   = useState('all');
-  const [driverFilter, setDriverFilter] = useState('all');
-  const [selected,     setSelected]     = useState(null);
+  const ADMIN_EMAILS = ['daviskeneile@gmail.com', 'admin@villecabs.com'];
+  const [tab,         setTab]        = useState('overview');
+  const [stats,       setStats]      = useState({ customers:0, drivers:0, pendingDrivers:0, activeDrivers:0, rides:0, completed:0, cancelled:0, totalFare:0, partnerRequests:0 });
+  const [drivers,     setDrivers]    = useState([]);
+  const [customers,   setCustomers]  = useState([]);
+  const [rides,       setRides]      = useState([]);
+  const [partners,    setPartners]   = useState([]);
+  const [messages,    setMessages]   = useState([]);
+  const [alerts,      setAlerts]     = useState([]);
+  const [unfulfilled, setUnfulfilled]= useState([]);
+  const [promos,      setPromos]     = useState([]);
+  const [loading,     setLoading]    = useState(true);
+  const [rideFilter,  setRideFilter] = useState('all');
+  const [driverFilter,setDriverFilter]=useState('all');
+  const [detail,      setDetail]     = useState(null);
 
-  // ── Guard: admin only ──────────────────────────────────────────────────────
+  // Access control
   if (!user || !ADMIN_EMAILS.includes(user.email)) {
     return (
       <div style={{ minHeight:'100vh', background:'#f5f6fa', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24 }}>
@@ -5587,694 +5590,454 @@ function AdminDash({ go, user }) {
     );
   }
 
-  // ── Load all data ──────────────────────────────────────────────────────────
   useEffect(() => {
     const load = async () => {
       try {
-        const [dSnap, cSnap, rSnap, pSnap, mSnap] = await Promise.all([
-          getDocs(collection(db, 'drivers')),
-          getDocs(collection(db, 'customers')),
-          getDocs(collection(db, 'bookings')),
-          getDocs(collection(db, 'partnerRequests')),
-          getDocs(collection(db, 'contactMessages')),
+        const [cSnap, dSnap, rSnap, pSnap, mSnap, aSnap, uSnap, promoSnap] = await Promise.all([
+          getDocs(collection(db,'customers')),
+          getDocs(collection(db,'drivers')),
+          getDocs(collection(db,'bookings')),
+          getDocs(collection(db,'partnerRequests')),
+          getDocs(collection(db,'contactMessages')),
+          getDocs(collection(db,'sosAlerts')),
+          getDocs(query(collection(db,'unfulfilled_ride_requests'), orderBy('created_at','desc'))),
+          getDocs(collection(db,'promo_codes')),
         ]);
-        const driversData   = dSnap.docs.map(d => ({ id:d.id, ...d.data() }));
-        const customersData = cSnap.docs.map(d => ({ id:d.id, ...d.data() }));
-        const ridesData     = rSnap.docs.map(d => ({ id:d.id, ...d.data() })).sort((a,b) => (b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
-        const partnersData  = pSnap.docs.map(d => ({ id:d.id, ...d.data() })).sort((a,b) => (b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
-        const messagesData  = mSnap.docs.map(d => ({ id:d.id, ...d.data() })).sort((a,b) => (b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
-        const completed = ridesData.filter(r => r.status==='completed');
-        const totalFare = completed.reduce((s,r) => s+(r.fare||0), 0);
-        setDrivers(driversData);
-        setCustomers(customersData);
-        setRides(ridesData);
-        setPartners(partnersData);
-        setMessages(messagesData);
-        setStats({
-          customers:      customersData.length,
-          drivers:        driversData.length,
-          pendingDrivers: driversData.filter(d => d.status==='pending').length,
-          activeDrivers:  driversData.filter(d => d.isOnline).length,
-          rides:          ridesData.length,
-          completed:      completed.length,
-          cancelled:      ridesData.filter(r => r.status==='cancelled').length,
-          totalFare,
-          partnerRequests: partnersData.filter(p => p.status==='new').length,
-        });
-        setLoading(false);
-      } catch(e) { console.error(e); setLoading(false); }
+        const cd = cSnap.docs.map(d=>({id:d.id,...d.data()}));
+        const dd = dSnap.docs.map(d=>({id:d.id,...d.data()}));
+        const rd = rSnap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+        const pd = pSnap.docs.map(d=>({id:d.id,...d.data()}));
+        const md = mSnap.docs.map(d=>({id:d.id,...d.data()}));
+        const ad2= aSnap.docs.map(d=>({id:d.id,...d.data()}));
+        const ud = uSnap.docs.map(d=>({id:d.id,...d.data()}));
+        const prd= promoSnap.docs.map(d=>({id:d.id,...d.data()}));
+        const completed = rd.filter(r=>r.status==='completed');
+        const totalFare = completed.reduce((s,r)=>s+(r.fare||0),0);
+        setCustomers(cd); setDrivers(dd); setRides(rd); setPartners(pd);
+        setMessages(md); setAlerts(ad2); setUnfulfilled(ud); setPromos(prd);
+        setStats({ customers:cd.length, drivers:dd.length, pendingDrivers:dd.filter(d=>d.status==='pending').length, activeDrivers:dd.filter(d=>d.isOnline).length, rides:rd.length, completed:completed.length, cancelled:rd.filter(r=>r.status==='cancelled').length, totalFare, partnerRequests:pd.filter(p=>p.status==='new').length });
+      } catch(e) { console.error(e); }
+      setLoading(false);
     };
     load();
   }, []);
 
-  const updateDriver = async (id, data) => {
-    await updateDoc(doc(db,'drivers',id), data);
-    setDrivers(prev => prev.map(d => d.id===id ? {...d,...data} : d));
-  };
-  const updatePartner = async (id, data) => {
-    await updateDoc(doc(db,'partnerRequests',id), data);
-    setPartners(prev => prev.map(p => p.id===id ? {...p,...data} : p));
-  };
-  const updateMessage = async (id, data) => {
-    await updateDoc(doc(db,'contactMessages',id), data);
-    setMessages(prev => prev.map(m => m.id===id ? {...m,...data} : m));
-  };
+  const updateDriver  = async (id, data) => { await updateDoc(doc(db,'drivers',id), data); setDrivers(p=>p.map(d=>d.id===id?{...d,...data}:d)); };
+  const updatePartner = async (id, data) => { await updateDoc(doc(db,'partnerRequests',id), data); setPartners(p=>p.map(d=>d.id===id?{...d,...data}:d)); };
+  const updateMessage = async (id, data) => { await updateDoc(doc(db,'contactMessages',id), data); setMessages(p=>p.map(d=>d.id===id?{...d,...data}:d)); };
+  const updateAlert   = async (id, data) => { await updateDoc(doc(db,'sosAlerts',id), data); setAlerts(p=>p.map(d=>d.id===id?{...d,...data}:d)); };
 
   const vcRevenue  = Math.round(stats.totalFare * 0.15);
-  const driverPay  = Math.round(stats.totalFare * 0.85);
+  const driverPayout = Math.round(stats.totalFare * 0.85);
+  const avgFare    = stats.completed > 0 ? Math.round(stats.totalFare / stats.completed) : 0;
 
-  const statusBadge = (status, map) => {
-    const cfg = map[status] || { label:status||'Unknown', bg:'#f3f4f6', color:'#555' };
-    return <span style={{ fontSize:10, background:cfg.bg, color:cfg.color, padding:'2px 8px', borderRadius:8, fontWeight:600 }}>{cfg.label}</span>;
-  };
-  const driverStatusMap = {
-    approved:  { label:'✅ Approved',  bg:'#f0fff4', color:'#1a9e5a' },
-    pending:   { label:'⏳ Pending',   bg:'#fffbeb', color:'#b45309' },
-    rejected:  { label:'❌ Rejected',  bg:'#fff0f0', color:'#dc2626' },
-    suspended: { label:'🚫 Suspended', bg:'#fdf2f8', color:'#9333ea' },
-  };
-  const rideStatusMap = {
-    completed:  { label:'✅ Done',     bg:'#f0fff4', color:'#1a9e5a' },
-    active:     { label:'🚗 Active',   bg:'#eff6ff', color:'#2563eb' },
-    searching:  { label:'🔍 Searching',bg:'#fffbeb', color:'#b45309' },
-    cancelled:  { label:'❌ Cancelled',bg:'#fff0f0', color:'#dc2626' },
-  };
-  const partnerStatusMap = {
-    new:       { label:'🆕 New',       bg:'#f9f5ff', color:'#6b21a8' },
-    contacted: { label:'📞 Contacted', bg:'#eff6ff', color:'#2563eb' },
-    approved:  { label:'✅ Approved',  bg:'#f0fff4', color:'#1a9e5a' },
-    featured:  { label:'⭐ Featured',  bg:'#fffbeb', color:'#b45309' },
-    rejected:  { label:'❌ Rejected',  bg:'#fff0f0', color:'#dc2626' },
-  };
+  // Filtered rides
+  const now        = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const weekStart  = new Date(todayStart.getTime() - 7*86400000);
+  const filteredRides = rides.filter(r => {
+    const d = new Date((r.createdAt?.seconds||0)*1000);
+    if (rideFilter==='today')     return d >= todayStart;
+    if (rideFilter==='week')      return d >= weekStart;
+    if (rideFilter==='completed') return r.status==='completed';
+    if (rideFilter==='cancelled') return r.status==='cancelled';
+    if (rideFilter==='active')    return r.status==='active'||r.status==='searching';
+    return true;
+  });
 
-  const filteredRides   = rideFilter==='all'   ? rides   : rides.filter(r => r.status===rideFilter);
-  const filteredDrivers = driverFilter==='all' ? drivers : drivers.filter(d => d.status===driverFilter);
+  const filteredDrivers = drivers.filter(d => {
+    if (driverFilter==='pending')  return d.status==='pending';
+    if (driverFilter==='approved') return d.status==='approved';
+    if (driverFilter==='suspended')return d.status==='suspended';
+    return true;
+  });
+
+  const tabs = [
+    ['overview','📊 Overview'], ['drivers','🚗 Drivers'], ['customers','👥 Customers'],
+    ['rides','🛣️ Rides'], ['partners','🤝 Partners'], ['revenue','💰 Revenue'],
+    ['promos','🎟️ Promos'], ['messages','📩 Messages'], ['alerts','🆘 Alerts'],
+    ['unfulfilled','📍 No Driver'],
+  ];
+
+  const StatusBadge = ({ status }) => {
+    const cfg = { pending:{bg:'#fefce8',color:'#854d0e'}, approved:{bg:'#f0fff4',color:'#1a9e5a'}, active:{bg:'#f0fff4',color:'#1a9e5a'}, rejected:{bg:'#fff0f0',color:'#dc2626'}, suspended:{bg:'#fff0f0',color:'#dc2626'}, new:{bg:'#f5f0ff',color:'#6b21a8'}, completed:{bg:'#f0fff4',color:'#1a9e5a'}, cancelled:{bg:'#fff0f0',color:'#dc2626'}, searching:{bg:'#fefce8',color:'#854d0e'}, contacted:{bg:'#fefce8',color:'#854d0e'}, featured:{bg:'#f5f0ff',color:'#6b21a8'}, online:{bg:'#f0fff4',color:'#1a9e5a'}, offline:{bg:'#f5f5f5',color:'#888'} };
+    const c = cfg[status?.toLowerCase()] || {bg:'#f5f5f5',color:'#888'};
+    return <span style={{ fontSize:10, background:c.bg, color:c.color, padding:'2px 8px', borderRadius:8, fontWeight:600, textTransform:'capitalize' }}>{status||'unknown'}</span>;
+  };
 
   if (loading) return (
-    <div style={{ minHeight:'100vh', background:'#f5f6fa', display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:14 }}>
-      <div style={{ width:40, height:40, border:'3px solid #e9d5ff', borderTop:'3px solid #6b21a8', borderRadius:'50%', animation:'spin 0.8s linear infinite' }}/>
-      <div style={{ fontSize:13, color:'#888' }}>Loading admin data...</div>
+    <div style={{ minHeight:'100vh', background:'#f5f6fa', display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:12 }}>
+      <img src="/logo.png" style={{ height:40, objectFit:'contain' }} alt="VilleCabs"/>
+      <div style={{ fontSize:14, color:'#888' }}>Loading admin dashboard...</div>
     </div>
   );
 
   return (
-    <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
+    <div style={{ minHeight:'100vh', background:'#f5f6fa' }}>
 
-      {/* ── HEADER ── */}
-      <div style={{ background:'#ffffff', padding:'12px 16px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', position:'sticky', top:0, zIndex:10, boxShadow:'0 1px 4px rgba(0,0,0,0.06)' }}>
-        <img src="/logo.png" alt="VilleCabs" style={{ height:28, objectFit:'contain' }}/>
-        <div>
-          <div style={{ fontSize:14, fontWeight:800, color:'#1a1a2e' }}>Admin Dashboard</div>
-          <div style={{ fontSize:11, color:'#888' }}>VilleCabs · Mandeville, Jamaica</div>
-        </div>
-        <button onClick={() => go('splash')} style={{ marginLeft:'auto', padding:'6px 14px', background:'#f5f0ff', color:'#6b21a8', border:'1px solid #e9d5ff', borderRadius:10, fontSize:12, fontWeight:600, cursor:'pointer' }}>← Exit</button>
+      {/* ── TOP BAR ── */}
+      <div style={{ background:'#ffffff', borderBottom:'1px solid #e5e7eb', padding:'10px 16px', display:'flex', alignItems:'center', gap:10, position:'sticky', top:0, zIndex:50, boxShadow:'0 1px 4px rgba(0,0,0,0.06)' }}>
+        <img src="/logo.png" style={{ height:28, objectFit:'contain' }} alt="VilleCabs"/>
+        <span style={{ fontSize:13, fontWeight:700, color:'#6b21a8', marginLeft:4 }}>Admin Dashboard</span>
+        <button onClick={() => go('splash')} style={{ marginLeft:'auto', padding:'6px 12px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:10, color:'#6b21a8', fontSize:11, fontWeight:600, cursor:'pointer' }}>← Exit Admin</button>
       </div>
 
       {/* ── TAB NAV ── */}
-      <div style={{ display:'flex', gap:0, background:'#ffffff', borderBottom:'1px solid #eee', overflowX:'auto', scrollbarWidth:'none' }}>
-        {[['overview','📊 Overview'],['drivers','🚗 Drivers'],['customers','👤 Customers'],['rides','🚕 Rides'],['partners','🤝 Partners'],['revenue','💰 Revenue'],['messages','📬 Messages']].map(([key,label]) => (
+      <div style={{ display:'flex', gap:4, padding:'10px 14px', background:'#fff', borderBottom:'1px solid #e5e7eb', overflowX:'auto', scrollbarWidth:'none' }}>
+        {tabs.map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
-            style={{ flexShrink:0, padding:'12px 16px', background:'none', border:'none', borderBottom:tab===key?'2px solid #6b21a8':'2px solid transparent', color:tab===key?'#6b21a8':'#888', fontSize:12, fontWeight:tab===key?700:400, cursor:'pointer', whiteSpace:'nowrap' }}>
-            {label}
-          </button>
+            style={{ flexShrink:0, padding:'6px 12px', borderRadius:20, border:'none', background:tab===key?'#6b21a8':'#f3f4f6', color:tab===key?'#fff':'#555', fontSize:11, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap' }}>
+            {label}{key==='drivers'&&stats.pendingDrivers>0?` (${stats.pendingDrivers})`:''}{key==='messages'&&messages.filter(m=>m.status==='new').length>0?` (${messages.filter(m=>m.status==='new').length})`:''}{key==='alerts'&&alerts.filter(a=>a.status==='new').length>0?` (${alerts.filter(a=>a.status==='new').length})`:''}{key==='unfulfilled'&&unfulfilled.length>0?` (${unfulfilled.length})`:''}{key==='partners'&&stats.partnerRequests>0?` (${stats.partnerRequests})`:''}</button>
         ))}
       </div>
 
-      <div style={{ padding:'14px', paddingBottom:40 }}>
+      <div style={{ padding:'14px 14px 40px', maxWidth:1000, margin:'0 auto' }}>
 
-        {/* ══════════ OVERVIEW ══════════ */}
-        {tab==='overview' && (
+        {/* ══ OVERVIEW ══ */}
+        {tab === 'overview' && (
           <div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14 }}>
+            <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:14 }}>Overview</div>
+            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))', gap:10, marginBottom:16 }}>
               {[
-                ['👤 Customers',    stats.customers,      '#6b21a8', '#f9f5ff'],
-                ['🚗 Drivers',      stats.drivers,        '#1a9e5a', '#f0fff4'],
-                ['⏳ Pending Apps', stats.pendingDrivers, '#b45309', '#fffbeb'],
-                ['🟢 Online Now',   stats.activeDrivers,  '#2563eb', '#eff6ff'],
-                ['🚕 Total Rides',  stats.rides,          '#1a1a2e', '#ffffff'],
-                ['✅ Completed',    stats.completed,      '#1a9e5a', '#f0fff4'],
-                ['❌ Cancelled',    stats.cancelled,      '#dc2626', '#fff0f0'],
-                ['🤝 New Partners', stats.partnerRequests,'#9333ea', '#fdf2f8'],
-              ].map(([label, value, color, bg], i) => (
-                <div key={i} style={{ background:bg, border:'1px solid #e5e7eb', borderRadius:14, padding:'14px' }}>
-                  <div style={{ fontSize:10, color:'#888', marginBottom:4 }}>{label}</div>
-                  <div style={{ fontSize:24, fontWeight:800, color }}>{value}</div>
+                ['Total Customers',    stats.customers,       '#6b21a8','#f9f5ff','#e9d5ff'],
+                ['Total Drivers',      stats.drivers,         '#1a1a2e','#fff','#e5e7eb'],
+                ['Pending Drivers',    stats.pendingDrivers,  '#b45309','#fffbeb','#fde047'],
+                ['Active Drivers',     stats.activeDrivers,   '#1a9e5a','#f0fff4','#86efac'],
+                ['Total Rides',        stats.rides,           '#1a1a2e','#fff','#e5e7eb'],
+                ['Completed Rides',    stats.completed,       '#1a9e5a','#f0fff4','#86efac'],
+                ['Cancelled Rides',    stats.cancelled,       '#dc2626','#fff0f0','#fca5a5'],
+                ['Total Fare (J$)',    stats.totalFare.toLocaleString(), '#6b21a8','#f9f5ff','#e9d5ff'],
+                ['VilleCabs Revenue',  'J$'+vcRevenue.toLocaleString(), '#1a9e5a','#f0fff4','#86efac'],
+                ['Partner Requests',   stats.partnerRequests, '#b45309','#fffbeb','#fde047'],
+              ].map(([label, value, color, bg, border], i) => (
+                <div key={i} style={{ background:bg, border:`1px solid ${border}`, borderRadius:14, padding:'14px 12px' }}>
+                  <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6 }}>{label}</div>
+                  <div style={{ fontSize:20, fontWeight:800, color }}>{value}</div>
                 </div>
               ))}
             </div>
-            <div style={{ background:'#fff', borderRadius:14, padding:16, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
-              <div style={{ fontSize:13, fontWeight:700, color:'#6b21a8', marginBottom:12 }}>💰 Revenue Summary</div>
-              {[
-                ['Total Fare Collected', `J$${stats.totalFare.toLocaleString()}`, '#1a1a2e'],
-                ['VilleCabs Revenue (15%)', `J$${vcRevenue.toLocaleString()}`, '#6b21a8'],
-                ['Driver Payouts (85%)', `J$${driverPay.toLocaleString()}`, '#1a9e5a'],
-                ['Completed Rides', stats.completed, '#555'],
-                ['Avg Fare', stats.completed ? `J$${Math.round(stats.totalFare/stats.completed).toLocaleString()}` : 'J$0', '#555'],
-              ].map(([l,v,c],i) => (
-                <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'9px 0', borderBottom:i<4?'1px solid #f5f5f5':'none' }}>
-                  <span style={{ fontSize:12, color:'#888' }}>{l}</span>
-                  <span style={{ fontSize:13, fontWeight:700, color:c }}>{v}</span>
-                </div>
-              ))}
+            {/* Recent activity */}
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
+              <div style={{ background:'#fff', borderRadius:14, padding:14, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
+                <div style={{ fontSize:12, fontWeight:700, color:'#6b21a8', marginBottom:10 }}>Recent Rides</div>
+                {rides.slice(0,5).map((r,i) => (
+                  <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'6px 0', borderBottom:i<4?'1px solid #f5f5f5':'none', fontSize:12 }}>
+                    <span style={{ color:'#1a1a2e' }}>{r.customerName||'Customer'}</span>
+                    <StatusBadge status={r.status}/>
+                  </div>
+                ))}
+              </div>
+              <div style={{ background:'#fff', borderRadius:14, padding:14, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
+                <div style={{ fontSize:12, fontWeight:700, color:'#6b21a8', marginBottom:10 }}>Pending Drivers</div>
+                {drivers.filter(d=>d.status==='pending').slice(0,5).map((d,i) => (
+                  <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'6px 0', borderBottom:i<4?'1px solid #f5f5f5':'none', fontSize:12 }}>
+                    <span style={{ color:'#1a1a2e' }}>{d.name||'Driver'}</span>
+                    <button onClick={() => { setTab('drivers'); setDriverFilter('pending'); }} style={{ fontSize:10, color:'#6b21a8', background:'none', border:'none', cursor:'pointer', fontWeight:600 }}>Review →</button>
+                  </div>
+                ))}
+                {drivers.filter(d=>d.status==='pending').length===0 && <div style={{ fontSize:12, color:'#888' }}>No pending applications</div>}
+              </div>
             </div>
           </div>
         )}
 
-        {/* ══════════ DRIVERS ══════════ */}
-        {tab==='drivers' && (
+        {/* ══ DRIVERS ══ */}
+        {tab === 'drivers' && (
           <div>
-            <div style={{ display:'flex', gap:6, marginBottom:12, overflowX:'auto', scrollbarWidth:'none' }}>
-              {[['all','All'],['pending','Pending'],['approved','Approved'],['rejected','Rejected'],['suspended','Suspended']].map(([k,l]) => (
-                <button key={k} onClick={() => setDriverFilter(k)}
-                  style={{ flexShrink:0, padding:'6px 14px', borderRadius:20, border:'none', background:driverFilter===k?'#6b21a8':'#f3f4f6', color:driverFilter===k?'#fff':'#555', fontSize:11, fontWeight:600, cursor:'pointer' }}>
-                  {l} {k==='all'?`(${drivers.length})`:k==='pending'?`(${drivers.filter(d=>d.status===k).length})`:''}
-                </button>
+            <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:12 }}>Driver Management</div>
+            <div style={{ display:'flex', gap:6, marginBottom:14, flexWrap:'wrap' }}>
+              {[['all','All'],['pending','Pending'],['approved','Approved'],['suspended','Suspended']].map(([k,l]) => (
+                <button key={k} onClick={() => setDriverFilter(k)} style={{ padding:'6px 14px', borderRadius:20, border:'none', background:driverFilter===k?'#6b21a8':'#f3f4f6', color:driverFilter===k?'#fff':'#555', fontSize:11, fontWeight:600, cursor:'pointer' }}>{l}</button>
               ))}
             </div>
-            {filteredDrivers.length===0 && <div style={{ textAlign:'center', padding:30, color:'#888' }}>No drivers found</div>}
-            {filteredDrivers.map((d,i) => (
+            {filteredDrivers.map((d, i) => (
               <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:8 }}>
-                  <div>
-                    <div style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>👤 {d.name||'—'}</div>
-                    <div style={{ fontSize:11, color:'#888', marginTop:2 }}>{d.email||'—'} · {d.phone||'—'}</div>
-                    <div style={{ fontSize:11, color:'#888', marginTop:1 }}>🚗 {d.vehicleMake||'—'} {d.vehicleModel||''} · {d.licensePlate||'—'}</div>
+                  <div style={{ display:'flex', gap:10, alignItems:'center' }}>
+                    {d.profilePhotoUrl ? <img src={d.profilePhotoUrl} style={{ width:40, height:40, borderRadius:'50%', objectFit:'cover' }} alt=""/> : <div style={{ width:40, height:40, borderRadius:'50%', background:'#f3f4f6', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>👤</div>}
+                    <div>
+                      <div style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>{d.name||'—'}</div>
+                      <div style={{ fontSize:11, color:'#888' }}>{d.phone||''} · {d.email||''}</div>
+                    </div>
                   </div>
-                  {statusBadge(d.status, driverStatusMap)}
+                  <StatusBadge status={d.isOnline?'online':d.status}/>
                 </div>
+                <div style={{ fontSize:12, color:'#555', marginBottom:8 }}>
+                  🚗 {d.vehicleMake||'—'} {d.vehicleModel||''} · {d.vehicleColor||''} · {d.licensePlate||'—'}
+                </div>
+                {d.vehiclePhotoUrl && <img src={d.vehiclePhotoUrl} style={{ width:'100%', maxHeight:100, objectFit:'cover', borderRadius:8, marginBottom:8 }} alt="Vehicle"/>}
+                {/* Documents */}
+                {d.docs && (
+                  <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:10 }}>
+                    {Object.entries(d.docs).map(([key, url]) => url && (
+                      <a key={key} href={url} target="_blank" rel="noreferrer" style={{ fontSize:10, background:'#f5f0ff', color:'#6b21a8', padding:'2px 8px', borderRadius:8, textDecoration:'none', fontWeight:600 }}>
+                        📄 {key}
+                      </a>
+                    ))}
+                  </div>
+                )}
+                {/* Actions */}
                 <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                  {d.status!=='approved' && (
-                    <button onClick={() => updateDriver(d.id, { status:'approved' })}
-                      style={{ padding:'6px 12px', background:'#1a9e5a', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>
-                      ✅ Approve
-                    </button>
-                  )}
-                  {d.status!=='rejected' && (
-                    <button onClick={() => updateDriver(d.id, { status:'rejected' })}
-                      style={{ padding:'6px 12px', background:'#fff0f0', color:'#dc2626', border:'1px solid #fca5a5', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>
-                      ❌ Reject
-                    </button>
-                  )}
-                  {d.status!=='suspended' && (
-                    <button onClick={() => updateDriver(d.id, { status:'suspended' })}
-                      style={{ padding:'6px 12px', background:'#fdf2f8', color:'#9333ea', border:'1px solid #e9d5ff', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>
-                      🚫 Suspend
-                    </button>
-                  )}
+                  {d.status==='pending' && <>
+                    <button onClick={() => updateDriver(d.id, { status:'approved' })} style={{ padding:'6px 12px', background:'#1a9e5a', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>✅ Approve</button>
+                    <button onClick={() => updateDriver(d.id, { status:'rejected' })} style={{ padding:'6px 12px', background:'#dc2626', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>❌ Reject</button>
+                    <button onClick={() => updateDriver(d.id, { status:'pending', docsRequested:true })} style={{ padding:'6px 12px', background:'#f59e0b', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>📋 Request Docs</button>
+                  </>}
+                  {d.status==='approved' && <button onClick={() => updateDriver(d.id, { status:'suspended' })} style={{ padding:'6px 12px', background:'#dc2626', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>🚫 Suspend</button>}
+                  {d.status==='suspended' && <button onClick={() => updateDriver(d.id, { status:'approved' })} style={{ padding:'6px 12px', background:'#1a9e5a', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>✅ Reinstate</button>}
                 </div>
               </div>
             ))}
+            {filteredDrivers.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}>No drivers in this category</div>}
           </div>
         )}
 
-        {/* ══════════ CUSTOMERS ══════════ */}
-        {tab==='customers' && (
+        {/* ══ CUSTOMERS ══ */}
+        {tab === 'customers' && (
           <div>
-            <div style={{ fontSize:11, color:'#888', marginBottom:12 }}>{customers.length} total customers</div>
-            {customers.length===0 && <div style={{ textAlign:'center', padding:30, color:'#888' }}>No customers yet</div>}
-            {customers.map((c,i) => {
+            <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:14 }}>Customer Management</div>
+            {customers.map((c, i) => {
               const cRides = rides.filter(r => r.customerId===c.id);
               const spent  = cRides.filter(r=>r.status==='completed').reduce((s,r)=>s+(r.fare||0),0);
               return (
                 <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
-                  <div style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginBottom:4 }}>👤 {c.name||'—'}</div>
-                  <div style={{ fontSize:11, color:'#888', marginBottom:6 }}>{c.email||'—'} · {c.phone||'—'}</div>
-                  <div style={{ display:'flex', gap:8 }}>
-                    <span style={{ fontSize:10, background:'#f9f5ff', color:'#6b21a8', padding:'2px 8px', borderRadius:8 }}>{cRides.length} rides</span>
-                    <span style={{ fontSize:10, background:'#f0fff4', color:'#1a9e5a', padding:'2px 8px', borderRadius:8 }}>J${spent.toLocaleString()} spent</span>
-                    {c.createdAt && <span style={{ fontSize:10, background:'#f3f4f6', color:'#555', padding:'2px 8px', borderRadius:8 }}>Joined {new Date((c.createdAt.seconds||0)*1000).toLocaleDateString()}</span>}
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:6 }}>
+                    <div>
+                      <div style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>{c.name||'—'}</div>
+                      <div style={{ fontSize:11, color:'#888' }}>{c.email||''} · {c.phone||''}</div>
+                    </div>
+                    <StatusBadge status={c.status||'active'}/>
+                  </div>
+                  <div style={{ display:'flex', gap:10, fontSize:11, color:'#555' }}>
+                    <span>🚕 {cRides.length} rides</span>
+                    <span>💰 J${spent.toLocaleString()} spent</span>
+                    <span>📅 {c.createdAt ? new Date((c.createdAt?.seconds||0)*1000).toLocaleDateString() : '—'}</span>
                   </div>
                 </div>
               );
             })}
+            {customers.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}>No customers yet</div>}
           </div>
         )}
 
-        {/* ══════════ RIDES ══════════ */}
-        {tab==='rides' && (
+        {/* ══ RIDES ══ */}
+        {tab === 'rides' && (
           <div>
-            <div style={{ display:'flex', gap:6, marginBottom:12, overflowX:'auto', scrollbarWidth:'none' }}>
-              {[['all','All'],['searching','Searching'],['active','Active'],['completed','Completed'],['cancelled','Cancelled']].map(([k,l]) => (
-                <button key={k} onClick={() => setRideFilter(k)}
-                  style={{ flexShrink:0, padding:'6px 14px', borderRadius:20, border:'none', background:rideFilter===k?'#6b21a8':'#f3f4f6', color:rideFilter===k?'#fff':'#555', fontSize:11, fontWeight:600, cursor:'pointer' }}>
-                  {l}
-                </button>
+            <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:12 }}>Ride Management</div>
+            <div style={{ display:'flex', gap:6, marginBottom:14, flexWrap:'wrap' }}>
+              {[['all','All'],['today','Today'],['week','This Week'],['active','Active'],['completed','Completed'],['cancelled','Cancelled']].map(([k,l]) => (
+                <button key={k} onClick={() => setRideFilter(k)} style={{ padding:'6px 14px', borderRadius:20, border:'none', background:rideFilter===k?'#6b21a8':'#f3f4f6', color:rideFilter===k?'#fff':'#555', fontSize:11, fontWeight:600, cursor:'pointer' }}>{l}</button>
               ))}
             </div>
-            {filteredRides.length===0 && <div style={{ textAlign:'center', padding:30, color:'#888' }}>No rides found</div>}
-            {filteredRides.map((r,i) => {
-              const d = new Date((r.createdAt?.seconds||0)*1000);
-              return (
-                <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
-                    <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>👤 {r.customerName||'—'}</div>
-                    <div style={{ fontSize:14, fontWeight:800, color:'#6b21a8' }}>J${(r.fare||0).toLocaleString()}</div>
+            <div style={{ fontSize:12, color:'#888', marginBottom:10 }}>{filteredRides.length} rides</div>
+            {filteredRides.slice(0,50).map((r, i) => (
+              <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
+                  <div>
+                    <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>👤 {r.customerName||'Customer'} → 🚗 {r.driverName||'Searching...'}</div>
+                    <div style={{ fontSize:11, color:'#888' }}>{new Date((r.createdAt?.seconds||0)*1000).toLocaleString()}</div>
                   </div>
-                  <div style={{ fontSize:11, color:'#888', marginBottom:2 }}>Driver: {r.driverName||'Not assigned'}</div>
-                  <div style={{ fontSize:11, color:'#555', marginBottom:2 }}>📍 {(r.pickup?.address||'').split(',')[0]}</div>
-                  <div style={{ fontSize:11, color:'#555', marginBottom:8 }}>🏁 {(r.dropoff?.address||'').split(',')[0]}</div>
-                  <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                    {statusBadge(r.status, rideStatusMap)}
-                    <span style={{ fontSize:10, background:'#f3f4f6', color:'#555', padding:'2px 8px', borderRadius:8 }}>💵 {r.paymentMethod||'Cash'}</span>
-                    {r.distanceKm && <span style={{ fontSize:10, background:'#f3f4f6', color:'#555', padding:'2px 8px', borderRadius:8 }}>📏 {r.distanceKm} km</span>}
-                    <span style={{ fontSize:10, background:'#f3f4f6', color:'#555', padding:'2px 8px', borderRadius:8 }}>{d.toLocaleDateString()}</span>
+                  <div style={{ textAlign:'right' }}>
+                    <div style={{ fontSize:14, fontWeight:700, color:'#6b21a8' }}>J${(r.fare||0).toLocaleString()}</div>
+                    <StatusBadge status={r.status}/>
                   </div>
                 </div>
-              );
-            })}
+                <div style={{ fontSize:11, color:'#555', marginBottom:2 }}>📍 {r.pickup?.address||'—'}</div>
+                <div style={{ fontSize:11, color:'#555', marginBottom:6 }}>🏁 {r.dropoff?.address||'—'}</div>
+                <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                  {r.distanceKm && <span style={{ fontSize:10, background:'#f3f4f6', color:'#555', padding:'2px 8px', borderRadius:8 }}>📏 {r.distanceKm} km</span>}
+                  <span style={{ fontSize:10, background:'#f3f4f6', color:'#555', padding:'2px 8px', borderRadius:8 }}>💵 {r.paymentMethod||'Cash'}</span>
+                  <span style={{ fontSize:10, background:'#f3f4f6', color:'#555', padding:'2px 8px', borderRadius:8 }}>🚗 {r.vehicleType||'—'}</span>
+                </div>
+              </div>
+            ))}
+            {filteredRides.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}>No rides found</div>}
           </div>
         )}
 
-        {/* ══════════ PARTNERS ══════════ */}
-        {tab==='partners' && (
+        {/* ══ PARTNERS ══ */}
+        {tab === 'partners' && (
           <div>
-            {partners.length===0 && <div style={{ textAlign:'center', padding:30, color:'#888' }}>No partner requests yet</div>}
-            {partners.map((p,i) => (
+            <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:14 }}>Partner Management</div>
+            {partners.map((p, i) => (
               <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
                 <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:8 }}>
                   <div>
                     <div style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>{p.bizName||'—'}</div>
-                    <div style={{ fontSize:11, color:'#888', marginTop:2 }}>{p.bizType||'—'} · {p.contact||'—'}</div>
-                    <div style={{ fontSize:11, color:'#888', marginTop:1 }}>{p.email||'—'} · {p.phone||'—'}</div>
-                    {p.message && <div style={{ fontSize:11, color:'#555', marginTop:4, fontStyle:'italic' }}>"{p.message}"</div>}
+                    <div style={{ fontSize:11, color:'#888' }}>{p.bizType||''} · {p.contact||''}</div>
                   </div>
-                  {statusBadge(p.status, partnerStatusMap)}
+                  <StatusBadge status={p.status||'new'}/>
                 </div>
+                <div style={{ fontSize:12, color:'#555', marginBottom:6 }}>📞 {p.phone||'—'} · 📧 {p.email||'—'}</div>
+                <div style={{ fontSize:12, color:'#555', marginBottom:6 }}>📍 {p.address||'—'}</div>
+                {p.message && <div style={{ fontSize:12, color:'#555', background:'#f9f9f9', borderRadius:8, padding:'8px 10px', marginBottom:10 }}>{p.message}</div>}
                 <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                  {[
-                    ['Contacted', 'contacted', '#2563eb', '#eff6ff', '#bfdbfe'],
-                    ['Approve',   'approved',  '#1a9e5a', '#f0fff4', '#86efac'],
-                    ['Feature',   'featured',  '#b45309', '#fffbeb', '#fde047'],
-                    ['Reject',    'rejected',  '#dc2626', '#fff0f0', '#fca5a5'],
-                  ].map(([label, status, color, bg, border]) => (
-                    p.status !== status &&
-                    <button key={status} onClick={() => updatePartner(p.id, { status })}
-                      style={{ padding:'5px 10px', background:bg, color, border:'1px solid '+border, borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>
-                      {label}
-                    </button>
-                  ))}
+                  {(!p.status||p.status==='new') && <button onClick={() => updatePartner(p.id,{status:'contacted'})} style={{ padding:'6px 12px', background:'#f59e0b', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>📞 Mark Contacted</button>}
+                  {p.status!=='approved' && <button onClick={() => updatePartner(p.id,{status:'approved'})} style={{ padding:'6px 12px', background:'#1a9e5a', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>✅ Approve</button>}
+                  {p.status!=='featured' && <button onClick={() => updatePartner(p.id,{status:'featured'})} style={{ padding:'6px 12px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>⭐ Feature</button>}
+                  {p.status!=='rejected' && <button onClick={() => updatePartner(p.id,{status:'rejected'})} style={{ padding:'6px 12px', background:'#dc2626', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>❌ Reject</button>}
                 </div>
               </div>
             ))}
+            {partners.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}>No partner requests yet</div>}
           </div>
         )}
 
-        {/* ══════════ REVENUE ══════════ */}
-        {tab==='revenue' && (
+        {/* ══ REVENUE ══ */}
+        {tab === 'revenue' && (
           <div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14 }}>
+            <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:14 }}>Revenue Dashboard</div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
               {[
-                ['Total Fare',      `J$${stats.totalFare.toLocaleString()}`, '#1a1a2e', '#fff'],
-                ['VC Revenue 15%',  `J$${vcRevenue.toLocaleString()}`,       '#6b21a8', '#f9f5ff'],
-                ['Driver Payout',   `J$${driverPay.toLocaleString()}`,       '#1a9e5a', '#f0fff4'],
-                ['Completed Rides', stats.completed,                         '#2563eb', '#eff6ff'],
-                ['Avg Fare',        stats.completed?`J$${Math.round(stats.totalFare/stats.completed).toLocaleString()}`:'J$0', '#b45309', '#fffbeb'],
-                ['Cancelled',       stats.cancelled,                         '#dc2626', '#fff0f0'],
-              ].map(([l,v,c,bg],i) => (
-                <div key={i} style={{ background:bg, border:'1px solid #e5e7eb', borderRadius:14, padding:'14px' }}>
-                  <div style={{ fontSize:10, color:'#888', marginBottom:4 }}>{l}</div>
-                  <div style={{ fontSize:20, fontWeight:800, color:c }}>{v}</div>
+                ['Total Fare Value',      'J$'+stats.totalFare.toLocaleString(), '#1a1a2e','#fff','#e5e7eb'],
+                ['VilleCabs Revenue (15%)','J$'+vcRevenue.toLocaleString(),       '#1a9e5a','#f0fff4','#86efac'],
+                ['Driver Payout (85%)',   'J$'+driverPayout.toLocaleString(),     '#6b21a8','#f9f5ff','#e9d5ff'],
+                ['Average Fare',          'J$'+avgFare.toLocaleString(),           '#b45309','#fffbeb','#fde047'],
+                ['Completed Rides',       stats.completed,                          '#1a1a2e','#fff','#e5e7eb'],
+                ['Cancelled Rides',       stats.cancelled,                          '#dc2626','#fff0f0','#fca5a5'],
+              ].map(([l,v,c,bg,border],i) => (
+                <div key={i} style={{ background:bg, border:`1px solid ${border}`, borderRadius:14, padding:'14px 12px' }}>
+                  <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6 }}>{l}</div>
+                  <div style={{ fontSize:22, fontWeight:800, color:c }}>{v}</div>
                 </div>
               ))}
             </div>
             <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:12, padding:'12px 14px', fontSize:12, color:'#6b21a8' }}>
-              VilleCabs earns 15% of every completed fare. Drivers keep 85%.
+              💰 Formula: VilleCabs Revenue = Total Fare × 15% · Driver Payout = Total Fare × 85%
+            </div>
+            {/* Revenue by ride type */}
+            <div style={{ background:'#fff', borderRadius:14, padding:14, marginTop:12, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
+              <div style={{ fontSize:12, fontWeight:700, color:'#6b21a8', marginBottom:10 }}>Revenue by Ride Type</div>
+              {['VilleRide','VilleXL','VilleMoto'].map((type, i) => {
+                const typeRides = rides.filter(r=>r.vehicleType===type&&r.status==='completed');
+                const typeFare  = typeRides.reduce((s,r)=>s+(r.fare||0),0);
+                return (
+                  <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'8px 0', borderBottom:i<2?'1px solid #f5f5f5':'none' }}>
+                    <span style={{ fontSize:13, color:'#1a1a2e' }}>{type}</span>
+                    <div style={{ textAlign:'right' }}>
+                      <span style={{ fontSize:13, fontWeight:700, color:'#6b21a8' }}>J${typeFare.toLocaleString()}</span>
+                      <span style={{ fontSize:11, color:'#888', marginLeft:8 }}>({typeRides.length} rides)</span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
 
-        {/* ══════════ MESSAGES ══════════ */}
-        {tab==='messages' && (
+        {/* ══ PROMOS ══ */}
+        {tab === 'promos' && (
           <div>
-            {messages.length===0 && <div style={{ textAlign:'center', padding:30, color:'#888' }}>No messages yet</div>}
-            {messages.map((m,i) => (
-              <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)', borderLeft:m.status==='new'?'3px solid #6b21a8':'3px solid transparent' }}>
+            <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:14 }}>Promotions</div>
+            {promos.map((p, i) => (
+              <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
                 <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
-                  <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>📬 {m.name||'—'}</div>
-                  <span style={{ fontSize:10, background:m.status==='resolved'?'#f0fff4':m.status==='in-progress'?'#eff6ff':'#f9f5ff', color:m.status==='resolved'?'#1a9e5a':m.status==='in-progress'?'#2563eb':'#6b21a8', padding:'2px 8px', borderRadius:8, fontWeight:600 }}>
-                    {m.status==='resolved'?'✅ Resolved':m.status==='in-progress'?'🔄 In Progress':'🆕 New'}
-                  </span>
+                  <div style={{ fontSize:14, fontWeight:700, color:'#6b21a8' }}>{p.code||'—'}</div>
+                  <StatusBadge status={p.active?'active':'inactive'}/>
                 </div>
-                <div style={{ fontSize:11, color:'#888', marginBottom:4 }}>{m.email||'—'} · {m.subject||'—'}</div>
+                <div style={{ fontSize:12, color:'#555' }}>Discount: J${(p.discount||0).toLocaleString()} · Used: {(p.usedBy||[]).length} times</div>
+                {p.maxUses && <div style={{ fontSize:11, color:'#888', marginTop:2 }}>Max uses: {p.maxUses}</div>}
+              </div>
+            ))}
+            {promos.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}>No promo codes yet</div>}
+          </div>
+        )}
+
+        {/* ══ MESSAGES ══ */}
+        {tab === 'messages' && (
+          <div>
+            <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:14 }}>Support Messages</div>
+            {messages.map((m, i) => (
+              <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)', borderLeft:`3px solid ${m.status==='new'?'#6b21a8':m.status==='resolved'?'#1a9e5a':'#f59e0b'}` }}>
+                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>{m.name||'—'}</div>
+                  <StatusBadge status={m.status||'new'}/>
+                </div>
+                <div style={{ fontSize:11, color:'#888', marginBottom:6 }}>{m.email||''} · {m.createdAt ? new Date((m.createdAt?.seconds||0)*1000).toLocaleDateString() : '—'}</div>
+                {m.subject && <div style={{ fontSize:12, fontWeight:600, color:'#374151', marginBottom:4 }}>{m.subject}</div>}
                 <div style={{ fontSize:12, color:'#555', marginBottom:10, lineHeight:1.5 }}>{m.message||'—'}</div>
                 <div style={{ display:'flex', gap:6 }}>
-                  {m.status!=='in-progress' && <button onClick={() => updateMessage(m.id,{status:'in-progress'})} style={{ padding:'5px 10px', background:'#eff6ff', color:'#2563eb', border:'1px solid #bfdbfe', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>🔄 In Progress</button>}
-                  {m.status!=='resolved'    && <button onClick={() => updateMessage(m.id,{status:'resolved'})}    style={{ padding:'5px 10px', background:'#f0fff4', color:'#1a9e5a', border:'1px solid #86efac', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>✅ Resolve</button>}
-                  {m.email && <a href={'mailto:'+m.email} style={{ padding:'5px 10px', background:'#f9f5ff', color:'#6b21a8', border:'1px solid #e9d5ff', borderRadius:8, fontSize:11, fontWeight:600, textDecoration:'none' }}>📧 Reply</a>}
+                  {m.status!=='in-progress' && <button onClick={() => updateMessage(m.id,{status:'in-progress'})} style={{ padding:'5px 10px', background:'#f59e0b', color:'#fff', border:'none', borderRadius:8, fontSize:10, fontWeight:600, cursor:'pointer' }}>In Progress</button>}
+                  {m.status!=='resolved' && <button onClick={() => updateMessage(m.id,{status:'resolved'})} style={{ padding:'5px 10px', background:'#1a9e5a', color:'#fff', border:'none', borderRadius:8, fontSize:10, fontWeight:600, cursor:'pointer' }}>✅ Resolved</button>}
+                  {m.email && <a href={'mailto:'+m.email} style={{ padding:'5px 10px', background:'#f5f0ff', color:'#6b21a8', border:'none', borderRadius:8, fontSize:10, fontWeight:600, textDecoration:'none' }}>📧 Reply</a>}
                 </div>
               </div>
             ))}
+            {messages.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}>No messages yet</div>}
           </div>
         )}
 
-      </div>
-
-
-      {/* ── UNFULFILLED RIDE REQUESTS TAB ── */}
-      {tab === 'unfulfilled' && (
-        <div style={{ padding:16 }}>
-          <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:14 }}>
-            No Driver Requests
-          </div>
-
-          {/* Summary stats */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
-            {(() => {
-              const now   = new Date();
-              const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-              const week  = new Date(today.getTime() - 7*86400000);
-              const todayCount = unfulfilled.filter(r => new Date((r.created_at?.seconds||0)*1000) >= today).length;
-              const weekCount  = unfulfilled.filter(r => new Date((r.created_at?.seconds||0)*1000) >= week).length;
-              // Most requested pickup area
-              const pickups = unfulfilled.map(r => r.pickup_address?.split(',')[0]).filter(Boolean);
-              const pickupCounts = pickups.reduce((acc, p) => { acc[p]=(acc[p]||0)+1; return acc; }, {});
-              const topPickup = Object.entries(pickupCounts).sort((a,b)=>b[1]-a[1])[0]?.[0] || '—';
-              // Busiest hour
-              const hours = unfulfilled.map(r => r.hour_of_day).filter(h => h !== undefined);
-              const hourCounts = hours.reduce((acc,h) => { acc[h]=(acc[h]||0)+1; return acc; }, {});
-              const busiestHour = Object.entries(hourCounts).sort((a,b)=>b[1]-a[1])[0]?.[0];
-              const busiestLabel = busiestHour !== undefined ? `${busiestHour}:00` : '—';
-              return [
-                ['Today',         todayCount,         '#6b21a8', '#f9f5ff', '#e9d5ff'],
-                ['This Week',     weekCount,          '#1a9e5a', '#f0fff4', '#86efac'],
-                ['Total',         unfulfilled.length, '#1a1a2e', '#fff',    '#e5e7eb'],
-                ['Busiest Hour',  busiestLabel,       '#b45309', '#fffbeb', '#fde047'],
-              ].map(([l,v,c,bg,border],i) => (
-                <div key={i} style={{ background:bg, border:`1px solid ${border}`, borderRadius:12, padding:'12px 14px' }}>
-                  <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', marginBottom:4 }}>{l}</div>
-                  <div style={{ fontSize:20, fontWeight:800, color:c }}>{v}</div>
-                </div>
-              ));
-            })()}
-          </div>
-
-          {/* Top pickup area */}
-          {unfulfilled.length > 0 && (() => {
-            const pickups = unfulfilled.map(r => r.pickup_address?.split(',')[0]).filter(Boolean);
-            const counts  = pickups.reduce((acc,p) => { acc[p]=(acc[p]||0)+1; return acc; }, {});
-            const top     = Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,3);
-            return (
-              <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:12, padding:'12px 14px', marginBottom:14 }}>
-                <div style={{ fontSize:12, fontWeight:700, color:'#6b21a8', marginBottom:8 }}>🔥 Most Requested Pickup Areas</div>
-                {top.map(([area, count], i) => (
-                  <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'4px 0', fontSize:12, color:'#1a1a2e' }}>
-                    <span>{area}</span>
-                    <span style={{ fontWeight:700, color:'#6b21a8' }}>{count} request{count>1?'s':''}</span>
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
-
-          {/* Request list */}
-          {unfulfilled.length === 0 ? (
-            <div style={{ textAlign:'center', padding:40 }}>
-              <div style={{ fontSize:32, marginBottom:10 }}>✅</div>
-              <div style={{ fontSize:14, color:'#888' }}>No unfulfilled requests yet</div>
-            </div>
-          ) : unfulfilled.map((r, i) => {
-            const d = new Date((r.created_at?.seconds||0)*1000);
-            return (
-              <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)', borderLeft:'3px solid #e9d5ff' }}>
-                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
-                  <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>👤 {r.customer_name||'Customer'}</div>
-                  <div style={{ fontSize:12, fontWeight:700, color:'#6b21a8' }}>J${(r.estimated_fare||0).toLocaleString()}</div>
-                </div>
-                <div style={{ fontSize:11, color:'#555', marginBottom:2 }}>📍 {(r.pickup_address||'').split(',')[0]}</div>
-                <div style={{ fontSize:11, color:'#555', marginBottom:8 }}>🏁 {(r.dropoff_address||'').split(',')[0]}</div>
-                <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                  <span style={{ fontSize:10, background:'#f3f4f6', color:'#555', padding:'2px 8px', borderRadius:8 }}>🚗 {r.ride_type}</span>
-                  <span style={{ fontSize:10, background:'#f3f4f6', color:'#555', padding:'2px 8px', borderRadius:8 }}>📏 {r.estimated_distance_km} km</span>
-                  <span style={{ fontSize:10, background:'#fefce8', color:'#854d0e', padding:'2px 8px', borderRadius:8 }}>⏰ {r.day_of_week} {r.hour_of_day}:00</span>
-                  <span style={{ fontSize:10, background:'#fff0f0', color:'#dc2626', padding:'2px 8px', borderRadius:8 }}>⚠️ No drivers</span>
-                </div>
-                <div style={{ fontSize:10, color:'#aaa', marginTop:6 }}>{d.toLocaleString()}</div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-
-
-
-// ── PARTNER WITH VILLECABS PAGE ───────────────────────────────────────────────
-function PartnerWithUs({ go, user }) {
-  const [form, setForm] = useState({ bizName:'', bizType:'', contact:'', phone:'', email:'', address:'', website:'', message:'' });
-  const [sent, setSent] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const set = (k,v) => setForm(p => ({...p,[k]:v}));
-  const submit = async () => {
-    if (!form.bizName||!form.email||!form.phone) { setError('Please fill in all required fields.'); return; }
-    setSaving(true); setError('');
-    try {
-      await addDoc(collection(db,'partnerRequests'), {...form, status:'new', createdAt:serverTimestamp()});
-      setSent(true);
-    } catch(e) { setError('Failed to submit. Please try again.'); }
-    setSaving(false);
-  };
-  return (
-    <div style={{ background:'#ffffff', minHeight:'100vh' }}>
-      <div style={{ background:'#ffffff', padding:'10px 16px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', position:'sticky', top:0, zIndex:10 }}>
-        
-        <img src="/logo.png" style={{ height:28, objectFit:'contain' }} alt="VilleCabs"/>
-        <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:6 }}>Partner With VilleCabs</span>
-      </div>
-      <div style={{ background:'linear-gradient(135deg,#6b21a8,#4c1d95)', padding:'32px 20px', textAlign:'center' }}>
-        <h1 style={{ fontSize:24, fontWeight:800, color:'#fff', margin:'0 0 8px' }}>Partner With VilleCabs</h1>
-        <p style={{ fontSize:13, color:'rgba(255,255,255,0.8)', margin:'0 0 20px' }}>Grow your business. We will drive the customers.</p>
-        <div style={{ display:'flex', gap:10, justifyContent:'center', flexWrap:'wrap' }}>
-          <button onClick={() => document.getElementById('pform')?.scrollIntoView({behavior:'smooth'})} style={{ padding:'11px 20px', background:'#fff', color:'#6b21a8', border:'none', borderRadius:22, fontSize:13, fontWeight:700, cursor:'pointer' }}>Become a Partner</button>
-          <button onClick={() => go('contact-us')} style={{ padding:'11px 20px', background:'transparent', color:'#fff', border:'2px solid rgba(255,255,255,0.4)', borderRadius:22, fontSize:13, fontWeight:600, cursor:'pointer' }}>Contact Us</button>
-        </div>
-      </div>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, padding:'20px 16px' }}>
-        {['🏨 Hotels','🍽️ Restaurants','🏡 Guest Houses','🎭 Attractions','🏢 Businesses','🎉 Clubs','🛒 Supermarkets','🎫 Events'].map((c,i) => (
-          <div key={i} style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:12, padding:'12px', textAlign:'center', fontSize:13, fontWeight:600, color:'#1a1a2e' }}>{c}</div>
-        ))}
-      </div>
-      <div id="pform" style={{ padding:'16px 16px 40px' }}>
-        <h2 style={{ fontSize:18, fontWeight:700, color:'#1a1a2e', margin:'0 0 14px' }}>Submit Partner Request</h2>
-        {sent ? (
-          <div style={{ textAlign:'center', padding:24 }}>
-            <div style={{ fontSize:40, marginBottom:12 }}>🎉</div>
-            <div style={{ fontSize:16, fontWeight:700, color:'#1a1a2e', marginBottom:6 }}>Request Received!</div>
-            <div style={{ fontSize:13, color:'#555' }}>Thank you. VilleCabs will contact you about partnership opportunities.</div>
-          </div>
-        ) : (
+        {/* ══ SAFETY ALERTS ══ */}
+        {tab === 'alerts' && (
           <div>
-            {error && <div style={{ background:'#fff0f0', border:'1px solid #fca5a5', borderRadius:10, padding:'10px 14px', fontSize:13, color:'#dc2626', marginBottom:12 }}>{error}</div>}
-            {[['Business Name *','bizName','e.g. Golf View Hotel'],['Business Type *','bizType','e.g. Hotel, Restaurant'],['Contact Person','contact','Full name'],['Phone *','phone','876-XXX-XXXX'],['Email *','email','your@email.com'],['Address','address','Mandeville, Manchester'],['Website','website','Optional']].map(([l,k,p]) => (
-              <div key={k}>
-                <label style={{ fontSize:12, fontWeight:600, color:'#555', display:'block', marginBottom:4 }}>{l}</label>
-                <input value={form[k]||''} onChange={e=>set(k,e.target.value)} placeholder={p} style={{ width:'100%', padding:'11px 13px', border:'1.5px solid #e2e4ed', borderRadius:10, fontSize:14, marginBottom:12, boxSizing:'border-box', outline:'none', color:'#1a1a2e' }}/>
+            <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:14 }}>Safety Alerts</div>
+            {alerts.map((a, i) => (
+              <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)', borderLeft:`3px solid ${a.status==='new'?'#dc2626':a.status==='resolved'?'#1a9e5a':'#f59e0b'}` }}>
+                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:'#dc2626' }}>🆘 SOS Alert</div>
+                  <StatusBadge status={a.status||'new'}/>
+                </div>
+                <div style={{ fontSize:12, color:'#555', marginBottom:4 }}>👤 Customer: {a.customerName||'—'} · 🚗 Driver: {a.driverName||'—'}</div>
+                <div style={{ fontSize:12, color:'#555', marginBottom:4 }}>🔑 Ride ID: {a.rideId||'—'}</div>
+                {a.location && <div style={{ fontSize:12, color:'#555', marginBottom:4 }}>📍 {a.location}</div>}
+                <div style={{ fontSize:11, color:'#888', marginBottom:10 }}>{a.createdAt ? new Date((a.createdAt?.seconds||0)*1000).toLocaleString() : '—'}</div>
+                <div style={{ display:'flex', gap:6 }}>
+                  {a.status!=='responding' && <button onClick={() => updateAlert(a.id,{status:'responding'})} style={{ padding:'5px 10px', background:'#f59e0b', color:'#fff', border:'none', borderRadius:8, fontSize:10, fontWeight:600, cursor:'pointer' }}>Responding</button>}
+                  {a.status!=='resolved' && <button onClick={() => updateAlert(a.id,{status:'resolved'})} style={{ padding:'5px 10px', background:'#1a9e5a', color:'#fff', border:'none', borderRadius:8, fontSize:10, fontWeight:600, cursor:'pointer' }}>✅ Resolved</button>}
+                </div>
               </div>
             ))}
-            <label style={{ fontSize:12, fontWeight:600, color:'#555', display:'block', marginBottom:4 }}>Message</label>
-            <textarea value={form.message} onChange={e=>set('message',e.target.value)} rows={3} placeholder="Tell us about your business..." style={{ width:'100%', padding:'11px 13px', border:'1.5px solid #e2e4ed', borderRadius:10, fontSize:14, marginBottom:14, boxSizing:'border-box', outline:'none', resize:'vertical', color:'#1a1a2e' }}/>
-            <button onClick={submit} disabled={saving} style={{ width:'100%', padding:'13px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:12, fontSize:14, fontWeight:700, cursor:'pointer', opacity:saving?0.7:1 }}>{saving?'Submitting...':'Submit Partner Request'}</button>
-            <p style={{ textAlign:'center', fontSize:12, color:'#888', marginTop:12 }}>📧 admin@villecabs.com · 📞 +1876-515-8113</p>
+            {alerts.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}><div style={{ fontSize:32, marginBottom:10 }}>✅</div>No safety alerts</div>}
           </div>
         )}
-      </div>
-    </div>
-  );
-}
 
-// ── DRIVER EARNINGS PAGE ──────────────────────────────────────────────────────
-function DriverEarnings({ go, user }) {
-  const [rides, setRides] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [period, setPeriod] = useState('week');
-  const [detail, setDetail] = useState(null);
-  useEffect(() => {
-    if (!user?.uid) return;
-    getDocs(query(collection(db,'bookings'), where('driverId','==',user.uid), where('status','==','completed')))
-      .then(snap => { setRides(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0))); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, [user]);
-  const now=new Date(), todayStart=new Date(now.getFullYear(),now.getMonth(),now.getDate());
-  const weekStart=new Date(todayStart.getTime()-6*86400000), monthStart=new Date(now.getFullYear(),now.getMonth(),1);
-  const filtered=rides.filter(r=>{const d=new Date((r.createdAt?.seconds||0)*1000);return period==='today'?d>=todayStart:period==='week'?d>=weekStart:d>=monthStart;});
-  const totalFare=filtered.reduce((s,r)=>s+(r.fare||0),0);
-  const driverNet=Math.round(totalFare*0.85), vcFee=Math.round(totalFare*0.15), avgFare=filtered.length?Math.round(totalFare/filtered.length):0;
-  if (detail) {
-    const fare=detail.fare||0;
-    return (
-      <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
-        <div style={{ background:'#fff', padding:'10px 16px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', position:'sticky', top:0, zIndex:10 }}>
-          
-          <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>Ride Details</span>
-        </div>
-        <div style={{ padding:16 }}>
-          <div style={{ background:'#fff', borderRadius:16, padding:18, boxShadow:'0 2px 10px rgba(0,0,0,0.07)', marginBottom:12 }}>
-            {[['Total Fare',`J$${fare.toLocaleString()}`,'#1a1a2e'],['VilleCabs Fee (15%)',`-J$${Math.round(fare*0.15).toLocaleString()}`,'#dc2626'],['You Earned (85%)',`J$${Math.round(fare*0.85).toLocaleString()}`,'#6b21a8']].map(([l,v,c],i)=>(
-              <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'10px 0', borderBottom:i<2?'1px solid #f0f0f0':'none' }}>
-                <span style={{ fontSize:13, color:'#555' }}>{l}</span><span style={{ fontSize:14, fontWeight:700, color:c }}>{v}</span>
-              </div>
-            ))}
-          </div>
-          <div style={{ background:'#fff', borderRadius:16, padding:18, boxShadow:'0 2px 10px rgba(0,0,0,0.07)' }}>
-            {[['Passenger',detail.customerName||'—'],['Pickup',(detail.pickup?.address||'—')],['Drop-off',(detail.dropoff?.address||'—')],['Distance',detail.distanceKm?detail.distanceKm+' km':'—'],['Payment',detail.paymentMethod||'Cash'],['Date',new Date((detail.createdAt?.seconds||0)*1000).toLocaleString()]].map(([l,v],i)=>(
-              <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'9px 0', borderBottom:i<5?'1px solid #f5f5f5':'none', gap:12 }}>
-                <span style={{ fontSize:12, color:'#888', flexShrink:0 }}>{l}</span><span style={{ fontSize:12, fontWeight:600, color:'#1a1a2e', textAlign:'right' }}>{v}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
-      <div style={{ background:'#fff', padding:'10px 16px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', position:'sticky', top:0, zIndex:10 }}>
-        
-        <img src="/logo.png" style={{ height:26, objectFit:'contain' }} alt="VilleCabs"/>
-        <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:4 }}>Earnings</span>
-      </div>
-      <div style={{ display:'flex', gap:8, padding:'12px 16px', background:'#fff', borderBottom:'1px solid #f0f0f0' }}>
-        {[['today','Today'],['week','This Week'],['month','This Month']].map(([k,l])=>(
-          <button key={k} onClick={()=>setPeriod(k)} style={{ flex:1, padding:'8px', borderRadius:20, border:'none', background:period===k?'#6b21a8':'#f3f4f6', color:period===k?'#fff':'#555', fontSize:12, fontWeight:600, cursor:'pointer' }}>{l}</button>
-        ))}
-      </div>
-      <div style={{ padding:'14px 14px 0' }}>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
-          <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:14, padding:'14px' }}>
-            <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', marginBottom:4 }}>You Earned</div>
-            <div style={{ fontSize:24, fontWeight:800, color:'#6b21a8' }}>J${driverNet.toLocaleString()}</div>
-            <div style={{ fontSize:11, color:'#888', marginTop:2 }}>{filtered.length} trips · Avg J${avgFare.toLocaleString()}</div>
-          </div>
-          <div style={{ background:'#fff', border:'1px solid #e5e7eb', borderRadius:14, padding:'14px' }}>
-            <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', marginBottom:4 }}>Total Fares</div>
-            <div style={{ fontSize:24, fontWeight:800, color:'#1a1a2e' }}>J${totalFare.toLocaleString()}</div>
-            <div style={{ fontSize:11, color:'#dc2626', marginTop:2 }}>Fee: J${vcFee.toLocaleString()}</div>
-          </div>
-        </div>
-        <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:10, padding:'10px 14px', fontSize:12, color:'#6b21a8', marginBottom:14 }}>Drivers keep <strong>85%</strong> of every completed fare.</div>
-      </div>
-      <div style={{ padding:'0 14px 90px' }}>
-        {loading&&<div style={{ textAlign:'center', color:'#888', padding:24 }}>Loading...</div>}
-        {!loading&&filtered.length===0&&<div style={{ textAlign:'center', color:'#888', padding:24 }}>No rides in this period</div>}
-        {filtered.map((r,i)=>{
-          const d=new Date((r.createdAt?.seconds||0)*1000), net=Math.round((r.fare||0)*0.85);
-          return (<div key={i} onClick={()=>setDetail(r)} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)', cursor:'pointer' }}>
-            <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
-              <div><div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>👤 {r.customerName||'Passenger'}</div><div style={{ fontSize:11, color:'#888', marginTop:2 }}>{d.toLocaleDateString()}</div></div>
-              <div style={{ textAlign:'right' }}><div style={{ fontSize:16, fontWeight:800, color:'#6b21a8' }}>J${net.toLocaleString()}</div><div style={{ fontSize:10, color:'#aaa' }}>of J${(r.fare||0).toLocaleString()}</div></div>
+        {/* ══ UNFULFILLED REQUESTS ══ */}
+        {tab === 'unfulfilled' && (
+          <div>
+            <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:14 }}>No Driver Requests</div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14 }}>
+              {(() => {
+                const todayCount = unfulfilled.filter(r => new Date((r.created_at?.seconds||0)*1000) >= todayStart).length;
+                const weekCount  = unfulfilled.filter(r => new Date((r.created_at?.seconds||0)*1000) >= weekStart).length;
+                const hours      = unfulfilled.map(r=>r.hour_of_day).filter(h=>h!==undefined);
+                const hCounts    = hours.reduce((a,h)=>{a[h]=(a[h]||0)+1;return a;},{});
+                const busiest    = Object.entries(hCounts).sort((a,b)=>b[1]-a[1])[0]?.[0];
+                return [
+                  ['Today',unfulfilled.filter(r=>new Date((r.created_at?.seconds||0)*1000)>=todayStart).length,'#6b21a8','#f9f5ff','#e9d5ff'],
+                  ['This Week',weekCount,'#1a9e5a','#f0fff4','#86efac'],
+                  ['Total',unfulfilled.length,'#1a1a2e','#fff','#e5e7eb'],
+                  ['Busiest Hour',busiest!==undefined?`${busiest}:00`:'—','#b45309','#fffbeb','#fde047'],
+                ].map(([l,v,c,bg,border],i) => (
+                  <div key={i} style={{ background:bg, border:`1px solid ${border}`, borderRadius:12, padding:'12px 14px' }}>
+                    <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', marginBottom:4 }}>{l}</div>
+                    <div style={{ fontSize:20, fontWeight:800, color:c }}>{v}</div>
+                  </div>
+                ));
+              })()}
             </div>
-            <div style={{ fontSize:11, color:'#555' }}>📍 {(r.pickup?.address||'').split(',')[0]}</div>
-          </div>);
-        })}
-      </div>
-    </div>
-  );
-}
+            {unfulfilled.map((r,i) => {
+              const d = new Date((r.created_at?.seconds||0)*1000);
+              return (
+                <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)', borderLeft:'3px solid #e9d5ff' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>👤 {r.customer_name||'Customer'}</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:'#6b21a8' }}>J${(r.estimated_fare||0).toLocaleString()}</div>
+                  </div>
+                  <div style={{ fontSize:11, color:'#555', marginBottom:2 }}>📍 {(r.pickup_address||'').split(',')[0]}</div>
+                  <div style={{ fontSize:11, color:'#555', marginBottom:8 }}>🏁 {(r.dropoff_address||'').split(',')[0]}</div>
+                  <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                    <span style={{ fontSize:10, background:'#f3f4f6', color:'#555', padding:'2px 8px', borderRadius:8 }}>🚗 {r.ride_type}</span>
+                    <span style={{ fontSize:10, background:'#f3f4f6', color:'#555', padding:'2px 8px', borderRadius:8 }}>📏 {r.estimated_distance_km} km</span>
+                    <span style={{ fontSize:10, background:'#fefce8', color:'#854d0e', padding:'2px 8px', borderRadius:8 }}>⏰ {r.day_of_week} {r.hour_of_day}:00</span>
+                  </div>
+                  <div style={{ fontSize:10, color:'#aaa', marginTop:6 }}>{d.toLocaleString()}</div>
+                </div>
+              );
+            })}
+            {unfulfilled.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}>No unfulfilled requests yet</div>}
+          </div>
+        )}
 
-// ── DRIVER DOCUMENTS PAGE ─────────────────────────────────────────────────────
-function DriverDocuments({ go, user }) {
-  const [docs, setDocs] = useState({});
-  const [saving, setSaving] = useState('');
-  const [msg, setMsg] = useState('');
-  useEffect(() => {
-    if (!user?.uid) return;
-    getDoc(doc(db,'drivers',user.uid)).then(snap => { if (snap.exists()) setDocs(snap.data().documents||{}); });
-  }, [user]);
-  const docTypes = [
-    {key:'licence',label:"Driver's Licence",icon:'🪪',required:true},
-    {key:'fitness',label:'Vehicle Fitness',icon:'📋',required:true},
-    {key:'registration',label:'Vehicle Registration',icon:'📄',required:true},
-    {key:'insurance',label:'Insurance Certificate',icon:'🛡️',required:false},
-    {key:'vehiclePhoto',label:'Vehicle Photo',icon:'🚗',required:false},
-  ];
-  const handleUpload = async (key, file) => {
-    if (!file||!user?.uid) return;
-    setSaving(key);
-    try {
-      const docData={status:'pending',name:file.name,uploadedAt:new Date().toISOString()};
-      await updateDoc(doc(db,'drivers',user.uid), {['documents.'+key]:docData});
-      setDocs(prev=>({...prev,[key]:docData}));
-      setMsg('Document uploaded — pending review');
-      setTimeout(()=>setMsg(''),3000);
-    } catch(e) { console.error(e); }
-    setSaving('');
-  };
-  const cfg={approved:{label:'✅ Approved',color:'#1a9e5a'},pending:{label:'⏳ Pending Review',color:'#b45309'},rejected:{label:'❌ Needs Update',color:'#dc2626'},missing:{label:'📤 Not Uploaded',color:'#6b7280'}};
-  return (
-    <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
-      <div style={{ background:'#fff', padding:'10px 16px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', position:'sticky', top:0, zIndex:10 }}>
-        
-        <img src="/logo.png" style={{ height:26, objectFit:'contain' }} alt="VilleCabs"/>
-        <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:4 }}>My Documents</span>
-      </div>
-      <div style={{ padding:'14px 14px 90px' }}>
-        {msg&&<div style={{ background:'#f0fff4', border:'1px solid #86efac', borderRadius:10, padding:'10px 14px', fontSize:13, color:'#1a9e5a', marginBottom:12 }}>{msg}</div>}
-        <div style={{ background:'#fefce8', border:'1px solid #fde047', borderRadius:12, padding:'10px 14px', fontSize:12, color:'#854d0e', marginBottom:12 }}>VilleCabs reviews all documents to keep riders safe.</div>
-        {docTypes.map(({key,label,icon,required})=>{
-          const d=docs[key], status=d?.status||'missing', c=cfg[status]||cfg.missing;
-          return (<div key={key} style={{ background:'#fff', borderRadius:14, padding:16, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
-            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
-              <span style={{ fontSize:26 }}>{icon}</span>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>{label}{required&&<span style={{ fontSize:9, background:'#fee2e2', color:'#dc2626', padding:'1px 6px', borderRadius:6, marginLeft:6 }}>Required</span>}</div>
-                <div style={{ fontSize:11, color:c.color, fontWeight:600, marginTop:2 }}>{c.label}</div>
-              </div>
-            </div>
-            <label style={{ display:'block', padding:'9px', background:status==='approved'?'#f9f5ff':'#6b21a8', color:status==='approved'?'#6b21a8':'#fff', borderRadius:10, fontSize:12, fontWeight:600, cursor:saving===key?'default':'pointer', textAlign:'center', opacity:saving===key?0.7:1 }}>
-              {saving===key?'Uploading...':status==='approved'?'Replace Document':'Upload Document'}
-              <input type="file" accept="image/*,.pdf" style={{ display:'none' }} onChange={e=>handleUpload(key,e.target.files[0])} disabled={saving===key}/>
-            </label>
-          </div>);
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ── DRIVER NOTIFICATIONS PAGE ─────────────────────────────────────────────────
-function DriverNotifications({ go, user }) {
-  const [notifs, setNotifs] = useState([
-    {id:'1',type:'account',title:'Welcome to VilleCabs!',message:'Complete your profile and documents to start receiving ride requests.',time:'Today',read:false},
-    {id:'2',type:'account',title:'Application Received',message:'Your VilleCabs driver application is being reviewed by our team.',time:'Today',read:false},
-  ]);
-  const [filter, setFilter] = useState('all');
-  const icons={ride:'🚕',account:'👤',safety:'🛡️',payment:'💰',system:'⚙️'};
-  const colors={ride:'#6b21a8',account:'#1a9e5a',safety:'#dc2626',payment:'#b45309',system:'#374151'};
-  const filtered=filter==='all'?notifs:filter==='unread'?notifs.filter(n=>!n.read):notifs.filter(n=>n.type===filter);
-  const unread=notifs.filter(n=>!n.read).length;
-  return (
-    <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
-      <div style={{ background:'#fff', padding:'10px 16px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', position:'sticky', top:0, zIndex:10 }}>
-        
-        <img src="/logo.png" style={{ height:26, objectFit:'contain' }} alt="VilleCabs"/>
-        <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:4 }}>Notifications</span>
-        {unread>0&&<div style={{ background:'#6b21a8', color:'#fff', borderRadius:10, fontSize:10, fontWeight:700, padding:'2px 7px' }}>{unread}</div>}
-        <button onClick={()=>setNotifs(p=>p.map(n=>({...n,read:true})))} style={{ marginLeft:'auto', background:'none', border:'none', fontSize:11, color:'#6b21a8', cursor:'pointer', fontWeight:600 }}>Mark all read</button>
-      </div>
-      <div style={{ display:'flex', gap:6, padding:'10px 14px', background:'#fff', borderBottom:'1px solid #f0f0f0', overflowX:'auto' }}>
-        {[['all','All'],['unread','Unread'],['ride','Rides'],['account','Account'],['safety','Safety']].map(([k,l])=>(
-          <button key={k} onClick={()=>setFilter(k)} style={{ flexShrink:0, padding:'5px 12px', borderRadius:20, border:'none', background:filter===k?'#6b21a8':'#f3f4f6', color:filter===k?'#fff':'#555', fontSize:11, fontWeight:600, cursor:'pointer' }}>{l}</button>
-        ))}
-      </div>
-      <div style={{ padding:'12px 14px 90px' }}>
-        {filtered.length===0&&<div style={{ textAlign:'center', padding:40 }}><div style={{ fontSize:40, marginBottom:12 }}>🔔</div><div style={{ fontSize:14, color:'#888' }}>No notifications</div></div>}
-        {filtered.map((n,i)=>(
-          <div key={i} onClick={()=>setNotifs(p=>p.map(x=>x.id===n.id?{...x,read:true}:x))}
-            style={{ background:n.read?'#fff':'#f9f5ff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)', borderLeft:n.read?'3px solid transparent':`3px solid ${colors[n.type]||'#6b21a8'}`, cursor:'pointer' }}>
-            <div style={{ display:'flex', gap:12 }}>
-              <div style={{ width:36, height:36, borderRadius:10, background:`${colors[n.type]||'#6b21a8'}18`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>{icons[n.type]||'🔔'}</div>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:3 }}>{n.title}</div>
-                <div style={{ fontSize:12, color:'#555', lineHeight:1.5 }}>{n.message}</div>
-                <div style={{ fontSize:10, color:'#aaa', marginTop:4 }}>{n.time}</div>
-              </div>
-              {!n.read&&<div style={{ width:8, height:8, borderRadius:'50%', background:'#6b21a8', flexShrink:0, marginTop:4 }}/>}
-            </div>
-          </div>
-        ))}
       </div>
     </div>
   );
