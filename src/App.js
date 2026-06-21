@@ -5592,31 +5592,35 @@ function AdminDash({ go, user }) {
 
   useEffect(() => {
     const load = async () => {
+      // Load each collection independently so one failure doesn't break everything
+      const safe = async (fn) => { try { return await fn(); } catch(e) { console.warn('Admin load error:', e.message); return { docs:[] }; } };
+
+      const [cSnap, dSnap, rSnap, pSnap, mSnap, aSnap, uSnap, promoSnap] = await Promise.all([
+        safe(() => getDocs(collection(db,'customers'))),
+        safe(() => getDocs(collection(db,'drivers'))),
+        safe(() => getDocs(collection(db,'bookings'))),
+        safe(() => getDocs(collection(db,'partnerRequests'))),
+        safe(() => getDocs(collection(db,'contact_submissions'))),
+        safe(() => getDocs(collection(db,'sosAlerts'))),
+        safe(() => getDocs(query(collection(db,'unfulfilled_ride_requests'), orderBy('created_at','desc')))),
+        safe(() => getDocs(collection(db,'promo_codes'))),
+      ]);
+
       try {
-        const [cSnap, dSnap, rSnap, pSnap, mSnap, aSnap, uSnap, promoSnap] = await Promise.all([
-          getDocs(collection(db,'customers')),
-          getDocs(collection(db,'drivers')),
-          getDocs(collection(db,'bookings')),
-          getDocs(collection(db,'partnerRequests')),
-          getDocs(collection(db,'contactMessages')),
-          getDocs(collection(db,'sosAlerts')),
-          getDocs(query(collection(db,'unfulfilled_ride_requests'), orderBy('created_at','desc'))),
-          getDocs(collection(db,'promo_codes')),
-        ]);
-        const cd = cSnap.docs.map(d=>({id:d.id,...d.data()}));
-        const dd = dSnap.docs.map(d=>({id:d.id,...d.data()}));
-        const rd = rSnap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
-        const pd = pSnap.docs.map(d=>({id:d.id,...d.data()}));
-        const md = mSnap.docs.map(d=>({id:d.id,...d.data()}));
-        const ad2= aSnap.docs.map(d=>({id:d.id,...d.data()}));
-        const ud = uSnap.docs.map(d=>({id:d.id,...d.data()}));
-        const prd= promoSnap.docs.map(d=>({id:d.id,...d.data()}));
+        const cd  = (cSnap.docs||[]).map(d=>({id:d.id,...d.data()}));
+        const dd  = (dSnap.docs||[]).map(d=>({id:d.id,...d.data()}));
+        const rd  = (rSnap.docs||[]).map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+        const pd  = (pSnap.docs||[]).map(d=>({id:d.id,...d.data()}));
+        const md  = (mSnap.docs||[]).map(d=>({id:d.id,...d.data()}));
+        const ad2 = (aSnap.docs||[]).map(d=>({id:d.id,...d.data()}));
+        const ud  = (uSnap.docs||[]).map(d=>({id:d.id,...d.data()}));
+        const prd = (promoSnap.docs||[]).map(d=>({id:d.id,...d.data()}));
         const completed = rd.filter(r=>r.status==='completed');
         const totalFare = completed.reduce((s,r)=>s+(r.fare||0),0);
         setCustomers(cd); setDrivers(dd); setRides(rd); setPartners(pd);
         setMessages(md); setAlerts(ad2); setUnfulfilled(ud); setPromos(prd);
         setStats({ customers:cd.length, drivers:dd.length, pendingDrivers:dd.filter(d=>d.status==='pending').length, activeDrivers:dd.filter(d=>d.isOnline).length, rides:rd.length, completed:completed.length, cancelled:rd.filter(r=>r.status==='cancelled').length, totalFare, partnerRequests:pd.filter(p=>p.status==='new').length });
-      } catch(e) { console.error(e); }
+      } catch(e) { console.error('Admin process error:', e); }
       setLoading(false);
     };
     load();
