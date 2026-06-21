@@ -3028,10 +3028,9 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
           <div style={{ fontSize:12, color:'#666888', lineHeight:1.7 }}>Between <strong>5pm and 8pm</strong> peak hours, fares may be slightly higher due to high demand. Book early or travel off-peak to get the best rates.</div>
         </div>
       </div>
-    </div>
 
-    {/* ── NO DRIVERS AVAILABLE MODAL ── */}
-    {noDrivers && (
+      {/* ── NO DRIVERS AVAILABLE MODAL ── */}
+      {noDrivers && (
       <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
         <div style={{ background:'#ffffff', borderRadius:20, padding:28, maxWidth:360, width:'100%', textAlign:'center', boxShadow:'0 20px 60px rgba(0,0,0,0.2)', border:'1px solid #e9d5ff' }}>
           <img src="/logo.png" alt="VilleCabs" style={{ height:40, objectFit:'contain', marginBottom:16 }}/>
@@ -3060,6 +3059,7 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
         </div>
       </div>
     )}
+  </div>
   );
 }
 function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, user }) {
