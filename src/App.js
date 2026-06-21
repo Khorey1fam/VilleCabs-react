@@ -937,9 +937,10 @@ function DriverLogin({ go, setUser, user }) {
 // ── DRIVER SIGNUP ─────────────────────────────────────────────────────────────
 function DriverSignup({ go, user }) {
   const [form, setForm]       = useState({ name:'',trn:'',dob:'',phone:'',email:'',password:'',make:'',model:'',plate:'' });
-  const [docs, setDocs]       = useState({ license:null, fitness:null, registration:null });
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState('');
+  const [docs, setDocs]       = useState({ license:null, fitness:null, registration:null, profilePhoto:null, vehiclePhoto:null });
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState('');
+  const [previews, setPreviews] = useState({ profilePhoto:null, vehiclePhoto:null });
   const set = (k,v) => setForm(p => ({ ...p, [k]:v }));
 
   const handleSubmit = async () => {
