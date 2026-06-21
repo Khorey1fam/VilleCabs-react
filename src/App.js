@@ -1008,6 +1008,72 @@ function DriverSignup({ go, user }) {
           <div key={k}><label style={s.lbl}>{lbl}</label><input style={s.inp} placeholder={ph} value={form[k]} onChange={e => set(k,e.target.value)}/></div>
         ))}
         <div style={{ height:'0.5px', background:'rgba(255,255,255,0.1)', margin:'8px 0 16px' }}/>
+        {/* ── PROFILE PHOTO ── */}
+        <div style={{ marginBottom:14 }}>
+          <label style={{ fontSize:12, fontWeight:600, color:'#1a1a2e', display:'block', marginBottom:8 }}>
+            Profile Photo * <span style={{ fontSize:11, color:'#888', fontWeight:400 }}>— Clear face photo</span>
+          </label>
+          <input type="file" id="doc-profilePhoto" accept="image/*" style={{ display:'none' }}
+            onChange={e => {
+              const file = e.target.files?.[0];
+              if (file) {
+                setDocs(p => ({ ...p, profilePhoto: file }));
+                setPreviews(p => ({ ...p, profilePhoto: URL.createObjectURL(file) }));
+              }
+            }}/>
+          <div onClick={() => document.getElementById('doc-profilePhoto').click()}
+            style={{ border:`2px dashed ${docs.profilePhoto?'#1a9e5a':'#e9d5ff'}`, borderRadius:14, padding:16, textAlign:'center', cursor:'pointer', background:docs.profilePhoto?'#f0fff4':'#f9f5ff' }}>
+            {previews.profilePhoto ? (
+              <div>
+                <img src={previews.profilePhoto} alt="Profile preview" style={{ width:80, height:80, borderRadius:'50%', objectFit:'cover', marginBottom:8, border:'3px solid #1a9e5a' }}/>
+                <div style={{ fontSize:12, color:'#1a9e5a', fontWeight:600 }}>✅ Profile Photo Added</div>
+                <div style={{ fontSize:11, color:'#888', marginTop:2 }}>Tap to change</div>
+              </div>
+            ) : (
+              <div>
+                <div style={{ fontSize:36, marginBottom:8 }}>📸</div>
+                <div style={{ fontSize:13, fontWeight:600, color:'#6b21a8' }}>Upload Profile Photo</div>
+                <div style={{ fontSize:11, color:'#888', marginTop:4 }}>Clear face photo required</div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── VEHICLE PHOTO ── */}
+        <div style={{ marginBottom:14 }}>
+          <label style={{ fontSize:12, fontWeight:600, color:'#1a1a2e', display:'block', marginBottom:8 }}>
+            Vehicle Photo * <span style={{ fontSize:11, color:'#888', fontWeight:400 }}>— Full vehicle, clear plate</span>
+          </label>
+          <input type="file" id="doc-vehiclePhoto" accept="image/*" style={{ display:'none' }}
+            onChange={e => {
+              const file = e.target.files?.[0];
+              if (file) {
+                setDocs(p => ({ ...p, vehiclePhoto: file }));
+                setPreviews(p => ({ ...p, vehiclePhoto: URL.createObjectURL(file) }));
+              }
+            }}/>
+          <div onClick={() => document.getElementById('doc-vehiclePhoto').click()}
+            style={{ border:`2px dashed ${docs.vehiclePhoto?'#1a9e5a':'#e9d5ff'}`, borderRadius:14, padding:16, textAlign:'center', cursor:'pointer', background:docs.vehiclePhoto?'#f0fff4':'#f9f5ff' }}>
+            {previews.vehiclePhoto ? (
+              <div>
+                <img src={previews.vehiclePhoto} alt="Vehicle preview" style={{ width:'100%', maxHeight:140, objectFit:'cover', borderRadius:10, marginBottom:8, border:'3px solid #1a9e5a' }}/>
+                <div style={{ fontSize:12, color:'#1a9e5a', fontWeight:600 }}>✅ Vehicle Photo Added</div>
+                <div style={{ fontSize:11, color:'#888', marginTop:2 }}>Tap to change</div>
+              </div>
+            ) : (
+              <div>
+                <div style={{ fontSize:36, marginBottom:8 }}>🚗</div>
+                <div style={{ fontSize:13, fontWeight:600, color:'#6b21a8' }}>Upload Vehicle Photo</div>
+                <div style={{ fontSize:11, color:'#888', marginTop:4 }}>Show full vehicle with licence plate visible</div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── DOCUMENTS ── */}
+        <div style={{ marginBottom:8 }}>
+          <label style={{ fontSize:12, fontWeight:600, color:'#1a1a2e', display:'block', marginBottom:8 }}>Required Documents</label>
+        </div>
         {[['license',"Driver's License"],['fitness','Vehicle Fitness Certificate'],['registration','Vehicle Registration']].map(([k,lbl]) => (
           <div key={k}>
             <input type="file" id={`doc-${k}`} accept="image/*,application/pdf" style={{ display:'none' }}
