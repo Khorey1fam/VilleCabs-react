@@ -2629,7 +2629,7 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
 }
 
 
-function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
+function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBookingId }) {
   const [sel,        setSel]        = useState(0);
   const [loading,    setLoading]    = useState(false);
   const [error,      setError]      = useState('');
@@ -2848,6 +2848,10 @@ function VehicleSelect({ go, user, pickupData, dropoffData, setBookingId }) {
         } catch(e) { console.error('Promo update error:', e); }
       }
       setBookingId(ref.id);
+      // Store fare in pickupData so BookingConfirm shows it immediately
+      if (typeof setPickupData === 'function') {
+        setPickupData(prev => ({ ...prev, fare: finalPrice, vehicleType: v.name, distanceKm: dist }));
+      }
       // Notify all approved drivers via FCM
       try {
         const driverSnap = await getDocs(query(collection(db,"drivers"), where("status","==","approved")));
@@ -3090,11 +3094,12 @@ function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, 
     }
   };
 
+  // Get fare from booking (Firestore) or pickupData (passed from VehicleSelect)
   const fare    = booking?.fare || pickupData?.fare || 0;
+  const dist    = booking?.distanceKm || pickupData?.distanceKm || 0;
   const address = booking?.pickup?.address || pickupData?.address || '';
   const dropoff = booking?.dropoff?.address || dropoffData?.address || '';
   const vehicle = booking?.vehicleType || pickupData?.vehicleType || 'VilleRide';
-  const dist    = booking?.distanceKm || 0;
 
   return (
     <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
