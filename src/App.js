@@ -910,9 +910,22 @@ function DriverLogin({ go, user, setUser }) {
       } catch(fsErr) { console.warn('Firestore error after auth:', fsErr); }
       setUser({ uid:cred.user.uid, name:data.name||'Driver', email:cred.user.email, role:'driver' });
       _manualNavDone = true;
-      if (!data.termsAccepted) go('driver-terms');
-      else if (!data.tipsSeen) go('driver-welcome-tips');
-      else go('driver-dash');
+      // Navigate based on onboarding status - default to driver-dash if data empty
+      try {
+        if (data.status && data.status !== 'approved') {
+          // Status checked above but just in case
+          go('driver-dash');
+        } else if (!data.termsAccepted) {
+          go('driver-terms');
+        } else if (!data.tipsSeen) {
+          go('driver-welcome-tips');
+        } else {
+          go('driver-dash');
+        }
+      } catch(navErr) {
+        console.error('Navigation error:', navErr);
+        go('driver-dash');
+      }
     } catch(err) {
       console.error('Driver login error code:', err.code, 'message:', err.message);
       const code = err.code || '';
@@ -926,7 +939,7 @@ function DriverLogin({ go, user, setUser }) {
       } else if (code.includes('network')) {
         setError('Network error. Check your connection.');
       } else {
-        setError('Login failed (' + code + '). Please try again.');
+        setError(code ? 'Login failed (' + code + '). Please try again.' : 'Something went wrong. Please check your connection and try again.');
       }
       setLoading(false);
     }
@@ -6304,6 +6317,7 @@ export default function App() {
 
     const unsub = onAuthStateChanged(auth, async (fu) => {
       if (done) return;
+      if (_manualNavDone) return; // Manual login/signup handled navigation already
       if (!fu) {
         // Not logged in - show landing
         clearTimeout(safety);
