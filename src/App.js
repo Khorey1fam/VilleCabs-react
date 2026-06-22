@@ -4073,35 +4073,33 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   // ── Poll for incoming ride requests every 5s ────────────────────────────
   useEffect(() => {
     if (!user?.uid) return;
-    const poll = async () => {
-      try {
-        const snap = await getDocs(query(collection(db,'bookings'), where('status','==','searching')));
-        const open = snap.docs
-          .map(d => ({ id:d.id, ...d.data() }))
-          .filter(r => !r.driverId && !(r.declinedBy||[]).includes(user.uid))
-          .sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
-        if (open.length > prevCountRef.current && prevCountRef.current >= 0) {
-          try {
-            const AC = window.AudioContext || window.webkitAudioContext;
-            if (AC) {
-              const ctx = new AC();
-              const osc = ctx.createOscillator(); const g = ctx.createGain();
-              osc.connect(g); g.connect(ctx.destination);
-              osc.frequency.value = 880; osc.type = 'sine';
-              g.gain.setValueAtTime(0.3, ctx.currentTime);
-              g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
-              osc.start(); osc.stop(ctx.currentTime + 0.6);
-              setTimeout(() => ctx.close(), 1000);
-            }
-          } catch(e) {}
-        }
-        prevCountRef.current = open.length;
-        setPendingRides(open);
-      } catch(e) { console.warn('Poll error:', e.message); }
-    };
-    poll();
-    const interval = setInterval(poll, 5000);
-    return () => clearInterval(interval);
+    // Real-time onSnapshot - instant new ride notifications (no polling!)
+    const q = query(collection(db,'bookings'), where('status','==','searching'));
+    const unsub = onSnapshot(q, snap => {
+      const open = snap.docs
+        .map(d => ({ id:d.id, ...d.data() }))
+        .filter(r => !r.driverId && !(r.declinedBy||[]).includes(user.uid))
+        .sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+      // Play sound when new ride arrives
+      if (open.length > prevCountRef.current && prevCountRef.current >= 0) {
+        try {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (AC) {
+            const ctx = new AC();
+            const osc = ctx.createOscillator(); const g = ctx.createGain();
+            osc.connect(g); g.connect(ctx.destination);
+            osc.frequency.value = 880; osc.type = 'sine';
+            g.gain.setValueAtTime(0.3, ctx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+            osc.start(); osc.stop(ctx.currentTime + 0.6);
+            setTimeout(() => ctx.close(), 1000);
+          }
+        } catch(e) {}
+      }
+      prevCountRef.current = open.length;
+      setPendingRides(open);
+    }, e => console.warn('Ride snapshot error:', e.message));
+    return () => unsub();
   }, [user]);
 
   const goOnline = async () => {
@@ -4123,6 +4121,9 @@ function DriverDash({ go, user, setUser, setBookingId }) {
       }
       const dSnap = await getDoc(doc(db,'drivers',user.uid));
       const dData = dSnap.exists() ? dSnap.data() : {};
+      // Optimistic: immediately hide ride from list
+      setPendingRides(prev => prev.filter(r => r.id !== rideId));
+
       await updateDoc(doc(db,'bookings',rideId), {
         driverId:     user.uid,
         driverName:   user.name,
@@ -4617,6 +4618,9 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     setDirections(null); // Clear old route, new one will load via useEffect
     try {
       // Update booking with arrived status
+      // Optimistic update - instant UI response
+      setBooking(prev => ({...prev, driverArrived:true}));
+      setArrived(true);
       await updateDoc(doc(db,'bookings',booking.id), {
         driverArrived:   true,
         arrivedAt:       serverTimestamp(),
@@ -4638,6 +4642,9 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     if (!booking?.id) return;
     setEnroute(true);
     try {
+      // Optimistic update
+      setBooking(prev => ({...prev, enrouteToDropoff:true}));
+      setEnroute(true);
       await updateDoc(doc(db,'bookings',booking.id), {
         enrouteToDropoff: true,
         enrouteAt:        serverTimestamp(),
@@ -4657,6 +4664,8 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
   const completeRide = async () => {
     if (!booking?.id) return;
     if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
+    // Optimistic update
+    setBooking(prev => ({...prev, status:'completed'}));
     await updateDoc(doc(db,'bookings',booking.id), { status:'completed', completedAt:serverTimestamp() });
     try { await updateDoc(doc(db,'drivers',user.uid), { isOnline:false, currentLocation:null }); } catch(e) {}
     // Show completion summary before going back
