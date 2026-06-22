@@ -887,181 +887,193 @@ function CustomerLogin({ go, setUser, user }) {
 }
 
 // ── DRIVER LOGIN ──────────────────────────────────────────────────────────────
-function DriverLogin({ go, setUser, user }) {
-  const [email, setEmail]       = useState('');
+function DriverLogin({ go, user, setUser }) {
+  const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState('');
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState('');
 
   const handleLogin = async () => {
     if (!email || !password) { setError('Please enter your email and password.'); return; }
     setLoading(true); setError('');
     try {
-      // Step 1: Firebase Auth sign in
       const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
-
-      // Step 2: Get driver profile from Firestore
       let data = {};
       try {
         const snap = await getDoc(doc(db,'drivers',cred.user.uid));
-        if (!snap.exists()) {
-          setError('No driver account found. Please apply to become a driver first.');
-          setLoading(false); return;
-        }
+        if (!snap.exists()) { setError('No driver account found. Please apply first.'); setLoading(false); return; }
         data = snap.data();
-        if (data.status === 'pending')  { setError('Your application is still pending admin approval.'); setLoading(false); return; }
-        if (data.status === 'rejected') { setError('Your application was not approved. Please contact support.'); setLoading(false); return; }
-        if (data.status === 'suspended') { setError('Your account has been suspended. Please contact support.'); setLoading(false); return; }
-        // Update last login non-blocking
+        if (data.status==='pending')   { setError('Your application is pending admin approval.'); setLoading(false); return; }
+        if (data.status==='rejected')  { setError('Your application was not approved. Contact support.'); setLoading(false); return; }
+        if (data.status==='suspended') { setError('Your account has been suspended. Contact support.'); setLoading(false); return; }
         updateDoc(doc(db,'drivers',cred.user.uid), { lastLogin:serverTimestamp() }).catch(()=>{});
-      } catch(firestoreErr) {
-        console.warn('Firestore read error (auth still succeeded):', firestoreErr);
-        // Auth succeeded even if Firestore fails - still navigate
-      }
-
-      // Step 3: Navigate
-      setUser({ uid:cred.user.uid, name:data.name||cred.user.displayName||'Driver', email:cred.user.email, role:'driver' });
+      } catch(fsErr) { console.warn('Firestore error after auth:', fsErr); }
+      setUser({ uid:cred.user.uid, name:data.name||'Driver', email:cred.user.email, role:'driver' });
       _manualNavDone = true;
       if (!data.termsAccepted) go('driver-terms');
       else if (!data.tipsSeen) go('driver-welcome-tips');
       else go('driver-dash');
-
     } catch(err) {
-      console.error('Driver login error:', err.code, err.message);
       const code = err.code || '';
       if (code.includes('wrong-password') || code.includes('invalid-credential') || code.includes('invalid-login')) {
-        setError('Incorrect email or password. Please try again.');
+        setError('Incorrect email or password.');
       } else if (code.includes('user-not-found')) {
-        setError('No account found with this email address.');
+        setError('No account found with this email.');
       } else if (code.includes('too-many-requests')) {
-        setError('Too many failed attempts. Please wait a few minutes before trying again.');
+        setError('Too many attempts. Please wait a few minutes.');
       } else if (code.includes('network')) {
-        setError('Network error. Please check your internet connection.');
+        setError('Network error. Check your connection.');
       } else {
-        setError('Login failed. Please try again. (' + code + ')');
+        setError('Login failed. Please try again.');
       }
       setLoading(false);
     }
   };
 
-;
-
   return (
     <div style={s.content}>
-      <TopBar title="Driver Registration" go={go} user={user}/>
-      <div style={{ padding:'20px', maxWidth:420, margin:'0 auto' }}>
-        <h2 style={{ fontSize:22, fontWeight:800, color:"#1a1a2e", marginBottom:4 }}>Drive with VilleCabs</h2>
-        <p style={{ color:'#6b7280', fontSize:13, marginBottom:16 }}>Fill in your details to apply as a VilleCabs driver.</p>
+      <TopBar title="Driver Login" go={go} user={user}/>
+      <div style={{ padding:'32px 20px', maxWidth:420, margin:'0 auto' }}>
+        <h2 style={{ fontSize:22, fontWeight:800, color:'#1a1a2e', marginBottom:4 }}>Welcome back</h2>
+        <p style={{ color:'#6b7280', fontSize:13, marginBottom:20 }}>Sign in to your driver account</p>
         {error && <div style={s.errBox}>⚠️ {error}</div>}
-        {[['name','Full Legal Name','As on your ID','text'],['trn','TRN','000-000-000','text'],['dob','Date of Birth','DD/MM/YYYY','text'],['phone','Phone Number','+1 (876) 555-0100','tel'],['email','Email Address','you@email.com','email'],['password','Password','At least 6 characters','password']].map(([k,lbl,ph,type]) => (
-          <div key={k}><label style={s.lbl}>{lbl}</label><input style={s.inp} type={type} placeholder={ph} value={form[k]} onChange={e => set(k,e.target.value)}/></div>
-        ))}
-        <div style={{ height:'0.5px', background:'rgba(255,255,255,0.1)', margin:'8px 0 16px' }}/>
-        {[['make','Make of Vehicle','e.g. Toyota'],['model','Model','e.g. Corolla'],['plate','License Plate Number','e.g. PP1234']].map(([k,lbl,ph]) => (
-          <div key={k}><label style={s.lbl}>{lbl}</label><input style={s.inp} placeholder={ph} value={form[k]} onChange={e => set(k,e.target.value)}/></div>
-        ))}
-        <div style={{ height:'0.5px', background:'rgba(255,255,255,0.1)', margin:'8px 0 16px' }}/>
-        {/* ── PROFILE PHOTO ── */}
-        <div style={{ marginBottom:14 }}>
-          <label style={{ fontSize:12, fontWeight:600, color:'#1a1a2e', display:'block', marginBottom:8 }}>
-            Profile Photo * <span style={{ fontSize:11, color:'#888', fontWeight:400 }}>— Clear face photo</span>
-          </label>
-          <input type="file" id="doc-profilePhoto" accept="image/*" style={{ display:'none' }}
-            onChange={e => {
-              const file = e.target.files?.[0];
-              if (file) {
-                setDocs(p => ({ ...p, profilePhoto: file }));
-                setPreviews(p => ({ ...p, profilePhoto: URL.createObjectURL(file) }));
-              }
-            }}/>
-          <div onClick={() => document.getElementById('doc-profilePhoto').click()}
-            style={{ border:`2px dashed ${docs.profilePhoto?'#1a9e5a':'#e9d5ff'}`, borderRadius:14, padding:16, textAlign:'center', cursor:'pointer', background:docs.profilePhoto?'#f0fff4':'#f9f5ff' }}>
-            {previews.profilePhoto ? (
-              <div>
-                <img src={previews.profilePhoto} alt="Profile preview" style={{ width:80, height:80, borderRadius:'50%', objectFit:'cover', marginBottom:8, border:'3px solid #1a9e5a' }}/>
-                <div style={{ fontSize:12, color:'#1a9e5a', fontWeight:600 }}>✅ Profile Photo Added</div>
-                <div style={{ fontSize:11, color:'#888', marginTop:2 }}>Tap to change</div>
-              </div>
-            ) : (
-              <div>
-                <div style={{ fontSize:36, marginBottom:8 }}>📸</div>
-                <div style={{ fontSize:13, fontWeight:600, color:'#6b21a8' }}>Upload Profile Photo</div>
-                <div style={{ fontSize:11, color:'#888', marginTop:4 }}>Clear face photo required</div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── VEHICLE PHOTO ── */}
-        <div style={{ marginBottom:14 }}>
-          <label style={{ fontSize:12, fontWeight:600, color:'#1a1a2e', display:'block', marginBottom:8 }}>
-            Vehicle Photo * <span style={{ fontSize:11, color:'#888', fontWeight:400 }}>— Full vehicle, clear plate</span>
-          </label>
-          <input type="file" id="doc-vehiclePhoto" accept="image/*" style={{ display:'none' }}
-            onChange={e => {
-              const file = e.target.files?.[0];
-              if (file) {
-                setDocs(p => ({ ...p, vehiclePhoto: file }));
-                setPreviews(p => ({ ...p, vehiclePhoto: URL.createObjectURL(file) }));
-              }
-            }}/>
-          <div onClick={() => document.getElementById('doc-vehiclePhoto').click()}
-            style={{ border:`2px dashed ${docs.vehiclePhoto?'#1a9e5a':'#e9d5ff'}`, borderRadius:14, padding:16, textAlign:'center', cursor:'pointer', background:docs.vehiclePhoto?'#f0fff4':'#f9f5ff' }}>
-            {previews.vehiclePhoto ? (
-              <div>
-                <img src={previews.vehiclePhoto} alt="Vehicle preview" style={{ width:'100%', maxHeight:140, objectFit:'cover', borderRadius:10, marginBottom:8, border:'3px solid #1a9e5a' }}/>
-                <div style={{ fontSize:12, color:'#1a9e5a', fontWeight:600 }}>✅ Vehicle Photo Added</div>
-                <div style={{ fontSize:11, color:'#888', marginTop:2 }}>Tap to change</div>
-              </div>
-            ) : (
-              <div>
-                <div style={{ fontSize:36, marginBottom:8 }}>🚗</div>
-                <div style={{ fontSize:13, fontWeight:600, color:'#6b21a8' }}>Upload Vehicle Photo</div>
-                <div style={{ fontSize:11, color:'#888', marginTop:4 }}>Show full vehicle with licence plate visible</div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ── DOCUMENTS ── */}
-        <div style={{ marginBottom:8 }}>
-          <label style={{ fontSize:12, fontWeight:600, color:'#1a1a2e', display:'block', marginBottom:8 }}>Required Documents</label>
-        </div>
-        {[['license',"Driver's License"],['fitness','Vehicle Fitness Certificate'],['registration','Vehicle Registration']].map(([k,lbl]) => (
-          <div key={k}>
-            <input type="file" id={`doc-${k}`} accept="image/*,application/pdf" style={{ display:'none' }}
-              onChange={e => { if (e.target.files?.[0]) setDocs(p => ({ ...p, [k]: e.target.files[0] })); }}/>
-            <div onClick={() => document.getElementById(`doc-${k}`).click()} style={docs[k]?s.uploadOk:s.uploadBox}>
-              <div style={{ fontSize:24, marginBottom:6 }}>{docs[k]?'✅':'📄'}</div>
-              <div style={{ fontSize:12, color:docs[k]?GREEN:'rgba(255,255,255,0.4)', fontWeight:docs[k]?500:400 }}>
-                {docs[k] ? `${lbl} ✓` : `Tap to upload ${lbl}`}
-              </div>
-              {docs[k] && <div style={{ fontSize:10, color:'#374151', marginTop:4 }}>{docs[k].name}</div>}
-            </div>
-          </div>
-        ))}
-      {(!docs.license||!docs.fitness||!docs.registration) && (
-  <div style={{ background:'rgba(226,75,74,0.1)', border:'0.5px solid rgba(226,75,74,0.3)', borderRadius:8, padding:'8px 12px', marginBottom:8, fontSize:12, color:'#f09595' }}>
-    ⚠️ Please upload all 3 documents to continue
-  </div>
-)}
-{Object.values(form).some(v => !v) && (
-  <div style={{ background:'rgba(226,75,74,0.1)', border:'0.5px solid rgba(226,75,74,0.3)', borderRadius:8, padding:'8px 12px', marginBottom:8, fontSize:12, color:'#f09595' }}>
-    ⚠️ Please fill in all fields above to continue
-  </div>
-)}
-<button
-  style={{ ...s.btnY, marginTop:8, opacity:(loading||Object.values(form).some(v=>!v)||!docs.license||!docs.fitness||!docs.registration)?0.4:1 }}
-  onClick={handleSubmit}
-  disabled={loading||Object.values(form).some(v=>!v)||!docs.license||!docs.fitness||!docs.registration}>
-  {loading?'Submitting...':'Submit Application'}
-</button>
+        <label style={s.lbl}>Email</label>
+        <input style={s.inp} type="email" placeholder="you@email.com" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key==='Enter' && handleLogin()}/>
+        <label style={s.lbl}>Password</label>
+        <input style={s.inp} type="password" placeholder="Your password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key==='Enter' && handleLogin()}/>
+        <button style={{ ...s.btnY, opacity:loading?0.7:1 }} onClick={handleLogin} disabled={loading}>
+          {loading ? 'Logging in...' : 'Login'}
+        </button>
+        <button style={s.link} onClick={() => go('driver-signup')}>New driver? Apply here →</button>
+        <button style={{ ...s.link, marginTop:4 }} onClick={() => go('login-choice')}>← Back</button>
       </div>
     </div>
   );
 }
 
-// ── DRIVER PENDING ────────────────────────────────────────────────────────────
+// ── DRIVER SIGNUP ─────────────────────────────────────────────────────────────
+function DriverSignup({ go, user }) {
+  const [form, setForm]       = useState({ name:'',trn:'',dob:'',phone:'',email:'',password:'',make:'',model:'',plate:'' });
+  const [docs, setDocs]       = useState({ license:null, fitness:null, registration:null, profilePhoto:null, vehiclePhoto:null });
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState('');
+  const [previews, setPreviews] = useState({ profilePhoto:null, vehiclePhoto:null });
+  const set = (k,v) => setForm(p => ({ ...p, [k]:v }));
+
+  const handleSubmit = async () => {
+    setError('');
+    if (Object.values(form).some(v => !v)) { setError('Please fill in all fields.'); return; }
+    if (!docs.license||!docs.fitness||!docs.registration) { setError('Please upload all 3 required documents.'); return; }
+    if (!docs.profilePhoto) { setError('Please upload your profile photo.'); return; }
+    if (!docs.vehiclePhoto)  { setError('Please upload a photo of your vehicle.'); return; }
+    if (form.password.length < 6) { setError('Password must be at least 6 characters.'); return; }
+    setLoading(true);
+    try {
+      const maxSize = 5 * 1024 * 1024;
+      for (const [k,f] of Object.entries(docs)) {
+        if (f && f.size > maxSize) { setError(`${k} file must be under 5MB.`); setLoading(false); return; }
+      }
+      setError('Creating your account...');
+      const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
+      const uploadFile = async (file, name, label) => {
+        if (!file) return null;
+        setError('Uploading ' + label + '...');
+        const r = storageRef(storage, 'driver-docs/' + cred.user.uid + '/' + name);
+        const snap = await uploadBytes(r, file, { contentType: file.type || 'application/octet-stream' });
+        return await getDownloadURL(snap.ref);
+      };
+      const licenseUrl      = await uploadFile(docs.license,       'license',       "Driver's Licence");
+      const fitnessUrl      = await uploadFile(docs.fitness,       'fitness',       'Fitness Certificate');
+      const registrationUrl = await uploadFile(docs.registration,  'registration',  'Vehicle Registration');
+      const profilePhotoUrl = await uploadFile(docs.profilePhoto,  'profilePhoto',  'Profile Photo');
+      const vehiclePhotoUrl = await uploadFile(docs.vehiclePhoto,  'vehiclePhoto',  'Vehicle Photo');
+      setError('Saving your profile...');
+      await setDoc(doc(db,'drivers',cred.user.uid), {
+        name:form.name, trn:form.trn, dob:form.dob, phone:form.phone, email:form.email,
+        vehicleMake:form.make, vehicleModel:form.model, licensePlate:form.plate,
+        status:'pending', role:'driver', createdAt:serverTimestamp(),
+        profilePhotoUrl, vehiclePhotoUrl,
+        docs:{ license:licenseUrl, fitness:fitnessUrl, registration:registrationUrl, profilePhoto:profilePhotoUrl, vehiclePhoto:vehiclePhotoUrl },
+      });
+      setError('');
+      sendWelcomeEmail(form.email, form.name);
+      go('driver-pending');
+    } catch(e) {
+      console.error('Signup error:', e);
+      setError(e.code==='auth/email-already-in-use' ? 'This email is already registered.' : 'Signup failed: ' + e.message);
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={s.content}>
+      <TopBar title="Driver Registration" go={go} user={user}/>
+      <div style={{ padding:'20px', maxWidth:420, margin:'0 auto' }}>
+        <h2 style={{ fontSize:22, fontWeight:800, color:'#1a1a2e', marginBottom:4 }}>Drive with VilleCabs</h2>
+        <p style={{ color:'#6b7280', fontSize:13, marginBottom:16 }}>Fill in your details to apply as a VilleCabs driver.</p>
+        {error && <div style={s.errBox}>⚠️ {error}</div>}
+        {[['name','Full Legal Name','As on your ID','text'],['trn','TRN','000-000-000','text'],['dob','Date of Birth','DD/MM/YYYY','text'],['phone','Phone Number','+1876-XXX-XXXX','tel'],['email','Email Address','you@email.com','email'],['password','Password','At least 6 characters','password']].map(([k,lbl,ph,type]) => (
+          <div key={k}>
+            <label style={s.lbl}>{lbl}</label>
+            <input style={s.inp} type={type} placeholder={ph} value={form[k]} onChange={e => set(k,e.target.value)}/>
+          </div>
+        ))}
+        <div style={{ borderTop:'1px solid #e5e7eb', marginTop:8, paddingTop:16, marginBottom:8 }}>
+          <label style={s.lbl}>Vehicle Make</label>
+          <input style={s.inp} type="text" placeholder="e.g. Toyota" value={form.make} onChange={e => set('make',e.target.value)}/>
+          <label style={s.lbl}>Vehicle Model</label>
+          <input style={s.inp} type="text" placeholder="e.g. Corolla" value={form.model} onChange={e => set('model',e.target.value)}/>
+          <label style={s.lbl}>Licence Plate</label>
+          <input style={s.inp} type="text" placeholder="e.g. 1234AB" value={form.plate} onChange={e => set('plate',e.target.value)}/>
+        </div>
+
+        {/* Profile Photo */}
+        <div style={{ marginBottom:14 }}>
+          <label style={s.lbl}>Profile Photo *</label>
+          <input type="file" id="doc-profilePhoto" accept="image/*" style={{ display:'none' }} onChange={e => { const f=e.target.files?.[0]; if(f){setDocs(p=>({...p,profilePhoto:f}));setPreviews(p=>({...p,profilePhoto:URL.createObjectURL(f)}));} }}/>
+          <div onClick={() => document.getElementById('doc-profilePhoto').click()} style={{ border:'2px dashed '+(docs.profilePhoto?'#1a9e5a':'#e9d5ff'), borderRadius:14, padding:16, textAlign:'center', cursor:'pointer', background:docs.profilePhoto?'#f0fff4':'#f9f5ff' }}>
+            {previews.profilePhoto ? <div><img src={previews.profilePhoto} alt="Profile" style={{ width:80, height:80, borderRadius:'50%', objectFit:'cover', border:'3px solid #1a9e5a' }}/><div style={{ fontSize:12, color:'#1a9e5a', fontWeight:600, marginTop:6 }}>✅ Profile Photo Added</div></div>
+            : <div><div style={{ fontSize:32, marginBottom:6 }}>📸</div><div style={{ fontSize:13, fontWeight:600, color:'#6b21a8' }}>Upload Profile Photo</div><div style={{ fontSize:11, color:'#888', marginTop:2 }}>Clear face photo required</div></div>}
+          </div>
+        </div>
+
+        {/* Vehicle Photo */}
+        <div style={{ marginBottom:14 }}>
+          <label style={s.lbl}>Vehicle Photo *</label>
+          <input type="file" id="doc-vehiclePhoto" accept="image/*" style={{ display:'none' }} onChange={e => { const f=e.target.files?.[0]; if(f){setDocs(p=>({...p,vehiclePhoto:f}));setPreviews(p=>({...p,vehiclePhoto:URL.createObjectURL(f)}));} }}/>
+          <div onClick={() => document.getElementById('doc-vehiclePhoto').click()} style={{ border:'2px dashed '+(docs.vehiclePhoto?'#1a9e5a':'#e9d5ff'), borderRadius:14, padding:16, textAlign:'center', cursor:'pointer', background:docs.vehiclePhoto?'#f0fff4':'#f9f5ff', marginBottom:4 }}>
+            {previews.vehiclePhoto ? <div><img src={previews.vehiclePhoto} alt="Vehicle" style={{ width:'100%', maxHeight:120, objectFit:'cover', borderRadius:10, border:'3px solid #1a9e5a' }}/><div style={{ fontSize:12, color:'#1a9e5a', fontWeight:600, marginTop:6 }}>✅ Vehicle Photo Added</div></div>
+            : <div><div style={{ fontSize:32, marginBottom:6 }}>🚗</div><div style={{ fontSize:13, fontWeight:600, color:'#6b21a8' }}>Upload Vehicle Photo</div><div style={{ fontSize:11, color:'#888', marginTop:2 }}>Show full vehicle with licence plate</div></div>}
+          </div>
+        </div>
+
+        {/* Documents */}
+        <label style={s.lbl}>Required Documents</label>
+        {[['license',"Driver's Licence",'🪪'],['fitness','Vehicle Fitness','📋'],['registration','Vehicle Registration','📄']].map(([k,lbl,icon]) => (
+          <div key={k} style={{ marginBottom:10 }}>
+            <input type="file" id={'doc-'+k} accept="image/*,application/pdf" style={{ display:'none' }} onChange={e => { if(e.target.files?.[0]) setDocs(p=>({...p,[k]:e.target.files[0]})); }}/>
+            <div onClick={() => document.getElementById('doc-'+k).click()} style={{ border:'2px dashed '+(docs[k]?'#1a9e5a':'#e9d5ff'), borderRadius:12, padding:'12px 14px', cursor:'pointer', background:docs[k]?'#f0fff4':'#f9f5ff', display:'flex', alignItems:'center', gap:10 }}>
+              <span style={{ fontSize:22 }}>{docs[k]?'✅':icon}</span>
+              <div>
+                <div style={{ fontSize:13, fontWeight:600, color:'#1a1a2e' }}>{lbl}</div>
+                <div style={{ fontSize:11, color:docs[k]?'#1a9e5a':'#888' }}>{docs[k]?docs[k].name:'Tap to upload'}</div>
+              </div>
+            </div>
+          </div>
+        ))}
+
+        <button style={{ ...s.btnY, marginTop:8, opacity:(loading||Object.values(form).some(v=>!v)||!docs.license||!docs.fitness||!docs.registration||!docs.profilePhoto||!docs.vehiclePhoto)?0.5:1 }}
+          onClick={handleSubmit}
+          disabled={loading||Object.values(form).some(v=>!v)||!docs.license||!docs.fitness||!docs.registration||!docs.profilePhoto||!docs.vehiclePhoto}>
+          {loading ? 'Submitting...' : 'Submit Application'}
+        </button>
+        <button style={s.link} onClick={() => go('login-choice')}>Already a driver? Login →</button>
+      </div>
+    </div>
+  );
+}
+
+
 function DriverPending({ go, user }) {
   return (
     <div style={s.content}>
