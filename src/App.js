@@ -914,17 +914,19 @@ function DriverLogin({ go, user, setUser }) {
       else if (!data.tipsSeen) go('driver-welcome-tips');
       else go('driver-dash');
     } catch(err) {
+      console.error('Driver login error code:', err.code, 'message:', err.message);
       const code = err.code || '';
-      if (code.includes('wrong-password') || code.includes('invalid-credential') || code.includes('invalid-login')) {
+      const msg  = err.message || '';
+      if (code.includes('wrong-password') || code.includes('invalid-credential') || code.includes('invalid-login') || msg.includes('password') || msg.includes('credential')) {
         setError('Incorrect email or password.');
-      } else if (code.includes('user-not-found')) {
+      } else if (code.includes('user-not-found') || msg.includes('user')) {
         setError('No account found with this email.');
       } else if (code.includes('too-many-requests')) {
         setError('Too many attempts. Please wait a few minutes.');
       } else if (code.includes('network')) {
         setError('Network error. Check your connection.');
       } else {
-        setError('Login failed. Please try again.');
+        setError('Login failed (' + code + '). Please try again.');
       }
       setLoading(false);
     }
