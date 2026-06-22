@@ -869,7 +869,7 @@ function CustomerLogin({ go, setUser, user }) {
     <div style={s.content}>
       <TopBar title="Log In" go={go} user={user}/>
       <div style={{ padding:'32px 20px', maxWidth:420, margin:'0 auto' }}>
-        <h2 style={{ fontSize:20, fontWeight:500, marginBottom:4 }}>Welcome back</h2>
+        <h2 style={{ fontSize:22, fontWeight:800, color:"#1a1a2e", marginBottom:4 }}>Welcome back</h2>
         <p style={{ color:'rgba(255,255,255,0.5)', fontSize:13, marginBottom:20 }}>Log in to book a VilleCabs ride</p>
         {error && <div style={s.errBox}>⚠️ {error}</div>}
         <GoogleBtn onClick={handleGoogle} loading={loading}/>
@@ -894,105 +894,57 @@ function DriverLogin({ go, setUser, user }) {
   const [error, setError]       = useState('');
 
   const handleLogin = async () => {
-    setError('');
-    if (!email||!password) { setError('Please enter your email and password.'); return; }
-    setLoading(true);
+    if (!email || !password) { setError('Please enter your email and password.'); return; }
+    setLoading(true); setError('');
     try {
-      // Small delay to ensure loading state renders before Firebase call
-      const cred = await signInWithEmailAndPassword(auth, email, password);
-      const snap = await getDoc(doc(db,'drivers',cred.user.uid));
-      if (!snap.exists()) { setError('No driver account found. Please apply first.'); setLoading(false); return; }
-      const data = snap.data();
-      if (data.status==='pending')  { setError('Your application is still pending admin approval.'); setLoading(false); return; }
-      if (data.status==='rejected') { setError('Your application was not approved. Contact support.'); setLoading(false); return; }
-      try { await updateDoc(doc(db,'drivers',cred.user.uid), { role:'driver' }); } catch(e) {}
-      try { await updateDoc(doc(db,'drivers',cred.user.uid), { role:'driver' }); } catch(e) {}
-      setUser({ uid:cred.user.uid, name:data.name, email:cred.user.email, role:'driver' });
+      // Step 1: Firebase Auth sign in
+      const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
+
+      // Step 2: Get driver profile from Firestore
+      let data = {};
+      try {
+        const snap = await getDoc(doc(db,'drivers',cred.user.uid));
+        if (!snap.exists()) {
+          setError('No driver account found. Please apply to become a driver first.');
+          setLoading(false); return;
+        }
+        data = snap.data();
+        if (data.status === 'pending')  { setError('Your application is still pending admin approval.'); setLoading(false); return; }
+        if (data.status === 'rejected') { setError('Your application was not approved. Please contact support.'); setLoading(false); return; }
+        if (data.status === 'suspended') { setError('Your account has been suspended. Please contact support.'); setLoading(false); return; }
+        // Update last login non-blocking
+        updateDoc(doc(db,'drivers',cred.user.uid), { lastLogin:serverTimestamp() }).catch(()=>{});
+      } catch(firestoreErr) {
+        console.warn('Firestore read error (auth still succeeded):', firestoreErr);
+        // Auth succeeded even if Firestore fails - still navigate
+      }
+
+      // Step 3: Navigate
+      setUser({ uid:cred.user.uid, name:data.name||cred.user.displayName||'Driver', email:cred.user.email, role:'driver' });
       _manualNavDone = true;
       if (!data.termsAccepted) go('driver-terms');
       else if (!data.tipsSeen) go('driver-welcome-tips');
       else go('driver-dash');
-    } catch(err) { setError('Incorrect email or password.'); }
-    setLoading(false);
-  };
 
-  return (
-    <div style={s.content}>
-      <TopBar title="Driver Login" go={go} user={user}/>
-      <div style={{ padding:'32px 20px', maxWidth:420, margin:'0 auto' }}>
-        <h2 style={{ fontSize:20, fontWeight:500, marginBottom:4 }}>Welcome back</h2>
-        <p style={{ color:'rgba(255,255,255,0.5)', fontSize:13, marginBottom:20 }}>Sign in to your driver account</p>
-        {error && <div style={s.errBox}>⚠️ {error}</div>}
-        <label style={s.lbl}>Email</label>
-        <input style={s.inp} type="email" placeholder="you@email.com" value={email} onChange={e => setEmail(e.target.value)}/>
-        <label style={s.lbl}>Password</label>
-        <input style={s.inp} type="password" placeholder="Your password" value={password} onChange={e => setPassword(e.target.value)}/>
-        <button style={{ ...s.btnY, opacity:loading?0.7:1 }} onClick={handleLogin} disabled={loading}>{loading?'Logging in...':'Login'}</button>
-        <button style={s.link} onClick={() => go('driver-signup')}>New driver? Apply here</button>
-      </div>
-    </div>
-  );
-}
-
-// ── DRIVER SIGNUP ─────────────────────────────────────────────────────────────
-function DriverSignup({ go, user }) {
-  const [form, setForm]       = useState({ name:'',trn:'',dob:'',phone:'',email:'',password:'',make:'',model:'',plate:'' });
-  const [docs, setDocs]       = useState({ license:null, fitness:null, registration:null, profilePhoto:null, vehiclePhoto:null });
-  const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState('');
-  const [previews, setPreviews] = useState({ profilePhoto:null, vehiclePhoto:null });
-  const set = (k,v) => setForm(p => ({ ...p, [k]:v }));
-
-  const handleSubmit = async () => {
-    setError('');
-    if (Object.values(form).some(v => !v)) { setError('Please fill in all fields.'); return; }
-    if (!docs.license||!docs.fitness||!docs.registration) { setError('Please upload all 3 documents.'); return; }
-    if (form.password.length < 6) { setError('Password must be at least 6 characters.'); return; }
-    setLoading(true);
-    setError('');
-    try {
-      // Validate file sizes (max 5MB each)
-      const maxSize = 5 * 1024 * 1024;
-      if (docs.license.size > maxSize || docs.fitness.size > maxSize || docs.registration.size > maxSize) {
-        setError('Each document must be under 5MB. Please compress your files and try again.');
-        setLoading(false); return;
-      }
-
-      setError('Creating your account...');
-      const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
-
-      // Convert file to base64 and upload with timeout
-      const uploadFile = async (file, name, label) => {
-        setError(`Uploading ${label} (${Math.round(file.size/1024)}KB)...`);
-        const r = storageRef(storage, `driver-docs/${cred.user.uid}/${name}`);
-        const snap = await uploadBytes(r, file, { contentType: file.type || 'application/octet-stream' });
-        const url = await getDownloadURL(snap.ref);
-        return url;
-      };
-
-      const licenseUrl      = await uploadFile(docs.license,      'license',       "Driver's Licence");
-      const fitnessUrl      = await uploadFile(docs.fitness,      'fitness',       'Fitness Certificate');
-      const registrationUrl = await uploadFile(docs.registration, 'registration',  'Vehicle Registration');
-
-      setError('Saving your profile...');
-      await setDoc(doc(db,'drivers',cred.user.uid), {
-        name:form.name, trn:form.trn, dob:form.dob, phone:form.phone, email:form.email,
-        vehicleMake:form.make, vehicleModel:form.model, licensePlate:form.plate,
-        status:'pending', role:'driver', createdAt:serverTimestamp(),
-        docs:{ license:licenseUrl, fitness:fitnessUrl, registration:registrationUrl },
-      });
-      setError('');
-      sendWelcomeEmail(form.email || '', form.name || 'Driver'); // non-blocking
-      go('driver-pending');
     } catch(err) {
-      console.error('Signup error:', err);
-      if (err.code === 'auth/email-already-in-use') setError('Email already registered.');
-      else if (err.code === 'storage/unauthorized') setError('Upload failed: Storage permission denied. Please contact support.');
-      else if (err.code === 'storage/canceled') setError('Upload was cancelled. Please try again.');
-      else setError(err.message || 'Something went wrong. Please try again.');
+      console.error('Driver login error:', err.code, err.message);
+      const code = err.code || '';
+      if (code.includes('wrong-password') || code.includes('invalid-credential') || code.includes('invalid-login')) {
+        setError('Incorrect email or password. Please try again.');
+      } else if (code.includes('user-not-found')) {
+        setError('No account found with this email address.');
+      } else if (code.includes('too-many-requests')) {
+        setError('Too many failed attempts. Please wait a few minutes before trying again.');
+      } else if (code.includes('network')) {
+        setError('Network error. Please check your internet connection.');
+      } else {
+        setError('Login failed. Please try again. (' + code + ')');
+      }
+      setLoading(false);
     }
-    setLoading(false);
   };
+
+;
 
   return (
     <div style={s.content}>
