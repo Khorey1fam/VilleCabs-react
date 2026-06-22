@@ -1768,11 +1768,11 @@ function CustomerDash({ go, user, setUser }) {
     <div style={{ ...s.content, background:'transparent', minHeight:'100vh', display:'flex', flexDirection:'column' }}>
 
       {/* Hamburger top bar */}
-      <div style={{ background:'rgba(10,15,35,0.92)', padding:'12px 16px', backdropFilter:'blur(10px)', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'0.5px solid rgba(255,255,255,0.08)' }}>
+      <div style={{ background:'#ffffff', padding:'10px 16px', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'1px solid #e5e7eb', boxShadow:'0 1px 4px rgba(0,0,0,0.06)' }}>
         <button onClick={() => setMenuOpen(true)} style={{ background:'none', border:'none', cursor:'pointer', padding:4, display:'flex', flexDirection:'column', gap:5 }}>
-          <div style={{ width:24, height:2.5, background:WHITE, borderRadius:2 }}/>
-          <div style={{ width:18, height:2.5, background:WHITE, borderRadius:2 }}/>
-          <div style={{ width:24, height:2.5, background:WHITE, borderRadius:2 }}/>
+          <div style={{ width:24, height:2.5, background:'#1a1a2e', borderRadius:2 }}/>
+          <div style={{ width:18, height:2.5, background:'#1a1a2e', borderRadius:2 }}/>
+          <div style={{ width:24, height:2.5, background:'#1a1a2e', borderRadius:2 }}/>
         </button>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
           <img src="/logo.png" alt="VilleCabs" onClick={() => setTab('book')} style={{ height:26, width:'auto', objectFit:'contain', cursor:'pointer' }}/>
@@ -5251,7 +5251,8 @@ function ChatScreen({ go, user, bookingId }) {
 
       {/* Header */}
       <div style={{ background:DARK, padding:'12px 16px', display:'flex', alignItems:'center', gap:12, flexShrink:0, borderBottom:'0.5px solid rgba(255,255,255,0.1)' }}>
-        
+        <button onClick={() => go(user?.role==='driver'?'driver-dash':'customer-dash')}
+          style={{ background:'none', border:'none', color:'#fff', fontSize:22, cursor:'pointer', padding:'0 4px', lineHeight:1, flexShrink:0 }}>←</button>
         <div style={{ width:38, height:38, borderRadius:'50%', background:'rgba(232,180,0,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>
           {user?.role === 'customer' ? '🚗' : '👤'}
         </div>
