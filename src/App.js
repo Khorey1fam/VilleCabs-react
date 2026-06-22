@@ -897,49 +897,56 @@ function DriverLogin({ go, user, setUser }) {
     if (!email || !password) { setError('Please enter your email and password.'); return; }
     setLoading(true); setError('');
     try {
+      // Step 1: Firebase Auth
+      console.log('Step 1: signing in...');
       const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
-      let data = {};
-      try {
-        const snap = await getDoc(doc(db,'drivers',cred.user.uid));
-        if (!snap.exists()) { setError('No driver account found. Please apply first.'); setLoading(false); return; }
-        data = snap.data();
-        if (data.status==='pending')   { setError('Your application is pending admin approval.'); setLoading(false); return; }
-        if (data.status==='rejected')  { setError('Your application was not approved. Contact support.'); setLoading(false); return; }
-        if (data.status==='suspended') { setError('Your account has been suspended. Contact support.'); setLoading(false); return; }
-        updateDoc(doc(db,'drivers',cred.user.uid), { lastLogin:serverTimestamp() }).catch(()=>{});
-      } catch(fsErr) { console.warn('Firestore error after auth:', fsErr); }
+      console.log('Step 1 OK - uid:', cred.user.uid);
+
+      // Step 2: Get Firestore driver doc
+      console.log('Step 2: getting driver doc...');
+      const snap = await getDoc(doc(db,'drivers',cred.user.uid));
+      console.log('Step 2 OK - exists:', snap.exists());
+
+      if (!snap.exists()) {
+        setError('No driver account found with this email. Please apply to become a driver.');
+        setLoading(false); return;
+      }
+      const data = snap.data();
+      console.log('Driver status:', data.status);
+
+      if (data.status === 'pending')   { setError('Your application is pending admin approval.'); setLoading(false); return; }
+      if (data.status === 'rejected')  { setError('Your application was not approved. Contact support.'); setLoading(false); return; }
+      if (data.status === 'suspended') { setError('Your account has been suspended. Contact support.'); setLoading(false); return; }
+
+      // Step 3: Update last login
+      updateDoc(doc(db,'drivers',cred.user.uid), { lastLogin:serverTimestamp() }).catch(()=>{});
+
+      // Step 4: Navigate
+      console.log('Step 4: navigating...');
       setUser({ uid:cred.user.uid, name:data.name||'Driver', email:cred.user.email, role:'driver' });
       _manualNavDone = true;
-      // Navigate based on onboarding status - default to driver-dash if data empty
-      try {
-        if (data.status && data.status !== 'approved') {
-          // Status checked above but just in case
-          go('driver-dash');
-        } else if (!data.termsAccepted) {
-          go('driver-terms');
-        } else if (!data.tipsSeen) {
-          go('driver-welcome-tips');
-        } else {
-          go('driver-dash');
-        }
-      } catch(navErr) {
-        console.error('Navigation error:', navErr);
-        go('driver-dash');
-      }
+      if      (!data.termsAccepted) go('driver-terms');
+      else if (!data.tipsSeen)      go('driver-welcome-tips');
+      else                          go('driver-dash');
+      console.log('Login complete!');
+
     } catch(err) {
-      console.error('Driver login error code:', err.code, 'message:', err.message);
+      console.error('Login error:', err);
       const code = err.code || '';
-      const msg  = err.message || '';
-      if (code.includes('wrong-password') || code.includes('invalid-credential') || code.includes('invalid-login') || msg.includes('password') || msg.includes('credential')) {
+      const msg  = err.message || String(err) || '';
+      console.error('Code:', code, 'Msg:', msg);
+      if (code.includes('wrong-password') || code.includes('invalid-credential') || code.includes('invalid-login')) {
         setError('Incorrect email or password.');
-      } else if (code.includes('user-not-found') || msg.includes('user')) {
+      } else if (code.includes('user-not-found')) {
         setError('No account found with this email.');
       } else if (code.includes('too-many-requests')) {
         setError('Too many attempts. Please wait a few minutes.');
       } else if (code.includes('network')) {
         setError('Network error. Check your connection.');
+      } else if (code.includes('permission-denied')) {
+        setError('Account access denied. Please contact support.');
       } else {
-        setError(code ? 'Login failed (' + code + '). Please try again.' : 'Something went wrong. Please check your connection and try again.');
+        setError('Error: ' + (code || msg || 'Unknown error. Check console for details.'));
       }
       setLoading(false);
     }
