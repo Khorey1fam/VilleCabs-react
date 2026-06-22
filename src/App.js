@@ -1614,7 +1614,7 @@ function DashPartnersSlider() {
   );
 }
 
-function CustomerDash({ go, user, setUser }) {
+function CustomerDash({ go, user, setUser, setBookingId, bookingId }) {
   const [tab,        setTab]        = useState('book');
   const [menuOpen,   setMenuOpen]   = useState(false);
   const [history,    setHistory]    = useState([]);
@@ -1780,7 +1780,7 @@ function CustomerDash({ go, user, setUser }) {
         <div style={{ display:'flex', gap:5, marginLeft:'auto', alignItems:'center' }}>
           <button onClick={() => go('business')} style={{ padding:'3px 8px', background:'rgba(255,255,255,0.08)', border:'1px solid rgba(255,255,255,0.15)', borderRadius:12, color:'rgba(255,255,255,0.8)', fontSize:10, fontWeight:600, cursor:'pointer' }}>Business</button>
           <button onClick={() => go('featured')} style={{ padding:'3px 8px', background:'rgba(255,255,255,0.08)', border:'1px solid rgba(255,255,255,0.15)', borderRadius:12, color:'rgba(255,255,255,0.8)', fontSize:10, fontWeight:600, cursor:'pointer' }}>Featured</button>
-          {activeRide && <div onClick={() => go('live-ride')} style={{ background:GREEN, borderRadius:14, padding:'3px 8px', fontSize:10, color:WHITE, cursor:'pointer', fontWeight:600 }}>🚕 Live</div>}
+          {activeRide && <div onClick={() => { if (activeRide?.id) setBookingId(activeRide.id); go('live-ride'); }} style={{ background:GREEN, borderRadius:14, padding:'3px 8px', fontSize:10, color:WHITE, cursor:'pointer', fontWeight:600 }}>🚕 Live</div>}
           <span style={{ fontSize:11, fontWeight:600, color:'rgba(255,255,255,0.85)', maxWidth:70, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{user?.name?.split(' ')[0]||''}</span>
         </div>
       </div>
@@ -1881,7 +1881,7 @@ function CustomerDash({ go, user, setUser }) {
                 {rideNotif?.licensePlate && <div style={{ fontSize:11, color:'#b38600', marginTop:2 }}>🔑 {rideNotif?.vehicleMake} {rideNotif?.vehicleModel} · {rideNotif?.licensePlate}</div>}
               </div>
               <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-                <button onClick={() => go('live-ride')} style={{ background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:500 }}>Track →</button>
+                <button onClick={() => { if (activeRide?.id) setBookingId(activeRide.id); go('live-ride'); }} style={{ background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:500 }}>Track →</button>
                 <button onClick={() => setRideNotif(null)} style={{ background:'rgba(255,255,255,0.08)', color:'rgba(255,255,255,0.5)', border:'none', borderRadius:8, padding:'6px 12px', fontSize:11, cursor:'pointer' }}>Dismiss</button>
               </div>
             </div>
@@ -1895,7 +1895,7 @@ function CustomerDash({ go, user, setUser }) {
                 <div style={{ fontSize:11, color:'#777', marginTop:2 }}>Please come outside 🚶</div>
               </div>
               <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-                <button onClick={() => go('live-ride')} style={{ background:YELLOW, color:DARK, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:700 }}>View →</button>
+                <button onClick={() => { if (activeRide?.id) setBookingId(activeRide.id); go('live-ride'); }} style={{ background:YELLOW, color:DARK, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:700 }}>View →</button>
                 <button onClick={() => setRideNotif(null)} style={{ background:'rgba(255,255,255,0.08)', color:'rgba(255,255,255,0.5)', border:'none', borderRadius:8, padding:'6px 12px', fontSize:11, cursor:'pointer' }}>OK</button>
               </div>
             </div>
@@ -1907,11 +1907,11 @@ function CustomerDash({ go, user, setUser }) {
                 <div style={{ fontSize:14, fontWeight:500, color:'#1a7a45' }}>On the way to drop-off!</div>
                 <div style={{ fontSize:12, color:'#444', marginTop:2 }}>{rideNotif?.driverName} has picked you up</div>
               </div>
-              <button onClick={() => go('live-ride')} style={{ background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:500 }}>Track →</button>
+              <button onClick={() => { if (activeRide?.id) setBookingId(activeRide.id); go('live-ride'); }} style={{ background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:'6px 12px', fontSize:12, cursor:'pointer', fontWeight:500 }}>Track →</button>
             </div>
           )}
           {activeRide && !rideNotif && (
-            <div style={{ background:'rgba(232,180,0,0.1)', border:'0.5px solid rgba(232,180,0,0.3)', margin:'10px 14px 0', borderRadius:12, padding:12, display:'flex', alignItems:'center', gap:10, cursor:'pointer' }} onClick={() => go('live-ride')}>
+            <div style={{ background:'rgba(232,180,0,0.1)', border:'0.5px solid rgba(232,180,0,0.3)', margin:'10px 14px 0', borderRadius:12, padding:12, display:'flex', alignItems:'center', gap:10, cursor:'pointer' }} onClick={() => { if (activeRide?.id) setBookingId(activeRide.id); go('live-ride'); }}>
               <div style={{ fontSize:22 }}>🚕</div>
               <div style={{ flex:1 }}>
                 <div style={{ fontSize:13, fontWeight:500, color:YELLOW }}>Ride in progress</div>
@@ -3314,6 +3314,20 @@ function LiveRide({ go, bookingId, user }) {
   }, [booking?.status]);
 
   useEffect(() => {
+    if (!bookingId && user?.uid) {
+      // BookingId missing - find customer's active booking automatically
+      getDocs(query(
+        collection(db,'bookings'),
+        where('customerId','==',user.uid),
+        where('status','in',['searching','active'])
+      )).then(snap => {
+        if (!snap.empty) {
+          const active = snap.docs[0];
+          setBookingId(active.id);
+        }
+      }).catch(e => console.error(e));
+      return;
+    }
     if (!bookingId) return;
     let prevStatus = null;
     const unsub = onSnapshot(doc(db,'bookings',bookingId), snap => {
