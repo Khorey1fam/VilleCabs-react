@@ -30,6 +30,9 @@ const auth           = getAuth(app);
 setPersistence(auth, browserLocalPersistence).catch(e => console.warn('Persistence:', e));
 const db             = getFirestore(app);
 const googleProvider = new GoogleAuthProvider();
+
+// Global flag to prevent onAuthStateChanged from overriding manual navigation
+let _manualNavDone = false;
 const storage = getStorage(app);
 let messaging = null;
 try { messaging = getMessaging(app); } catch(e) { console.warn('Messaging unavailable'); }
