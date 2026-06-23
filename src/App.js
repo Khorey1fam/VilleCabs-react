@@ -4031,10 +4031,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
       }).catch(() => setLoading(false));
   }, [user]);
 
-  // ── Poll for incoming ride requests every 5s ────────────────────────────
-  useEffect(() => {
-    if (!user?.uid) return;
-    // Check if driver already has an active ride
+  // ── Check if driver already has an active ride ──────────────────────────
   useEffect(() => {
     if (!user?.uid) return;
     getDocs(query(collection(db,'bookings'),
@@ -4045,7 +4042,9 @@ function DriverDash({ go, user, setUser, setBookingId }) {
     }).catch(()=>{});
   }, [user]);
 
-  // Real-time onSnapshot - instant new ride notifications (no polling!)
+  // ── Listen for incoming ride requests ─────────────────────────────────────
+  useEffect(() => {
+    if (!user?.uid) return;
     const q = query(collection(db,'bookings'), where('status','==','searching'));
     const unsub = onSnapshot(q, snap => {
       const open = snap.docs
