@@ -2394,16 +2394,17 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
 
 function PinPickup({ go, setPickupData, user }) {
   const [mapsReady, setMapsReady] = useState(!!window.google?.maps?.places);
-  useEffect(() => {
-    if (window.google?.maps?.places) { setMapsReady(true); return; }
-    const iv = setInterval(() => { if (window.google?.maps?.places) { setMapsReady(true); clearInterval(iv); } }, 300);
-    return () => clearInterval(iv);
-  }, []);
   const [pinPos,      setPinPos]      = useState(MANCHESTER_CENTER);
   const [address,     setAddress]     = useState('');
   const [note,        setNote]        = useState('');
   const [loading,     setLoading]     = useState(false);
   const [passengers,  setPassengers]  = useState(1);
+
+  useEffect(() => {
+    if (window.google?.maps?.places) { setMapsReady(true); return; }
+    const iv = setInterval(() => { if (window.google?.maps?.places) { setMapsReady(true); clearInterval(iv); } }, 300);
+    return () => clearInterval(iv);
+  }, []);
 
   const handleMapClick = useCallback(async (e) => {
     const lat = e.latLng.lat();
@@ -2513,16 +2514,17 @@ function PinPickup({ go, setPickupData, user }) {
 
 function PinDropoff({ go, pickupData, setDropoffData, user }) {
   const [mapsReady, setMapsReady] = useState(!!window.google?.maps?.places);
-  useEffect(() => {
-    if (window.google?.maps?.places) { setMapsReady(true); return; }
-    const iv = setInterval(() => { if (window.google?.maps?.places) { setMapsReady(true); clearInterval(iv); } }, 300);
-    return () => clearInterval(iv);
-  }, []);
   // Start map centered on pickup location if available, else Mandeville
   const startPos = pickupData?.coords || MANCHESTER_CENTER;
   const [pinPos,   setPinPos]   = useState(MANCHESTER_CENTER);
   const [address,  setAddress]  = useState('');
   const [note,     setNote]     = useState('');
+
+  useEffect(() => {
+    if (window.google?.maps?.places) { setMapsReady(true); return; }
+    const iv = setInterval(() => { if (window.google?.maps?.places) { setMapsReady(true); clearInterval(iv); } }, 300);
+    return () => clearInterval(iv);
+  }, []);
 
   const handlePlaceSelect = (place) => {
     const pos = { lat: place.lat, lng: place.lng };
