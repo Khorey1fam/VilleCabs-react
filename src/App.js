@@ -2345,7 +2345,12 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
 
 
 function PinPickup({ go, setPickupData, user }) {
-  const { isLoaded: mapsReady } = useJsApiLoader({ id:'google-map-script', googleMapsApiKey: GOOGLE_MAPS_KEY, libraries: LIBRARIES, version:'weekly' });
+  const [mapsReady, setMapsReady] = useState(!!window.google?.maps?.places);
+  useEffect(() => {
+    if (window.google?.maps?.places) { setMapsReady(true); return; }
+    const iv = setInterval(() => { if (window.google?.maps?.places) { setMapsReady(true); clearInterval(iv); } }, 300);
+    return () => clearInterval(iv);
+  }, []);
   const [pinPos,      setPinPos]      = useState(MANCHESTER_CENTER);
   const [address,     setAddress]     = useState('');
   const [note,        setNote]        = useState('');
@@ -2470,7 +2475,12 @@ function PinPickup({ go, setPickupData, user }) {
 
 // ── PIN DROPOFF ───────────────────────────────────────────────────────────────
 function PinDropoff({ go, pickupData, setDropoffData, user }) {
-  const { isLoaded: mapsReady } = useJsApiLoader({ id:'google-map-script', googleMapsApiKey: GOOGLE_MAPS_KEY, libraries: LIBRARIES, version:'weekly' });
+  const [mapsReady, setMapsReady] = useState(!!window.google?.maps?.places);
+  useEffect(() => {
+    if (window.google?.maps?.places) { setMapsReady(true); return; }
+    const iv = setInterval(() => { if (window.google?.maps?.places) { setMapsReady(true); clearInterval(iv); } }, 300);
+    return () => clearInterval(iv);
+  }, []);
   // Start map centered on pickup location if available, else Mandeville
   const startPos = pickupData?.coords || MANCHESTER_CENTER;
   const [pinPos,   setPinPos]   = useState(MANCHESTER_CENTER);
