@@ -74,20 +74,6 @@ const sendWelcomeEmail = async (toEmail, toName) => {
 const LIBRARIES       = ['places'];
 const GOOGLE_MAPS_KEY = process.env.REACT_APP_GOOGLE_MAPS_KEY || '';
 
-// Load Google Maps + Places API immediately at module level
-// so it's ready before any component tries to use it
-(function loadGoogleMaps() {
-  if (window.google?.maps?.places) return;
-  if (document.querySelector('script[src*="maps.googleapis.com/maps/api"]')) return;
-  const script = document.createElement('script');
-  script.src = 'https://maps.googleapis.com/maps/api/js?key=' + GOOGLE_MAPS_KEY + '&libraries=places&callback=__googleMapsReady';
-  script.async = true;
-  window.__googleMapsReady = function() {
-    window.__googleMapsLoaded = true;
-    window.dispatchEvent(new Event('google-maps-ready'));
-  };
-  document.head.appendChild(script);
-})();
 
 // Dark map style matching VilleCabs theme
 const MAP_STYLE = [
@@ -2292,62 +2278,92 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder,
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [open,    setOpen]    = useState(false);
-  const [ready,   setReady]   = useState(false);
+  const [status,  setStatus]  = useState('waiting'); // waiting | ready | error
   const debounce  = useRef(null);
   const svc       = useRef(null);
   const detailSvc = useRef(null);
-  const token     = useRef(null);
+  const tokenRef  = useRef(null);
 
-  // Init Places services - listen for ready event + poll as backup
+  // Sync value prop
   useEffect(() => {
-    const tryInit = () => {
-      if (!window.google?.maps?.places) return false;
-      try {
-        svc.current       = new window.google.maps.places.AutocompleteService();
-        detailSvc.current = new window.google.maps.places.PlacesService(document.createElement('div'));
-        token.current     = new window.google.maps.places.AutocompleteSessionToken();
-        setReady(true);
-        return true;
-      } catch(e) { return false; }
-    };
-    // If already loaded (e.g. page was visited before)
-    if (tryInit()) return;
-    // Listen for VilleMap to finish loading
-    const onReady = () => tryInit();
-    window.addEventListener('google-maps-ready', onReady);
-    // Poll every 200ms as fallback
-    const iv = setInterval(() => { if (tryInit()) clearInterval(iv); }, 200);
-    return () => {
-      clearInterval(iv);
-      window.removeEventListener('google-maps-ready', onReady);
-    };
-  }, []);
-
-  // Sync external value
-  useEffect(() => {
-    if (value !== query) setQuery(value || '');
+    if (value !== undefined && value !== query) setQuery(value || '');
   }, [value]);
 
+  // Init Places when Google Maps SDK is ready
+  useEffect(() => {
+    const init = () => {
+      try {
+        if (!window.google?.maps?.places) return false;
+        svc.current       = new window.google.maps.places.AutocompleteService();
+        detailSvc.current = new window.google.maps.places.PlacesService(document.createElement('div'));
+        tokenRef.current  = new window.google.maps.places.AutocompleteSessionToken();
+        setStatus('ready');
+        return true;
+      } catch(e) {
+        console.warn('Places init error:', e);
+        setStatus('error');
+        return false;
+      }
+    };
+
+    // Try immediately in case Maps already loaded
+    if (init()) return;
+
+    // Listen for VilleMap to finish loading Maps SDK
+    const onReady = () => { setTimeout(init, 100); };
+    window.addEventListener('google-maps-ready', onReady);
+
+    // Poll every 500ms as final fallback
+    const iv = setInterval(() => { if (init()) clearInterval(iv); }, 500);
+
+    return () => {
+      window.removeEventListener('google-maps-ready', onReady);
+      clearInterval(iv);
+    };
+  }, [mapsLoaded]);
+
   const search = (text) => {
-    if (!text || text.length < 2 || !svc.current) {
-      setResults([]); setOpen(false); return;
+    if (!text || text.length < 2) { setResults([]); setOpen(false); return; }
+    if (!svc.current) {
+      // Not ready yet - try to init
+      if (window.google?.maps?.places) {
+        svc.current = new window.google.maps.places.AutocompleteService();
+        detailSvc.current = new window.google.maps.places.PlacesService(document.createElement('div'));
+        tokenRef.current  = new window.google.maps.places.AutocompleteSessionToken();
+        setStatus('ready');
+      } else {
+        setResults([{ description: 'Search loading, please try again...', place_id: null }]);
+        setOpen(true);
+        return;
+      }
     }
     setLoading(true);
     svc.current.getPlacePredictions({
-      input: text,
-      sessionToken: token.current,
-      location: new window.google.maps.LatLng(18.0417, -77.5071),
-      radius: 25000,
+      input:                text,
+      sessionToken:         tokenRef.current,
+      location:             new window.google.maps.LatLng(18.0417, -77.5071),
+      radius:               30000,
       componentRestrictions: { country: 'jm' },
-      types: ['geocode', 'establishment'],
-    }, (preds, status) => {
+    }, (predictions, st) => {
       setLoading(false);
-      if (status === window.google.maps.places.PlacesServiceStatus.OK && preds?.length) {
-        setResults(preds.slice(0, 6));
+      if (st === window.google.maps.places.PlacesServiceStatus.OK && predictions?.length) {
+        setResults(predictions.slice(0, 6));
         setOpen(true);
       } else {
-        setResults([]);
-        setOpen(text.length > 1);
+        // Also try without type restrictions for broader results
+        svc.current.getPlacePredictions({
+          input:                text,
+          sessionToken:         tokenRef.current,
+          componentRestrictions: { country: 'jm' },
+        }, (preds2, st2) => {
+          if (st2 === window.google.maps.places.PlacesServiceStatus.OK && preds2?.length) {
+            setResults(preds2.slice(0, 6));
+            setOpen(true);
+          } else {
+            setResults([]);
+            setOpen(false);
+          }
+        });
       }
     });
   };
@@ -2357,23 +2373,25 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder,
     setQuery(val);
     if (onChange) onChange(val);
     clearTimeout(debounce.current);
-    debounce.current = setTimeout(() => search(val), 350);
+    if (!val) { setResults([]); setOpen(false); return; }
+    debounce.current = setTimeout(() => search(val), 300);
   };
 
   const handleSelect = (pred) => {
-    const desc = pred.description || '';
+    if (!pred.place_id) return;
+    const desc = pred.description || pred.structured_formatting?.main_text || '';
     setQuery(desc);
     setOpen(false);
     setResults([]);
     if (onChange) onChange(desc);
     if (!detailSvc.current) return;
     detailSvc.current.getDetails({
-      placeId: pred.place_id,
-      sessionToken: token.current,
-      fields: ['name', 'formatted_address', 'geometry'],
-    }, (place, status) => {
-      if (status === window.google.maps.places.PlacesServiceStatus.OK && place?.geometry) {
-        const addr = place.formatted_address || place.name;
+      placeId:      pred.place_id,
+      sessionToken: tokenRef.current,
+      fields:       ['name', 'formatted_address', 'geometry'],
+    }, (place, st) => {
+      if (st === window.google.maps.places.PlacesServiceStatus.OK && place?.geometry) {
+        const addr = place.formatted_address || place.name || desc;
         setQuery(addr);
         if (onChange) onChange(addr);
         if (onPlaceSelect) onPlaceSelect({
@@ -2382,11 +2400,19 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder,
           lat:              place.geometry.location.lat(),
           lng:              place.geometry.location.lng(),
         });
-        // Reset session token
-        token.current = new window.google.maps.places.AutocompleteSessionToken();
+        // Refresh session token
+        if (window.google?.maps?.places) {
+          tokenRef.current = new window.google.maps.places.AutocompleteSessionToken();
+        }
       }
     });
   };
+
+  const ph = status === 'ready'
+    ? (placeholder || 'Search address, road or landmark')
+    : status === 'error'
+    ? 'Search unavailable'
+    : 'Search loading...';
 
   return (
     <div style={{ position:'relative', zIndex:50 }}>
@@ -2397,49 +2423,40 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder,
           value={query}
           onChange={handleChange}
           onFocus={() => { if (results.length > 0) setOpen(true); }}
-          onBlur={() => setTimeout(() => setOpen(false), 250)}
-          placeholder={ready ? (placeholder || 'Search address or landmark') : 'Loading search...'}
+          onBlur={() => setTimeout(() => setOpen(false), 200)}
+          placeholder={ph}
           autoComplete="off"
           autoCorrect="off"
           spellCheck="false"
-          style={{ width:'100%', padding:'13px 36px 13px 38px', background:'#ffffff', border:'2px solid #e9d5ff', borderRadius:12, fontSize:14, color:'#1a1a2e', boxSizing:'border-box', outline:'none', boxShadow:'0 2px 8px rgba(107,33,168,0.08)' }}
+          style={{ width:'100%', padding:'13px 36px 13px 38px', background:'#ffffff', border:'2px solid '+(status==='ready'?'#e9d5ff':'#e5e7eb'), borderRadius:12, fontSize:14, color:'#1a1a2e', boxSizing:'border-box', outline:'none', boxShadow:'0 2px 8px rgba(107,33,168,0.08)' }}
         />
-        {loading && <span style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)' }}>⏳</span>}
-        {!loading && query.length > 0 && (
-          <span
-            onMouseDown={e => { e.preventDefault(); setQuery(''); setOpen(false); setResults([]); if (onChange) onChange(''); }}
+        {loading && <span style={{ position:'absolute', right:36, top:'50%', transform:'translateY(-50%)', fontSize:12, color:'#6b21a8' }}>⏳</span>}
+        {query.length > 0 && (
+          <span onMouseDown={e => { e.preventDefault(); setQuery(''); setOpen(false); setResults([]); if (onChange) onChange(''); }}
             style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)', fontSize:18, color:'#aaa', cursor:'pointer', padding:4 }}>✕</span>
         )}
       </div>
-      {open && (
+      {open && results.length > 0 && (
         <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, right:0, background:'#fff', border:'1px solid #e9d5ff', borderRadius:12, boxShadow:'0 8px 24px rgba(107,33,168,0.15)', overflow:'hidden', zIndex:100, maxHeight:280, overflowY:'auto' }}>
-          {results.length > 0 ? (
-            <>
-              {results.map((p, i) => (
-                <div key={i}
-                  onMouseDown={e => { e.preventDefault(); handleSelect(p); }}
-                  onTouchEnd={e => { e.preventDefault(); handleSelect(p); }}
-                  style={{ padding:'12px 14px', cursor:'pointer', borderBottom: i < results.length-1 ? '1px solid #f5f0ff' : 'none', display:'flex', alignItems:'flex-start', gap:10, background:'#fff' }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#f9f5ff'}
-                  onMouseLeave={e => e.currentTarget.style.background = '#fff'}>
-                  <span style={{ color:'#6b21a8', fontSize:16, flexShrink:0, marginTop:2 }}>📍</span>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                      {p.structured_formatting?.main_text || p.description?.split(',')[0]}
-                    </div>
-                    <div style={{ fontSize:11, color:'#888', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                      {p.structured_formatting?.secondary_text || p.description}
-                    </div>
-                  </div>
+          {results.map((p, i) => (
+            <div key={i}
+              onMouseDown={e => { e.preventDefault(); handleSelect(p); }}
+              onTouchEnd={e => { e.preventDefault(); handleSelect(p); }}
+              style={{ padding:'12px 14px', cursor:'pointer', borderBottom:i<results.length-1?'1px solid #f5f0ff':'none', display:'flex', alignItems:'flex-start', gap:10, background:'#fff' }}
+              onMouseEnter={e => e.currentTarget.style.background='#f9f5ff'}
+              onMouseLeave={e => e.currentTarget.style.background='#fff'}>
+              <span style={{ color:'#6b21a8', fontSize:16, flexShrink:0, marginTop:2 }}>📍</span>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                  {p.structured_formatting?.main_text || p.description?.split(',')[0] || p.description}
                 </div>
-              ))}
-              <div style={{ padding:'5px 12px', fontSize:10, color:'#bbb', textAlign:'right', background:'#fafafa' }}>Powered by Google</div>
-            </>
-          ) : (
-            <div style={{ padding:'16px', fontSize:13, color:'#888', textAlign:'center' }}>
-              No results — try a road, area or landmark in Mandeville
+                <div style={{ fontSize:11, color:'#888', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                  {p.structured_formatting?.secondary_text || p.description}
+                </div>
+              </div>
             </div>
-          )}
+          ))}
+          <div style={{ padding:'4px 12px', fontSize:10, color:'#bbb', textAlign:'right', background:'#fafafa' }}>Powered by Google</div>
         </div>
       )}
     </div>
@@ -3265,10 +3282,11 @@ function SearchingAnimation({ onCancel }) {
 }
 
 function LiveRide({ go, bookingId, user }) {
-  const [booking,   setBooking]   = useState(null);
-  const [rating,    setRating]    = useState(0);
-  const [rated,     setRated]     = useState(false);
-  const [driverInfo,setDriverInfo]= useState(null);
+  const [booking,      setBooking]      = useState(null);
+  const [rating,       setRating]       = useState(0);
+  const [rated,        setRated]        = useState(false);
+  const [driverInfo,   setDriverInfo]   = useState(null);
+  const [directions,   setDirections]   = useState(null);
   const [sosSent,    setSosSent]    = useState(false);
   const [sosHolding, setSosHolding] = useState(false);
   const [sosCount,   setSosCount]   = useState(5);
@@ -3455,6 +3473,23 @@ function LiveRide({ go, bookingId, user }) {
   const dropoffCoords = booking?.dropoff?.lat   ? { lat:booking.dropoff.lat,        lng:booking.dropoff.lng        } : null;
   const driverCoords  = booking?.driverLocation ? { lat:booking.driverLocation.lat, lng:booking.driverLocation.lng } : null;
 
+  // Compute directions: driver→pickup (searching/active) OR pickup→dropoff (enroute)
+  useEffect(() => {
+    if (!window.google?.maps) return;
+    const origin      = booking?.status === 'active' && booking?.enrouteToDropoff ? pickupCoords  : driverCoords;
+    const destination = booking?.status === 'active' && booking?.enrouteToDropoff ? dropoffCoords : pickupCoords;
+    if (!origin || !destination) { setDirections(null); return; }
+    const svc = new window.google.maps.DirectionsService();
+    svc.route({
+      origin,
+      destination,
+      travelMode: window.google.maps.TravelMode.DRIVING,
+    }, (result, status) => {
+      if (status === 'OK') setDirections(result);
+      else setDirections(null);
+    });
+  }, [driverCoords?.lat, driverCoords?.lng, pickupCoords?.lat, booking?.status, booking?.enrouteToDropoff]);
+
   // ── Cancelled screen ──
   if (cancelDone || booking?.status === 'cancelled') {
     return (
@@ -3584,7 +3619,7 @@ function LiveRide({ go, bookingId, user }) {
   return (
     <div style={{ ...s.content }}>
       <div style={{ position:'relative' }}>
-        <VilleMap height={typeof window!=='undefined'?Math.max(320,window.innerHeight*0.45):320} center={driverCoords||pickupCoords} zoom={15} expandable={true}>
+        <VilleMap height={typeof window!=='undefined'?Math.max(320,window.innerHeight*0.45):320} center={driverCoords||pickupCoords} zoom={15} expandable={true} directions={directions}>
           <Marker position={pickupCoords} title="Pickup"
             icon={{ url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><circle cx="14" cy="14" r="11" fill="#1a9e5a" stroke="white" stroke-width="2.5"/></svg>'), scaledSize:{width:28,height:28} }}/>
           {dropoffCoords && (
@@ -4709,6 +4744,26 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
   const driverCoords  = booking?.driverLocation? { lat:booking.driverLocation.lat, lng:booking.driverLocation.lng } : null;
   const markers = [{ position:pickupCoords, title:'Pickup' }];
   if (dropoffCoords) markers.push({ position:dropoffCoords, title:'Drop-off' });
+
+  // Route: driver → pickup (before arrival) or pickup → dropoff (enroute)
+  useEffect(() => {
+    if (!window.google?.maps || !booking) return;
+    const pickupPt  = booking.pickup?.lat  ? { lat:booking.pickup.lat,  lng:booking.pickup.lng  } : null;
+    const dropoffPt = booking.dropoff?.lat ? { lat:booking.dropoff.lat, lng:booking.dropoff.lng } : null;
+    const driverPt  = booking.driverLocation?.lat ? { lat:booking.driverLocation.lat, lng:booking.driverLocation.lng } : null;
+    const origin      = arrived && dropoffPt ? pickupPt : driverPt;
+    const destination = arrived && dropoffPt ? dropoffPt : pickupPt;
+    if (!origin || !destination) { setDirections(null); return; }
+    const svc = new window.google.maps.DirectionsService();
+    svc.route({
+      origin,
+      destination,
+      travelMode: window.google.maps.TravelMode.DRIVING,
+    }, (result, status) => {
+      if (status === 'OK') setDirections(result);
+      else setDirections(null);
+    });
+  }, [booking?.driverLocation?.lat, booking?.driverLocation?.lng, arrived]);
 
   return (
     <div style={{ ...s.content }}>
