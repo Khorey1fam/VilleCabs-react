@@ -2345,6 +2345,7 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
 
 
 function PinPickup({ go, setPickupData, user }) {
+  const { isLoaded: mapsReady } = useJsApiLoader({ id:'google-map-script', googleMapsApiKey: GOOGLE_MAPS_KEY, libraries: LIBRARIES, version:'weekly' });
   const [pinPos,      setPinPos]      = useState(MANCHESTER_CENTER);
   const [address,     setAddress]     = useState('');
   const [note,        setNote]        = useState('');
