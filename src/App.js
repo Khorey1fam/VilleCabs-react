@@ -11,7 +11,7 @@ import {
   onSnapshot, updateDoc, query, where, orderBy, serverTimestamp, getDocs,
   arrayUnion, increment, arrayRemove
 } from 'firebase/firestore';
-import { GoogleMap, useJsApiLoader, Marker, DirectionsRenderer } from '@react-google-maps/api';
+import { GoogleMap, useJsApiLoader, Marker, DirectionsRenderer, Autocomplete } from '@react-google-maps/api';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -2274,201 +2274,72 @@ function CustomerSettings({ go, user, setUser }) {
 const MANDEVILLE_BIAS = { lat:18.0417, lng:-77.5071 };
 const BIAS_RADIUS_METERS = 25000;
 
-function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder, mapsLoaded }) {
-  const [query,   setQuery]   = useState(value || '');
-  const [results, setResults] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [open,    setOpen]    = useState(false);
-  const debounce  = useRef(null);
-  const tokenRef  = useRef(null);
+function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder }) {
+  const [query,      setQuery]      = useState(value || '');
+  const autocompleteRef             = useRef(null);
 
-  // Sync value prop
+  // Sync external value
   useEffect(() => {
     if (value !== undefined && value !== query) setQuery(value || '');
   }, [value]);
 
-  // Create session token when Maps loads
-  useEffect(() => {
-    const createToken = async () => {
-      try {
-        const { AutocompleteSessionToken } = await window.google.maps.importLibrary('places');
-        tokenRef.current = new AutocompleteSessionToken();
-      } catch(e) {}
-    };
-    if (window.google?.maps?.importLibrary) { createToken(); return; }
-    const onReady = () => createToken();
-    window.addEventListener('google-maps-ready', onReady);
-    const iv = setInterval(() => {
-      if (window.google?.maps?.importLibrary) { createToken(); clearInterval(iv); }
-    }, 500);
-    return () => { window.removeEventListener('google-maps-ready', onReady); clearInterval(iv); };
-  }, [mapsLoaded]);
-
-  const search = async (text) => {
-    if (!text || text.length < 2) { setResults([]); setOpen(false); return; }
-    if (!window.google?.maps) {
-      console.warn('Google Maps not loaded yet');
-      return;
-    }
-    setLoading(true);
-    try {
-      // Use the NEW AutocompleteSuggestion API (required for API keys created after March 2025)
-      const { AutocompleteSuggestion, AutocompleteSessionToken } = await window.google.maps.importLibrary('places');
-      if (!tokenRef.current) tokenRef.current = new AutocompleteSessionToken();
-      const { suggestions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions({
-        input:              text,
-        sessionToken:       tokenRef.current,
-        includedRegionCodes: ['jm'],
-        locationBias: {
-          center: { lat: 18.0417, lng: -77.5071 },
-          radius: 30000,
-        },
-        language: 'en',
-      });
-      setResults(suggestions || []);
-      setOpen((suggestions || []).length > 0);
-    } catch(e) {
-      console.error('Autocomplete error:', e.message || e);
-      // Fallback: try legacy API if new API fails
-      try {
-        if (window.google?.maps?.places?.AutocompleteService) {
-          const svc = new window.google.maps.places.AutocompleteService();
-          svc.getPlacePredictions({
-            input: text,
-            componentRestrictions: { country: 'jm' },
-            location: new window.google.maps.LatLng(18.0417, -77.5071),
-            radius: 30000,
-          }, (preds, status) => {
-            setLoading(false);
-            if (status === 'OK' && preds?.length) {
-              // Convert legacy format to new format
-              const converted = preds.slice(0,6).map(p => ({
-                placePrediction: {
-                  mainText: { text: p.structured_formatting?.main_text || p.description?.split(',')[0] || '' },
-                  secondaryText: { text: p.structured_formatting?.secondary_text || '' },
-                  text: { text: p.description || '' },
-                  toPlace: () => ({
-                    fetchFields: async () => {},
-                    displayName: p.description,
-                    formattedAddress: p.description,
-                    location: null,
-                  }),
-                  placeId: p.place_id,
-                  _legacyPred: p,
-                }
-              }));
-              setResults(converted);
-              setOpen(converted.length > 0);
-            } else {
-              setResults([]);
-              setLoading(false);
-            }
-          });
-          return;
-        }
-      } catch(fallbackErr) {
-        console.warn('Fallback also failed:', fallbackErr);
-      }
-      setResults([]);
-    }
-    setLoading(false);
+  const onLoad = (autocomplete) => {
+    autocompleteRef.current = autocomplete;
+    // Bias to Mandeville, Jamaica
+    autocomplete.setBounds(new window.google.maps.LatLngBounds(
+      new window.google.maps.LatLng(17.9, -77.7),  // SW
+      new window.google.maps.LatLng(18.2, -77.3),  // NE
+    ));
+    autocomplete.setComponentRestrictions({ country: 'jm' });
+    autocomplete.setFields(['name', 'formatted_address', 'geometry', 'place_id']);
   };
 
-  const handleChange = (e) => {
-    const val = e.target.value;
-    setQuery(val);
-    if (onChange) onChange(val);
-    clearTimeout(debounce.current);
-    if (!val) { setResults([]); setOpen(false); return; }
-    debounce.current = setTimeout(() => search(val), 300);
+  const onPlaceChanged = () => {
+    if (!autocompleteRef.current) return;
+    const place = autocompleteRef.current.getPlace();
+    if (!place || !place.geometry) return;
+    const addr = place.formatted_address || place.name || query;
+    setQuery(addr);
+    if (onChange) onChange(addr);
+    if (onPlaceSelect) onPlaceSelect({
+      name:             place.name,
+      formattedAddress: place.formatted_address,
+      lat:              place.geometry.location.lat(),
+      lng:              place.geometry.location.lng(),
+    });
   };
-
-  const handleSelect = async (suggestion) => {
-    const pred = suggestion.placePrediction;
-    const mainText = pred.mainText?.text || pred.text?.text || '';
-    setQuery(mainText);
-    setOpen(false);
-    setResults([]);
-    if (onChange) onChange(mainText);
-    try {
-      const pred = suggestion.placePrediction;
-      // Handle legacy predictions from fallback
-      if (pred._legacyPred) {
-        const p = pred._legacyPred;
-        const detailSvc = new window.google.maps.places.PlacesService(document.createElement('div'));
-        detailSvc.getDetails({ placeId: p.place_id, fields: ['name','formatted_address','geometry'] }, (place, st) => {
-          if (st === 'OK' && place?.geometry) {
-            const addr = place.formatted_address || place.name || mainText;
-            setQuery(addr); if (onChange) onChange(addr);
-            if (onPlaceSelect) onPlaceSelect({ name: place.name, formattedAddress: place.formatted_address, lat: place.geometry.location.lat(), lng: place.geometry.location.lng() });
-          }
-        });
-        return;
-      }
-      // New API
-      const place = pred.toPlace();
-      await place.fetchFields({ fields: ['displayName', 'formattedAddress', 'location'] });
-      const addr = place.formattedAddress || place.displayName || mainText;
-      setQuery(addr);
-      if (onChange) onChange(addr);
-      if (onPlaceSelect && place.location) onPlaceSelect({
-        name:             place.displayName,
-        formattedAddress: place.formattedAddress,
-        lat:              place.location.lat(),
-        lng:              place.location.lng(),
-      });
-      const { AutocompleteSessionToken } = await window.google.maps.importLibrary('places');
-      tokenRef.current = new AutocompleteSessionToken();
-    } catch(e) {
-      console.warn('Place details error:', e);
-    }
-  };
-
-  const getMainText = (s) => s.placePrediction?.mainText?.text || s.placePrediction?.text?.text || '';
-  const getSecText  = (s) => s.placePrediction?.secondaryText?.text || '';
 
   return (
-    <div style={{ position:'relative', zIndex:50 }}>
+    <Autocomplete
+      onLoad={onLoad}
+      onPlaceChanged={onPlaceChanged}
+      options={{
+        componentRestrictions: { country: 'jm' },
+        bounds: new window.google?.maps?.LatLngBounds?.(
+          { lat: 17.9, lng: -77.7 },
+          { lat: 18.2, lng: -77.3 }
+        ),
+        strictBounds: false,
+        fields: ['name', 'formatted_address', 'geometry', 'place_id'],
+      }}
+    >
       <div style={{ position:'relative' }}>
-        <span style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', fontSize:16, color:'#6b21a8', pointerEvents:'none' }}>🔍</span>
+        <span style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', fontSize:16, color:'#6b21a8', pointerEvents:'none', zIndex:1 }}>🔍</span>
         <input
           type="text"
           value={query}
-          onChange={handleChange}
-          onFocus={() => { if (results.length > 0) setOpen(true); }}
-          onBlur={() => setTimeout(() => setOpen(false), 200)}
+          onChange={e => { setQuery(e.target.value); if (onChange) onChange(e.target.value); }}
           placeholder={placeholder || 'Search address, road or landmark'}
           autoComplete="off"
-          autoCorrect="off"
-          spellCheck="false"
           style={{ width:'100%', padding:'13px 36px 13px 38px', background:'#ffffff', border:'2px solid #e9d5ff', borderRadius:12, fontSize:14, color:'#1a1a2e', boxSizing:'border-box', outline:'none', boxShadow:'0 2px 8px rgba(107,33,168,0.08)' }}
         />
-        {loading && <span style={{ position:'absolute', right:36, top:'50%', transform:'translateY(-50%)', fontSize:12 }}>⏳</span>}
         {query.length > 0 && (
-          <span onMouseDown={e => { e.preventDefault(); setQuery(''); setOpen(false); setResults([]); if (onChange) onChange(''); }}
+          <span
+            onMouseDown={e => { e.preventDefault(); setQuery(''); if (onChange) onChange(''); }}
             style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)', fontSize:18, color:'#aaa', cursor:'pointer', padding:4 }}>✕</span>
         )}
       </div>
-      {open && results.length > 0 && (
-        <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, right:0, background:'#fff', border:'1px solid #e9d5ff', borderRadius:12, boxShadow:'0 8px 24px rgba(107,33,168,0.15)', overflow:'hidden', zIndex:100, maxHeight:300, overflowY:'auto' }}>
-          {results.map((s, i) => (
-            <div key={i}
-              onMouseDown={e => { e.preventDefault(); handleSelect(s); }}
-              onTouchEnd={e => { e.preventDefault(); handleSelect(s); }}
-              style={{ padding:'12px 14px', cursor:'pointer', borderBottom:i<results.length-1?'1px solid #f5f0ff':'none', display:'flex', alignItems:'flex-start', gap:10, background:'#fff' }}
-              onMouseEnter={e => e.currentTarget.style.background='#f9f5ff'}
-              onMouseLeave={e => e.currentTarget.style.background='#fff'}>
-              <span style={{ color:'#6b21a8', fontSize:16, flexShrink:0, marginTop:2 }}>📍</span>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{getMainText(s)}</div>
-                <div style={{ fontSize:11, color:'#888', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{getSecText(s)}</div>
-              </div>
-            </div>
-          ))}
-          <div style={{ padding:'4px 12px', fontSize:10, color:'#bbb', textAlign:'right', background:'#fafafa' }}>Powered by Google</div>
-        </div>
-      )}
-    </div>
+    </Autocomplete>
   );
 }
 
@@ -2507,13 +2378,16 @@ function PinPickup({ go, setPickupData, user }) {
       <TopBar title="Pin Pickup Location" onBack={() => go('customer-dash')} go={go} user={user}/>
       {/* Address search autocomplete */}
       <div style={{ padding:'10px 14px', background:'#ffffff', borderBottom:'1px solid #e2e4ed' }}>
-        <AddressAutocompleteInput
-          value={address}
-          onChange={setAddress}
-          onPlaceSelect={handlePlaceSelect}
-          placeholder="Search pickup address, road or landmark"
-          mapsLoaded={!!window.google?.maps?.places}
-        />
+        {mapsReady ? (
+          <AddressAutocompleteInput
+            value={address}
+            onChange={setAddress}
+            onPlaceSelect={handlePlaceSelect}
+            placeholder="Search pickup address, road or landmark"
+          />
+        ) : (
+          <input placeholder="Loading search..." disabled style={{ width:'100%', padding:'13px 38px', border:'2px solid #e5e7eb', borderRadius:12, fontSize:14, color:'#aaa', boxSizing:'border-box', background:'#f9f9f9' }}/>
+        )}
       </div>
       <VilleMap height={300} center={pinPos||MANCHESTER_CENTER} zoom={14} onClick={handleMapClick}
         markers={[{ position:pinPos, title:'Pickup' }]} expandable={true}/>
@@ -2595,6 +2469,7 @@ function PinPickup({ go, setPickupData, user }) {
 
 // ── PIN DROPOFF ───────────────────────────────────────────────────────────────
 function PinDropoff({ go, pickupData, setDropoffData, user }) {
+  const { isLoaded: mapsReady } = useJsApiLoader({ id:'google-map-script', googleMapsApiKey: GOOGLE_MAPS_KEY, libraries: LIBRARIES, version:'weekly' });
   // Start map centered on pickup location if available, else Mandeville
   const startPos = pickupData?.coords || MANCHESTER_CENTER;
   const [pinPos,   setPinPos]   = useState(MANCHESTER_CENTER);
@@ -2638,13 +2513,16 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
 
       {/* Search box */}
       <div style={{ background:'#ffffff', padding:'12px 14px', borderBottom:'1px solid #e5e7eb' }}>
-        <AddressAutocompleteInput
-          value={address}
-          onChange={setAddress}
-          onPlaceSelect={handlePlaceSelect}
-          placeholder="Where are you going? Search address or landmark"
-          mapsLoaded={!!window.google?.maps?.places}
-        />
+        {mapsReady ? (
+          <AddressAutocompleteInput
+            value={address}
+            onChange={setAddress}
+            onPlaceSelect={handlePlaceSelect}
+            placeholder="Where are you going? Search address or landmark"
+          />
+        ) : (
+          <input placeholder="Loading search..." disabled style={{ width:'100%', padding:'13px 38px', border:'2px solid #e5e7eb', borderRadius:12, fontSize:14, color:'#aaa', boxSizing:'border-box', background:'#f9f9f9' }}/>
+        )}
       </div>
 
       {/* Map */}
