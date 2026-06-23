@@ -2278,10 +2278,7 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder,
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [open,    setOpen]    = useState(false);
-  const [status,  setStatus]  = useState('waiting'); // waiting | ready | error
   const debounce  = useRef(null);
-  const svc       = useRef(null);
-  const detailSvc = useRef(null);
   const tokenRef  = useRef(null);
 
   // Sync value prop
@@ -2289,83 +2286,48 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder,
     if (value !== undefined && value !== query) setQuery(value || '');
   }, [value]);
 
-  // Init Places when Google Maps SDK is ready
+  // Create session token when Maps loads
   useEffect(() => {
-    const init = () => {
+    const createToken = async () => {
       try {
-        if (!window.google?.maps?.places) return false;
-        svc.current       = new window.google.maps.places.AutocompleteService();
-        detailSvc.current = new window.google.maps.places.PlacesService(document.createElement('div'));
-        tokenRef.current  = new window.google.maps.places.AutocompleteSessionToken();
-        setStatus('ready');
-        return true;
-      } catch(e) {
-        console.warn('Places init error:', e);
-        setStatus('error');
-        return false;
-      }
+        const { AutocompleteSessionToken } = await window.google.maps.importLibrary('places');
+        tokenRef.current = new AutocompleteSessionToken();
+      } catch(e) {}
     };
-
-    // Try immediately in case Maps already loaded
-    if (init()) return;
-
-    // Listen for VilleMap to finish loading Maps SDK
-    const onReady = () => { setTimeout(init, 100); };
+    if (window.google?.maps?.importLibrary) { createToken(); return; }
+    const onReady = () => createToken();
     window.addEventListener('google-maps-ready', onReady);
-
-    // Poll every 500ms as final fallback
-    const iv = setInterval(() => { if (init()) clearInterval(iv); }, 500);
-
-    return () => {
-      window.removeEventListener('google-maps-ready', onReady);
-      clearInterval(iv);
-    };
+    const iv = setInterval(() => {
+      if (window.google?.maps?.importLibrary) { createToken(); clearInterval(iv); }
+    }, 500);
+    return () => { window.removeEventListener('google-maps-ready', onReady); clearInterval(iv); };
   }, [mapsLoaded]);
 
-  const search = (text) => {
+  const search = async (text) => {
     if (!text || text.length < 2) { setResults([]); setOpen(false); return; }
-    if (!svc.current) {
-      // Not ready yet - try to init
-      if (window.google?.maps?.places) {
-        svc.current = new window.google.maps.places.AutocompleteService();
-        detailSvc.current = new window.google.maps.places.PlacesService(document.createElement('div'));
-        tokenRef.current  = new window.google.maps.places.AutocompleteSessionToken();
-        setStatus('ready');
-      } else {
-        setResults([{ description: 'Search loading, please try again...', place_id: null }]);
-        setOpen(true);
-        return;
-      }
-    }
+    if (!window.google?.maps?.importLibrary) return;
     setLoading(true);
-    svc.current.getPlacePredictions({
-      input:                text,
-      sessionToken:         tokenRef.current,
-      location:             new window.google.maps.LatLng(18.0417, -77.5071),
-      radius:               30000,
-      componentRestrictions: { country: 'jm' },
-    }, (predictions, st) => {
-      setLoading(false);
-      if (st === window.google.maps.places.PlacesServiceStatus.OK && predictions?.length) {
-        setResults(predictions.slice(0, 6));
-        setOpen(true);
-      } else {
-        // Also try without type restrictions for broader results
-        svc.current.getPlacePredictions({
-          input:                text,
-          sessionToken:         tokenRef.current,
-          componentRestrictions: { country: 'jm' },
-        }, (preds2, st2) => {
-          if (st2 === window.google.maps.places.PlacesServiceStatus.OK && preds2?.length) {
-            setResults(preds2.slice(0, 6));
-            setOpen(true);
-          } else {
-            setResults([]);
-            setOpen(false);
-          }
-        });
-      }
-    });
+    try {
+      // Use the NEW AutocompleteSuggestion API (required for API keys created after March 2025)
+      const { AutocompleteSuggestion, AutocompleteSessionToken } = await window.google.maps.importLibrary('places');
+      if (!tokenRef.current) tokenRef.current = new AutocompleteSessionToken();
+      const { suggestions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions({
+        input:              text,
+        sessionToken:       tokenRef.current,
+        includedRegionCodes: ['jm'],
+        locationBias: {
+          center: { lat: 18.0417, lng: -77.5071 },
+          radius: 30000,
+        },
+        language: 'en',
+      });
+      setResults(suggestions || []);
+      setOpen((suggestions || []).length > 0);
+    } catch(e) {
+      console.warn('Autocomplete error:', e);
+      setResults([]);
+    }
+    setLoading(false);
   };
 
   const handleChange = (e) => {
@@ -2377,42 +2339,36 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder,
     debounce.current = setTimeout(() => search(val), 300);
   };
 
-  const handleSelect = (pred) => {
-    if (!pred.place_id) return;
-    const desc = pred.description || pred.structured_formatting?.main_text || '';
-    setQuery(desc);
+  const handleSelect = async (suggestion) => {
+    const pred = suggestion.placePrediction;
+    const mainText = pred.mainText?.text || pred.text?.text || '';
+    setQuery(mainText);
     setOpen(false);
     setResults([]);
-    if (onChange) onChange(desc);
-    if (!detailSvc.current) return;
-    detailSvc.current.getDetails({
-      placeId:      pred.place_id,
-      sessionToken: tokenRef.current,
-      fields:       ['name', 'formatted_address', 'geometry'],
-    }, (place, st) => {
-      if (st === window.google.maps.places.PlacesServiceStatus.OK && place?.geometry) {
-        const addr = place.formatted_address || place.name || desc;
-        setQuery(addr);
-        if (onChange) onChange(addr);
-        if (onPlaceSelect) onPlaceSelect({
-          name:             place.name,
-          formattedAddress: place.formatted_address,
-          lat:              place.geometry.location.lat(),
-          lng:              place.geometry.location.lng(),
-        });
-        // Refresh session token
-        if (window.google?.maps?.places) {
-          tokenRef.current = new window.google.maps.places.AutocompleteSessionToken();
-        }
-      }
-    });
+    if (onChange) onChange(mainText);
+    try {
+      // Fetch full place details with location
+      const place = pred.toPlace();
+      await place.fetchFields({ fields: ['displayName', 'formattedAddress', 'location'] });
+      const addr = place.formattedAddress || place.displayName || mainText;
+      setQuery(addr);
+      if (onChange) onChange(addr);
+      if (onPlaceSelect) onPlaceSelect({
+        name:             place.displayName,
+        formattedAddress: place.formattedAddress,
+        lat:              place.location.lat(),
+        lng:              place.location.lng(),
+      });
+      // Refresh session token after selection
+      const { AutocompleteSessionToken } = await window.google.maps.importLibrary('places');
+      tokenRef.current = new AutocompleteSessionToken();
+    } catch(e) {
+      console.warn('Place details error:', e);
+    }
   };
 
-  const ph = status === 'ready'
-    ? (placeholder || 'Search address, road or landmark')
-    : status === 'error'
-    ? 'Search unavailable'
-    : 'Search loading...';
+  const getMainText = (s) => s.placePrediction?.mainText?.text || s.placePrediction?.text?.text || '';
+  const getSecText  = (s) => s.placePrediction?.secondaryText?.text || '';
 
   return (
     <div style={{ position:'relative', zIndex:50 }}>
@@ -2424,35 +2380,31 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder,
           onChange={handleChange}
           onFocus={() => { if (results.length > 0) setOpen(true); }}
           onBlur={() => setTimeout(() => setOpen(false), 200)}
-          placeholder={ph}
+          placeholder={placeholder || 'Search address, road or landmark'}
           autoComplete="off"
           autoCorrect="off"
           spellCheck="false"
-          style={{ width:'100%', padding:'13px 36px 13px 38px', background:'#ffffff', border:'2px solid '+(status==='ready'?'#e9d5ff':'#e5e7eb'), borderRadius:12, fontSize:14, color:'#1a1a2e', boxSizing:'border-box', outline:'none', boxShadow:'0 2px 8px rgba(107,33,168,0.08)' }}
+          style={{ width:'100%', padding:'13px 36px 13px 38px', background:'#ffffff', border:'2px solid #e9d5ff', borderRadius:12, fontSize:14, color:'#1a1a2e', boxSizing:'border-box', outline:'none', boxShadow:'0 2px 8px rgba(107,33,168,0.08)' }}
         />
-        {loading && <span style={{ position:'absolute', right:36, top:'50%', transform:'translateY(-50%)', fontSize:12, color:'#6b21a8' }}>⏳</span>}
+        {loading && <span style={{ position:'absolute', right:36, top:'50%', transform:'translateY(-50%)', fontSize:12 }}>⏳</span>}
         {query.length > 0 && (
           <span onMouseDown={e => { e.preventDefault(); setQuery(''); setOpen(false); setResults([]); if (onChange) onChange(''); }}
             style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)', fontSize:18, color:'#aaa', cursor:'pointer', padding:4 }}>✕</span>
         )}
       </div>
       {open && results.length > 0 && (
-        <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, right:0, background:'#fff', border:'1px solid #e9d5ff', borderRadius:12, boxShadow:'0 8px 24px rgba(107,33,168,0.15)', overflow:'hidden', zIndex:100, maxHeight:280, overflowY:'auto' }}>
-          {results.map((p, i) => (
+        <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, right:0, background:'#fff', border:'1px solid #e9d5ff', borderRadius:12, boxShadow:'0 8px 24px rgba(107,33,168,0.15)', overflow:'hidden', zIndex:100, maxHeight:300, overflowY:'auto' }}>
+          {results.map((s, i) => (
             <div key={i}
-              onMouseDown={e => { e.preventDefault(); handleSelect(p); }}
-              onTouchEnd={e => { e.preventDefault(); handleSelect(p); }}
+              onMouseDown={e => { e.preventDefault(); handleSelect(s); }}
+              onTouchEnd={e => { e.preventDefault(); handleSelect(s); }}
               style={{ padding:'12px 14px', cursor:'pointer', borderBottom:i<results.length-1?'1px solid #f5f0ff':'none', display:'flex', alignItems:'flex-start', gap:10, background:'#fff' }}
               onMouseEnter={e => e.currentTarget.style.background='#f9f5ff'}
               onMouseLeave={e => e.currentTarget.style.background='#fff'}>
               <span style={{ color:'#6b21a8', fontSize:16, flexShrink:0, marginTop:2 }}>📍</span>
               <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                  {p.structured_formatting?.main_text || p.description?.split(',')[0] || p.description}
-                </div>
-                <div style={{ fontSize:11, color:'#888', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                  {p.structured_formatting?.secondary_text || p.description}
-                </div>
+                <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{getMainText(s)}</div>
+                <div style={{ fontSize:11, color:'#888', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{getSecText(s)}</div>
               </div>
             </div>
           ))}
@@ -4656,9 +4608,6 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     setDirections(null); // Clear old route, new one will load via useEffect
     try {
       // Update booking with arrived status
-      // Optimistic update - instant UI response
-      setBooking(prev => ({...prev, driverArrived:true}));
-      setArrived(true);
       await updateDoc(doc(db,'bookings',booking.id), {
         driverArrived:   true,
         arrivedAt:       serverTimestamp(),
@@ -4680,9 +4629,6 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     if (!booking?.id) return;
     setEnroute(true);
     try {
-      // Optimistic update
-      setBooking(prev => ({...prev, enrouteToDropoff:true}));
-      setEnroute(true);
       await updateDoc(doc(db,'bookings',booking.id), {
         enrouteToDropoff: true,
         enrouteAt:        serverTimestamp(),
@@ -4702,8 +4648,6 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
   const completeRide = async () => {
     if (!booking?.id) return;
     if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
-    // Optimistic update
-    setBooking(prev => ({...prev, status:'completed'}));
     await updateDoc(doc(db,'bookings',booking.id), { status:'completed', completedAt:serverTimestamp() });
     try { await updateDoc(doc(db,'drivers',user.uid), { isOnline:false, currentLocation:null }); } catch(e) {}
     // Show completion summary before going back
