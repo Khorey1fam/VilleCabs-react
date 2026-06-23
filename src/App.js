@@ -3995,6 +3995,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   const [earnings,     setEarnings]     = useState({ today:0, week:0, total:0, todayRides:0, weekRides:0, totalRides:0, history:[] });
   const [pendingRides, setPendingRides] = useState([]);
   const [loading,      setLoading]      = useState(true);
+  const [activeRideId, setActiveRideId] = useState(null);
   const prevCountRef = useRef(0);
 
   // ── Load driver online status + earnings on mount ─────────────────────────
@@ -4204,6 +4205,18 @@ function DriverDash({ go, user, setUser, setBookingId }) {
               ))}
             </div>
           </div>
+
+          {/* Active ride banner */}
+          {activeRideId && (
+            <div onClick={() => { go('driver-active'); }}
+              style={{ margin:'0 14px 12px', background:'#6b21a8', borderRadius:14, padding:'14px 16px', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <div>
+                <div style={{ fontSize:14, fontWeight:700, color:'#fff' }}>🚗 Active Ride In Progress</div>
+                <div style={{ fontSize:12, color:'rgba(255,255,255,0.8)', marginTop:3 }}>Tap to return to your current ride</div>
+              </div>
+              <div style={{ fontSize:20, color:'#fff' }}>→</div>
+            </div>
+          )}
 
           {/* Peak hours banner */}
           {(() => { const h=new Date().getHours(),d=new Date().getDay(); return d>=1&&d<=5&&h>=17&&h<19 ? (
