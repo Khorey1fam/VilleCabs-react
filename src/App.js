@@ -2315,10 +2315,10 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
       onPlaceChanged={onPlaceChanged}
       options={{
         componentRestrictions: { country: 'jm' },
-        bounds: new window.google?.maps?.LatLngBounds?.(
+        bounds: window.google?.maps ? new window.google.maps.LatLngBounds(
           { lat: 17.9, lng: -77.7 },
           { lat: 18.2, lng: -77.3 }
-        ),
+        ) : undefined,
         strictBounds: false,
         fields: ['name', 'formatted_address', 'geometry', 'place_id'],
       }}
