@@ -3307,7 +3307,6 @@ function LiveRide({ go, bookingId, user }) {
   }, [booking?.driverId]);
 
   // Force completed screen when booking status changes to completed
-  const [forceUpdate, setForceUpdate] = useState(0);
   useEffect(() => {
     if (booking?.status === 'completed') {
       setForceUpdate(n => n + 1);
