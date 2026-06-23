@@ -5,6 +5,7 @@
   "dependencies": {
     "@react-google-maps/api": "^2.20.8",
     "@stripe/stripe-js": "^9.8.0",
+    "@vercel/speed-insights": "^2.0.0",
     "firebase": "^10.14.1",
     "install": "^0.13.0",
     "react": "^18.2.0",
