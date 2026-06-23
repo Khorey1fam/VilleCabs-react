@@ -2428,10 +2428,15 @@ function PinPickup({ go, setPickupData, user }) {
   };
 
   return (
-    <div style={{ ...s.content, background:'transparent' }}>
+    <div style={{ ...s.content, background:'#f5f6fa', display:'flex', flexDirection:'column', minHeight:'100vh' }}>
       <TopBar title="Pin Pickup Location" onBack={() => go('customer-dash')} go={go} user={user}/>
-      {/* Address search autocomplete */}
-      <div style={{ padding:'10px 14px', background:'#ffffff', borderBottom:'1px solid #e2e4ed' }}>
+
+      {/* Map first */}
+      <VilleMap height={280} center={pinPos||MANCHESTER_CENTER} zoom={14} onClick={handleMapClick}
+        markers={[{ position:pinPos, title:'Pickup' }]} expandable={true}/>
+
+      {/* Search box below map */}
+      <div style={{ background:'#ffffff', padding:'12px 14px', borderBottom:'1px solid #e5e7eb' }}>
         <AddressAutocompleteInput
           value={address}
           onChange={setAddress}
@@ -2439,85 +2444,43 @@ function PinPickup({ go, setPickupData, user }) {
           placeholder="Search pickup address, road or landmark"
         />
       </div>
-      <VilleMap height={300} center={pinPos||MANCHESTER_CENTER} zoom={14} onClick={handleMapClick}
-        markers={[{ position:pinPos, title:'Pickup' }]} expandable={true}/>
-      <div style={{ padding:16 }}>
-        <div style={{ background:'rgba(26,158,90,0.1)', border:'0.5px solid rgba(26,158,90,0.3)', borderRadius:8, padding:'8px 12px', marginBottom:12, fontSize:12, color:'#9fe1cb' }}>
-          📍 Tap anywhere on the map to pin your exact pickup location
+
+      <div style={{ flex:1, background:'#ffffff', padding:'14px 16px' }}>
+        <div style={{ background:'#f0fff4', border:'1px solid #86efac', borderRadius:10, padding:'10px 12px', marginBottom:14, fontSize:12, color:'#1a9e5a' }}>
+          📍 Tap the map or search above to pin your pickup location
         </div>
-        <label style={s.lbl}>Pinned address</label>
-        <input style={s.inp} value={loading ? 'Getting address...' : address} onChange={e => setAddress(e.target.value)}/>
-        <label style={s.lbl}>District / Road / Landmark <span style={{ color:'rgba(255,255,255,0.3)', fontWeight:400 }}>(optional)</span></label>
-        <input style={s.inp} placeholder="e.g. Hatfield district, top of Caledonia Road, near the blue gate..." value={note} onChange={e => setNote(e.target.value)}/>
-        {/* Passenger counter */}
-        <div style={{ background:'#111111', border:'none', borderRadius:12, padding:'14px 16px', marginBottom:14 }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-            <div>
-              <div style={{ fontSize:14, fontWeight:500, color:WHITE }}>👥 Number of Passengers</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.4)', marginTop:3 }}>Including yourself</div>
-            </div>
-            <div style={{ display:'flex', alignItems:'center', gap:16 }}>
-              <button
-                onClick={() => setPassengers(p => Math.max(1, p - 1))}
-                style={{ width:38, height:38, borderRadius:'50%', background:passengers<=1?'rgba(255,255,255,0.05)':'rgba(232,180,0,0.15)', border:`1.5px solid ${passengers<=1?'rgba(255,255,255,0.1)':'rgba(232,180,0,0.4)'}`, color:passengers<=1?'rgba(255,255,255,0.3)':YELLOW, fontSize:20, fontWeight:700, cursor:passengers<=1?'default':'pointer', display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>
-                −
-              </button>
-              <div style={{ fontSize:24, fontWeight:700, color:WHITE, minWidth:24, textAlign:'center' }}>{passengers}</div>
-              <button
-                onClick={() => setPassengers(p => Math.min(6, p + 1))}
-                style={{ width:38, height:38, borderRadius:'50%', background:passengers>=6?'rgba(255,255,255,0.05)':'rgba(232,180,0,0.15)', border:`1.5px solid ${passengers>=6?'rgba(255,255,255,0.1)':'rgba(232,180,0,0.4)'}`, color:passengers>=6?'rgba(255,255,255,0.3)':YELLOW, fontSize:20, fontWeight:700, cursor:passengers>=6?'default':'pointer', display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>
-                +
-              </button>
-            </div>
+
+        {address && (
+          <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:10, padding:'10px 14px', marginBottom:14, fontSize:13, color:'#1a1a2e', fontWeight:500 }}>
+            📍 {address}
           </div>
-          {passengers > 1 && (
-            <div style={{ marginTop:10, padding:'8px 10px', background:'rgba(232,180,0,0.08)', borderRadius:8, fontSize:12, color:'rgba(232,180,0,0.9)' }}>
-              ⚡ {passengers >= 5 ? 'VilleXL recommended for your group' : `${passengers} passengers — driver will be notified`}
-            </div>
-          )}
+        )}
+
+        <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:6 }}>Passengers</label>
+        <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:16 }}>
+          <button onClick={() => setPassengers(p => Math.max(1,p-1))} style={{ width:36, height:36, borderRadius:'50%', border:'1.5px solid #e9d5ff', background:'#f9f5ff', fontSize:20, cursor:'pointer', color:'#6b21a8', display:'flex', alignItems:'center', justifyContent:'center' }}>−</button>
+          <span style={{ fontSize:18, fontWeight:700, color:'#1a1a2e', minWidth:24, textAlign:'center' }}>{passengers}</span>
+          <button onClick={() => setPassengers(p => Math.min(6,p+1))} style={{ width:36, height:36, borderRadius:'50%', border:'1.5px solid #e9d5ff', background:'#f9f5ff', fontSize:20, cursor:'pointer', color:'#6b21a8', display:'flex', alignItems:'center', justifyContent:'center' }}>+</button>
+          <span style={{ fontSize:12, color:'#888' }}>passenger{passengers>1?'s':''}</span>
         </div>
 
-        <button style={{ ...s.btnY, background:'#111111', color:'#ffffff' }} onClick={handleConfirm}>Confirm Pickup</button>
-      </div>
-
-      {/* ── PICKUP PAGE BANNERS ── */}
-      <div style={{ padding:'20px 16px 0', background:'#f5f6fa' }}>
-
-        {/* Tip 1: Accuracy */}
-        <div style={{ background:'#111111', borderRadius:16, padding:'18px', marginBottom:14, display:'flex', gap:14, alignItems:'flex-start' }}>
-          <div style={{ fontSize:28, flexShrink:0 }}>📍</div>
-          <div>
-            <div style={{ fontSize:14, fontWeight:700, color:'#e8b400', marginBottom:6 }}>Pin Your Exact Location</div>
-            <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', lineHeight:1.7 }}>Place your pickup pin as close as possible to where you are standing. This helps your driver find you quickly and ensures your fare is calculated accurately based on the real distance.</div>
+        {address && (
+          <div style={{ background:'#fefce8', border:'1px solid #fde047', borderRadius:10, padding:'10px 12px', marginBottom:14, fontSize:12, color:'#854d0e' }}>
+            Add any extra details like gate, landmark, or apartment number below
           </div>
-        </div>
+        )}
+        <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:6 }}>Additional Details (optional)</label>
+        <input style={{ ...s.inp, marginBottom:16 }} value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. Blue gate, near the school..."/>
 
-        {/* Tip 2: Rural areas */}
-        <div style={{ background:'#111111', borderRadius:16, padding:'18px', marginBottom:14, display:'flex', gap:14, alignItems:'flex-start' }}>
-          <div style={{ fontSize:28, flexShrink:0 }}>🏘️</div>
-          <div>
-            <div style={{ fontSize:14, fontWeight:700, color:'#e8b400', marginBottom:6 }}>In a Rural Area?</div>
-            <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', lineHeight:1.7 }}>If you're on an unnamed road or in a district not on the map, use the <strong style={{color:'#ffffff'}}>"Additional Details"</strong> field below your pickup pin to describe your location — e.g. "Top of Caledonia Road, near the blue gate, Hatfield district."</div>
-          </div>
-        </div>
-
-        {/* Tip 3: Last trip */}
-        <div style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:16, padding:'18px', marginBottom:14, boxShadow:'0 2px 8px rgba(0,0,0,0.05)' }}>
-          <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:10 }}>🕐 Quick Tip — Returning Customer?</div>
-          <div style={{ fontSize:12, color:'#666888', lineHeight:1.7 }}>You can view your past trips under <strong>My Rides</strong> in the menu. Favourite locations? Just pin the same spot — the map remembers where you last looked!</div>
-        </div>
-
-        {/* Tip 4: Chat */}
-        <div style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:16, padding:'18px', marginBottom:14, boxShadow:'0 2px 8px rgba(0,0,0,0.05)' }}>
-          <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:10 }}>💬 Chat With Your Driver</div>
-          <div style={{ fontSize:12, color:'#666888', lineHeight:1.7 }}>Once a driver accepts your ride, you can chat directly with them in the app to share extra directions, confirm your spot, or confirm your estimated fare before the ride starts.</div>
-        </div>
+        <button style={{ ...s.btnY, background:'#6b21a8', color:'#fff', opacity:address?1:0.5 }}
+          disabled={!address} onClick={handleConfirm}>
+          Confirm Pickup →
+        </button>
       </div>
     </div>
   );
 }
 
-// ── PIN DROPOFF ───────────────────────────────────────────────────────────────
 function PinDropoff({ go, pickupData, setDropoffData, user }) {
   const [mapsReady, setMapsReady] = useState(!!window.google?.maps?.places);
   useEffect(() => {
@@ -2606,12 +2569,12 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
           </div>
         )}
 
-        {/* Drop-off address input */}
-        <input
-          value={address}
-          onChange={e => setAddress(e.target.value)}
-          style={{ width:'100%', padding:'11px 13px', border:'1.5px solid #e9d5ff', borderRadius:10, fontSize:14, color:'#1a1a2e', boxSizing:'border-box', outline:'none', background:'#ffffff', marginBottom:14 }}
-        />
+        {/* Selected address display */}
+        {address && (
+          <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:10, padding:'10px 14px', marginBottom:14, fontSize:13, color:'#1a1a2e', fontWeight:500 }}>
+            🏁 {address}
+          </div>
+        )}
 
         {/* Additional details */}
         <label style={{ fontSize:12, fontWeight:600, color:'#555', display:'block', marginBottom:6 }}>
@@ -4050,7 +4013,18 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   // ── Poll for incoming ride requests every 5s ────────────────────────────
   useEffect(() => {
     if (!user?.uid) return;
-    // Real-time onSnapshot - instant new ride notifications (no polling!)
+    // Check if driver already has an active ride
+  useEffect(() => {
+    if (!user?.uid) return;
+    getDocs(query(collection(db,'bookings'),
+      where('driverId','==',user.uid),
+      where('status','in',['active','arrived','enroute'])
+    )).then(snap => {
+      if (!snap.empty) setActiveRideId(snap.docs[0].id);
+    }).catch(()=>{});
+  }, [user]);
+
+  // Real-time onSnapshot - instant new ride notifications (no polling!)
     const q = query(collection(db,'bookings'), where('status','==','searching'));
     const unsub = onSnapshot(q, snap => {
       const open = snap.docs
@@ -5240,7 +5214,7 @@ function ChatScreen({ go, user, bookingId }) {
 
       {/* Header */}
       <div style={{ background:DARK, padding:'12px 16px', display:'flex', alignItems:'center', gap:12, flexShrink:0, borderBottom:'0.5px solid rgba(255,255,255,0.1)' }}>
-        <button onClick={() => go(user?.role==='driver'?'driver-dash':'customer-dash')}
+        <button onClick={() => go(user?.role==='driver'?'driver-active':'live-ride')}
           style={{ background:'none', border:'none', color:'#fff', fontSize:22, cursor:'pointer', padding:'0 4px', lineHeight:1, flexShrink:0 }}>←</button>
         <div style={{ width:38, height:38, borderRadius:'50%', background:'rgba(232,180,0,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>
           {user?.role === 'customer' ? '🚗' : '👤'}
