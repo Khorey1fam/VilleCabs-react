@@ -161,6 +161,7 @@ function VilleMap({ height = 260, center = MANCHESTER_CENTER, zoom = 14, onClick
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: GOOGLE_MAPS_KEY,
     libraries: LIBRARIES,
+    version: 'weekly',
   });
   useEffect(() => {
     if (isLoaded) {
@@ -2305,7 +2306,10 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder,
 
   const search = async (text) => {
     if (!text || text.length < 2) { setResults([]); setOpen(false); return; }
-    if (!window.google?.maps?.importLibrary) return;
+    if (!window.google?.maps) {
+      console.warn('Google Maps not loaded yet');
+      return;
+    }
     setLoading(true);
     try {
       // Use the NEW AutocompleteSuggestion API (required for API keys created after March 2025)
@@ -2324,7 +2328,47 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder,
       setResults(suggestions || []);
       setOpen((suggestions || []).length > 0);
     } catch(e) {
-      console.warn('Autocomplete error:', e);
+      console.error('Autocomplete error:', e.message || e);
+      // Fallback: try legacy API if new API fails
+      try {
+        if (window.google?.maps?.places?.AutocompleteService) {
+          const svc = new window.google.maps.places.AutocompleteService();
+          svc.getPlacePredictions({
+            input: text,
+            componentRestrictions: { country: 'jm' },
+            location: new window.google.maps.LatLng(18.0417, -77.5071),
+            radius: 30000,
+          }, (preds, status) => {
+            setLoading(false);
+            if (status === 'OK' && preds?.length) {
+              // Convert legacy format to new format
+              const converted = preds.slice(0,6).map(p => ({
+                placePrediction: {
+                  mainText: { text: p.structured_formatting?.main_text || p.description?.split(',')[0] || '' },
+                  secondaryText: { text: p.structured_formatting?.secondary_text || '' },
+                  text: { text: p.description || '' },
+                  toPlace: () => ({
+                    fetchFields: async () => {},
+                    displayName: p.description,
+                    formattedAddress: p.description,
+                    location: null,
+                  }),
+                  placeId: p.place_id,
+                  _legacyPred: p,
+                }
+              }));
+              setResults(converted);
+              setOpen(converted.length > 0);
+            } else {
+              setResults([]);
+              setLoading(false);
+            }
+          });
+          return;
+        }
+      } catch(fallbackErr) {
+        console.warn('Fallback also failed:', fallbackErr);
+      }
       setResults([]);
     }
     setLoading(false);
@@ -2347,19 +2391,32 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder,
     setResults([]);
     if (onChange) onChange(mainText);
     try {
-      // Fetch full place details with location
+      const pred = suggestion.placePrediction;
+      // Handle legacy predictions from fallback
+      if (pred._legacyPred) {
+        const p = pred._legacyPred;
+        const detailSvc = new window.google.maps.places.PlacesService(document.createElement('div'));
+        detailSvc.getDetails({ placeId: p.place_id, fields: ['name','formatted_address','geometry'] }, (place, st) => {
+          if (st === 'OK' && place?.geometry) {
+            const addr = place.formatted_address || place.name || mainText;
+            setQuery(addr); if (onChange) onChange(addr);
+            if (onPlaceSelect) onPlaceSelect({ name: place.name, formattedAddress: place.formatted_address, lat: place.geometry.location.lat(), lng: place.geometry.location.lng() });
+          }
+        });
+        return;
+      }
+      // New API
       const place = pred.toPlace();
       await place.fetchFields({ fields: ['displayName', 'formattedAddress', 'location'] });
       const addr = place.formattedAddress || place.displayName || mainText;
       setQuery(addr);
       if (onChange) onChange(addr);
-      if (onPlaceSelect) onPlaceSelect({
+      if (onPlaceSelect && place.location) onPlaceSelect({
         name:             place.displayName,
         formattedAddress: place.formattedAddress,
         lat:              place.location.lat(),
         lng:              place.location.lng(),
       });
-      // Refresh session token after selection
       const { AutocompleteSessionToken } = await window.google.maps.importLibrary('places');
       tokenRef.current = new AutocompleteSessionToken();
     } catch(e) {
@@ -3425,22 +3482,23 @@ function LiveRide({ go, bookingId, user }) {
   const dropoffCoords = booking?.dropoff?.lat   ? { lat:booking.dropoff.lat,        lng:booking.dropoff.lng        } : null;
   const driverCoords  = booking?.driverLocation ? { lat:booking.driverLocation.lat, lng:booking.driverLocation.lng } : null;
 
-  // Compute directions: driver→pickup (searching/active) OR pickup→dropoff (enroute)
+  // Compute directions: driver→pickup OR pickup→dropoff
   useEffect(() => {
-    if (!window.google?.maps) return;
-    const origin      = booking?.status === 'active' && booking?.enrouteToDropoff ? pickupCoords  : driverCoords;
-    const destination = booking?.status === 'active' && booking?.enrouteToDropoff ? dropoffCoords : pickupCoords;
-    if (!origin || !destination) { setDirections(null); return; }
+    if (!window.google?.maps?.DirectionsService) return;
+    const enroute     = booking?.enrouteToDropoff;
+    const origin      = enroute ? pickupCoords  : driverCoords;
+    const destination = enroute ? dropoffCoords : pickupCoords;
+    if (!origin?.lat || !destination?.lat) { setDirections(null); return; }
     const svc = new window.google.maps.DirectionsService();
     svc.route({
-      origin,
-      destination,
-      travelMode: window.google.maps.TravelMode.DRIVING,
+      origin:      { lat: origin.lat, lng: origin.lng },
+      destination: { lat: destination.lat, lng: destination.lng },
+      travelMode:  window.google.maps.TravelMode.DRIVING,
     }, (result, status) => {
       if (status === 'OK') setDirections(result);
-      else setDirections(null);
+      else { console.warn('Directions failed:', status); setDirections(null); }
     });
-  }, [driverCoords?.lat, driverCoords?.lng, pickupCoords?.lat, booking?.status, booking?.enrouteToDropoff]);
+  }, [driverCoords?.lat, driverCoords?.lng, pickupCoords?.lat, booking?.enrouteToDropoff]);
 
   // ── Cancelled screen ──
   if (cancelDone || booking?.status === 'cancelled') {
@@ -4689,25 +4747,25 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
   const markers = [{ position:pickupCoords, title:'Pickup' }];
   if (dropoffCoords) markers.push({ position:dropoffCoords, title:'Drop-off' });
 
-  // Route: driver → pickup (before arrival) or pickup → dropoff (enroute)
+  // Route: driver→pickup (before arrival) or pickup→dropoff (after arrival)
   useEffect(() => {
-    if (!window.google?.maps || !booking) return;
-    const pickupPt  = booking.pickup?.lat  ? { lat:booking.pickup.lat,  lng:booking.pickup.lng  } : null;
-    const dropoffPt = booking.dropoff?.lat ? { lat:booking.dropoff.lat, lng:booking.dropoff.lng } : null;
-    const driverPt  = booking.driverLocation?.lat ? { lat:booking.driverLocation.lat, lng:booking.driverLocation.lng } : null;
-    const origin      = arrived && dropoffPt ? pickupPt : driverPt;
-    const destination = arrived && dropoffPt ? dropoffPt : pickupPt;
-    if (!origin || !destination) { setDirections(null); return; }
+    if (!window.google?.maps?.DirectionsService || !booking) return;
+    const pickupPt  = booking.pickup?.lat  ? { lat: booking.pickup.lat,          lng: booking.pickup.lng          } : null;
+    const dropoffPt = booking.dropoff?.lat ? { lat: booking.dropoff.lat,         lng: booking.dropoff.lng         } : null;
+    const driverPt  = booking.driverLocation?.lat ? { lat: booking.driverLocation.lat, lng: booking.driverLocation.lng } : null;
+    const origin      = arrived ? pickupPt  : driverPt;
+    const destination = arrived ? dropoffPt : pickupPt;
+    if (!origin?.lat || !destination?.lat) { setDirections(null); return; }
     const svc = new window.google.maps.DirectionsService();
     svc.route({
-      origin,
-      destination,
-      travelMode: window.google.maps.TravelMode.DRIVING,
+      origin:      { lat: origin.lat,      lng: origin.lng      },
+      destination: { lat: destination.lat, lng: destination.lng },
+      travelMode:  window.google.maps.TravelMode.DRIVING,
     }, (result, status) => {
       if (status === 'OK') setDirections(result);
-      else setDirections(null);
+      else { console.warn('Driver directions failed:', status); setDirections(null); }
     });
-  }, [booking?.driverLocation?.lat, booking?.driverLocation?.lng, arrived]);
+  }, [booking?.driverLocation?.lat, booking?.driverLocation?.lng, arrived, booking?.pickup?.lat]);
 
   return (
     <div style={{ ...s.content }}>
