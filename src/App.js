@@ -3301,7 +3301,8 @@ function SearchingAnimation({ onCancel }) {
   );
 }
 
-function LiveRide({ go, bookingId, user }) {
+function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, dropoffData }) {
+  const [forceUpdate,  setForceUpdate]  = useState(0);
   const [booking,      setBooking]      = useState(null);
   const [rating,       setRating]       = useState(0);
   const [rated,        setRated]        = useState(false);
@@ -3652,7 +3653,7 @@ function LiveRide({ go, bookingId, user }) {
           )}
         </VilleMap>
         <div style={{ position:'absolute', bottom:0, left:0, right:0, background:'rgba(10,15,35,0.88)', backdropFilter:'blur(8px)', padding:'7px 14px', textAlign:'center', fontSize:12, color:YELLOW, fontWeight:500 }}>
-          {booking?.status==='active'
+          {(booking?.status==='active'||booking?.status==='arrived')
             ? booking?.enrouteToDropoff
               ? '🚗 En route to drop-off — tracking live'
               : driverCoords
@@ -3732,7 +3733,7 @@ function LiveRide({ go, bookingId, user }) {
         )}
 
         {/* Driver arrived in-screen alert */}
-        {booking?.driverArrived && !booking?.enrouteToDropoff && booking?.status === 'active' && (
+        {(booking?.driverArrived || booking?.status === 'arrived') && !booking?.enrouteToDropoff && (
           <div style={{ background:'#fffbe6', border:'2px solid #e8b400', borderRadius:12, padding:14, marginBottom:12, display:'flex', alignItems:'center', gap:12, boxShadow:'0 2px 8px rgba(232,180,0,0.2)' }}>
             <div style={{ fontSize:28 }}>📍</div>
             <div style={{ flex:1 }}>
