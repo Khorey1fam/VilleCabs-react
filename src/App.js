@@ -1906,22 +1906,6 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId }) {
               <div style={{ fontSize:26, fontWeight:800, color:'#1a1a2e', marginBottom:4, lineHeight:1.2 }}>
                 Good day, {user?.name?.split(' ')[0]||'Rider'} 👋
               </div>
-              {/* Active ride banner - blocks new booking */}
-              {activeRide && (
-                <div onClick={() => { setBookingId(activeRide.id); go('live-ride'); }}
-                  style={{ background:'linear-gradient(135deg,#1a9e5a,#166534)', borderRadius:14, padding:'14px 16px', marginBottom:14, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'space-between', boxShadow:'0 4px 14px rgba(26,158,90,0.3)' }}>
-                  <div>
-                    <div style={{ fontSize:14, fontWeight:700, color:'#ffffff', marginBottom:3 }}>
-                      {activeRide.status === 'searching' ? '🔍 Finding your driver...' :
-                       activeRide.status === 'arrived'   ? '📍 Driver has arrived!' :
-                       activeRide.status === 'enroute'   ? '🚗 On the way to drop-off!' :
-                       '🚕 Ride in progress'}
-                    </div>
-                    <div style={{ fontSize:12, color:'rgba(255,255,255,0.85)' }}>Tap to return to your active ride</div>
-                  </div>
-                  <div style={{ fontSize:22 }}>→</div>
-                </div>
-              )}
 
               <button onClick={() => { if (activeRide) { alert('You already have an active ride in progress. Please complete or cancel it before booking a new ride.'); return; } go('pin-pickup'); }}
                 style={{ background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', margin:'14px auto 0', padding:0 }}>
@@ -3762,29 +3746,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
         )}
 
         {/* En route to drop-off banner */}
-        {booking?.enrouteToDropoff && (booking?.status === 'active' || booking?.status === 'arrived' || booking?.status === 'enroute') && (
-          <div style={{ background:'#f0fff8', border:'2px solid #1a9e5a', borderRadius:12, padding:14, marginBottom:12, display:'flex', alignItems:'center', gap:12, boxShadow:'0 2px 8px rgba(26,158,90,0.15)' }}>
-            <div style={{ fontSize:28 }}>🚗</div>
-            <div style={{ flex:1 }}>
-              <div style={{ fontSize:14, fontWeight:700, color:'#1a7a45' }}>On the way to drop-off!</div>
-              <div style={{ fontSize:12, color:'#444', marginTop:2 }}>{booking.driverName} has picked you up</div>
-              <div style={{ fontSize:11, color:'#666', marginTop:2 }}>Heading to {booking.dropoff?.address?.split(',')[0]} 📍</div>
-            </div>
-          </div>
-        )}
 
-        
-        {/* En route to drop-off banner */}
-        {booking?.enrouteToDropoff && (booking?.status === 'active' || booking?.status === 'arrived' || booking?.status === 'enroute') && (
-          <div style={{ background:'#f0fff8', border:'2px solid #1a9e5a', borderRadius:12, padding:14, marginBottom:12, display:'flex', alignItems:'center', gap:12, boxShadow:'0 2px 8px rgba(26,158,90,0.15)' }}>
-            <div style={{ fontSize:28 }}>🚗</div>
-            <div style={{ flex:1 }}>
-              <div style={{ fontSize:14, fontWeight:700, color:'#1a7a45' }}>On the way to drop-off!</div>
-              <div style={{ fontSize:12, color:'#444', marginTop:2 }}>{booking.driverName} has picked you up</div>
-              <div style={{ fontSize:11, color:'#666', marginTop:2 }}>Heading to {booking.dropoff?.address?.split(',')[0]} 📍</div>
-            </div>
-          </div>
-        )}
 
         {/* Manual refresh if ride shows completed */}
         {booking?.status === 'completed' && (
