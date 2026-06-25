@@ -3510,6 +3510,26 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   const [cancelDone, setCancelDone] = useState(false);
   const sosRef = useRef(null);
 
+  const shareRide = () => {
+    const driverName = booking?.driverName || 'A VilleCabs driver';
+    const pickup     = booking?.pickup?.address?.split(',')[0] || 'Pickup location';
+    const dropoff    = booking?.dropoff?.address?.split(',')[0] || 'Drop-off location';
+    const plate      = booking?.licensePlate || '';
+    const text       = `I'm on my way! 🚕\n\nTracking my VilleCabs ride:\n📍 From: ${pickup}\n🏁 To: ${dropoff}\n🚗 Driver: ${driverName}${plate ? ' · ' + plate : ''}\n\nBook your own ride at villecabs.com`;
+    if (navigator.share) {
+      navigator.share({ title: 'My VilleCabs Ride', text, url: 'https://villecabs.com' })
+        .catch(() => {});
+    } else {
+      navigator.clipboard?.writeText(text).then(() => {
+        setShareCopied(true);
+        setTimeout(() => setShareCopied(false), 3000);
+      }).catch(() => {
+        setShareCopied(true);
+        setTimeout(() => setShareCopied(false), 3000);
+      });
+    }
+  };
+
   const cancelRide = async () => {
     if (!bookingId || !window.confirm('Cancel this ride? The booking will be removed.')) return;
     setCancelling(true);
@@ -3924,6 +3944,25 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
               style={{ marginTop:14, padding:'9px 24px', background:'rgba(226,75,74,0.15)', border:'1px solid rgba(226,75,74,0.4)', borderRadius:10, color:'#f09595', fontSize:13, cursor:'pointer', opacity:cancelling?0.6:1 }}>
               {cancelling ? 'Cancelling...' : '✕ Cancel Ride'}
             </button>
+          </div>
+        )}
+
+        {/* Share ride card - shows when driver accepted */}
+        {(booking?.status === 'active' || booking?.status === 'arrived' || booking?.status === 'enroute') && (
+          <div style={{ background:'#0D0D0D', border:'1px solid rgba(106,27,185,0.4)', borderRadius:14, padding:'14px 16px', marginBottom:12 }}>
+            <div style={{ fontSize:12, fontWeight:700, color:'#D4AF37', marginBottom:10 }}>📤 Share Your Ride</div>
+            <div style={{ fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:12, lineHeight:1.5 }}>Let friends or family know you're on your way.</div>
+            <div style={{ display:'flex', gap:8 }}>
+              <button onClick={shareRide}
+                style={{ flex:1, padding:'11px 0', background:'linear-gradient(135deg,#6A1BB9,#4c1d95)', color:'#fff', border:'none', borderRadius:10, fontSize:13, fontWeight:700, cursor:'pointer' }}>
+                {shareCopied ? '✅ Copied!' : '📤 Share Ride'}
+              </button>
+              <a href={`https://wa.me/?text=${encodeURIComponent('I\'m on my way! 🚕 My VilleCabs driver: ' + (booking?.driverName||'VilleCabs driver') + (booking?.licensePlate ? ' · ' + booking.licensePlate : '') + '. Book at villecabs.com')}`}
+                target="_blank" rel="noopener noreferrer"
+                style={{ flex:1, padding:'11px 0', background:'#25D366', color:'#fff', border:'none', borderRadius:10, fontSize:13, fontWeight:700, cursor:'pointer', textDecoration:'none', textAlign:'center', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                💬 WhatsApp
+              </a>
+            </div>
           </div>
         )}
 
