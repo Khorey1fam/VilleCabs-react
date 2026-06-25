@@ -4415,29 +4415,40 @@ function DriverDash({ go, user, setUser, setBookingId }) {
     try { await updateDoc(doc(db,'bookings',rideId), { declinedBy: arrayUnion(user.uid) }); } catch(e) {}
   };
   const acceptRide = async (rideId) => {
+    if (!rideId) { console.error('No rideId'); return; }
+    console.log('Accepting ride:', rideId);
     try {
       const snap = await getDoc(doc(db,'bookings',rideId));
-      if (!snap.exists() || snap.data().status !== 'searching' || snap.data().driverId) {
-        alert('This ride was already accepted.'); return;
-      }
+      if (!snap.exists()) { alert('Ride not found.'); return; }
+      const bData = snap.data();
+      if (bData.status !== 'searching') { alert('This ride is no longer available.'); return; }
+      if (bData.driverId && bData.driverId !== user.uid) { alert('This ride was already accepted by another driver.'); return; }
+
       const dSnap = await getDoc(doc(db,'drivers',user.uid));
       const dData = dSnap.exists() ? dSnap.data() : {};
-      // Optimistic: immediately hide ride from list
-      setPendingRides(prev => prev.filter(r => r.id !== rideId));
 
       await updateDoc(doc(db,'bookings',rideId), {
         driverId:     user.uid,
-        driverName:   user.name,
+        driverName:   user.name || dData.name || 'Driver',
         vehicleMake:  dData.vehicleMake  || '',
         vehicleModel: dData.vehicleModel || '',
         vehicleColor: dData.vehicleColor || '',
         licensePlate: dData.licensePlate || '',
+        profilePhotoUrl: dData.profilePhotoUrl || '',
+        rating:       dData.rating || 5.0,
         status:       'active',
         acceptedAt:   serverTimestamp(),
       });
+
+      console.log('Ride accepted! Navigating to driver-active...');
+      setActiveRideId(rideId);
       setBookingId(rideId);
+      setPendingRides([]);
       go('driver-active');
-    } catch(e) { console.error(e); }
+    } catch(e) {
+      console.error('acceptRide error:', e);
+      alert('Failed to accept ride: ' + e.message);
+    }
   };
   const handleLogout = async () => {
     await goOffline();
