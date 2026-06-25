@@ -6430,222 +6430,36 @@ function DriverEarnings({ go, user }) {
   const [rides,   setRides]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [period,  setPeriod]  = useState('week');
-  const [detail,  setDetail]  = useState(null);
+
   useEffect(() => {
     if (!user?.uid) return;
-    getDocs(query(collection(db,'bookings'), where('driverId','==',user.uid), where('status','==','completed')))
-      .then(snap => { setRides(snap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0))); setLoading(false); })
-      .catch(() => setLoading(false));
+    getDocs(query(
+      collection(db,'bookings'),
+      where('driverId','==',user.uid),
+      where('status','==','completed')
+    ))
+    .then(snap => {
+      setRides(snap.docs.map(d => ({ id:d.id, ...d.data() }))
+        .sort((a,b) => (b.completedAt?.seconds||0) - (a.completedAt?.seconds||0)));
+      setLoading(false);
+    })
+    .catch(() => setLoading(false));
   }, [user]);
-  const now=new Date(), todayStart=new Date(now.getFullYear(),now.getMonth(),now.getDate());
-  const weekStart=new Date(todayStart.getTime()-6*86400000), monthStart=new Date(now.getFullYear(),now.getMonth(),1);
-  const filtered=rides.filter(r=>{const d=new Date((r.createdAt?.seconds||0)*1000);return period==='today'?d>=todayStart:period==='week'?d>=weekStart:d>=monthStart;});
-  const totalFare=filtered.reduce((s,r)=>s+(r.fare||0),0);
-  const driverNet=Math.round(totalFare*0.85), vcFee=Math.round(totalFare*0.15);
-  if (detail) {
-    const fare=detail.fare||0;
-    return (
-      <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
-        <div style={{ background:'#fff', padding:'8px 14px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #e5e7eb', position:'sticky', top:0, zIndex:10 }}>
-          <button onClick={()=>setDetail(null)} style={{ background:'none', border:'none', fontSize:20, cursor:'pointer', color:'#1a1a2e' }}>←</button>
-          <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>Ride Details</span>
-        </div>
-        <div style={{ padding:16 }}>
-          <div style={{ background:'#fff', borderRadius:14, padding:16, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
-            {[['Total Fare','J$'+fare.toLocaleString(),'#1a1a2e'],['VilleCabs Fee (15%)','-J$'+Math.round(fare*0.15).toLocaleString(),'#dc2626'],['You Earned (85%)','J$'+Math.round(fare*0.85).toLocaleString(),'#6b21a8']].map(([l,v,c],i)=>(
-              <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'10px 0', borderBottom:i<2?'1px solid #f0f0f0':'none' }}>
-                <span style={{ fontSize:13, color:'#555' }}>{l}</span><span style={{ fontSize:14, fontWeight:700, color:c }}>{v}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
-      <div style={{ background:'#fff', padding:'8px 14px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #e5e7eb', position:'sticky', top:0, zIndex:10 }}>
-        <img src="/logo.png" onClick={() => go('driver-dash')} style={{cursor:'pointer',  height:26, objectFit:'contain' }} alt="VilleCabs"/>
-        <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:4 }}>Earnings</span>
-      </div>
-      <div style={{ display:'flex', gap:8, padding:'12px 16px', background:'#fff', borderBottom:'1px solid #f0f0f0' }}>
-        {[['today','Today'],['week','This Week'],['month','This Month']].map(([k,l])=>(
-          <button key={k} onClick={()=>setPeriod(k)} style={{ flex:1, padding:'8px', borderRadius:20, border:'none', background:period===k?'#6b21a8':'#f3f4f6', color:period===k?'#fff':'#555', fontSize:12, fontWeight:600, cursor:'pointer' }}>{l}</button>
-        ))}
-      </div>
-      <div style={{ padding:'14px' }}>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
-          <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:14, padding:'14px' }}>
-            <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', marginBottom:4 }}>You Earned</div>
-            <div style={{ fontSize:22, fontWeight:800, color:'#6b21a8' }}>J${driverNet.toLocaleString()}</div>
-          </div>
-          <div style={{ background:'#fff', border:'1px solid #e5e7eb', borderRadius:14, padding:'14px' }}>
-            <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', marginBottom:4 }}>Total Fares</div>
-            <div style={{ fontSize:22, fontWeight:800, color:'#1a1a2e' }}>J${totalFare.toLocaleString()}</div>
-          </div>
-        </div>
-        {loading && <div style={{ textAlign:'center', color:'#888', padding:24 }}>Loading...</div>}
-        {!loading && filtered.length===0 && <div style={{ textAlign:'center', color:'#888', padding:24 }}>No rides in this period</div>}
-        {filtered.map((r,i)=>{
-          const d=new Date((r.createdAt?.seconds||0)*1000);
-          return (
-    <div style={{ ...s.content, background:'#f5f6fa' }}>
-      <div style={{ background:'#111827', padding:'12px 16px', display:'flex', alignItems:'center', gap:12, boxShadow:'0 2px 12px rgba(0,0,0,0.3)' }}>
-        <button onClick={() => go('driver-dash')} style={{ background:'none', border:'none', color:'#fff', fontSize:20, cursor:'pointer' }}>←</button>
-        <img src="/logo.png" alt="VilleCabs" onClick={() => go('driver-dash')} style={{ height:26, objectFit:'contain', cursor:'pointer' }}/>
-        <span style={{ color:'#ffffff', fontSize:14, fontWeight:700, flex:1, textAlign:'center' }}>My Earnings</span>
-        <div style={{ width:60 }}/>
-      </div>
 
-      {/* Period selector */}
-      <div style={{ display:'flex', gap:8, padding:'14px 16px 0' }}>
-        {['week','month','all'].map(p => (
-          <button key={p} onClick={() => setPeriod(p)}
-            style={{ flex:1, padding:'9px 0', borderRadius:10, border:'none', fontWeight:700, fontSize:12, cursor:'pointer',
-              background: period===p ? 'linear-gradient(135deg,#6A1BB9,#4c1d95)' : '#ffffff',
-              color: period===p ? '#ffffff' : '#6b7280',
-              boxShadow: period===p ? '0 2px 8px rgba(106,27,185,0.3)' : 'none' }}>
-            {p==='week'?'This Week':p==='month'?'This Month':'All Time'}
-          </button>
-        ))}
-      </div>
-
-      {loading ? (
-        <div style={{ textAlign:'center', padding:40, color:'#888' }}>Loading earnings...</div>
-      ) : (() => {
-        const now   = Date.now() / 1000;
-        const filtered = rides.filter(r => {
-          if (period === 'all') return true;
-          const secs = r.completedAt?.seconds || r.createdAt?.seconds || 0;
-          return period === 'week' ? (now - secs) < 604800 : (now - secs) < 2592000;
-        });
-        const totalFare = filtered.reduce((s, r) => s + (r.fare || 0), 0);
-        const totalEarn = Math.round(totalFare * 0.85);
-        const totalFee  = Math.round(totalFare * 0.15);
-        const avgFare   = filtered.length ? Math.round(totalFare / filtered.length) : 0;
-
-        return (
-          <div style={{ flex:1, overflowY:'auto', padding:'14px 16px 80px' }}>
-
-            {/* Summary cards */}
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14 }}>
-              <div style={{ background:'#0D0D0D', borderRadius:14, padding:'16px', border:'1px solid rgba(212,175,55,0.3)' }}>
-                <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:6 }}>Your Earnings</div>
-                <div style={{ fontSize:22, fontWeight:800, color:'#D4AF37' }}>J${totalEarn.toLocaleString()}</div>
-                <div style={{ fontSize:10, color:'rgba(255,255,255,0.3)', marginTop:4 }}>{filtered.length} ride{filtered.length!==1?'s':''}</div>
-              </div>
-              <div style={{ background:'#0D0D0D', borderRadius:14, padding:'16px', border:'1px solid rgba(255,255,255,0.08)' }}>
-                <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:6 }}>Total Fares</div>
-                <div style={{ fontSize:22, fontWeight:800, color:'#ffffff' }}>J${totalFare.toLocaleString()}</div>
-                <div style={{ fontSize:10, color:'rgba(255,255,255,0.3)', marginTop:4 }}>Platform fee J${totalFee.toLocaleString()}</div>
-              </div>
-              <div style={{ background:'#0D0D0D', borderRadius:14, padding:'16px', border:'1px solid rgba(255,255,255,0.08)' }}>
-                <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:6 }}>Avg per Ride</div>
-                <div style={{ fontSize:22, fontWeight:800, color:'#ffffff' }}>J${avgFare.toLocaleString()}</div>
-              </div>
-              <div style={{ background:'#0D0D0D', borderRadius:14, padding:'16px', border:'1px solid rgba(26,158,90,0.3)' }}>
-                <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:6 }}>Completion Rate</div>
-                <div style={{ fontSize:22, fontWeight:800, color:'#1a9e5a' }}>{filtered.length ? '100' : '0'}%</div>
-              </div>
-            </div>
-
-            {/* Ride history */}
-            <div style={{ fontSize:11, fontWeight:700, color:'#6b7280', textTransform:'uppercase', letterSpacing:0.8, marginBottom:10 }}>
-              Ride History ({filtered.length})
-            </div>
-
-            {filtered.length === 0 ? (
-              <div style={{ background:'#ffffff', borderRadius:14, padding:24, textAlign:'center', color:'#888' }}>
-                <div style={{ fontSize:32, marginBottom:8 }}>🚗</div>
-                <div style={{ fontSize:14, fontWeight:600 }}>No rides this {period === 'week' ? 'week' : period === 'month' ? 'month' : 'time'}</div>
-                <div style={{ fontSize:12, marginTop:4 }}>Complete rides to see them here</div>
-              </div>
-            ) : filtered.map((ride, i) => {
-              const date = ride.completedAt?.seconds
-                ? new Date(ride.completedAt.seconds*1000).toLocaleDateString('en-JM',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})
-                : '—';
-              const earn = Math.round((ride.fare||0) * 0.85);
-            
-  const now      = Date.now() / 1000;
+  const now = Date.now() / 1000;
   const filtered = rides.filter(r => {
     if (period === 'all') return true;
     const secs = r.completedAt?.seconds || r.createdAt?.seconds || 0;
     return period === 'week' ? (now - secs) < 604800 : (now - secs) < 2592000;
   });
-  const totalFare = filtered.reduce((s, r) => s + (r.fare || 0), 0);
+  const totalFare = filtered.reduce((s,r) => s + (r.fare||0), 0);
   const totalEarn = Math.round(totalFare * 0.85);
   const totalFee  = Math.round(totalFare * 0.15);
   const avgFare   = filtered.length ? Math.round(totalFare / filtered.length) : 0;
 
   return (
-    <div style={{ ...s.content, background:'#f5f6fa' }}>
-      <div style={{ background:'#111827', padding:'12px 16px', display:'flex', alignItems:'center', gap:12, boxShadow:'0 2px 12px rgba(0,0,0,0.3)' }}>
-        <button onClick={() => go('driver-dash')} style={{ background:'none', border:'none', color:'#fff', fontSize:20, cursor:'pointer' }}>←</button>
-        <img src="/logo.png" alt="VilleCabs" onClick={() => go('driver-dash')} style={{ height:26, objectFit:'contain', cursor:'pointer' }}/>
-        <span style={{ color:'#ffffff', fontSize:14, fontWeight:700, flex:1, textAlign:'center' }}>My Earnings</span>
-        <div style={{ width:60 }}/>
-      </div>
-
-      {/* Period selector */}
-      <div style={{ display:'flex', gap:8, padding:'14px 16px 0' }}>
-        {['week','month','all'].map(p => (
-          <button key={p} onClick={() => setPeriod(p)}
-            style={{ flex:1, padding:'9px 0', borderRadius:10, border:'none', fontWeight:700, fontSize:12, cursor:'pointer',
-              background: period===p ? 'linear-gradient(135deg,#6A1BB9,#4c1d95)' : '#ffffff',
-              color: period===p ? '#ffffff' : '#6b7280',
-              boxShadow: period===p ? '0 2px 8px rgba(106,27,185,0.3)' : 'none' }}>
-            {p==='week'?'This Week':p==='month'?'This Month':'All Time'}
-          </button>
-        ))}
-      </div>
-
-      {loading ? (
-        <div style={{ textAlign:'center', padding:40, color:'#888' }}>Loading earnings...</div>
-      ) : (
-        <div style={{ flex:1, overflowY:'auto', padding:'14px 16px 80px' }}>
-
-          {/* Summary cards */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14 }}>
-            <div style={{ background:'#0D0D0D', borderRadius:14, padding:'16px', border:'1px solid rgba(212,175,55,0.3)' }}>
-              <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:6 }}>Your Earnings</div>
-              <div style={{ fontSize:22, fontWeight:800, color:'#D4AF37' }}>J${totalEarn.toLocaleString()}</div>
-              <div style={{ fontSize:10, color:'rgba(255,255,255,0.3)', marginTop:4 }}>{filtered.length} ride{filtered.length!==1?'s':''}</div>
-            </div>
-            <div style={{ background:'#0D0D0D', borderRadius:14, padding:'16px', border:'1px solid rgba(255,255,255,0.08)' }}>
-              <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:6 }}>Total Fares</div>
-              <div style={{ fontSize:22, fontWeight:800, color:'#ffffff' }}>J${totalFare.toLocaleString()}</div>
-              <div style={{ fontSize:10, color:'rgba(255,255,255,0.3)', marginTop:4 }}>Platform fee J${totalFee.toLocaleString()}</div>
-            </div>
-            <div style={{ background:'#0D0D0D', borderRadius:14, padding:'16px', border:'1px solid rgba(255,255,255,0.08)' }}>
-              <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:6 }}>Avg per Ride</div>
-              <div style={{ fontSize:22, fontWeight:800, color:'#ffffff' }}>J${avgFare.toLocaleString()}</div>
-            </div>
-            <div style={{ background:'#0D0D0D', borderRadius:14, padding:'16px', border:'1px solid rgba(26,158,90,0.3)' }}>
-              <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:6 }}>Rides Completed</div>
-              <div style={{ fontSize:22, fontWeight:800, color:'#1a9e5a' }}>{filtered.length}</div>
-            </div>
-          </div>
-
-          {/* Ride history */}
-          <div style={{ fontSize:11, fontWeight:700, color:'#6b7280', textTransform:'uppercase', letterSpacing:0.8, marginBottom:10 }}>
-            Ride History ({filtered.length})
-          </div>
-
-          {filtered.length === 0 ? (
-            <div style={{ background:'#ffffff', borderRadius:14, padding:24, textAlign:'center', color:'#888' }}>
-              <div style={{ fontSize:32, marginBottom:8 }}>🚗</div>
-              <div style={{ fontSize:14, fontWeight:600 }}>No rides {period==='week'?'this week':period==='month'?'this month':'yet'}</div>
-              <div style={{ fontSize:12, marginTop:4 }}>Complete rides to see them here</div>
-            </div>
-          ) : filtered.map((ride, i) => {
-            const date = ride.completedAt?.seconds
-              ? new Date(ride.completedAt.seconds*1000).toLocaleDateString('en-JM',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})
-              : '—';
-            const earn = Math.round((ride.fare||0) * 0.85);
-            return (
     <div style={{ ...s.content, background:'#f5f6fa', display:'flex', flexDirection:'column' }}>
 
-      {/* Header */}
       <div style={{ background:'#111827', padding:'12px 16px', display:'flex', alignItems:'center', gap:12, boxShadow:'0 2px 12px rgba(0,0,0,0.3)', flexShrink:0 }}>
         <button onClick={() => go('driver-dash')} style={{ background:'none', border:'none', color:'#fff', fontSize:20, cursor:'pointer' }}>←</button>
         <img src="/logo.png" alt="VilleCabs" onClick={() => go('driver-dash')} style={{ height:26, objectFit:'contain', cursor:'pointer' }}/>
@@ -6653,90 +6467,77 @@ function DriverEarnings({ go, user }) {
         <div style={{ width:60 }}/>
       </div>
 
-      {/* Period selector */}
       <div style={{ display:'flex', gap:8, padding:'14px 16px 0', flexShrink:0 }}>
         {['week','month','all'].map(p => (
           <button key={p} onClick={() => setPeriod(p)}
             style={{ flex:1, padding:'9px 0', borderRadius:10, border:'none', fontWeight:700, fontSize:12, cursor:'pointer',
               background: period===p ? 'linear-gradient(135deg,#6A1BB9,#4c1d95)' : '#ffffff',
-              color: period===p ? '#ffffff' : '#6b7280',
-              boxShadow: period===p ? '0 2px 8px rgba(106,27,185,0.3)' : 'none' }}>
+              color: period===p ? '#ffffff' : '#6b7280' }}>
             {p==='week' ? 'This Week' : p==='month' ? 'This Month' : 'All Time'}
           </button>
         ))}
       </div>
 
-      {/* Main content */}
       {loading ? (
         <div style={{ textAlign:'center', padding:40, color:'#888' }}>Loading earnings...</div>
       ) : (
         <div style={{ flex:1, overflowY:'auto', padding:'14px 16px 80px' }}>
 
-          {/* Summary cards */}
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14 }}>
-            <div style={{ background:'#0D0D0D', borderRadius:14, padding:'16px', border:'1px solid rgba(212,175,55,0.3)' }}>
+            <div style={{ background:'#0D0D0D', borderRadius:14, padding:16, border:'1px solid rgba(212,175,55,0.3)' }}>
               <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:6 }}>Your Earnings</div>
               <div style={{ fontSize:22, fontWeight:800, color:'#D4AF37' }}>J${totalEarn.toLocaleString()}</div>
               <div style={{ fontSize:10, color:'rgba(255,255,255,0.3)', marginTop:4 }}>{filtered.length} ride{filtered.length!==1?'s':''}</div>
             </div>
-            <div style={{ background:'#0D0D0D', borderRadius:14, padding:'16px', border:'1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ background:'#0D0D0D', borderRadius:14, padding:16, border:'1px solid rgba(255,255,255,0.08)' }}>
               <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:6 }}>Total Fares</div>
               <div style={{ fontSize:22, fontWeight:800, color:'#ffffff' }}>J${totalFare.toLocaleString()}</div>
-              <div style={{ fontSize:10, color:'rgba(255,255,255,0.3)', marginTop:4 }}>Platform fee J${totalFee.toLocaleString()}</div>
+              <div style={{ fontSize:10, color:'rgba(255,255,255,0.3)', marginTop:4 }}>Fee J${totalFee.toLocaleString()}</div>
             </div>
-            <div style={{ background:'#0D0D0D', borderRadius:14, padding:'16px', border:'1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ background:'#0D0D0D', borderRadius:14, padding:16, border:'1px solid rgba(255,255,255,0.08)' }}>
               <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:6 }}>Avg per Ride</div>
               <div style={{ fontSize:22, fontWeight:800, color:'#ffffff' }}>J${avgFare.toLocaleString()}</div>
             </div>
-            <div style={{ background:'#0D0D0D', borderRadius:14, padding:'16px', border:'1px solid rgba(26,158,90,0.3)' }}>
-              <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:6 }}>Rides Completed</div>
+            <div style={{ background:'#0D0D0D', borderRadius:14, padding:16, border:'1px solid rgba(26,158,90,0.3)' }}>
+              <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:6 }}>Completed</div>
               <div style={{ fontSize:22, fontWeight:800, color:'#1a9e5a' }}>{filtered.length}</div>
             </div>
           </div>
 
-          {/* Ride history label */}
           <div style={{ fontSize:11, fontWeight:700, color:'#6b7280', textTransform:'uppercase', letterSpacing:0.8, marginBottom:10 }}>
             Ride History ({filtered.length})
           </div>
 
-          {/* Empty state */}
           {filtered.length === 0 && (
-            <div style={{ background:'#ffffff', borderRadius:14, padding:24, textAlign:'center', color:'#888' }}>
+            <div style={{ background:'#ffffff', borderRadius:14, padding:24, textAlign:'center' }}>
               <div style={{ fontSize:32, marginBottom:8 }}>🚗</div>
-              <div style={{ fontSize:14, fontWeight:600 }}>No rides {period==='week'?'this week':period==='month'?'this month':'yet'}</div>
-              <div style={{ fontSize:12, marginTop:4 }}>Complete rides to see them here</div>
+              <div style={{ fontSize:14, fontWeight:600, color:'#888' }}>No rides {period==='week'?'this week':period==='month'?'this month':'yet'}</div>
             </div>
           )}
 
-          {/* Ride cards */}
           {filtered.map((ride, i) => {
             const rideDate = ride.completedAt?.seconds
               ? new Date(ride.completedAt.seconds*1000).toLocaleDateString('en-JM',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})
               : '—';
             const earn = Math.round((ride.fare||0) * 0.85);
             return (
-              <div key={ride.id || i} style={{ background:'#ffffff', borderRadius:14, padding:'14px 16px', marginBottom:10, boxShadow:'0 1px 4px rgba(0,0,0,0.06)' }}>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:8 }}>
+              <div key={ride.id||i} style={{ background:'#ffffff', borderRadius:14, padding:'14px 16px', marginBottom:10, boxShadow:'0 1px 4px rgba(0,0,0,0.06)' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
                   <div style={{ fontSize:12, color:'#6b7280' }}>{rideDate}</div>
                   <div style={{ fontSize:15, fontWeight:800, color:'#1a9e5a' }}>+J${earn.toLocaleString()}</div>
                 </div>
                 <div style={{ display:'flex', gap:8, marginBottom:4, alignItems:'center' }}>
                   <div style={{ width:8, height:8, borderRadius:'50%', background:'#1a9e5a', flexShrink:0 }}/>
-                  <div style={{ fontSize:12, color:'#1a1a2e', fontWeight:500, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                    {ride.pickup?.address?.split(',')[0] || '—'}
-                  </div>
+                  <div style={{ fontSize:12, color:'#1a1a2e', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ride.pickup?.address?.split(',')[0]||'—'}</div>
                 </div>
                 <div style={{ display:'flex', gap:8, alignItems:'center' }}>
                   <div style={{ width:8, height:8, borderRadius:'50%', background:'#6A1BB9', flexShrink:0 }}/>
-                  <div style={{ fontSize:12, color:'#1a1a2e', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                    {ride.dropoff?.address?.split(',')[0] || '—'}
-                  </div>
+                  <div style={{ fontSize:12, color:'#1a1a2e', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ride.dropoff?.address?.split(',')[0]||'—'}</div>
                 </div>
-                <div style={{ display:'flex', gap:16, marginTop:8, paddingTop:8, borderTop:'1px solid #f0f0f0', flexWrap:'wrap' }}>
-                  <div style={{ fontSize:11, color:'#888' }}>Fare: <span style={{ color:'#1a1a2e', fontWeight:600 }}>J${(ride.fare||0).toLocaleString()}</span></div>
+                <div style={{ display:'flex', gap:12, marginTop:8, paddingTop:8, borderTop:'1px solid #f0f0f0', flexWrap:'wrap' }}>
+                  <div style={{ fontSize:11, color:'#888' }}>Fare: <span style={{ fontWeight:600, color:'#1a1a2e' }}>J${(ride.fare||0).toLocaleString()}</span></div>
                   <div style={{ fontSize:11, color:'#888' }}>Fee: <span style={{ color:'#e24b4a' }}>-J${Math.round((ride.fare||0)*0.15).toLocaleString()}</span></div>
                   {ride.distanceKm && <div style={{ fontSize:11, color:'#888' }}>{Number(ride.distanceKm).toFixed(1)} km</div>}
-                  {ride.vehicleType && <div style={{ fontSize:11, color:'#888' }}>{ride.vehicleType}</div>}
                 </div>
               </div>
             );
