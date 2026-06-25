@@ -76,6 +76,41 @@ const sendWelcomeEmail = async (toEmail, toName, role = 'customer') => {
   }
 };
 const LIBRARIES       = ['places'];
+
+// Send ride receipt email to customer after ride completes
+const sendRideReceipt = async (booking, customerEmail, customerName) => {
+  if (!customerEmail) return;
+  try {
+    const fare     = booking?.fare || 0;
+    const distance = booking?.distanceKm ? booking.distanceKm.toFixed(1) : '—';
+    const date     = new Date().toLocaleDateString('en-JM', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+    const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        service_id:  'service_8fp53l4',
+        template_id: 'template_ride_receipt',
+        user_id:     'NYE1IvkRipsFf-pQg',
+        template_params: {
+          to_email:     customerEmail,
+          to_name:      customerName,
+          from_name:    'VilleCabs',
+          reply_to:     'admin@villecabs.com',
+          ride_date:    date,
+          pickup:       booking?.pickup?.address   || '—',
+          dropoff:      booking?.dropoff?.address  || '—',
+          driver_name:  booking?.driverName        || '—',
+          vehicle:      `${booking?.vehicleMake||''} ${booking?.vehicleModel||''} ${booking?.licensePlate||''}`.trim(),
+          distance_km:  distance,
+          fare:         `J$${fare.toLocaleString()}`,
+          booking_id:   booking?.id || '—',
+        },
+      }),
+    });
+    if (res.ok) console.log('✅ Receipt sent to', customerEmail);
+    else console.warn('Receipt email failed:', res.status);
+  } catch(e) { console.warn('Receipt email error:', e); }
+};
 const GOOGLE_MAPS_KEY = process.env.REACT_APP_GOOGLE_MAPS_KEY || '';
 
 
@@ -2064,6 +2099,134 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId }) {
 }
 
 // ── CUSTOMER PROFILE ──────────────────────────────────────────────────────────
+function CustomerReferral({ go, user }) {
+  const [code,    setCode]    = React.useState(null);
+  const [copied,  setCopied]  = React.useState(false);
+  const [stats,   setStats]   = React.useState({ used: 0, earned: 0 });
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    if (!user?.uid) return;
+    // Generate deterministic referral code from uid
+    const refCode = 'VILLE' + user.uid.substring(0, 5).toUpperCase();
+    setCode(refCode);
+    // Check how many times it was used
+    getDocs(query(collection(db,'bookings'),
+      where('promoCode','==', refCode)
+    )).then(snap => {
+      const used   = snap.size;
+      const earned = used * 200; // J$200 per referral
+      setStats({ used, earned });
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [user]);
+
+  const copyCode = () => {
+    navigator.clipboard?.writeText(code).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {
+      // Fallback
+      const el = document.createElement('textarea');
+      el.value = code;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const shareText = `Get your first VilleCabs ride with J$200 off! Use my code: ${code} at villecabs.com 🚕`;
+
+  const share = () => {
+    if (navigator.share) {
+      navigator.share({ title: 'VilleCabs Referral', text: shareText, url: 'https://villecabs.com' });
+    } else {
+      navigator.clipboard?.writeText(shareText);
+      alert('Share text copied to clipboard!');
+    }
+  };
+
+  return (
+    <div style={{ ...s.content, background:'#f5f6fa' }}>
+      <div style={{ background:'#111827', padding:'12px 16px', display:'flex', alignItems:'center', gap:12, boxShadow:'0 2px 12px rgba(0,0,0,0.3)' }}>
+        <button onClick={() => go('customer-dash')} style={{ background:'none', border:'none', color:'#fff', fontSize:20, cursor:'pointer' }}>←</button>
+        <img src="/logo.png" alt="VilleCabs" onClick={() => go('customer-dash')} style={{ height:26, objectFit:'contain', cursor:'pointer' }}/>
+        <span style={{ color:'#ffffff', fontSize:14, fontWeight:700, flex:1, textAlign:'center' }}>Refer & Earn</span>
+        <div style={{ width:60 }}/>
+      </div>
+
+      <div style={{ flex:1, overflowY:'auto', padding:'20px 16px 80px' }}>
+
+        {/* Hero */}
+        <div style={{ background:'linear-gradient(135deg,#6A1BB9,#4c1d95)', borderRadius:20, padding:'24px 20px', textAlign:'center', marginBottom:16, boxShadow:'0 8px 24px rgba(106,27,185,0.4)' }}>
+          <div style={{ fontSize:40, marginBottom:10 }}>🎁</div>
+          <div style={{ fontSize:20, fontWeight:800, color:'#ffffff', marginBottom:6 }}>Give J$200, Get J$200</div>
+          <div style={{ fontSize:13, color:'rgba(255,255,255,0.8)', lineHeight:1.6 }}>Share your code with friends. When they book their first ride, you both get J$200 off.</div>
+        </div>
+
+        {/* Your code */}
+        <div style={{ background:'#0D0D0D', borderRadius:16, padding:'18px 20px', marginBottom:12, border:'1px solid rgba(212,175,55,0.3)' }}>
+          <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:10 }}>Your Referral Code</div>
+          <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+            <div style={{ flex:1, background:'rgba(255,255,255,0.06)', border:'2px dashed rgba(212,175,55,0.4)', borderRadius:12, padding:'14px', textAlign:'center' }}>
+              <div style={{ fontSize:26, fontWeight:900, color:'#D4AF37', letterSpacing:4 }}>{loading ? '...' : code}</div>
+            </div>
+            <button onClick={copyCode} style={{ width:52, height:52, borderRadius:12, background:copied?'#1a9e5a':'rgba(212,175,55,0.15)', border:'1px solid '+(copied?'#1a9e5a':'#D4AF37'), color:copied?'#fff':'#D4AF37', fontSize:20, cursor:'pointer', flexShrink:0 }}>
+              {copied ? '✅' : '📋'}
+            </button>
+          </div>
+          {copied && <div style={{ fontSize:12, color:'#1a9e5a', textAlign:'center', marginTop:8 }}>Code copied!</div>}
+        </div>
+
+        {/* Stats */}
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
+          <div style={{ background:'#ffffff', borderRadius:14, padding:'16px', textAlign:'center', boxShadow:'0 1px 4px rgba(0,0,0,0.06)' }}>
+            <div style={{ fontSize:28, fontWeight:800, color:'#6A1BB9' }}>{loading ? '—' : stats.used}</div>
+            <div style={{ fontSize:11, color:'#888', marginTop:4 }}>Friends Referred</div>
+          </div>
+          <div style={{ background:'#ffffff', borderRadius:14, padding:'16px', textAlign:'center', boxShadow:'0 1px 4px rgba(0,0,0,0.06)' }}>
+            <div style={{ fontSize:28, fontWeight:800, color:'#1a9e5a' }}>J${loading ? '—' : stats.earned.toLocaleString()}</div>
+            <div style={{ fontSize:11, color:'#888', marginTop:4 }}>Total Earned</div>
+          </div>
+        </div>
+
+        {/* Share button */}
+        <button onClick={share} style={{ width:'100%', padding:'16px', background:'linear-gradient(135deg,#6A1BB9,#4c1d95)', color:'#fff', border:'none', borderRadius:14, fontSize:15, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 14px rgba(106,27,185,0.4)', marginBottom:12 }}>
+          📤 Share My Code
+        </button>
+
+        {/* WhatsApp share */}
+        <a href={`https://wa.me/?text=${encodeURIComponent(shareText)}`} target="_blank" rel="noopener noreferrer"
+          style={{ display:'block', width:'100%', padding:'16px', background:'#25D366', color:'#fff', border:'none', borderRadius:14, fontSize:15, fontWeight:700, cursor:'pointer', textDecoration:'none', textAlign:'center', marginBottom:20 }}>
+          💬 Share via WhatsApp
+        </a>
+
+        {/* How it works */}
+        <div style={{ background:'#ffffff', borderRadius:16, padding:'18px', boxShadow:'0 1px 4px rgba(0,0,0,0.06)' }}>
+          <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:14 }}>How it works</div>
+          {[
+            ['1️⃣', 'Share your code', 'Send it to friends, family or anyone in Mandeville'],
+            ['2️⃣', 'They sign up', 'Friend creates a VilleCabs account and enters your code'],
+            ['3️⃣', 'Both get J$200', 'They get J$200 off their first ride, you earn J$200 credit'],
+          ].map(([icon, title, body]) => (
+            <div key={title} style={{ display:'flex', gap:12, marginBottom:14, alignItems:'flex-start' }}>
+              <span style={{ fontSize:20, flexShrink:0 }}>{icon}</span>
+              <div>
+                <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:2 }}>{title}</div>
+                <div style={{ fontSize:12, color:'#6b7280', lineHeight:1.5 }}>{body}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function CustomerProfile({ go, user, setUser }) {
   const [form,    setForm]    = useState({ name:user?.name||'', phone:'' });
   const [loading, setLoading] = useState(false);
@@ -2564,7 +2727,8 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
   const startPos = pickupData?.coords || MANCHESTER_CENTER;
   const [pinPos,   setPinPos]   = useState(MANCHESTER_CENTER);
   const [address,  setAddress]  = useState('');
-  const [note,     setNote]     = useState('');
+  const [note,         setNote]         = useState('');
+  const [fareEstimate, setFareEstimate] = useState(null);
 
   useEffect(() => {
     if (window.google?.maps?.places) { setMapsReady(true); return; }
@@ -2576,6 +2740,19 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
     const pos = { lat: place.lat, lng: place.lng };
     setPinPos(pos);
     setAddress(place.formattedAddress || place.name);
+    // Calculate fare estimate
+    if (pickupData?.coords) {
+      try {
+        const R = 6371;
+        const dLat = (place.lat - pickupData.coords.lat) * Math.PI / 180;
+        const dLon = (place.lng - pickupData.coords.lng) * Math.PI / 180;
+        const a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(pickupData.coords.lat*Math.PI/180)*Math.cos(place.lat*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
+        const distKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const base = 300, perKm = 120;
+        const est = Math.round((base + distKm * perKm) / 50) * 50;
+        setFareEstimate({ distKm: distKm.toFixed(1), min: est, max: Math.round(est * 1.2 / 50) * 50 });
+      } catch(e) {}
+    }
   };
 
   const handleMapClick = async (e) => {
@@ -2586,6 +2763,19 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
       const addr = await geocodeLatLng(lat, lng);
       setAddress(addr);
     } catch(err) {}
+    // Calculate fare estimate
+    if (pickupData?.coords) {
+      try {
+        const R = 6371;
+        const dLat = (lat - pickupData.coords.lat) * Math.PI / 180;
+        const dLon = (lng  - pickupData.coords.lng) * Math.PI / 180;
+        const a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(pickupData.coords.lat*Math.PI/180)*Math.cos(lat*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
+        const distKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        const base = 300, perKm = 120;
+        const est = Math.round((base + distKm * perKm) / 50) * 50;
+        setFareEstimate({ distKm: distKm.toFixed(1), min: est, max: Math.round(est * 1.2 / 50) * 50 });
+      } catch(e) {}
+    }
   };
 
   const handleConfirm = () => {
@@ -3626,7 +3816,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
               <p style={{ fontSize:12, color:'rgba(255,255,255,0.4)', marginBottom:14 }}>Rate your driver</p>
               <div style={{ display:'flex', gap:10, justifyContent:'center', marginBottom:14 }}>
                 {[1,2,3,4,5].map(star => (
-                  <div key={star} onClick={() => setRating(star)} style={{ fontSize:36, cursor:'pointer', opacity:star<=rating?1:0.25, transition:'opacity 0.2s' }}>⭐</div>
+                  <div key={star} onClick={() => { setRating(star); submitRating(star); }} style={{ fontSize:36, cursor:'pointer', opacity:star<=rating?1:0.25, transition:'opacity 0.2s' }}>⭐</div>
                 ))}
               </div>
               {rating > 0 && <button style={s.btnY} onClick={submitRating}>Submit Rating</button>}
@@ -4132,6 +4322,13 @@ function DriverDash({ go, user, setUser, setBookingId }) {
       where('status','in',['active','arrived','enroute'])
     )).then(snap => {
       if (!snap.empty) setActiveRideId(snap.docs[0].id);
+    }).catch(()=>{});
+    // Load driver rating
+    getDoc(doc(db,'drivers',user.uid)).then(snap => {
+      if (snap.exists()) {
+        const d = snap.data();
+        setDriverRating({ avg: d.rating || 5.0, count: d.ratingCount || 0 });
+      }
     }).catch(()=>{});
   }, [user]);
 
@@ -4738,6 +4935,16 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
     await updateDoc(doc(db,'bookings',booking.id), { status:'completed', completedAt:serverTimestamp() });
     try { await updateDoc(doc(db,'drivers',user.uid), { isOnline:false, currentLocation:null }); } catch(e) {}
+    // Send receipt email to customer
+    try {
+      if (booking?.customerId) {
+        const custSnap = await getDoc(doc(db,'customers',booking.customerId));
+        if (custSnap.exists()) {
+          const cust = custSnap.data();
+          sendRideReceipt(booking, cust.email, cust.name);
+        }
+      }
+    } catch(e) { console.warn('Could not send receipt:', e); }
     // Show completion summary before going back
     setCompleted(true);
   };
@@ -6281,18 +6488,113 @@ function DriverEarnings({ go, user }) {
         {!loading && filtered.length===0 && <div style={{ textAlign:'center', color:'#888', padding:24 }}>No rides in this period</div>}
         {filtered.map((r,i)=>{
           const d=new Date((r.createdAt?.seconds||0)*1000);
-          return (<div key={i} onClick={()=>setDetail(r)} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)', cursor:'pointer' }}>
-            <div style={{ display:'flex', justifyContent:'space-between' }}>
-              <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>{r.customerName||'Passenger'}</div>
-              <div style={{ fontSize:15, fontWeight:800, color:'#6b21a8' }}>J${Math.round((r.fare||0)*0.85).toLocaleString()}</div>
-            </div>
-            <div style={{ fontSize:11, color:'#888' }}>{d.toLocaleDateString()}</div>
-          </div>);
-        })}
+          return (
+    <div style={{ ...s.content, background:'#f5f6fa' }}>
+      <div style={{ background:'#111827', padding:'12px 16px', display:'flex', alignItems:'center', gap:12, boxShadow:'0 2px 12px rgba(0,0,0,0.3)' }}>
+        <button onClick={() => go('driver-dash')} style={{ background:'none', border:'none', color:'#fff', fontSize:20, cursor:'pointer' }}>←</button>
+        <img src="/logo.png" alt="VilleCabs" onClick={() => go('driver-dash')} style={{ height:26, objectFit:'contain', cursor:'pointer' }}/>
+        <span style={{ color:'#ffffff', fontSize:14, fontWeight:700, flex:1, textAlign:'center' }}>My Earnings</span>
+        <div style={{ width:60 }}/>
       </div>
+
+      {/* Period selector */}
+      <div style={{ display:'flex', gap:8, padding:'14px 16px 0' }}>
+        {['week','month','all'].map(p => (
+          <button key={p} onClick={() => setPeriod(p)}
+            style={{ flex:1, padding:'9px 0', borderRadius:10, border:'none', fontWeight:700, fontSize:12, cursor:'pointer',
+              background: period===p ? 'linear-gradient(135deg,#6A1BB9,#4c1d95)' : '#ffffff',
+              color: period===p ? '#ffffff' : '#6b7280',
+              boxShadow: period===p ? '0 2px 8px rgba(106,27,185,0.3)' : 'none' }}>
+            {p==='week'?'This Week':p==='month'?'This Month':'All Time'}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign:'center', padding:40, color:'#888' }}>Loading earnings...</div>
+      ) : (() => {
+        const now   = Date.now() / 1000;
+        const filtered = rides.filter(r => {
+          if (period === 'all') return true;
+          const secs = r.completedAt?.seconds || r.createdAt?.seconds || 0;
+          return period === 'week' ? (now - secs) < 604800 : (now - secs) < 2592000;
+        });
+        const totalFare = filtered.reduce((s, r) => s + (r.fare || 0), 0);
+        const totalEarn = Math.round(totalFare * 0.85);
+        const totalFee  = Math.round(totalFare * 0.15);
+        const avgFare   = filtered.length ? Math.round(totalFare / filtered.length) : 0;
+
+        return (
+          <div style={{ flex:1, overflowY:'auto', padding:'14px 16px 80px' }}>
+
+            {/* Summary cards */}
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14 }}>
+              <div style={{ background:'#0D0D0D', borderRadius:14, padding:'16px', border:'1px solid rgba(212,175,55,0.3)' }}>
+                <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:6 }}>Your Earnings</div>
+                <div style={{ fontSize:22, fontWeight:800, color:'#D4AF37' }}>J${totalEarn.toLocaleString()}</div>
+                <div style={{ fontSize:10, color:'rgba(255,255,255,0.3)', marginTop:4 }}>{filtered.length} ride{filtered.length!==1?'s':''}</div>
+              </div>
+              <div style={{ background:'#0D0D0D', borderRadius:14, padding:'16px', border:'1px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:6 }}>Total Fares</div>
+                <div style={{ fontSize:22, fontWeight:800, color:'#ffffff' }}>J${totalFare.toLocaleString()}</div>
+                <div style={{ fontSize:10, color:'rgba(255,255,255,0.3)', marginTop:4 }}>Platform fee J${totalFee.toLocaleString()}</div>
+              </div>
+              <div style={{ background:'#0D0D0D', borderRadius:14, padding:'16px', border:'1px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:6 }}>Avg per Ride</div>
+                <div style={{ fontSize:22, fontWeight:800, color:'#ffffff' }}>J${avgFare.toLocaleString()}</div>
+              </div>
+              <div style={{ background:'#0D0D0D', borderRadius:14, padding:'16px', border:'1px solid rgba(26,158,90,0.3)' }}>
+                <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:6 }}>Completion Rate</div>
+                <div style={{ fontSize:22, fontWeight:800, color:'#1a9e5a' }}>{filtered.length ? '100' : '0'}%</div>
+              </div>
+            </div>
+
+            {/* Ride history */}
+            <div style={{ fontSize:11, fontWeight:700, color:'#6b7280', textTransform:'uppercase', letterSpacing:0.8, marginBottom:10 }}>
+              Ride History ({filtered.length})
+            </div>
+
+            {filtered.length === 0 ? (
+              <div style={{ background:'#ffffff', borderRadius:14, padding:24, textAlign:'center', color:'#888' }}>
+                <div style={{ fontSize:32, marginBottom:8 }}>🚗</div>
+                <div style={{ fontSize:14, fontWeight:600 }}>No rides this {period === 'week' ? 'week' : period === 'month' ? 'month' : 'time'}</div>
+                <div style={{ fontSize:12, marginTop:4 }}>Complete rides to see them here</div>
+              </div>
+            ) : filtered.map((ride, i) => {
+              const date = ride.completedAt?.seconds
+                ? new Date(ride.completedAt.seconds*1000).toLocaleDateString('en-JM',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})
+                : '—';
+              const earn = Math.round((ride.fare||0) * 0.85);
+              return (
+                <div key={ride.id || i} style={{ background:'#ffffff', borderRadius:14, padding:'14px 16px', marginBottom:10, boxShadow:'0 1px 4px rgba(0,0,0,0.06)' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:8 }}>
+                    <div style={{ fontSize:12, color:'#6b7280' }}>{date}</div>
+                    <div style={{ fontSize:15, fontWeight:800, color:'#1a9e5a' }}>+J${earn.toLocaleString()}</div>
+                  </div>
+                  <div style={{ display:'flex', gap:8, marginBottom:4, alignItems:'center' }}>
+                    <div style={{ width:8, height:8, borderRadius:'50%', background:'#1a9e5a', flexShrink:0 }}/>
+                    <div style={{ fontSize:12, color:'#1a1a2e', fontWeight:500, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ride.pickup?.address?.split(',')[0] || '—'}</div>
+                  </div>
+                  <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                    <div style={{ width:8, height:8, borderRadius:'50%', background:'#6A1BB9', flexShrink:0 }}/>
+                    <div style={{ fontSize:12, color:'#1a1a2e', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ride.dropoff?.address?.split(',')[0] || '—'}</div>
+                  </div>
+                  <div style={{ display:'flex', gap:16, marginTop:8, paddingTop:8, borderTop:'1px solid #f0f0f0' }}>
+                    <div style={{ fontSize:11, color:'#888' }}>Fare: <span style={{ color:'#1a1a2e', fontWeight:600 }}>J${(ride.fare||0).toLocaleString()}</span></div>
+                    <div style={{ fontSize:11, color:'#888' }}>Fee: <span style={{ color:'#e24b4a' }}>-J${Math.round((ride.fare||0)*0.15).toLocaleString()}</span></div>
+                    {ride.distanceKm && <div style={{ fontSize:11, color:'#888' }}>{Number(ride.distanceKm).toFixed(1)} km</div>}
+                    {ride.vehicleType && <div style={{ fontSize:11, color:'#888' }}>{ride.vehicleType}</div>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
     </div>
   );
 }
+
 
 function DriverDocuments({ go, user }) {
   const [docs,   setDocs]   = useState({});
