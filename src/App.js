@@ -3508,6 +3508,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   const [sosCount,   setSosCount]   = useState(5);
   const [cancelling, setCancelling] = useState(false);
   const [cancelDone, setCancelDone] = useState(false);
+  const [shareCopied,  setShareCopied]  = useState(false);
   const sosRef = useRef(null);
 
   const shareRide = () => {
