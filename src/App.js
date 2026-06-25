@@ -2943,7 +2943,10 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
       if (typeof setPickupData === 'function') {
         setPickupData(prev => ({ ...prev, fare: finalPrice, vehicleType: v.name, distanceKm: dist }));
       }
-      // Notify all approved drivers via FCM
+      // Navigate immediately - don't wait for notifications
+      setLoading(false);
+      go('booking-confirm');
+      // Notify drivers in background (non-blocking)
       try {
         const driverSnap = await getDocs(query(collection(db,"drivers"), where("status","==","approved")));
         const tokens = driverSnap.docs.map(d => d.data().fcmToken).filter(Boolean);
@@ -2955,9 +2958,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
           createdAt: serverTimestamp(),
         });
       } catch(e) { console.log("Notification send skipped:", e.message); }
-      go('booking-confirm');
-    } catch(err) { setError('Failed to create booking. Please try again.'); }
-    setLoading(false);
+    } catch(err) { setError('Failed to create booking. Please try again.'); setLoading(false); }
   };
 
   const v = vehicles[sel];
