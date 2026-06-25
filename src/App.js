@@ -1129,7 +1129,7 @@ function TermsScreen({ go, user }) {
   return (
     <div style={{ ...s.content, background:'transparent' }}>
       <div style={{ background:'rgba(10,15,35,0.92)', padding:'16px 18px', backdropFilter:'blur(10px)', display:'flex', alignItems:'center', gap:10 }}>
-        <img src="/logo.png" alt="V" style={{ width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
+        <img src="/logo.png" alt="V" onClick={() => go('customer-dash')} style={{cursor:'pointer',  width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
         <span style={{ color:WHITE, fontSize:16, fontWeight:600 }}>VilleCabs</span>
       </div>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:100 }}>
@@ -1235,7 +1235,7 @@ function WelcomeTips({ go, user }) {
     <div style={{ ...s.content, background:'transparent' }}>
       <div style={{ background:'rgba(10,15,35,0.92)', padding:'16px 18px', backdropFilter:'blur(10px)', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <img src="/logo.png" alt="V" style={{ width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
+          <img src="/logo.png" alt="V" onClick={() => go('customer-dash')} style={{cursor:'pointer',  width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
           <span style={{ color:WHITE, fontSize:16, fontWeight:600 }}>VilleCabs</span>
         </div>
         <span style={{ color:'#888', fontSize:12 }}>{step+1} of {tips.length}</span>
@@ -1280,7 +1280,7 @@ function AboutUs({ go, user }) {
       <TopBar title="About VilleCabs" go={go} user={user}/>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:40 }}>
         <div style={{ textAlign:'center', marginBottom:24 }}>
-          <img src="/logo.png" alt="VilleCabs" style={{ width:80, height:80, borderRadius:'50%', objectFit:'cover', border:'2px solid rgba(232,180,0,0.4)', marginBottom:12 }}/>
+          <img src="/logo.png" alt="VilleCabs" onClick={() => go('customer-dash')} style={{cursor:'pointer',  width:80, height:80, borderRadius:'50%', objectFit:'cover', border:'2px solid rgba(232,180,0,0.4)', marginBottom:12 }}/>
           <h2 style={{ fontSize:20, fontWeight:700, color:WHITE, marginBottom:4 }}>Welcome to VilleCabs</h2>
           <p style={{ fontSize:13, color:YELLOW, fontStyle:'italic' }}>Your city. Your ride. Your way.</p>
         </div>
@@ -2432,7 +2432,7 @@ function PinPickup({ go, setPickupData, user }) {
     <div style={{ minHeight:'100vh', background:'#F5F6FA', display:'flex', flexDirection:'column' }}>
 
       {/* ── HEADER ── */}
-      <div style={{ background:'#111827', padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0, boxShadow:'0 2px 12px rgba(0,0,0,0.4)' }}>
+      <div style={{ background:'#ffffff', padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0, boxShadow:'0 2px 12px rgba(0,0,0,0.4)' }}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
           <button onClick={() => go('customer-dash')} style={{ background:'none', border:'none', color:'#ffffff', fontSize:20, cursor:'pointer', padding:'2px 6px' }}>←</button>
           <img src="/logo.png" alt="VilleCabs" style={{ height:26, objectFit:'contain' }}/>
@@ -3130,7 +3130,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
       {noDrivers && (
       <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.5)', zIndex:200, display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
         <div style={{ background:'#ffffff', borderRadius:20, padding:28, maxWidth:360, width:'100%', textAlign:'center', boxShadow:'0 20px 60px rgba(0,0,0,0.2)', border:'1px solid #e9d5ff' }}>
-          <img src="/logo.png" alt="VilleCabs" style={{ height:40, objectFit:'contain', marginBottom:16 }}/>
+          <img src="/logo.png" alt="VilleCabs" onClick={() => go('customer-dash')} style={{cursor:'pointer',  height:40, objectFit:'contain', marginBottom:16 }}/>
           <div style={{ width:56, height:56, borderRadius:'50%', background:'#f5f0ff', border:'2px solid #e9d5ff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:28, margin:'0 auto 16px' }}>🚕</div>
           <h2 style={{ fontSize:18, fontWeight:800, color:'#6b21a8', margin:'0 0 12px', lineHeight:1.3 }}>No Drivers Available Right Now</h2>
           <p style={{ fontSize:14, color:'#374151', lineHeight:1.7, margin:'0 0 8px' }}>
@@ -3653,7 +3653,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
           )}
         </VilleMap>
         <div style={{ position:'absolute', bottom:0, left:0, right:0, background:'rgba(10,15,35,0.88)', backdropFilter:'blur(8px)', padding:'7px 14px', textAlign:'center', fontSize:12, color:YELLOW, fontWeight:500 }}>
-          {(booking?.status==='active'||booking?.status==='arrived')
+          {(booking?.status==='active'||booking?.status==='arrived'||booking?.status==='enroute')
             ? booking?.enrouteToDropoff
               ? '🚗 En route to drop-off — tracking live'
               : driverCoords
@@ -3832,7 +3832,7 @@ function DriverTermsScreen({ go, user }) {
   return (
     <div style={{ ...s.content, background:'transparent' }}>
       <div style={{ background:'rgba(10,15,35,0.92)', padding:'16px 18px', backdropFilter:'blur(10px)', display:'flex', alignItems:'center', gap:10 }}>
-        <img src="/logo.png" alt="V" style={{ width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
+        <img src="/logo.png" alt="V" onClick={() => go('driver-dash')} style={{cursor:'pointer',  width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
         <span style={{ color:WHITE, fontSize:16, fontWeight:600 }}>VilleCabs — Driver Agreement</span>
       </div>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:100 }}>
@@ -3939,7 +3939,7 @@ function DriverWelcomeTips({ go, user }) {
     <div style={{ ...s.content, background:'transparent' }}>
       <div style={{ background:'rgba(10,15,35,0.92)', padding:'16px 18px', backdropFilter:'blur(10px)', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <img src="/logo.png" alt="V" style={{ width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
+          <img src="/logo.png" alt="V" onClick={() => go('driver-dash')} style={{cursor:'pointer',  width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
           <span style={{ color:WHITE, fontSize:16, fontWeight:600 }}>Driver Guide</span>
         </div>
         <span style={{ color:'#888', fontSize:12 }}>{step+1} of {tips.length}</span>
@@ -3978,7 +3978,7 @@ function DriverAboutUs({ go, user }) {
       <TopBar title="About VilleCabs" go={go} user={user}/>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:40 }}>
         <div style={{ textAlign:'center', marginBottom:24 }}>
-          <img src="/logo.png" alt="VilleCabs" style={{ width:80, height:80, borderRadius:'50%', objectFit:'cover', border:'2px solid rgba(232,180,0,0.4)', marginBottom:12 }}/>
+          <img src="/logo.png" alt="VilleCabs" onClick={() => go('driver-dash')} style={{cursor:'pointer',  width:80, height:80, borderRadius:'50%', objectFit:'cover', border:'2px solid rgba(232,180,0,0.4)', marginBottom:12 }}/>
           <h2 style={{ fontSize:20, fontWeight:700, color:WHITE, marginBottom:4 }}>Welcome to VilleCabs</h2>
           <p style={{ fontSize:13, color:YELLOW, fontStyle:'italic' }}>Your city. Your ride. Your way.</p>
         </div>
@@ -4225,7 +4225,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
           <div style={{ width:14, height:2, background:'#1a1a2e', borderRadius:1 }}/>
           <div style={{ width:20, height:2, background:'#1a1a2e', borderRadius:1 }}/>
         </button>
-        <img src="/logo.png" alt="VilleCabs" style={{ height:26, objectFit:'contain', flexShrink:0 }}/>
+        <img src="/logo.png" alt="VilleCabs" onClick={() => go('driver-dash')} style={{cursor:'pointer',  height:26, objectFit:'contain', flexShrink:0 }}/>
         <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:8 }}>
           <div style={{ display:'flex', alignItems:'center', gap:5, padding:'4px 10px', borderRadius:20, background:isOnline?'#f0fff4':'#f5f5f5', border:`1px solid ${isOnline?'#86efac':'#e5e7eb'}` }}>
             <div style={{ width:7, height:7, borderRadius:'50%', background:isOnline?'#1a9e5a':'#9ca3af' }}/>
@@ -4724,6 +4724,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     try {
       await updateDoc(doc(db,'bookings',booking.id), {
         enrouteToDropoff: true,
+        status:           'enroute',
         enrouteAt:        serverTimestamp(),
       });
       await addDoc(collection(db,'notifications'), {
@@ -4986,7 +4987,7 @@ function DriverProfile({ go, user }) {
       {/* Header */}
       <div style={{ background:'#fff', padding:'10px 16px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', position:'sticky', top:0, zIndex:10 }}>
         
-        <img src="/logo.png" style={{ height:26, objectFit:'contain' }} alt="VilleCabs"/>
+        <img src="/logo.png" onClick={() => go('driver-dash')} style={{cursor:'pointer',  height:26, objectFit:'contain' }} alt="VilleCabs"/>
         <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:4 }}>My Profile</span>
         <button onClick={() => setEditing(!editing)} style={{ marginLeft:'auto', padding:'6px 14px', background:editing?'#f3f4f6':'#6b21a8', color:editing?'#555':'#fff', border:'none', borderRadius:20, fontSize:12, fontWeight:600, cursor:'pointer' }}>
           {editing ? 'Cancel' : '✏️ Edit'}
@@ -5763,7 +5764,7 @@ function AdminDash({ go, user }) {
 
   if (loading) return (
     <div style={{ minHeight:'100vh', background:'#f5f6fa', display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:12 }}>
-      <img src="/logo.png" style={{ height:40, objectFit:'contain' }} alt="VilleCabs"/>
+      <img src="/logo.png" onClick={() => go('admin')} style={{cursor:'pointer',  height:40, objectFit:'contain' }} alt="VilleCabs"/>
       <div style={{ fontSize:14, color:'#888' }}>Loading admin dashboard...</div>
     </div>
   );
@@ -6187,7 +6188,7 @@ function PartnerWithUs({ go, user }) {
   return (
     <div style={{ background:'#fff', minHeight:'100vh' }}>
       <div style={{ background:'#fff', padding:'8px 14px', display:'flex', alignItems:'center', borderBottom:'1px solid #e5e7eb', position:'sticky', top:0, zIndex:10 }}>
-        <img src="/logo.png" style={{ height:30, objectFit:'contain' }} alt="VilleCabs"/>
+        <img src="/logo.png" onClick={() => go('splash')} style={{cursor:'pointer',  height:30, objectFit:'contain' }} alt="VilleCabs"/>
         <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:8 }}>Partner With VilleCabs</span>
       </div>
       <div style={{ background:'linear-gradient(135deg,#6b21a8,#4c1d95)', padding:'28px 20px', textAlign:'center' }}>
@@ -6263,7 +6264,7 @@ function DriverEarnings({ go, user }) {
   return (
     <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
       <div style={{ background:'#fff', padding:'8px 14px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #e5e7eb', position:'sticky', top:0, zIndex:10 }}>
-        <img src="/logo.png" style={{ height:26, objectFit:'contain' }} alt="VilleCabs"/>
+        <img src="/logo.png" onClick={() => go('driver-dash')} style={{cursor:'pointer',  height:26, objectFit:'contain' }} alt="VilleCabs"/>
         <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:4 }}>Earnings</span>
       </div>
       <div style={{ display:'flex', gap:8, padding:'12px 16px', background:'#fff', borderBottom:'1px solid #f0f0f0' }}>
@@ -6322,7 +6323,7 @@ function DriverDocuments({ go, user }) {
   return (
     <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
       <div style={{ background:'#fff', padding:'8px 14px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #e5e7eb', position:'sticky', top:0, zIndex:10 }}>
-        <img src="/logo.png" style={{ height:26, objectFit:'contain' }} alt="VilleCabs"/>
+        <img src="/logo.png" onClick={() => go('driver-dash')} style={{cursor:'pointer',  height:26, objectFit:'contain' }} alt="VilleCabs"/>
         <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:4 }}>My Documents</span>
       </div>
       <div style={{ padding:'14px 14px 90px' }}>
@@ -6362,7 +6363,7 @@ function DriverNotifications({ go, user }) {
   return (
     <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
       <div style={{ background:'#fff', padding:'8px 14px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #e5e7eb', position:'sticky', top:0, zIndex:10 }}>
-        <img src="/logo.png" style={{ height:26, objectFit:'contain' }} alt="VilleCabs"/>
+        <img src="/logo.png" onClick={() => go('driver-dash')} style={{cursor:'pointer',  height:26, objectFit:'contain' }} alt="VilleCabs"/>
         <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:4 }}>Notifications</span>
         {unread>0&&<div style={{ background:'#6b21a8', color:'#fff', borderRadius:10, fontSize:10, fontWeight:700, padding:'2px 7px' }}>{unread}</div>}
         <button onClick={()=>setNotifs(p=>p.map(n=>({...n,read:true})))} style={{ marginLeft:'auto', background:'none', border:'none', fontSize:11, color:'#6b21a8', cursor:'pointer', fontWeight:600 }}>Mark all read</button>
