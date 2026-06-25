@@ -1,4 +1,3 @@
-/* eslint-disable */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { initializeApp } from 'firebase/app';
 import {
@@ -6693,7 +6692,6 @@ export default function App() {
   const [pickupData,  setPickupData]  = useState(null);
   const [dropoffData, setDropoffData] = useState(null);
   const [loading,     setLoading]     = useState(true);
-  const screenHistory                  = useRef(['splash']); // Navigation history stack
 
   useEffect(() => {
     let done = false;
@@ -6776,41 +6774,7 @@ export default function App() {
   if (loading) return <LoadingScreen/>;
 
     // go() - navigate to a screen and track history
-  const go = useCallback((newScreen) => {
-    // Track history for browser back button
-    const resetScreens = ['splash','role','customer-dash','driver-dash','admin'];
-    if (resetScreens.includes(newScreen)) {
-      screenHistory.current = [newScreen];
-    } else {
-      const h = screenHistory.current;
-      if (h[h.length-1] !== newScreen) {
-        screenHistory.current = [...h, newScreen];
-      }
-    }
-    // Push state WITHOUT triggering popstate
-    try {
-      window.history.pushState({ appScreen: newScreen }, '');
-    } catch(e) {}
-    setScreen(newScreen);
-  }, [setScreen]);
-
-  // Browser back button
-  useEffect(() => {
-    const onPop = (e) => {
-      // Only handle our own history entries
-      if (!e.state?.appScreen) return;
-      const hist = screenHistory.current;
-      if (hist.length > 1) {
-        const next = hist.slice(0, -1);
-        screenHistory.current = next;
-        setScreen(next[next.length - 1]);
-      }
-    };
-    window.addEventListener('popstate', onPop);
-    return () => window.removeEventListener('popstate', onPop);
-  }, []);
-
-  const props = { go, user, setUser, bookingId, setBookingId, pickupData, setPickupData, dropoffData, setDropoffData };
+  const props = { go:setScreen, user, setUser, bookingId, setBookingId, pickupData, setPickupData, dropoffData, setDropoffData };
 
   const screens = {
     splash:           <Splash {...props}/>,
