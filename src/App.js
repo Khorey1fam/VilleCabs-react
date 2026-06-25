@@ -2434,13 +2434,13 @@ function PinPickup({ go, setPickupData, user }) {
       {/* ── HEADER ── */}
       <div style={{ background:'#ffffff', padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0, boxShadow:'0 2px 12px rgba(0,0,0,0.4)' }}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <button onClick={() => go('customer-dash')} style={{ background:'none', border:'none', color:'#ffffff', fontSize:20, cursor:'pointer', padding:'2px 6px' }}>←</button>
+          <button onClick={() => go('customer-dash')} style={{ background:'none', border:'none', color:'#111827', fontSize:20, cursor:'pointer', padding:'2px 6px' }}>←</button>
           <img src="/logo.png" alt="VilleCabs" style={{ height:26, objectFit:'contain' }}/>
         </div>
-        <span style={{ color:'#ffffff', fontSize:14, fontWeight:700, letterSpacing:0.3 }}>Pin Pickup Location</span>
+        <span style={{ color:'#111827', fontSize:14, fontWeight:700, letterSpacing:0.3 }}>Pin Pickup Location</span>
         <div style={{ display:'flex', gap:6 }}>
-          <button onClick={() => go('business')} style={{ padding:'4px 10px', background:'rgba(106,27,185,0.3)', border:'1px solid #6A1BB9', borderRadius:20, color:'#ffffff', fontSize:10, fontWeight:600, cursor:'pointer' }}>Business</button>
-          <button onClick={() => go('featured')} style={{ padding:'4px 10px', background:'rgba(212,175,55,0.2)', border:'1px solid #D4AF37', borderRadius:20, color:'#D4AF37', fontSize:10, fontWeight:600, cursor:'pointer' }}>Featured</button>
+          <button onClick={() => go('business')} style={{ padding:'4px 10px', background:'rgba(106,27,185,0.3)', border:'1px solid #6A1BB9', borderRadius:20, color:'#6A1BB9', fontSize:10, fontWeight:600, cursor:'pointer' }}>Business</button>
+          <button onClick={() => go('featured')} style={{ padding:'4px 10px', background:'rgba(212,175,55,0.1)', border:'1px solid #D4AF37', borderRadius:20, color:'#b8860b', fontSize:10, fontWeight:600, cursor:'pointer' }}>Featured</button>
         </div>
       </div>
 
@@ -2602,12 +2602,12 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
     <div style={{ minHeight:'100vh', background:'#F5F6FA', display:'flex', flexDirection:'column' }}>
 
       {/* ── HEADER ── */}
-      <div style={{ background:'#111827', padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0, boxShadow:'0 2px 12px rgba(0,0,0,0.4)' }}>
+      <div style={{ background:'#ffffff', padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0, boxShadow:'0 2px 8px rgba(0,0,0,0.08)' }}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <button onClick={() => go('pin-pickup')} style={{ background:'none', border:'none', color:'#ffffff', fontSize:20, cursor:'pointer', padding:'2px 6px' }}>←</button>
+          <button onClick={() => go('pin-pickup')} style={{ background:'none', border:'none', color:'#111827', fontSize:20, cursor:'pointer', padding:'2px 6px' }}>←</button>
           <img src="/logo.png" alt="VilleCabs" style={{ height:26, objectFit:'contain' }}/>
         </div>
-        <span style={{ color:'#ffffff', fontSize:14, fontWeight:700, letterSpacing:0.3 }}>Pin Drop-off Location</span>
+        <span style={{ color:'#111827', fontSize:14, fontWeight:700, letterSpacing:0.3 }}>Pin Drop-off Location</span>
         <div style={{ display:'flex', gap:6 }}>
           <button onClick={() => go('business')} style={{ padding:'4px 10px', background:'rgba(106,27,185,0.3)', border:'1px solid #6A1BB9', borderRadius:20, color:'#ffffff', fontSize:10, fontWeight:600, cursor:'pointer' }}>Business</button>
           <button onClick={() => go('featured')} style={{ padding:'4px 10px', background:'rgba(212,175,55,0.2)', border:'1px solid #D4AF37', borderRadius:20, color:'#D4AF37', fontSize:10, fontWeight:600, cursor:'pointer' }}>Featured</button>
@@ -3745,7 +3745,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
         )}
 
         {/* En route to drop-off banner */}
-        {booking?.enrouteToDropoff && booking?.status === 'active' && (
+        {booking?.enrouteToDropoff && (booking?.status === 'active' || booking?.status === 'arrived' || booking?.status === 'enroute') && (
           <div style={{ background:'#f0fff8', border:'2px solid #1a9e5a', borderRadius:12, padding:14, marginBottom:12, display:'flex', alignItems:'center', gap:12, boxShadow:'0 2px 8px rgba(26,158,90,0.15)' }}>
             <div style={{ fontSize:28 }}>🚗</div>
             <div style={{ flex:1 }}>
@@ -3758,7 +3758,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
 
         
         {/* En route to drop-off banner */}
-        {booking?.enrouteToDropoff && booking?.status === 'active' && (
+        {booking?.enrouteToDropoff && (booking?.status === 'active' || booking?.status === 'arrived' || booking?.status === 'enroute') && (
           <div style={{ background:'#f0fff8', border:'2px solid #1a9e5a', borderRadius:12, padding:14, marginBottom:12, display:'flex', alignItems:'center', gap:12, boxShadow:'0 2px 8px rgba(26,158,90,0.15)' }}>
             <div style={{ fontSize:28 }}>🚗</div>
             <div style={{ flex:1 }}>
@@ -3775,6 +3775,17 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
             <div style={{ fontSize:24, marginBottom:6 }}>✅</div>
             <div style={{ fontSize:14, fontWeight:500, color:GREEN, marginBottom:8 }}>Ride completed!</div>
             <button style={s.btnY} onClick={() => setBooking(prev => ({ ...prev }))}>View Receipt & Rate Driver</button>
+          </div>
+        )}
+
+        {/* Driver picked you up banner - shows when enroute */}
+        {(booking?.enrouteToDropoff || booking?.status === 'enroute') && (
+          <div style={{ background:'linear-gradient(135deg,#1a9e5a,#166534)', borderRadius:12, padding:'12px 16px', marginBottom:12, display:'flex', alignItems:'center', gap:12 }}>
+            <div style={{ fontSize:26, flexShrink:0 }}>🚗</div>
+            <div>
+              <div style={{ fontSize:14, fontWeight:700, color:'#ffffff', marginBottom:2 }}>Driver has picked you up!</div>
+              <div style={{ fontSize:12, color:'rgba(255,255,255,0.85)' }}>On the way to your drop-off location 📍</div>
+            </div>
           </div>
         )}
 
