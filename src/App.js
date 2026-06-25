@@ -4701,6 +4701,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
       // Update booking with arrived status
       await updateDoc(doc(db,'bookings',booking.id), {
         driverArrived:   true,
+        status:          'arrived',
         arrivedAt:       serverTimestamp(),
       });
       // Save arrival notification to Firestore for customer to pick up
@@ -4745,60 +4746,36 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     setCompleted(true);
   };
 
-  // ── Completed screen ──
-  if (completed) {
-    const fare = booking?.fare || 0;
-    const fee  = Math.round(fare * 0.15);
-    const earn = Math.round(fare * 0.85);
-    return (
-      <div style={{ ...s.content, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24, minHeight:'100vh' }}>
-        <div style={{ width:80, height:80, borderRadius:'50%', background:'rgba(26,158,90,0.15)', border:'2px solid #1a9e5a', display:'flex', alignItems:'center', justifyContent:'center', fontSize:36, marginBottom:16 }}>✅</div>
-        <div style={{ fontSize:22, fontWeight:800, color:WHITE, marginBottom:4 }}>Ride Completed!</div>
-        <div style={{ fontSize:13, color:'#6b7280', marginBottom:24 }}>Thank you for driving with VilleCabs</div>
-        <div style={{ background:'rgba(15,20,40,0.8)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:18, padding:20, width:'100%', maxWidth:380, marginBottom:20 }}>
-          {[
-            ['Total Fare', `J$${fare.toLocaleString()}`, WHITE],
-            ['VilleCabs Fee (15%)', `−J$${fee.toLocaleString()}`, '#f09595'],
-            ['Your Earnings (85%)', `J$${earn.toLocaleString()}`, '#1a9e5a'],
-            ['Payment', booking?.paymentMethod || 'Cash', YELLOW],
-          ].map(([label, val, col], i) => (
-            <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'10px 0', borderBottom: i<3 ? '0.5px solid rgba(255,255,255,0.07)' : 'none' }}>
-              <span style={{ fontSize:13, color:'rgba(255,255,255,0.55)' }}>{label}</span>
-              <span style={{ fontSize:14, fontWeight:700, color:col }}>{val}</span>
-            </div>
-          ))}
+
+
+  const fare = booking?.fare || 0;
+  const fee  = Math.round(fare * 0.15);
+  const earn = Math.round(fare * 0.85);
+
+  // Completed screen - rendered as conditional JSX (not early return) to preserve hook count
+  if (completed) return (
+    <div style={{ ...s.content, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24, minHeight:'100vh' }}>
+      <div style={{ width:80, height:80, borderRadius:'50%', background:'rgba(26,158,90,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:36, marginBottom:16 }}>✅</div>
+      <div style={{ fontSize:22, fontWeight:800, color:'#1a1a2e', marginBottom:6 }}>Ride Complete!</div>
+      <div style={{ fontSize:14, color:'#888', marginBottom:24, textAlign:'center' }}>Great job! Your earnings have been recorded.</div>
+      <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:16, padding:'20px 24px', width:'100%', maxWidth:340, marginBottom:20 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', marginBottom:10 }}>
+          <span style={{ fontSize:13, color:'#888' }}>Total fare</span>
+          <span style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>J${fare.toLocaleString()}</span>
         </div>
-        <button onClick={() => go('driver-dash')} style={{ width:'100%', maxWidth:380, padding:'15px', background:'#1a9e5a', border:'none', borderRadius:14, color:'#fff', fontSize:15, fontWeight:700, cursor:'pointer', marginBottom:10 }}>🟢 Back Online</button>
-        <button onClick={() => { go('driver-dash'); }} style={{ width:'100%', maxWidth:380, padding:'12px', background:'rgba(255,255,255,0.06)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:14, color:'rgba(255,255,255,0.5)', fontSize:13, cursor:'pointer' }}>Go Offline</button>
+        <div style={{ display:'flex', justifyContent:'space-between', marginBottom:10 }}>
+          <span style={{ fontSize:13, color:'#888' }}>Platform fee (15%)</span>
+          <span style={{ fontSize:13, color:'#e24b4a' }}>−J${fee.toLocaleString()}</span>
+        </div>
+        <div style={{ borderTop:'1px solid #e9d5ff', paddingTop:10, display:'flex', justifyContent:'space-between' }}>
+          <span style={{ fontSize:15, fontWeight:700, color:'#1a1a2e' }}>Your earnings</span>
+          <span style={{ fontSize:15, fontWeight:800, color:'#1a9e5a' }}>J${earn.toLocaleString()}</span>
+        </div>
       </div>
-    );
-  }
-
-  const pickupCoords  = booking?.pickup       ? { lat:booking.pickup.lat,         lng:booking.pickup.lng         } : MANCHESTER_CENTER;
-  const dropoffCoords = booking?.dropoff       ? { lat:booking.dropoff.lat,        lng:booking.dropoff.lng        } : null;
-  const driverCoords  = booking?.driverLocation? { lat:booking.driverLocation.lat, lng:booking.driverLocation.lng } : null;
-  const markers = [{ position:pickupCoords, title:'Pickup' }];
-  if (dropoffCoords) markers.push({ position:dropoffCoords, title:'Drop-off' });
-
-  // Route: driver→pickup (before arrival) or pickup→dropoff (after arrival)
-  useEffect(() => {
-    if (!window.google?.maps?.DirectionsService || !booking) return;
-    const pickupPt  = booking.pickup?.lat  ? { lat: booking.pickup.lat,          lng: booking.pickup.lng          } : null;
-    const dropoffPt = booking.dropoff?.lat ? { lat: booking.dropoff.lat,         lng: booking.dropoff.lng         } : null;
-    const driverPt  = booking.driverLocation?.lat ? { lat: booking.driverLocation.lat, lng: booking.driverLocation.lng } : null;
-    const origin      = arrived ? pickupPt  : driverPt;
-    const destination = arrived ? dropoffPt : pickupPt;
-    if (!origin?.lat || !destination?.lat) { setDirections(null); return; }
-    const svc = new window.google.maps.DirectionsService();
-    svc.route({
-      origin:      { lat: origin.lat,      lng: origin.lng      },
-      destination: { lat: destination.lat, lng: destination.lng },
-      travelMode:  window.google.maps.TravelMode.DRIVING,
-    }, (result, status) => {
-      if (status === 'OK') setDirections(result);
-      else { console.warn('Driver directions failed:', status); setDirections(null); }
-    });
-  }, [booking?.driverLocation?.lat, booking?.driverLocation?.lng, arrived, booking?.pickup?.lat]);
+      <button onClick={() => { go('driver-dash'); }} style={{ ...s.btnY, width:'100%', maxWidth:340, marginBottom:10 }}>Go to Dashboard</button>
+      <button onClick={async () => { try { await updateDoc(doc(db,'drivers',user.uid), { isOnline:false }); } catch(e){} go('driver-dash'); }} style={{ background:'none', border:'none', color:'rgba(255,255,255,0.5)', fontSize:13, cursor:'pointer' }}>Go Offline</button>
+    </div>
+  );
 
   return (
     <div style={{ ...s.content }}>
