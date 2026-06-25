@@ -738,7 +738,7 @@ function CustomerSignup({ go, setUser, user }) {
       const refCode = 'VC' + Math.random().toString(36).substring(2,7).toUpperCase();
       await setDoc(doc(db,'customers',cred.user.uid), { name:form.name, phone:form.phone, email:form.email, role:'customer', referralCode:refCode, referralCount:0, createdAt:serverTimestamp() });
       await sendEmailVerification(cred.user);
-      sendWelcomeEmail(form.email, form.name); // non-blocking
+      // Welcome email sent AFTER verification (see OTPScreen)
       setUser({ uid:cred.user.uid, name:form.name, email:form.email, role:'customer' });
       go('otp');
     } catch(err) { setError(err.code==='auth/email-already-in-use'?'Email already registered.':err.message); }
@@ -824,6 +824,10 @@ function OTPScreen({ go, user }) {
           <button style={s.btnY} onClick={async () => {
             await auth.currentUser?.reload();
             if (auth.currentUser?.emailVerified) {
+              // Send welcome email now that email is confirmed
+              if (user?.role !== 'driver') {
+                sendWelcomeEmail(user?.email || auth.currentUser.email, user?.name || auth.currentUser.displayName || 'Valued Customer');
+              }
               go(user?.role==='driver' ? 'driver-pending' : 'terms');
             } else {
               alert('Email not verified yet. Please check your inbox (and spam folder) and click the verification link.');
