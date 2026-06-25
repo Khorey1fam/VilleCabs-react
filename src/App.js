@@ -6777,34 +6777,37 @@ export default function App() {
 
     // go() - navigate to a screen and track history
   const go = useCallback((newScreen) => {
-    const resetScreens = ['splash', 'role', 'customer-dash', 'driver-dash', 'admin'];
+    // Track history for browser back button
+    const resetScreens = ['splash','role','customer-dash','driver-dash','admin'];
     if (resetScreens.includes(newScreen)) {
       screenHistory.current = [newScreen];
     } else {
-      const hist = screenHistory.current;
-      if (hist[hist.length - 1] !== newScreen) {
-        screenHistory.current = [...hist, newScreen];
+      const h = screenHistory.current;
+      if (h[h.length-1] !== newScreen) {
+        screenHistory.current = [...h, newScreen];
       }
     }
-    window.history.pushState({ screen: newScreen }, '', window.location.pathname);
+    // Push state WITHOUT triggering popstate
+    try {
+      window.history.pushState({ appScreen: newScreen }, '');
+    } catch(e) {}
     setScreen(newScreen);
-  }, []);
+  }, [setScreen]);
 
-  // Browser back button handler
+  // Browser back button
   useEffect(() => {
-    const handlePop = () => {
+    const onPop = (e) => {
+      // Only handle our own history entries
+      if (!e.state?.appScreen) return;
       const hist = screenHistory.current;
       if (hist.length > 1) {
-        const newHist = hist.slice(0, -1);
-        screenHistory.current = newHist;
-        setScreen(newHist[newHist.length - 1]);
-      } else {
-        // Nothing to go back to — stay on current screen
-        window.history.pushState({ screen: hist[0] || 'splash' }, '', window.location.pathname);
+        const next = hist.slice(0, -1);
+        screenHistory.current = next;
+        setScreen(next[next.length - 1]);
       }
     };
-    window.addEventListener('popstate', handlePop);
-    return () => window.removeEventListener('popstate', handlePop);
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
   }, []);
 
   const props = { go, user, setUser, bookingId, setBookingId, pickupData, setPickupData, dropoffData, setDropoffData };
