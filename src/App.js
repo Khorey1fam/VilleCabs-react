@@ -1638,7 +1638,7 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId }) {
       const rides = snap.docs.map(d => ({ id:d.id, ...d.data() }));
       // Sort by most recent first
       rides.sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
-      const active    = rides.find(r => r.status === 'active');
+      const active    = rides.find(r => ['searching','active','arrived','enroute'].includes(r.status));
       const completed = rides.find(r => r.status === 'completed' &&
         (Date.now()/1000 - (r.completedAt?.seconds||0)) < 300);
 
@@ -1799,7 +1799,7 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId }) {
             {/* Menu items */}
             <div style={{ flex:1, overflowY:'auto', padding:'8px 0' }}>
               {[
-                ['🚕', 'Book a Ride',      () => { setTab('book'); setMenuOpen(false); }],
+                ['🚕', 'Book a Ride',      () => { if (activeRide) { setMenuOpen(false); alert('You already have an active ride in progress. Please complete or cancel it first.'); return; } setTab('book'); setMenuOpen(false); }],
                 ['🕐', 'Ride History',     () => { setTab('history'); setMenuOpen(false); }],
                 ['👤', 'My Profile',       () => { go('customer-profile'); setMenuOpen(false); }],
                 ['💰', 'Payments',         () => { go('payments'); setMenuOpen(false); }],
@@ -1906,7 +1906,24 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId }) {
               <div style={{ fontSize:26, fontWeight:800, color:'#1a1a2e', marginBottom:4, lineHeight:1.2 }}>
                 Good day, {user?.name?.split(' ')[0]||'Rider'} 👋
               </div>
-              <button onClick={() => go('pin-pickup')}
+              {/* Active ride banner - blocks new booking */}
+              {activeRide && (
+                <div onClick={() => { setBookingId(activeRide.id); go('live-ride'); }}
+                  style={{ background:'linear-gradient(135deg,#1a9e5a,#166534)', borderRadius:14, padding:'14px 16px', marginBottom:14, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'space-between', boxShadow:'0 4px 14px rgba(26,158,90,0.3)' }}>
+                  <div>
+                    <div style={{ fontSize:14, fontWeight:700, color:'#ffffff', marginBottom:3 }}>
+                      {activeRide.status === 'searching' ? '🔍 Finding your driver...' :
+                       activeRide.status === 'arrived'   ? '📍 Driver has arrived!' :
+                       activeRide.status === 'enroute'   ? '🚗 On the way to drop-off!' :
+                       '🚕 Ride in progress'}
+                    </div>
+                    <div style={{ fontSize:12, color:'rgba(255,255,255,0.85)' }}>Tap to return to your active ride</div>
+                  </div>
+                  <div style={{ fontSize:22 }}>→</div>
+                </div>
+              )}
+
+              <button onClick={() => { if (activeRide) { alert('You already have an active ride in progress. Please complete or cancel it before booking a new ride.'); return; } go('pin-pickup'); }}
                 style={{ background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', margin:'14px auto 0', padding:0 }}>
                 <div style={{ width:190, height:190, borderRadius:'50%', background:'#ffffff', boxShadow:'0 8px 40px rgba(0,0,0,0.15), 0 0 0 6px rgba(232,180,0,0.2)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', position:'relative', overflow:'hidden' }}>
                   <div style={{ position:'absolute', inset:0, background:'radial-gradient(circle at 50% 60%, rgba(232,180,0,0.12) 0%, transparent 70%)' }}/>
@@ -2000,7 +2017,7 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId }) {
                 <div style={{ fontSize:40, marginBottom:12 }}>🚕</div>
                 <div style={{ fontSize:15, marginBottom:6 }}>No rides yet</div>
                 <div style={{ fontSize:13 }}>Your completed rides will appear here</div>
-                <button style={{ ...s.btnY, marginTop:20 }} onClick={() => setTab('book')}>Book your first ride</button>
+                <button style={{ ...s.btnY, marginTop:20 }} onClick={() => { if (activeRide) { alert('You already have an active ride in progress.'); return; } setTab('book'); }}>Book your first ride</button>
               </div>
             ) : history.map((ride,i) => {
               const date = ride.completedAt?.seconds
