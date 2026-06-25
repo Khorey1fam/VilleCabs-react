@@ -47,26 +47,30 @@ const WHITE  = '#ffffff';
 // Manchester, Jamaica centre
 const MANCHESTER_CENTER = { lat: 18.0416, lng: -77.5036 };
 
-// Send welcome email via EmailJS
-const sendWelcomeEmail = async (toEmail, toName) => {
+// Send welcome email via EmailJS (Google Workspace: admin@villecabs.com)
+const sendWelcomeEmail = async (toEmail, toName, role = 'customer') => {
+  const templateId = role === 'driver' ? 'template_driver_welcome' : 'template_customer_welcom';
   try {
-    await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+    const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        service_id:  'service_h9ryisl',
-        template_id: 'template_welcome',
+        service_id:  'service_8fp53l4',
+        template_id: templateId,
         user_id:     '9-C6Nw3ZGGd5R7jto',
         template_params: {
-          to_email:    toEmail,
-          to_name:     toName,
-          from_name:   'VilleCabs',
-          reply_to:    'admin@villecabs.com',
-          message:     'Welcome to VilleCabs! Your account is ready. Book your first ride at villecabs.com',
+          to_email:  toEmail,
+          to_name:   toName,
+          from_name: 'VilleCabs',
+          reply_to:  'admin@villecabs.com',
         },
       }),
     });
-    console.log('Welcome email sent to', toEmail);
+    if (res.ok) {
+      console.log(`✅ Welcome email sent to ${toEmail} [${role}] via admin@villecabs.com`);
+    } else {
+      console.warn('EmailJS error:', res.status, await res.text());
+    }
   } catch(e) {
     console.warn('Welcome email failed:', e);
   }
@@ -1008,7 +1012,7 @@ function DriverSignup({ go, user }) {
         docs:{ license:licenseUrl, fitness:fitnessUrl, registration:registrationUrl, profilePhoto:profilePhotoUrl, vehiclePhoto:vehiclePhotoUrl },
       });
       setError('');
-      sendWelcomeEmail(form.email, form.name);
+      sendWelcomeEmail(form.email, form.name, 'driver');
       go('driver-pending');
     } catch(e) {
       console.error('Signup error:', e);
@@ -1352,7 +1356,7 @@ function ContactUs({ go, user }) {
         method: 'POST',
         headers: { 'Content-Type':'application/json' },
         body: JSON.stringify({
-          service_id:  'service_h9ryisl',
+          service_id:  'service_8fp53l4',
           template_id: 'template_ss6rofa',
           user_id:     '9-C6Nw3ZGGd5R7jto',
           template_params: {
@@ -4013,7 +4017,7 @@ function DriverContactUs({ go, user }) {
       await fetch('https://api.emailjs.com/api/v1.0/email/send', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
-          service_id:'service_h9ryisl', template_id:'template_ss6rofa', user_id:'9-C6Nw3ZGGd5R7jto',
+          service_id:'service_8fp53l4', template_id:'template_ss6rofa', user_id:'9-C6Nw3ZGGd5R7jto',
           template_params:{ to_email:'daviskeneile@gmail.com', to_name:'VilleCabs Admin', from_name:form.name, from_email:form.email, subject:form.subject, otp_code:`Driver message from: ${form.name} (${form.email})\\n\\nSubject: ${form.subject}\\n\\n${form.message}` },
         }),
       });
