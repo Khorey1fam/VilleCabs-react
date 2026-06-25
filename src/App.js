@@ -6774,40 +6774,39 @@ export default function App() {
 
   if (loading) return <LoadingScreen/>;
 
-    const go = (newScreen) => {
-    // Don't push duplicates
-    if (newScreen === screen) return;
-    // Screens that should reset history (fresh start)
+    // go() - navigate to a screen and track history
+  const go = (newScreen) => {
     const resetScreens = ['splash', 'role', 'customer-dash', 'driver-dash', 'admin'];
     if (resetScreens.includes(newScreen)) {
       screenHistory.current = [newScreen];
     } else {
-      screenHistory.current = [...screenHistory.current, newScreen];
+      // avoid duplicate consecutive entries
+      const hist = screenHistory.current;
+      if (hist[hist.length - 1] !== newScreen) {
+        screenHistory.current = [...hist, newScreen];
+      }
     }
-    // Push to browser history so back button fires popstate
+    // Push to browser history for back button
     window.history.pushState({ screen: newScreen }, '', window.location.pathname);
     setScreen(newScreen);
   };
 
-  const goBack = () => {
-    const hist = screenHistory.current;
-    if (hist.length > 1) {
-      // Remove current screen
-      const newHist = hist.slice(0, -1);
-      screenHistory.current = newHist;
-      const prev = newHist[newHist.length - 1];
-      setScreen(prev);
-    }
-  };
-
-  // Listen for browser back button
+  // Browser back button handler
   useEffect(() => {
-    const handlePop = () => { goBack(); };
+    const handlePop = () => {
+      const hist = screenHistory.current;
+      if (hist.length > 1) {
+        const newHist = hist.slice(0, -1);
+        screenHistory.current = newHist;
+        setScreen(newHist[newHist.length - 1]);
+      } else {
+        // Nothing to go back to — stay on current screen
+        window.history.pushState({ screen: hist[0] || 'splash' }, '', window.location.pathname);
+      }
+    };
     window.addEventListener('popstate', handlePop);
-    // Push initial state so first back press fires popstate
-    window.history.pushState({ screen }, '', window.location.pathname);
     return () => window.removeEventListener('popstate', handlePop);
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const props = { go, user, setUser, bookingId, setBookingId, pickupData, setPickupData, dropoffData, setDropoffData };
 
