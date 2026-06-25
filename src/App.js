@@ -4748,6 +4748,21 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
 
 
 
+  // Computed coordinates from booking
+  const driverCoords  = booking?.driverLocation?.lat
+    ? { lat: booking.driverLocation.lat, lng: booking.driverLocation.lng }
+    : null;
+  const pickupCoords  = booking?.pickup?.lat
+    ? { lat: booking.pickup.lat,  lng: booking.pickup.lng  }
+    : MANCHESTER_CENTER;
+  const dropoffCoords = booking?.dropoff?.lat
+    ? { lat: booking.dropoff.lat, lng: booking.dropoff.lng }
+    : null;
+  const markers = [
+    ...(pickupCoords  ? [{ position: pickupCoords,  label:'A', title:'Pickup'   }] : []),
+    ...(dropoffCoords ? [{ position: dropoffCoords, label:'B', title:'Drop-off' }] : []),
+  ];
+
   const fare = booking?.fare || 0;
   const fee  = Math.round(fare * 0.15);
   const earn = Math.round(fare * 0.85);
