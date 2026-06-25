@@ -6776,21 +6776,19 @@ export default function App() {
   if (loading) return <LoadingScreen/>;
 
     // go() - navigate to a screen and track history
-  const go = (newScreen) => {
+  const go = useCallback((newScreen) => {
     const resetScreens = ['splash', 'role', 'customer-dash', 'driver-dash', 'admin'];
     if (resetScreens.includes(newScreen)) {
       screenHistory.current = [newScreen];
     } else {
-      // avoid duplicate consecutive entries
       const hist = screenHistory.current;
       if (hist[hist.length - 1] !== newScreen) {
         screenHistory.current = [...hist, newScreen];
       }
     }
-    // Push to browser history for back button
     window.history.pushState({ screen: newScreen }, '', window.location.pathname);
     setScreen(newScreen);
-  };
+  }, []);
 
   // Browser back button handler
   useEffect(() => {
