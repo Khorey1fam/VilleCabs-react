@@ -6692,6 +6692,7 @@ export default function App() {
   const [pickupData,  setPickupData]  = useState(null);
   const [dropoffData, setDropoffData] = useState(null);
   const [loading,     setLoading]     = useState(true);
+  const screenHistory                  = useRef(['splash']); // Navigation history stack
 
   useEffect(() => {
     let done = false;
@@ -6773,7 +6774,42 @@ export default function App() {
 
   if (loading) return <LoadingScreen/>;
 
-  const props = { go:setScreen, user, setUser, bookingId, setBookingId, pickupData, setPickupData, dropoffData, setDropoffData };
+    const go = (newScreen) => {
+    // Don't push duplicates
+    if (newScreen === screen) return;
+    // Screens that should reset history (fresh start)
+    const resetScreens = ['splash', 'role', 'customer-dash', 'driver-dash', 'admin'];
+    if (resetScreens.includes(newScreen)) {
+      screenHistory.current = [newScreen];
+    } else {
+      screenHistory.current = [...screenHistory.current, newScreen];
+    }
+    // Push to browser history so back button fires popstate
+    window.history.pushState({ screen: newScreen }, '', window.location.pathname);
+    setScreen(newScreen);
+  };
+
+  const goBack = () => {
+    const hist = screenHistory.current;
+    if (hist.length > 1) {
+      // Remove current screen
+      const newHist = hist.slice(0, -1);
+      screenHistory.current = newHist;
+      const prev = newHist[newHist.length - 1];
+      setScreen(prev);
+    }
+  };
+
+  // Listen for browser back button
+  useEffect(() => {
+    const handlePop = () => { goBack(); };
+    window.addEventListener('popstate', handlePop);
+    // Push initial state so first back press fires popstate
+    window.history.pushState({ screen }, '', window.location.pathname);
+    return () => window.removeEventListener('popstate', handlePop);
+  }, []);
+
+  const props = { go, user, setUser, bookingId, setBookingId, pickupData, setPickupData, dropoffData, setDropoffData };
 
   const screens = {
     splash:           <Splash {...props}/>,
