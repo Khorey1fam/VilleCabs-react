@@ -3536,12 +3536,18 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   };
 
   const cancelRide = async () => {
-    if (!bookingId || !window.confirm('Cancel this ride? The booking will be removed.')) return;
+    if (!bookingId) return;
+    const reasons = ['Wrong pickup location', 'Changed my mind', 'Driver taking too long', 'Found another ride', 'Other'];
+    const reason  = window.prompt('Please tell us why you want to cancel:\n\n' + reasons.map((r,i) => `${i+1}. ${r}`).join('\n') + '\n\nEnter number (1-5) or leave blank to cancel without reason:');
+    if (reason === null) return; // user clicked Cancel on prompt
+    const reasonText = reasons[parseInt(reason)-1] || reason || 'No reason given';
+    if (!window.confirm(`Cancel ride? Reason: "${reasonText}"`)) return;
     setCancelling(true);
     try {
       await updateDoc(doc(db,'bookings',bookingId), {
-        status:      'cancelled',
-        cancelledBy: 'customer',
+        status:        'cancelled',
+        cancelledBy:   'customer',
+        cancelReason:  reasonText,
         cancelledAt: serverTimestamp(),
       });
       setCancelDone(true);
@@ -3812,6 +3818,14 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
             <div style={{ background:'rgba(255,255,255,0.04)', borderRadius:10, padding:12, marginBottom:14 }}>
               {[
                 ['Driver', booking.driverName||'--'],
+                ...(booking.driverLocation && booking.pickup ? [['ETA', (() => {
+                  const R=6371, dLat=(booking.pickup.lat-booking.driverLocation.lat)*Math.PI/180;
+                  const dLon=(booking.pickup.lng-booking.driverLocation.lng)*Math.PI/180;
+                  const a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(booking.driverLocation.lat*Math.PI/180)*Math.cos(booking.pickup.lat*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
+                  const km=R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+                  const mins=Math.max(1,Math.round(km/0.5));
+                  return `~${mins} min away`;
+                })()]] : []),
                 ['Vehicle', booking.vehicleMake ? `${booking.vehicleMake} ${booking.vehicleModel||''}` : '--'],
                 ['Plate', booking.licensePlate||'--'],
                 ['Distance', `${booking.distanceKm||'--'} km`],
@@ -4413,7 +4427,28 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   };
   const goOffline = async () => {
     setIsOnline(false);
-    try { await updateDoc(doc(db,'drivers',user.uid), { isOnline:false }); } catch(e) {}
+    try {
+      await updateDoc(doc(db,'drivers',user.uid), { isOnline:false });
+      // Check if any other drivers are still online
+      const onlineSnap = await getDocs(query(collection(db,'drivers'), where('isOnline','==',true), where('status','==','approved')));
+      const hour = new Date().getHours();
+      const isPeak = (hour >= 7 && hour <= 9) || (hour >= 17 && hour <= 20);
+      if (onlineSnap.size === 0 && isPeak) {
+        // Send low driver alert to admin
+        fetch('https://api.emailjs.com/api/v1.0/email/send', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            service_id:'service_8fp53l4', template_id:'template_low_driver_alert',
+            user_id:'NYE1IvkRipsFf-pQg',
+            template_params:{
+              to_email:'admin@villecabs.com', to_name:'Admin', from_name:'VilleCabs System',
+              reply_to:'admin@villecabs.com',
+              message:`⚠️ Alert: No drivers are currently online during peak hours (${new Date().toLocaleTimeString('en-JM')}). Please contact available drivers.`
+            }
+          })
+        }).catch(()=>{});
+      }
+    } catch(e) {}
   };
   const declineRide = async (rideId) => {
     try { await updateDoc(doc(db,'bookings',rideId), { declinedBy: arrayUnion(user.uid) }); } catch(e) {}
@@ -4562,6 +4597,28 @@ function DriverDash({ go, user, setUser, setBookingId }) {
               <div style={{ fontSize:20, color:'#fff' }}>→</div>
             </div>
           )}
+
+          {/* Online/Offline prominent widget */}
+          <div style={{ margin:'0 14px 12px', borderRadius:14, padding:'14px 16px',
+            background: isOnline ? 'linear-gradient(135deg,#1a9e5a,#166534)' : '#1a1a2e',
+            border: `1px solid ${isOnline ? '#1a9e5a' : 'rgba(255,255,255,0.1)'}`,
+            display:'flex', alignItems:'center', justifyContent:'space-between',
+            boxShadow: isOnline ? '0 4px 14px rgba(26,158,90,0.35)' : 'none' }}>
+            <div>
+              <div style={{ fontSize:13, fontWeight:700, color:'#fff', marginBottom:3 }}>
+                {isOnline ? '🟢 You are Online' : '⚫ You are Offline'}
+              </div>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.7)' }}>
+                {isOnline ? 'Accepting ride requests' : 'Go online to receive rides'}
+              </div>
+            </div>
+            <div onClick={() => isOnline ? goOffline() : goOnline()}
+              style={{ width:52, height:28, borderRadius:14, background: isOnline ? '#fff' : 'rgba(255,255,255,0.15)',
+                position:'relative', cursor:'pointer', transition:'background 0.3s', flexShrink:0 }}>
+              <div style={{ position:'absolute', top:4, left: isOnline ? 26 : 4, width:20, height:20,
+                borderRadius:'50%', background: isOnline ? '#1a9e5a' : '#6b7280', transition:'left 0.3s' }}/>
+            </div>
+          </div>
 
           {/* Peak hours banner */}
           {(() => { const h=new Date().getHours(),d=new Date().getDay(); return d>=1&&d<=5&&h>=17&&h<19 ? (
@@ -5130,6 +5187,12 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
                     <div style={{ width:40, height:40, borderRadius:'50%', background:'rgba(232,180,0,0.2)', border:'1.5px solid #e8b400', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>💬</div>
                     <span style={{ fontSize:9, color:YELLOW }}>Chat</span>
                   </div>
+                  {booking?.customerPhone && (
+                    <a href={`tel:${booking.customerPhone}`} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, textDecoration:'none' }}>
+                      <div style={{ width:40, height:40, borderRadius:'50%', background:'rgba(26,158,90,0.2)', border:'1.5px solid #1a9e5a', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>📞</div>
+                      <span style={{ fontSize:9, color:'#1a9e5a' }}>Call</span>
+                    </a>
+                  )}
                 </div>
               </div>
             </div>
@@ -6275,6 +6338,35 @@ function AdminDash({ go, user }) {
                 );
               })}
             </div>
+
+            {/* CSV Export */}
+            <button onClick={() => {
+              const rows = rides.filter(r => r.status === 'completed');
+              const header = 'Date,Customer,Driver,Vehicle,Pickup,Dropoff,Fare,Distance,Vehicle Type';
+              const csv = [header, ...rows.map(r => {
+                const date = r.completedAt?.seconds ? new Date(r.completedAt.seconds*1000).toLocaleDateString('en-JM') : '—';
+                return [
+                  date,
+                  r.customerName||'—',
+                  r.driverName||'—',
+                  `${r.vehicleMake||''} ${r.vehicleModel||''}`.trim()||'—',
+                  (r.pickup?.address||'—').replace(/,/g,' '),
+                  (r.dropoff?.address||'—').replace(/,/g,' '),
+                  r.fare||0,
+                  r.distanceKm ? Number(r.distanceKm).toFixed(1) : '—',
+                  r.vehicleType||'—'
+                ].join(',');
+              })].join('
+');
+              const blob = new Blob([csv], { type:'text/csv' });
+              const url  = URL.createObjectURL(blob);
+              const a    = document.createElement('a');
+              a.href = url; a.download = `villecabs-rides-${new Date().toISOString().slice(0,10)}.csv`;
+              a.click(); URL.revokeObjectURL(url);
+            }}
+              style={{ width:'100%', padding:'13px', background:'linear-gradient(135deg,#6b21a8,#4c1d95)', color:'#fff', border:'none', borderRadius:12, fontSize:14, fontWeight:700, cursor:'pointer', marginTop:8, boxShadow:'0 4px 12px rgba(107,33,168,0.3)' }}>
+              📥 Export Ride Data (CSV)
+            </button>
           </div>
         )}
 
