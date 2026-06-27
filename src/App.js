@@ -4372,15 +4372,22 @@ function DriverDash({ go, user, setUser, setBookingId }) {
       }).catch(() => setLoading(false));
   }, [user]);
 
-  // ── Check if driver already has an active ride ──────────────────────────
+  // ── Check if driver has an active ride (real-time) ──────────────────────
   useEffect(() => {
     if (!user?.uid) return;
-    getDocs(query(collection(db,'bookings'),
+    const q = query(collection(db,'bookings'),
       where('driverId','==',user.uid),
-      where('status','in',['active','arrived','enroute'])
-    )).then(snap => {
-      if (!snap.empty) setActiveRideId(snap.docs[0].id);
-    }).catch(()=>{});
+      where('status','in',['active','arrived','enroute','searching'])
+    );
+    const unsub = onSnapshot(q, snap => {
+      if (!snap.empty) {
+        setActiveRideId(snap.docs[0].id);
+        setBookingId(snap.docs[0].id);
+      } else {
+        setActiveRideId(null);
+      }
+    }, ()=>{});
+    return () => unsub();
     // Load driver rating
     getDoc(doc(db,'drivers',user.uid)).then(snap => {
       if (snap.exists()) {
@@ -4559,6 +4566,18 @@ function DriverDash({ go, user, setUser, setBookingId }) {
       {/* ══════════════════════════════════════════════════════
           HOME TAB
           ══════════════════════════════════════════════════════ */}
+      {/* ── ACTIVE RIDE BANNER (all tabs) ── */}
+      {activeRideId && (
+        <div onClick={() => go('driver-active')}
+          style={{ margin:'10px 14px 0', background:'linear-gradient(135deg,#6b21a8,#4c1d95)', borderRadius:14, padding:'14px 16px', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'space-between', boxShadow:'0 4px 14px rgba(107,33,168,0.4)' }}>
+          <div>
+            <div style={{ fontSize:14, fontWeight:700, color:'#fff', marginBottom:3 }}>🚗 Active Ride In Progress</div>
+            <div style={{ fontSize:12, color:'rgba(255,255,255,0.85)' }}>Tap to return to your current ride →</div>
+          </div>
+          <div style={{ fontSize:24, color:'#D4AF37' }}>→</div>
+        </div>
+      )}
+
       {driverTab === 'home' && (
         <div style={{ flex:1, overflowY:'auto', paddingBottom:80 }}>
 
@@ -4585,18 +4604,6 @@ function DriverDash({ go, user, setUser, setBookingId }) {
               ))}
             </div>
           </div>
-
-          {/* Active ride banner */}
-          {activeRideId && (
-            <div onClick={() => { go('driver-active'); }}
-              style={{ margin:'0 14px 12px', background:'#6b21a8', borderRadius:14, padding:'14px 16px', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-              <div>
-                <div style={{ fontSize:14, fontWeight:700, color:'#fff' }}>🚗 Active Ride In Progress</div>
-                <div style={{ fontSize:12, color:'rgba(255,255,255,0.8)', marginTop:3 }}>Tap to return to your current ride</div>
-              </div>
-              <div style={{ fontSize:20, color:'#fff' }}>→</div>
-            </div>
-          )}
 
           {/* Online/Offline prominent widget */}
           <div style={{ margin:'0 14px 12px', borderRadius:14, padding:'14px 16px',
@@ -6825,8 +6832,24 @@ export default function App() {
         if (dSnap.exists()) {
           const d = dSnap.data();
           setUser({ uid:fu.uid, name:d.name||fu.displayName||'Driver', email:fu.email, role:'driver' });
-          if      (d.status === 'approved') setScreen('driver-dash');
-          else if (d.status === 'pending')  setScreen('driver-pending');
+          if (d.status === 'approved') {
+            // Check if driver has an active ride - redirect there
+            try {
+              const activeRideQ = await getDocs(query(
+                collection(db,'bookings'),
+                where('driverId','==',fu.uid),
+                where('status','in',['active','arrived','enroute','searching'])
+              ));
+              if (!activeRideQ.empty) {
+                setBookingId(activeRideQ.docs[0].id);
+                setScreen('driver-active');
+              } else {
+                setScreen('driver-dash');
+              }
+            } catch(e) {
+              setScreen('driver-dash');
+            }
+          } else if (d.status === 'pending')  setScreen('driver-pending');
           else                               setScreen('driver-login');
         } else if (cSnap.exists()) {
           const d = cSnap.data();
