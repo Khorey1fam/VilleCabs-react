@@ -6356,8 +6356,7 @@ function AdminDash({ go, user }) {
                   r.distanceKm ? Number(r.distanceKm).toFixed(1) : '—',
                   r.vehicleType||'—'
                 ].join(',');
-              })].join('
-');
+              })].join(String.fromCharCode(10));
               const blob = new Blob([csv], { type:'text/csv' });
               const url  = URL.createObjectURL(blob);
               const a    = document.createElement('a');
