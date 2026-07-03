@@ -790,6 +790,56 @@ function RoleSelect({ go, user }) {
 }
 
 // ── CUSTOMER SIGNUP ───────────────────────────────────────────────────────────
+// ── COMPLETE PROFILE (Google sign-in users: collect name + phone) ──────────────
+function CompleteProfile({ go, user, setUser }) {
+  const [name,    setName]    = useState(user?.name || '');
+  const [phone,   setPhone]   = useState('');
+  const [error,   setError]   = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleContinue = async () => {
+    setError('');
+    if (!name.trim()) { setError('Please enter your full name.'); return; }
+    const digits = phone.replace(/\D/g, '');
+    if (digits.length < 7) { setError('Please enter a valid phone number.'); return; }
+    setLoading(true);
+    try {
+      await updateDoc(doc(db,'customers',user.uid), { name: name.trim(), phone: phone.trim() });
+      setUser(prev => ({ ...prev, name: name.trim() }));
+      const snap = await getDoc(doc(db,'customers',user.uid));
+      const d = snap.exists() ? snap.data() : {};
+      if (!d.termsAccepted) go('terms');
+      else if (!d.tipsSeen) go('welcome-tips');
+      else go('customer-dash');
+    } catch(err) { setError('Failed to save your details. Please try again.'); }
+    setLoading(false);
+  };
+
+  return (
+    <div style={s.content}>
+      <div style={{ background:'#ffffff', padding:'16px 18px', borderBottom:'1px solid #e5e7eb', display:'flex', alignItems:'center', gap:10 }}>
+        <img src="/logo.png" alt="VilleCabs" style={{ height:28, objectFit:'contain' }}/>
+        <span style={{ color:'#1a1a2e', fontSize:16, fontWeight:600 }}>Almost there!</span>
+      </div>
+      <div style={{ padding:'28px 20px', maxWidth:420, margin:'0 auto' }}>
+        <div style={{ textAlign:'center', marginBottom:22 }}>
+          <div style={{ fontSize:44, marginBottom:10 }}>👋</div>
+          <h2 style={{ fontSize:20, fontWeight:800, color:'#1a1a2e', marginBottom:6 }}>Complete Your Profile</h2>
+          <p style={{ fontSize:13, color:'#6b7280', lineHeight:1.6 }}>Drivers need your name and phone number to identify and reach you for your rides.</p>
+        </div>
+        {error && <div style={s.errBox}>⚠️ {error}</div>}
+        <label style={s.lbl}>Full Name</label>
+        <input style={s.inp} value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Kezia Brown"/>
+        <label style={s.lbl}>Phone Number</label>
+        <input style={s.inp} type="tel" value={phone} onChange={e=>setPhone(e.target.value)} placeholder="+1 (876) 555-0100"/>
+        <button style={{ ...s.btnY, opacity:loading?0.7:1, marginTop:6 }} onClick={handleContinue} disabled={loading}>
+          {loading ? 'Saving...' : 'Continue'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function CustomerSignup({ go, setUser, user }) {
   const [form, setForm]       = useState({ name:'', phone:'', email:'', password:'' });
   const [loading, setLoading] = useState(false);
@@ -821,11 +871,12 @@ function CustomerSignup({ go, setUser, user }) {
       if (!snap.exists()) {
         await setDoc(doc(db,'customers',r.user.uid), { name:r.user.displayName, email:r.user.email, role:'customer', createdAt:serverTimestamp() });
         setUser({ uid:r.user.uid, name:r.user.displayName, email:r.user.email, role:'customer' });
-        go('terms');
+        go('complete-profile');
       } else {
         const d = snap.data();
         setUser({ uid:r.user.uid, name:d.name||r.user.displayName, email:r.user.email, role:'customer' });
-        go(d.termsAccepted ? (d.tipsSeen ? 'customer-dash' : 'welcome-tips') : 'terms');
+        if (!d.phone) go('complete-profile');
+        else go(d.termsAccepted ? (d.tipsSeen ? 'customer-dash' : 'welcome-tips') : 'terms');
       }
     } catch(err) { setError(err.message); }
     setLoading(false);
@@ -961,7 +1012,10 @@ function CustomerLogin({ go, setUser, user }) {
       if (!snap.exists()) await setDoc(doc(db,'customers',r.user.uid), { name:r.user.displayName, email:r.user.email, role:'customer', createdAt:serverTimestamp() });
       const data = snap.exists() ? snap.data() : {};
       setUser({ uid:r.user.uid, name:data.name||r.user.displayName, email:r.user.email, role:'customer' });
-      go('customer-dash');
+      if (!data.phone) go('complete-profile');
+      else if (!data.termsAccepted) go('terms');
+      else if (!data.tipsSeen) go('welcome-tips');
+      else go('customer-dash');
     } catch(err) { setError(err.message); }
     setLoading(false);
   };
@@ -7647,6 +7701,8 @@ export default function App() {
           setUser({ uid:fu.uid, name:d.name||fu.displayName||'Customer', email:fu.email, role:'customer' });
           if (!fu.emailVerified && fu.providerData?.[0]?.providerId === 'password') {
             setScreen('otp');
+          } else if (!d.phone) {
+            setScreen('complete-profile');
           } else if (!d.termsAccepted) {
             setScreen('terms');
           } else if (!d.tipsSeen) {
@@ -7740,6 +7796,7 @@ export default function App() {
     'driver-notifications':   <DriverNotifications {...props}/>,
     'login':                  <CustomerLogin {...props}/>,
     'login-choice':           <CustomerLogin {...props}/>,
+    'complete-profile':       <CompleteProfile {...props}/>,
     admin:                    <AdminDash {...props}/>,
     'partner-locations':      <PartnerLocations {...props}/>,
   };
