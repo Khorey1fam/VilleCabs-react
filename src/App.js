@@ -107,6 +107,110 @@ const sendReplyEmail = async (toEmail, toName, subject, replyText) => {
 };
 const LIBRARIES       = ['places'];
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  Global Toast + Confirm system (Feature: UX polish)
+//  Replaces jarring browser alert()/confirm() with styled in-app UI.
+//  Any component can call vcToast('msg') or await vcConfirm('question')
+//  without prop-drilling — they dispatch window events the host listens to.
+// ═══════════════════════════════════════════════════════════════════════════
+const vcToast = (message, type = 'info') => {
+  try { window.dispatchEvent(new CustomEvent('vc-toast', { detail: { message, type } })); } catch(e) {}
+};
+let _vcConfirmResolver = null;
+const vcConfirm = (message, opts = {}) => new Promise((resolve) => {
+  _vcConfirmResolver = resolve;
+  try {
+    window.dispatchEvent(new CustomEvent('vc-confirm', { detail: {
+      message,
+      confirmText: opts.confirmText || 'Confirm',
+      cancelText:  opts.cancelText  || 'Cancel',
+      danger:      opts.danger || false,
+    } }));
+  } catch(e) { resolve(false); }
+});
+const _vcResolveConfirm = (val) => { if (_vcConfirmResolver) { _vcConfirmResolver(val); _vcConfirmResolver = null; } };
+
+// Turn technical Firebase/network errors into calm, user-friendly messages.
+// Never shows raw error text or codes to the user.
+const friendlyAuthError = (err) => {
+  const code = (err && err.code) || '';
+  const map = {
+    'auth/invalid-email':          'That email address doesn\u2019t look right. Please check and try again.',
+    'auth/user-disabled':          'This account has been disabled. Please contact support at admin@villecabs.com.',
+    'auth/user-not-found':         'We couldn\u2019t find an account with those details. Please check or sign up.',
+    'auth/wrong-password':         'Incorrect email or password. Please try again.',
+    'auth/invalid-credential':     'Incorrect email or password. Please try again.',
+    'auth/invalid-login-credentials':'Incorrect email or password. Please try again.',
+    'auth/email-already-in-use':   'That email is already registered. Try logging in instead.',
+    'auth/weak-password':          'Please choose a password with at least 6 characters.',
+    'auth/too-many-requests':      'Too many attempts. Please wait a few minutes and try again.',
+    'auth/network-request-failed': 'Network problem. Please check your connection and try again.',
+    'auth/popup-closed-by-user':   'Sign-in was cancelled. Please try again.',
+    'auth/popup-blocked':          'Your browser blocked the sign-in popup. Please allow popups and try again.',
+    'auth/requires-recent-login':  'For your security, please log out and back in, then try again.',
+  };
+  return map[code] || 'Something went wrong. Please try again in a moment.';
+};
+
+// Generic friendly fallback for non-auth operations (bookings, writes, etc.)
+const friendlyError = (err) => {
+  const code = (err && err.code) || '';
+  if (code === 'permission-denied')  return 'You don\u2019t have permission to do that right now. Please try again or contact support.';
+  if (code === 'unavailable')        return 'Connection problem. Please check your internet and try again.';
+  if (code === 'deadline-exceeded')  return 'That took too long. Please check your connection and try again.';
+  if (code === 'not-found')          return 'We couldn\u2019t find that anymore \u2014 it may have changed. Please refresh and try again.';
+  if ((err && err.message || '').toLowerCase().includes('network')) return 'Network problem. Please check your connection and try again.';
+  return 'Something went wrong. Please try again in a moment.';
+};
+
+function ToastHost() {
+  const [toasts,  setToasts]  = useState([]);
+  const [confirm, setConfirm] = useState(null);
+  useEffect(() => {
+    const onToast = (e) => {
+      const id = Date.now() + Math.random();
+      setToasts(t => [...t, { id, ...e.detail }]);
+      setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3400);
+    };
+    const onConfirm = (e) => setConfirm(e.detail);
+    window.addEventListener('vc-toast', onToast);
+    window.addEventListener('vc-confirm', onConfirm);
+    return () => { window.removeEventListener('vc-toast', onToast); window.removeEventListener('vc-confirm', onConfirm); };
+  }, []);
+
+  const closeConfirm = (val) => { _vcResolveConfirm(val); setConfirm(null); };
+  const toastColor = (type) => type==='success' ? '#1a9e5a' : type==='error' ? '#dc2626' : type==='warn' ? '#b45309' : '#1a1a2e';
+  const toastIcon  = (type) => type==='success' ? '✅' : type==='error' ? '⚠️' : type==='warn' ? '⚡' : 'ℹ️';
+
+  return (
+    <>
+      {/* Toasts */}
+      <div style={{ position:'fixed', top:16, left:'50%', transform:'translateX(-50%)', zIndex:9999, display:'flex', flexDirection:'column', gap:8, alignItems:'center', pointerEvents:'none', width:'92%', maxWidth:420 }}>
+        {toasts.map(t => (
+          <div key={t.id} style={{ background:'#fff', color:toastColor(t.type), borderLeft:`4px solid ${toastColor(t.type)}`, borderRadius:12, padding:'12px 16px', boxShadow:'0 8px 30px rgba(0,0,0,0.18)', fontSize:13, fontWeight:600, display:'flex', alignItems:'center', gap:10, width:'100%', boxSizing:'border-box', animation:'vcToastIn 0.25s ease' }}>
+            <span style={{ fontSize:16 }}>{toastIcon(t.type)}</span>
+            <span style={{ color:'#1a1a2e', fontWeight:500, lineHeight:1.4 }}>{t.message}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Confirm dialog */}
+      {confirm && (
+        <div onClick={() => closeConfirm(false)} style={{ position:'fixed', inset:0, zIndex:10000, background:'rgba(10,15,30,0.6)', backdropFilter:'blur(3px)', display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background:'#fff', borderRadius:18, padding:'24px 22px', maxWidth:340, width:'100%', boxShadow:'0 20px 60px rgba(0,0,0,0.3)', animation:'vcConfirmIn 0.2s ease' }}>
+            <div style={{ fontSize:34, textAlign:'center', marginBottom:12 }}>{confirm.danger ? '⚠️' : '❓'}</div>
+            <div style={{ fontSize:14, color:'#374151', lineHeight:1.6, textAlign:'center', marginBottom:22, whiteSpace:'pre-line' }}>{confirm.message}</div>
+            <div style={{ display:'flex', gap:10 }}>
+              <button onClick={() => closeConfirm(false)} style={{ flex:1, padding:'12px', background:'#f3f4f6', color:'#374151', border:'none', borderRadius:12, fontSize:14, fontWeight:600, cursor:'pointer' }}>{confirm.cancelText}</button>
+              <button onClick={() => closeConfirm(true)} style={{ flex:1, padding:'12px', background: confirm.danger ? '#dc2626' : '#6b21a8', color:'#fff', border:'none', borderRadius:12, fontSize:14, fontWeight:700, cursor:'pointer' }}>{confirm.confirmText}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ── Dark mode helpers (Feature: Dark Mode) ───────────────────────────────────
 const getDarkPref = () => { try { return localStorage.getItem('vc_theme') === 'dark'; } catch(e) { return false; } };
 const setDarkPref = (on) => {
@@ -279,6 +383,8 @@ function GlobalStyles() {
         '@keyframes slideInLeft { from { transform:translateX(-100%);opacity:0 } to { transform:translateX(0);opacity:1 } }',
         '@keyframes pulse { 0%,100% { opacity:1;transform:scale(1) } 50% { opacity:0.6;transform:scale(1.3) } }',
         '@keyframes spin { to { transform:rotate(360deg) } }',
+        '@keyframes vcToastIn { from { opacity:0; transform:translateY(-14px) } to { opacity:1; transform:translateY(0) } }',
+        '@keyframes vcConfirmIn { from { opacity:0; transform:scale(0.94) } to { opacity:1; transform:scale(1) } }',
       ].join(' ');
       document.head.appendChild(el);
     }
@@ -921,7 +1027,7 @@ function CustomerSignup({ go, setUser, user }) {
       // Welcome email sent AFTER verification (see OTPScreen)
       setUser({ uid:cred.user.uid, name:form.name, email:form.email, role:'customer' });
       go('otp');
-    } catch(err) { setError(err.code==='auth/email-already-in-use'?'Email already registered.':err.message); }
+    } catch(err) { setError(friendlyAuthError(err)); }
     setLoading(false);
   };
 
@@ -940,7 +1046,7 @@ function CustomerSignup({ go, setUser, user }) {
         if (!d.phone) go('complete-profile');
         else go(d.termsAccepted ? (d.tipsSeen ? 'customer-dash' : 'welcome-tips') : 'terms');
       }
-    } catch(err) { setError(err.message); }
+    } catch(err) { setError(friendlyAuthError(err)); }
     setLoading(false);
   };
 
@@ -983,11 +1089,7 @@ function OTPScreen({ go, user }) {
       setResent(true);
       setCooldown(60);
     } catch(err) {
-      if (err.code === 'auth/too-many-requests') {
-        setError('Too many attempts. Please wait a few minutes before trying again.');
-      } else {
-        setError(err.message);
-      }
+      setError(friendlyAuthError(err));
     }
   };
 
@@ -1011,7 +1113,7 @@ function OTPScreen({ go, user }) {
               }
               go(user?.role==='driver' ? 'driver-pending' : 'terms');
             } else {
-              alert('Email not verified yet. Please check your inbox (and spam folder) and click the verification link.');
+              vcToast('Email not verified yet — check your inbox and spam folder for the verification link.', 'warn');
             }
           }}>I've verified my email →</button>
           <button
@@ -1085,7 +1187,7 @@ function CustomerLogin({ go, setUser, user }) {
       else if (!data.termsAccepted) go('terms');
       else if (!data.tipsSeen) go('welcome-tips');
       else go('customer-dash');
-    } catch(err) { setError(err.message); }
+    } catch(err) { setError(friendlyAuthError(err)); }
     setLoading(false);
   };
 
@@ -1246,7 +1348,7 @@ function DriverSignup({ go, user }) {
       go('driver-pending');
     } catch(e) {
       console.error('Signup error:', e);
-      setError(e.code==='auth/email-already-in-use' ? 'This email is already registered.' : 'Signup failed: ' + e.message);
+      setError(friendlyAuthError(e));
       setLoading(false);
     }
   };
@@ -2071,7 +2173,7 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
             {/* Menu items */}
             <div style={{ flex:1, overflowY:'auto', padding:'8px 0 24px', WebkitOverflowScrolling:'touch' }}>
               {[
-                ['🚕', 'Book a Ride',      () => { if (activeRide) { setMenuOpen(false); alert('You already have an active ride in progress. Please complete or cancel it first.'); return; } setTab('book'); setMenuOpen(false); }],
+                ['🚕', 'Book a Ride',      () => { if (activeRide) { setMenuOpen(false); vcToast('You already have an active ride in progress. Please complete or cancel it first.', 'warn'); return; } setTab('book'); setMenuOpen(false); }],
                 ['🕐', 'Ride History',     () => { setTab('history'); setMenuOpen(false); }],
                 ['👤', 'My Profile',       () => { go('customer-profile'); setMenuOpen(false); }],
                 ['💰', 'Payments',         () => { go('payments'); setMenuOpen(false); }],
@@ -2184,7 +2286,7 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
                 Good day, {user?.name?.split(' ')[0]||'Rider'} 👋
               </div>
 
-              <button onClick={() => { if (activeRide) { alert('You already have an active ride in progress. Please complete or cancel it before booking a new ride.'); return; } go('pin-pickup'); }}
+              <button onClick={() => { if (activeRide) { vcToast('You already have an active ride in progress. Complete or cancel it before booking a new one.', 'warn'); return; } go('pin-pickup'); }}
                 style={{ background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', margin:'14px auto 0', padding:0 }}>
                 <div style={{ width:190, height:190, borderRadius:'50%', background:'#ffffff', boxShadow:'0 8px 40px rgba(0,0,0,0.15), 0 0 0 6px rgba(232,180,0,0.2)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', position:'relative', overflow:'hidden' }}>
                   <div style={{ position:'absolute', inset:0, background:'radial-gradient(circle at 50% 60%, rgba(232,180,0,0.12) 0%, transparent 70%)' }}/>
@@ -2278,7 +2380,7 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
                 <div style={{ fontSize:40, marginBottom:12 }}>🚕</div>
                 <div style={{ fontSize:15, marginBottom:6, color:'#374151' }}>No rides yet</div>
                 <div style={{ fontSize:13 }}>Your completed rides will appear here</div>
-                <button style={{ ...s.btnY, marginTop:20 }} onClick={() => { if (activeRide) { alert('You already have an active ride in progress.'); return; } setTab('book'); }}>Book your first ride</button>
+                <button style={{ ...s.btnY, marginTop:20 }} onClick={() => { if (activeRide) { vcToast('You already have an active ride in progress.', 'warn'); return; } setTab('book'); }}>Book your first ride</button>
               </div>
             ) : history.map((ride,i) => {
               const date = ride.completedAt?.seconds
@@ -2292,7 +2394,7 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
               const to   = (ride.dropoff?.address||'--').split(',')[0];
               const canRebook = ride.pickup?.lat && ride.pickup?.lng && ride.dropoff?.lat && ride.dropoff?.lng;
               const handleBookAgain = () => {
-                if (activeRide) { alert('You already have an active ride in progress. Please complete or cancel it before booking a new ride.'); return; }
+                if (activeRide) { vcToast('You already have an active ride in progress. Complete or cancel it before booking a new one.', 'warn'); return; }
                 if (typeof setPickupData === 'function') {
                   setPickupData({ address: ride.pickup.address, coords: { lat: ride.pickup.lat, lng: ride.pickup.lng }, passengers: ride.passengers || 1 });
                 }
@@ -2400,7 +2502,7 @@ function CustomerReferral({ go, user }) {
       navigator.share({ title: 'VilleCabs Referral', text: shareText, url: 'https://villecabs.com' });
     } else {
       navigator.clipboard?.writeText(shareText);
-      alert('Share text copied to clipboard!');
+      vcToast('Share text copied to clipboard!', 'success');
     }
   };
 
@@ -2588,7 +2690,7 @@ function CustomerSettings({ go, user, setUser }) {
       setNewPassword(''); setConfirmPassword('');
     } catch(err) {
       if (err.code === 'auth/requires-recent-login') setErrPass('Please log out and log back in before changing your password.');
-      else setErrPass(err.message);
+      else setErrPass(friendlyAuthError(err));
     }
     setLoadingPass(false);
   };
@@ -2607,20 +2709,20 @@ function CustomerSettings({ go, user, setUser }) {
       setNewEmail('');
     } catch(err) {
       if (err.code === 'auth/requires-recent-login') setErrEmail('Please log out and log back in before changing your email.');
-      else setErrEmail(err.message);
+      else setErrEmail(friendlyAuthError(err));
     }
     setLoadingEmail(false);
   };
 
   const handleDeactivate = async () => {
-    if (!window.confirm('Are you sure you want to deactivate your account?')) return;
+    if (!(await vcConfirm('Deactivate your account?', { confirmText:'Deactivate', danger:true }))) return;
     setLoadingDeact(true);
     try {
       await updateDoc(doc(db,'customers',user.uid), { status:'deactivated', deactivatedAt:serverTimestamp() });
       await signOut(auth);
       setUser(null);
       go('splash');
-    } catch(err) { alert('Error: ' + err.message); }
+    } catch(err) { vcToast(friendlyError(err), 'error'); }
     setLoadingDeact(false);
   };
 
@@ -3925,7 +4027,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
     const reason  = window.prompt('Please tell us why you want to cancel:\n\n' + reasons.map((r,i) => `${i+1}. ${r}`).join('\n') + '\n\nEnter number (1-5) or leave blank to cancel without reason:');
     if (reason === null) return; // user clicked Cancel on prompt
     const reasonText = reasons[parseInt(reason)-1] || reason || 'No reason given';
-    if (!window.confirm(`Cancel ride? Reason: "${reasonText}"`)) return;
+    if (!(await vcConfirm(`Cancel this ride?\nReason: ${reasonText}`, { confirmText:'Cancel Ride', danger:true }))) return;
     setCancelling(true);
     try {
       await updateDoc(doc(db,'bookings',bookingId), {
@@ -3944,7 +4046,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
     if (!booking || booking?.status !== 'searching') return;
     const handlePop = () => {
       window.history.pushState(null, '', window.location.href);
-      alert('Please cancel your ride before leaving this page.');
+      vcToast('Please cancel your ride before leaving this page.', 'warn');
     };
     window.history.pushState(null, '', window.location.href);
     window.addEventListener('popstate', handlePop);
@@ -4158,7 +4260,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
           <div style={{ color:'rgba(255,255,255,0.4)', fontSize:13 }}>Setting up your ride</div>
           <button style={{ ...s.btnO, marginTop:24 }} onClick={async () => {
             if (bookingId) {
-              if (!window.confirm('You must cancel your ride before leaving.')) return;
+              if (!(await vcConfirm('You must cancel your ride before leaving. Cancel it now?', { confirmText:'Cancel Ride', danger:true }))) return;
               try { await updateDoc(doc(db,'bookings',bookingId), { status:'cancelled', cancelledBy:'customer', cancelledAt:serverTimestamp() }); } catch(e) {}
             }
             go('customer-dash');
@@ -4942,7 +5044,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
       setActiveRideId(null);
       setBookingId(null);
       go('driver-dash');
-      alert('Could not accept that ride — it may have been taken. Please try another.');
+      vcToast('Could not accept that ride — it may have been taken. Please try another.', 'error');
     } finally {
       setAcceptingId(null);
     }
@@ -5332,6 +5434,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
   const [sosCount,      setSosCount]      = useState(5);
   const [directions, setDirections] = useState(null);
   const [completed,  setCompleted]  = useState(false);
+  const [completing, setCompleting] = useState(false);
   const watchRef = useRef(null);
   const sosRef   = useRef(null);
 
@@ -5339,7 +5442,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
   useEffect(() => {
     const handlePopState = (e) => {
       window.history.pushState(null, '', window.location.href);
-      alert('You cannot leave an active ride. Please complete the ride first.');
+      vcToast('You cannot leave an active ride. Please complete the ride first.', 'warn');
     };
     window.history.pushState(null, '', window.location.href);
     window.addEventListener('popstate', handlePopState);
@@ -5509,10 +5612,18 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
 
   const completeRide = async () => {
     if (!booking?.id) return;
+    if (completing) return;
+    setCompleting(true);
     if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
-    await updateDoc(doc(db,'bookings',booking.id), { status:'completed', completedAt:serverTimestamp() });
+    try {
+      await updateDoc(doc(db,'bookings',booking.id), { status:'completed', completedAt:serverTimestamp() });
+    } catch(e) {
+      setCompleting(false);
+      vcToast('Couldn\u2019t complete the ride \u2014 please check your connection and try again.', 'error');
+      return;
+    }
     try { await updateDoc(doc(db,'drivers',user.uid), { isOnline:false, currentLocation:null }); } catch(e) {}
-    // Send receipt email to customer
+    // Send receipt email to customer (non-critical — never blocks completion)
     try {
       if (booking?.customerId) {
         const custSnap = await getDoc(doc(db,'customers',booking.customerId));
@@ -5587,11 +5698,11 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
 
   return (
     <div style={{ ...s.content }}>
-      <TopBar title="Active Ride" onBack={() => { if (window.confirm('You cannot leave an active ride. Please complete the ride first.\n\nPress Cancel to stay on this screen.')) {} }}/>
+      <TopBar title="Active Ride" onBack={() => { vcToast('You cannot leave an active ride. Please complete the ride first.', 'warn'); }}/>
       <div style={{ background:locationStatus==='tracking'?'rgba(26,158,90,0.15)':'rgba(226,75,74,0.1)', padding:'6px 16px', fontSize:11, color:locationStatus==='tracking'?'#9fe1cb':'#f09595', display:'flex', alignItems:'center', gap:6 }}>
         {locationStatus==='tracking' ? '📍 Sharing live location with passenger' :
          locationStatus==='denied' ? (
-           <span>⚠️ Location denied — <span style={{textDecoration:'underline',cursor:'pointer'}} onClick={() => alert('To enable location:\n\n1. Click the 🔒 lock icon in your browser address bar\n2. Set Location to Allow\n3. Refresh the page')}>tap here to fix</span></span>
+           <span>⚠️ Location denied — <span style={{textDecoration:'underline',cursor:'pointer'}} onClick={() => vcToast('To enable location: tap the 🔒 lock icon in your address bar, set Location to Allow, then refresh.', 'info')}>tap here to fix</span></span>
          ) : '📍 Getting your location...'}
       </div>
       <VilleMap height={typeof window!=='undefined'?Math.max(320,window.innerHeight*0.45):320} center={driverCoords||pickupCoords} zoom={14} markers={arrived?[]:markers} directions={directions} expandable={true}>
@@ -5720,8 +5831,8 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
               </div>
             )}
             {arrived && (
-              <button onClick={completeRide} style={{ width:'100%', padding:'15px', background:'#0f1a35', border:'1.5px solid rgba(232,180,0,0.4)', borderRadius:14, color:'#e8b400', fontSize:15, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 12px rgba(0,0,0,0.3)' }}>
-                ✅ Complete Ride
+              <button onClick={completeRide} disabled={completing} style={{ width:'100%', padding:'15px', background:'#0f1a35', border:'1.5px solid rgba(232,180,0,0.4)', borderRadius:14, color:'#e8b400', fontSize:15, fontWeight:700, cursor: completing?'default':'pointer', opacity: completing?0.7:1, boxShadow:'0 4px 12px rgba(0,0,0,0.3)' }}>
+                {completing ? '⏳ Completing...' : '✅ Complete Ride'}
               </button>
             )}
           </>
@@ -5932,7 +6043,7 @@ function DriverSettings({ go, user, setUser }) {
       setNewPassword(''); setConfirmPassword('');
     } catch(err) {
       if (err.code === 'auth/requires-recent-login') setErrPass('Please log out and log back in before changing your password.');
-      else setErrPass(err.message);
+      else setErrPass(friendlyAuthError(err));
     }
     setLoadingPass(false);
   };
@@ -5951,20 +6062,20 @@ function DriverSettings({ go, user, setUser }) {
       setNewEmail('');
     } catch(err) {
       if (err.code === 'auth/requires-recent-login') setErrEmail('Please log out and log back in before changing your email.');
-      else setErrEmail(err.message);
+      else setErrEmail(friendlyAuthError(err));
     }
     setLoadingEmail(false);
   };
 
   const handleDeactivate = async () => {
-    if (!window.confirm('Are you sure you want to deactivate your account? You will not be able to accept rides.')) return;
+    if (!(await vcConfirm('Deactivate your account? You will not be able to accept rides.', { confirmText:'Deactivate', danger:true }))) return;
     setLoadingDeact(true);
     try {
       await updateDoc(doc(db,'drivers',user.uid), { status:'suspended', deactivatedAt:serverTimestamp() });
       await signOut(auth);
       setUser(null);
       go('splash');
-    } catch(err) { alert('Error: ' + err.message); }
+    } catch(err) { vcToast(friendlyError(err), 'error'); }
     setLoadingDeact(false);
   };
 
@@ -6093,7 +6204,7 @@ function ChatScreen({ go, user, bookingId }) {
       setMessages(msgs);
       setError('');
     }, err => {
-      setError('Could not load messages: ' + err.message);
+      setError('Could not load messages. Please refresh and try again.');
     });
     return () => unsub();
   }, [activeBookingId]);
@@ -6122,7 +6233,7 @@ function ChatScreen({ go, user, bookingId }) {
       });
       setError('');
     } catch(err) {
-      setError('Failed to send: ' + err.message);
+      setError('Your message couldn’t be sent. Please try again.');
       setText(trimmed);
     }
     setSending(false);
@@ -6830,7 +6941,7 @@ function AdminDash({ go, user }) {
                   <div style={{ display:'flex', gap:6, marginTop:10 }}>
                     {c.status === 'banned'
                       ? <button onClick={() => updateCustomer(c.id, { status:'active' })} style={{ padding:'6px 12px', background:'#1a9e5a', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>✅ Unban — allow bookings</button>
-                      : <button onClick={() => { if (window.confirm(`Ban ${c.name||'this customer'} from booking rides?`)) updateCustomer(c.id, { status:'banned' }); }} style={{ padding:'6px 12px', background:'#dc2626', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>🚫 Ban from booking</button>}
+                      : <button onClick={async () => { if (await vcConfirm(`Ban ${c.name||'this customer'} from booking rides?`, { confirmText:'Ban', danger:true })) updateCustomer(c.id, { status:'banned' }); }} style={{ padding:'6px 12px', background:'#dc2626', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>🚫 Ban from booking</button>}
                   </div>
                 </div>
               );
@@ -6921,8 +7032,8 @@ function AdminDash({ go, user }) {
             const drv = drivers.find(d => d.id === driverId);
             updateBooking(rideId, { driverId, driverName: drv?.name || 'Driver' });
           };
-          const cancelScheduled = (rideId) => {
-            if (window.confirm('Cancel this scheduled ride? The customer will see it as cancelled.')) {
+          const cancelScheduled = async (rideId) => {
+            if (await vcConfirm('Cancel this scheduled ride? The customer will see it as cancelled.', { confirmText:'Cancel Ride', danger:true })) {
               updateBooking(rideId, { status:'cancelled', cancelledBy:'admin', cancelledAt: serverTimestamp() });
             }
           };
@@ -7911,7 +8022,7 @@ function ScheduledRidesCard({ user, go }) {
   }, [user]);
   if (!upcoming.length) return null;
   const cancelRide = async (id) => {
-    if (!window.confirm('Cancel this scheduled ride?')) return;
+    if (!(await vcConfirm('Cancel this scheduled ride?', { confirmText:'Cancel Ride', danger:true }))) return;
     try { await updateDoc(doc(db,'bookings',id), { status:'cancelled', cancelledBy:'customer', cancelledAt:serverTimestamp() }); } catch(e) {}
   };
   return (
@@ -8261,6 +8372,7 @@ export default function App() {
     <ErrorBoundary>
       <div style={s.screen}>
         <GlobalStyles/>
+        <ToastHost/>
         <MapBg/>
         {showOnboarding && !user && screen === 'splash'
           ? <OnboardingFlow onDone={() => { try { localStorage.setItem('vc_onboarded','1'); } catch(e) {} setShowOnboarding(false); }}/>
