@@ -450,7 +450,7 @@ function Footer({ go }) {
               ['About VilleCabs',     () => go('about-us')],
               ['Contact Us',          () => go('contact-us')],
               ['Help & Info',         () => go('help')],
-              ['Privacy Policy',      () => window.open('/privacy','_blank')],
+              ['Privacy Policy',      () => go('privacy')],
               ['Terms & Conditions',  () => go('terms')],
               ['Become a Driver',     () => go('driver-signup')],
               ['Partner Locations',   () => go('partner-locations')],
@@ -1922,7 +1922,7 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId }) {
             </div>
 
             {/* Menu items */}
-            <div style={{ flex:1, overflowY:'auto', padding:'8px 0' }}>
+            <div style={{ flex:1, overflowY:'auto', padding:'8px 0 24px', WebkitOverflowScrolling:'touch' }}>
               {[
                 ['🚕', 'Book a Ride',      () => { if (activeRide) { setMenuOpen(false); alert('You already have an active ride in progress. Please complete or cancel it first.'); return; } setTab('book'); setMenuOpen(false); }],
                 ['🕐', 'Ride History',     () => { setTab('history'); setMenuOpen(false); }],
@@ -1934,6 +1934,8 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId }) {
                 ['❓', 'Help Centre',      () => { go('help'); setMenuOpen(false); }],
                 ['📬', 'Contact Support',  () => { go('contact-us'); setMenuOpen(false); }],
                 ['ℹ️', 'About VilleCabs', () => { go('about-us'); setMenuOpen(false); }],
+                ['📄', 'Terms & Conditions', () => { go('terms'); setMenuOpen(false); }],
+                ['🔒', 'Privacy Policy',   () => { go('privacy'); setMenuOpen(false); }],
               ].map(([icon, label, action], i) => (
                 <div key={i} onClick={action}
                   style={{ padding:'13px 20px', display:'flex', alignItems:'center', gap:14, cursor:'pointer', borderBottom:'1px solid rgba(255,255,255,0.04)' }}
@@ -4723,7 +4725,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
               <div style={{ fontSize:16, fontWeight:700, color:'#fff' }}>{user?.name||'Driver'}</div>
               <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{user?.email||''}</div>
             </div>
-            <div style={{ flex:1, overflowY:'auto' }}>
+            <div style={{ flex:1, overflowY:'auto', padding:'0 0 24px', WebkitOverflowScrolling:'touch' }}>
               {[
                 ['🏠','Home',           () => { setDriverTab('home'); setMenuOpen(false); }],
                 ['🚗','Ride History',   () => { setDriverTab('rides'); setMenuOpen(false); }],
@@ -4733,6 +4735,10 @@ function DriverDash({ go, user, setUser, setBookingId }) {
                 ['👤','My Profile',    () => { go('driver-profile'); setMenuOpen(false); }],
                 ['⚙️','Settings',      () => { go('driver-settings'); setMenuOpen(false); }],
                 ['❓','Help',          () => { go('driver-help'); setMenuOpen(false); }],
+                ['ℹ️','About VilleCabs',() => { go('driver-about'); setMenuOpen(false); }],
+                ['📬','Contact Support',() => { go('driver-contact'); setMenuOpen(false); }],
+                ['📄','Terms & Conditions',() => { go('driver-terms'); setMenuOpen(false); }],
+                ['🔒','Privacy Policy', () => { go('privacy'); setMenuOpen(false); }],
               ].map(([icon, label, action], i) => (
                 <div key={i} onClick={action} style={{ padding:'14px 20px', display:'flex', alignItems:'center', gap:14, cursor:'pointer', borderBottom:'1px solid #f5f5f5' }}
                   onMouseEnter={e=>e.currentTarget.style.background='#f9f5ff'}
@@ -7076,6 +7082,101 @@ function DriverEarnings({ go, user }) {
 }
 
 
+function PrivacyPolicy({ go, user }) {
+  const sections = [
+    { n:'1',  title:'Information We Collect', body:'We may collect the following information.',
+      groups:[
+        { h:'Passenger Information', items:['Full name','Email address','Phone number','Pickup and destination information','Payment information (if applicable)','Account details'] },
+        { h:'Driver Information', items:['Full name','Email address','Phone number','Driver’s licence information','Vehicle information','Insurance and registration documents','Banking details for payouts'] },
+      ] },
+    { n:'2',  title:'How We Use Information', body:'We use collected information to:',
+      items:['Provide transportation services','Match drivers and passengers','Process onboarding and support','Improve service quality','Prevent fraud and maintain safety','Communicate updates and promotions'] },
+    { n:'3',  title:'Location Information', body:'VilleCabs may collect location-related information where necessary to:',
+      items:['Connect rides','Improve route accuracy','Support service operations'],
+      foot:'Users may manage permissions through their device settings where applicable.' },
+    { n:'4',  title:'Information Sharing', body:'VilleCabs does not sell personal information. Information may be shared:',
+      items:['Between drivers and passengers as needed for rides','With service providers supporting operations','When required by law','To protect safety and prevent fraud'] },
+    { n:'5',  title:'Data Security', body:'VilleCabs takes reasonable measures to protect user information from unauthorized access, disclosure, or misuse. However, no online platform can guarantee absolute security.' },
+    { n:'6',  title:'Data Retention', body:'Information will be retained only as long as necessary for operational, legal, or business purposes.' },
+    { n:'7',  title:'User Rights', body:'Users may request to:',
+      items:['Access personal information','Correct inaccurate information','Request deletion where applicable','Contact VilleCabs regarding privacy concerns'] },
+    { n:'8',  title:'Cookies & Website Analytics', body:'VilleCabs may use cookies or analytics tools to improve website functionality and user experience. Users may manage cookies through browser settings.' },
+    { n:'9',  title:'Children', body:'VilleCabs services are not intended for children under 18.' },
+    { n:'10', title:'Policy Updates', body:'VilleCabs may update this Privacy Policy periodically. Updates become effective once published.' },
+  ];
+  return (
+    <div style={{ ...s.content, background:'transparent' }}>
+      <TopBar title="Privacy Policy" onBack={() => go(user ? (user.role==='driver'?'driver-dash':'customer-dash') : 'splash')} go={go} user={user}/>
+      <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:44 }}>
+
+        {/* Header */}
+        <div style={{ textAlign:'center', marginBottom:22 }}>
+          <div style={{ fontSize:44, marginBottom:10 }}>🔒</div>
+          <h2 style={{ fontSize:20, fontWeight:800, color:WHITE, marginBottom:6 }}>VilleCabs Privacy Policy</h2>
+          <p style={{ fontSize:12, color:YELLOW, fontStyle:'italic' }}>Effective Date: June 19, 2026</p>
+        </div>
+
+        {/* Intro */}
+        <div style={{ background:'rgba(15,20,40,0.7)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:16, marginBottom:18 }}>
+          <p style={{ fontSize:13, color:'rgba(255,255,255,0.72)', lineHeight:1.8, margin:'0 0 10px' }}>
+            VilleCabs Limited (“VilleCabs”, “we”, “our”, “us”) respects your privacy and is committed to protecting personal information collected through villecabs.com and related services.
+          </p>
+          <p style={{ fontSize:13, color:YELLOW, lineHeight:1.7, margin:0, fontWeight:600 }}>
+            By using VilleCabs, you agree to this Privacy Policy.
+          </p>
+        </div>
+
+        {/* Numbered sections */}
+        {sections.map((sec) => (
+          <div key={sec.n} style={{ background:'rgba(15,20,40,0.6)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:16, marginBottom:12 }}>
+            <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:sec.body?10:0 }}>
+              <span style={{ flexShrink:0, width:26, height:26, borderRadius:8, background:'rgba(232,180,0,0.15)', border:'0.5px solid rgba(232,180,0,0.4)', color:YELLOW, fontSize:12, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center' }}>{sec.n}</span>
+              <span style={{ fontSize:14, fontWeight:700, color:WHITE }}>{sec.title}</span>
+            </div>
+            {sec.body && <p style={{ fontSize:13, color:'rgba(255,255,255,0.7)', lineHeight:1.75, margin:'0 0 6px' }}>{sec.body}</p>}
+            {sec.groups && sec.groups.map((g,gi) => (
+              <div key={gi} style={{ marginTop:10 }}>
+                <div style={{ fontSize:12, fontWeight:700, color:'#a78bfa', marginBottom:6 }}>{g.h}</div>
+                {g.items.map((it,ii) => (
+                  <div key={ii} style={{ fontSize:13, color:'rgba(255,255,255,0.7)', marginBottom:5, display:'flex', gap:8 }}>
+                    <span style={{ color:GREEN, flexShrink:0 }}>•</span>{it}
+                  </div>
+                ))}
+              </div>
+            ))}
+            {sec.items && sec.items.map((it,ii) => (
+              <div key={ii} style={{ fontSize:13, color:'rgba(255,255,255,0.7)', marginBottom:5, display:'flex', gap:8 }}>
+                <span style={{ color:GREEN, flexShrink:0 }}>•</span>{it}
+              </div>
+            ))}
+            {sec.foot && <p style={{ fontSize:12, color:'rgba(255,255,255,0.55)', lineHeight:1.7, margin:'8px 0 0', fontStyle:'italic' }}>{sec.foot}</p>}
+          </div>
+        ))}
+
+        {/* Contact */}
+        <div style={{ background:'rgba(26,158,90,0.08)', border:'0.5px solid rgba(26,158,90,0.3)', borderRadius:14, padding:16, marginBottom:16 }}>
+          <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:10 }}>
+            <span style={{ flexShrink:0, width:26, height:26, borderRadius:8, background:'rgba(26,158,90,0.15)', border:'0.5px solid rgba(26,158,90,0.4)', color:GREEN, fontSize:12, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center' }}>11</span>
+            <span style={{ fontSize:14, fontWeight:700, color:WHITE }}>Contact Us</span>
+          </div>
+          <div style={{ fontSize:13, color:'rgba(255,255,255,0.72)', lineHeight:1.9 }}>
+            <div><strong style={{ color:WHITE }}>VilleCabs Limited</strong></div>
+            <div>Website: <a href="https://villecabs.com" target="_blank" rel="noreferrer" style={{ color:YELLOW, textDecoration:'none' }}>villecabs.com</a></div>
+            <div>Email: <a href="mailto:admin@villecabs.com" style={{ color:YELLOW, textDecoration:'none' }}>admin@villecabs.com</a></div>
+            <div>Phone / WhatsApp: <a href="https://wa.me/18765158113" target="_blank" rel="noreferrer" style={{ color:YELLOW, textDecoration:'none' }}>876-515-8113</a></div>
+          </div>
+        </div>
+
+        <p style={{ fontSize:12, color:'rgba(255,255,255,0.55)', textAlign:'center', fontStyle:'italic', lineHeight:1.7, marginBottom:8 }}>
+          By using VilleCabs services, users acknowledge and accept this Privacy Policy.
+        </p>
+      </div>
+      <Footer go={go}/>
+    </div>
+  );
+}
+
+
 function DriverDocuments({ go, user }) {
   const [docs,   setDocs]   = useState({});
   const [saving, setSaving] = useState('');
@@ -7538,6 +7639,7 @@ export default function App() {
     'payments':         <PaymentsPage {...props}/>,
     'promotions':       <PromotionsPage {...props}/>,
     'safety-centre':         <SafetyCentre {...props}/>,
+    'privacy':               <PrivacyPolicy {...props}/>,
     'partner-with-us':       <PartnerWithUs {...props}/>,
     'driver-earnings':        <DriverEarnings {...props}/>,
     'driver-documents':       <DriverDocuments {...props}/>,
