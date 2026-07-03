@@ -756,6 +756,342 @@ function OverviewTab({ setTab }) {
 }
 
 // ── MAIN ADMIN APP ────────────────────────────────────────────────────────────
+// ── LIVE MAP TAB ──────────────────────────────────────────────────────────────
+function LiveMapTab() {
+  const [drivers, setDrivers] = useState([]);
+  const [rides,   setRides]   = useState([]);
+  useEffect(() => {
+    const u1 = onSnapshot(collection(db,'drivers'), snap => setDrivers(snap.docs.map(d=>({id:d.id,...d.data()}))));
+    const u2 = onSnapshot(query(collection(db,'bookings'), where('status','in',['active','enroute','arrived'])), snap => setRides(snap.docs.map(d=>({id:d.id,...d.data()}))), () => {});
+    return () => { u1(); u2(); };
+  }, []);
+
+  const nowMs = Date.now();
+  const isFresh = (loc) => loc?.lat && (!loc.updatedAt?.seconds || (nowMs - loc.updatedAt.seconds*1000) < 5*60*1000);
+  const onlineDrivers   = drivers.filter(d => d.isOnline);
+  const locatedDrivers  = onlineDrivers.filter(d => isFresh(d.currentLocation));
+
+  return (
+    <div>
+      <div style={s.statgrid}>
+        <StatCard label="Online drivers" value={onlineDrivers.length} color={GREEN} sub="signed in now"/>
+        <StatCard label="Active rides"   value={rides.length} color={YELLOW} sub="in progress"/>
+        <StatCard label="Live locations" value={locatedDrivers.length + rides.filter(r=>r.driverLocation?.lat).length} sub="broadcasting GPS"/>
+        <StatCard label="Idle online"    value={onlineDrivers.length - locatedDrivers.length} sub="no live GPS"/>
+      </div>
+
+      <div style={s.card}>
+        <div style={{ fontSize:14, fontWeight:500, marginBottom:14, color:WHITE }}>🚗 Active Rides</div>
+        {rides.length === 0 && <div style={{ color:'rgba(255,255,255,0.4)', fontSize:13 }}>No rides in progress right now.</div>}
+        {rides.map(r => (
+          <div key={r.id} style={{ padding:'12px 0', borderBottom:'0.5px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
+              <span style={{ fontSize:14, fontWeight:500, color:WHITE }}>{r.driverName||'Driver'} → {r.customerName||'Rider'}</span>
+              <span style={{ ...s.badge, background:'rgba(26,158,90,0.15)', color:GREEN }}>{r.status}</span>
+            </div>
+            <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)' }}>{(r.pickup?.address||'—').split(',')[0]} → {(r.dropoff?.address||'—').split(',')[0]} · J${(r.fare||0).toLocaleString()}</div>
+            <div style={{ fontSize:11, color:r.driverLocation?.lat?GREEN:'rgba(255,255,255,0.35)', marginTop:3 }}>{r.driverLocation?.lat ? '📍 Live GPS active' : '⏳ Awaiting driver GPS'}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={s.card}>
+        <div style={{ fontSize:14, fontWeight:500, marginBottom:14, color:WHITE }}>🟢 Available Drivers (online)</div>
+        {onlineDrivers.length === 0 && <div style={{ color:'rgba(255,255,255,0.4)', fontSize:13 }}>No drivers online right now.</div>}
+        {onlineDrivers.map(d => (
+          <div key={d.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 0', borderBottom:'0.5px solid rgba(255,255,255,0.06)' }}>
+            <div>
+              <div style={{ fontSize:14, color:WHITE }}>{d.name||'Driver'}</div>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>{d.vehicleMake||''} {d.vehicleModel||''} · {d.licensePlate||'—'}</div>
+            </div>
+            <span style={{ ...s.badge, background: isFresh(d.currentLocation)?'rgba(26,158,90,0.15)':'rgba(232,180,0,0.15)', color: isFresh(d.currentLocation)?GREEN:YELLOW }}>
+              {isFresh(d.currentLocation) ? '📍 Live GPS' : 'No GPS'}
+            </span>
+          </div>
+        ))}
+        {onlineDrivers.length > locatedDrivers.length && (
+          <div style={{ marginTop:12, fontSize:11, color:'rgba(255,255,255,0.4)', background:'rgba(232,180,0,0.06)', border:'0.5px solid rgba(232,180,0,0.2)', borderRadius:8, padding:'8px 10px' }}>
+            ℹ️ Drivers only broadcast GPS while the app is open. Idle drivers with the app closed won't show a live location.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── SCHEDULED RIDES TAB ───────────────────────────────────────────────────────
+function ScheduledTab() {
+  const [rides,   setRides]   = useState([]);
+  const [drivers, setDrivers] = useState([]);
+  useEffect(() => {
+    const u1 = onSnapshot(query(collection(db,'bookings'), where('status','==','scheduled')), snap => setRides(snap.docs.map(d=>({id:d.id,...d.data()}))), () => {});
+    const u2 = onSnapshot(collection(db,'drivers'), snap => setDrivers(snap.docs.map(d=>({id:d.id,...d.data()}))));
+    return () => { u1(); u2(); };
+  }, []);
+
+  const now = Date.now();
+  const scheduled  = [...rides].sort((a,b)=>(a.scheduledFor?.seconds||0)-(b.scheduledFor?.seconds||0));
+  const unassigned = scheduled.filter(r=>!r.driverId);
+  const assigned   = scheduled.filter(r=>r.driverId);
+  const approved   = drivers.filter(d=>d.status==='approved');
+
+  const fmt = (v) => { const sec=v?.seconds; if(!sec) return '—'; return new Date(sec*1000).toLocaleString('en-JM',{weekday:'short',day:'numeric',month:'short',hour:'numeric',minute:'2-digit'}); };
+  const isSoon = (v) => v?.seconds && (v.seconds*1000-now)<2*3600*1000 && (v.seconds*1000-now)>0;
+  const isPast = (v) => v?.seconds && (v.seconds*1000<now);
+
+  const reassign = async (id, driverId) => {
+    if (!driverId) { await updateDoc(doc(db,'bookings',id), { driverId:null, driverName:null }); return; }
+    const drv = drivers.find(d=>d.id===driverId);
+    await updateDoc(doc(db,'bookings',id), { driverId, driverName: drv?.name||'Driver' });
+  };
+  const cancelRide = async (id) => {
+    if (window.confirm('Cancel this scheduled ride? The customer will see it as cancelled.'))
+      await updateDoc(doc(db,'bookings',id), { status:'cancelled', cancelledBy:'admin', cancelledAt:serverTimestamp() });
+  };
+
+  const Card = ({ r }) => (
+    <div style={{ ...s.card, borderLeft:`3px solid ${isPast(r.scheduledFor)?RED:isSoon(r.scheduledFor)?YELLOW:'#4c8bf5'}` }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+        <span style={{ fontSize:14, fontWeight:500, color:WHITE }}>🗓️ {fmt(r.scheduledFor)}</span>
+        <span style={{ fontSize:15, fontWeight:600, color:GREEN }}>J${(r.fare||0).toLocaleString()}</span>
+      </div>
+      {isPast(r.scheduledFor) && <div style={{ fontSize:11, color:'#f09595', marginBottom:4 }}>⚠️ Pickup time has passed</div>}
+      {isSoon(r.scheduledFor) && <div style={{ fontSize:11, color:YELLOW, marginBottom:4 }}>⏰ Within 2 hours</div>}
+      <div style={{ fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:3 }}>👤 {r.customerName||'Customer'} · {r.vehicleType||'VilleRide'}</div>
+      <div style={{ fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:10 }}>{(r.pickup?.address||'—').split(',')[0]} → {(r.dropoff?.address||'—').split(',')[0]}</div>
+      <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+        <select value={r.driverId||''} onChange={e=>reassign(r.id, e.target.value)}
+          style={{ flex:1, minWidth:150, padding:'8px 10px', borderRadius:8, border:'0.5px solid rgba(255,255,255,0.2)', background:'#1a1f2e', color:WHITE, fontSize:12 }}>
+          <option value="">— Unassigned (any driver can claim) —</option>
+          {approved.map(d => <option key={d.id} value={d.id}>{d.name||'Driver'}{d.isOnline?' 🟢':''}</option>)}
+        </select>
+        <button onClick={()=>cancelRide(r.id)} style={{ ...s.btnReject, marginRight:0 }}>Cancel</button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:12, marginBottom:20 }}>
+        <StatCard label="Needs a driver" value={unassigned.length} color={YELLOW} sub="unassigned"/>
+        <StatCard label="Assigned"       value={assigned.length}   color={GREEN}  sub="driver claimed"/>
+      </div>
+      {scheduled.length === 0 && (
+        <div style={s.card}><div style={{ color:'rgba(255,255,255,0.4)', fontSize:13, textAlign:'center', padding:20 }}>🗓️ No scheduled rides. Future bookings customers schedule will appear here.</div></div>
+      )}
+      {unassigned.length > 0 && <div style={{ fontSize:13, fontWeight:500, color:YELLOW, marginBottom:10 }}>⚠️ Needs a Driver ({unassigned.length})</div>}
+      {unassigned.map(r => <Card key={r.id} r={r}/>)}
+      {assigned.length > 0 && <div style={{ fontSize:13, fontWeight:500, color:'#4c8bf5', margin:'16px 0 10px' }}>✅ Assigned ({assigned.length})</div>}
+      {assigned.map(r => <Card key={r.id} r={r}/>)}
+    </div>
+  );
+}
+
+// ── PARTNERS TAB ──────────────────────────────────────────────────────────────
+function PartnersTab() {
+  const [partners, setPartners] = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db,'partnerRequests'), snap => { setPartners(snap.docs.map(d=>({id:d.id,...d.data()}))); setLoading(false); }, ()=>setLoading(false));
+    return () => unsub();
+  }, []);
+  const setStatus = async (id, status) => { await updateDoc(doc(db,'partnerRequests',id), { status }); };
+  const badge = (st) => {
+    const map = { new:{bg:'rgba(232,180,0,0.15)',color:YELLOW}, approved:{bg:'rgba(26,158,90,0.15)',color:GREEN}, featured:{bg:'rgba(107,33,168,0.2)',color:'#c9a3f5'}, rejected:{bg:'rgba(226,75,74,0.12)',color:'#f09595'} };
+    const m = map[(st||'new').toLowerCase()] || map.new;
+    return <span style={{ ...s.badge, background:m.bg, color:m.color }}>{st||'new'}</span>;
+  };
+  if (loading) return <div style={{ color:'rgba(255,255,255,0.4)', fontSize:13 }}>Loading...</div>;
+  return (
+    <div>
+      <div style={s.statgrid}>
+        <StatCard label="Total" value={partners.length}/>
+        <StatCard label="New requests" value={partners.filter(p=>(p.status||'new')==='new').length} color={YELLOW}/>
+        <StatCard label="Approved" value={partners.filter(p=>['approved','featured'].includes((p.status||'').toLowerCase())).length} color={GREEN}/>
+        <StatCard label="Featured" value={partners.filter(p=>(p.status||'').toLowerCase()==='featured').length} color="#c9a3f5"/>
+      </div>
+      {partners.length===0 && <div style={s.card}><div style={{ color:'rgba(255,255,255,0.4)', fontSize:13, textAlign:'center', padding:20 }}>No partner requests yet.</div></div>}
+      {partners.map(p => (
+        <div key={p.id} style={s.card}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+            <span style={{ fontSize:15, fontWeight:500, color:WHITE }}>{p.businessName||p.name||'Business'}</span>
+            {badge(p.status)}
+          </div>
+          <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', marginBottom:3 }}>{p.businessType||'Business'} · {p.address||'Manchester, Jamaica'}</div>
+          {p.email && <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', marginBottom:3 }}>📧 {p.email}{p.phone?` · ☎ ${p.phone}`:''}</div>}
+          {p.message && <div style={{ fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:10, lineHeight:1.5 }}>{p.message}</div>}
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:8 }}>
+            <button onClick={()=>setStatus(p.id,'approved')} style={s.btnApprove}>Approve</button>
+            <button onClick={()=>setStatus(p.id,'featured')} style={{ ...s.btnApprove, background:'#6b21a8' }}>⭐ Feature</button>
+            <button onClick={()=>setStatus(p.id,'rejected')} style={s.btnReject}>Reject</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── SAFETY ALERTS TAB ─────────────────────────────────────────────────────────
+function AlertsTab() {
+  const [alerts,  setAlerts]  = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db,'sos_alerts'), snap => { setAlerts(snap.docs.map(d=>({id:d.id,...d.data()}))); setLoading(false); }, ()=>setLoading(false));
+    return () => unsub();
+  }, []);
+  const setStatus = async (id, status) => { await updateDoc(doc(db,'sos_alerts',id), { status }); };
+  const sorted = [...alerts].sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+  if (loading) return <div style={{ color:'rgba(255,255,255,0.4)', fontSize:13 }}>Loading...</div>;
+  return (
+    <div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:20 }}>
+        <StatCard label="Total alerts" value={alerts.length}/>
+        <StatCard label="New" value={alerts.filter(a=>(a.status||'new')==='new').length} color={RED}/>
+        <StatCard label="Resolved" value={alerts.filter(a=>a.status==='resolved').length} color={GREEN}/>
+      </div>
+      {sorted.length===0 && <div style={s.card}><div style={{ color:'rgba(255,255,255,0.4)', fontSize:13, textAlign:'center', padding:20 }}>✅ No safety alerts.</div></div>}
+      {sorted.map(a => (
+        <div key={a.id} style={{ ...s.card, borderLeft:`3px solid ${a.status==='resolved'?GREEN:RED}` }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+            <span style={{ fontSize:14, fontWeight:600, color:RED }}>🆘 SOS Alert</span>
+            <span style={{ ...s.badge, background: a.status==='resolved'?'rgba(26,158,90,0.15)':'rgba(226,75,74,0.15)', color: a.status==='resolved'?GREEN:'#f09595' }}>{a.status||'new'}</span>
+          </div>
+          <div style={{ fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:3 }}>👤 {a.customerName||'—'} · 🚗 {a.driverName||'—'}</div>
+          {a.location && <div style={{ fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:3 }}>📍 {a.location}</div>}
+          <div style={{ fontSize:11, color:'rgba(255,255,255,0.35)', marginBottom:10 }}>{a.createdAt?.seconds ? new Date(a.createdAt.seconds*1000).toLocaleString() : '—'}</div>
+          <div style={{ display:'flex', gap:8 }}>
+            {a.status!=='responding' && <button onClick={()=>setStatus(a.id,'responding')} style={{ ...s.btnApprove, background:YELLOW, color:DARK }}>Responding</button>}
+            {a.status!=='resolved' && <button onClick={()=>setStatus(a.id,'resolved')} style={s.btnApprove}>✅ Resolved</button>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── NO DRIVER (UNFULFILLED) TAB ───────────────────────────────────────────────
+function UnfulfilledTab() {
+  const [reqs,    setReqs]    = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db,'unfulfilled_ride_requests'), snap => { setReqs(snap.docs.map(d=>({id:d.id,...d.data()}))); setLoading(false); }, ()=>setLoading(false));
+    return () => unsub();
+  }, []);
+  const sorted = [...reqs].sort((a,b)=>(b.created_at?.seconds||0)-(a.created_at?.seconds||0));
+  const todayStart = new Date(); todayStart.setHours(0,0,0,0);
+  const todayCount = reqs.filter(r=>new Date((r.created_at?.seconds||0)*1000)>=todayStart).length;
+  if (loading) return <div style={{ color:'rgba(255,255,255,0.4)', fontSize:13 }}>Loading...</div>;
+  return (
+    <div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:12, marginBottom:20 }}>
+        <StatCard label="Total unmatched" value={reqs.length} color={YELLOW} sub="no driver available"/>
+        <StatCard label="Today" value={todayCount} sub="requests today"/>
+      </div>
+      {sorted.length===0 && <div style={s.card}><div style={{ color:'rgba(255,255,255,0.4)', fontSize:13, textAlign:'center', padding:20 }}>No unmatched requests logged.</div></div>}
+      {sorted.map(r => (
+        <div key={r.id} style={s.card}>
+          <div style={{ fontSize:13, color:WHITE, marginBottom:4 }}>{(r.pickup_address||r.pickup?.address||'—').split(',')[0]} → {(r.dropoff_address||r.dropoff?.address||'—').split(',')[0]}</div>
+          <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)' }}>👤 {r.customer_name||r.customerName||'Customer'} · {r.created_at?.seconds ? new Date(r.created_at.seconds*1000).toLocaleString() : '—'}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── DRIVER PERFORMANCE TAB ────────────────────────────────────────────────────
+function PerformanceTab() {
+  const [drivers, setDrivers] = useState([]);
+  const [rides,   setRides]   = useState([]);
+  useEffect(() => {
+    const u1 = onSnapshot(collection(db,'drivers'), snap => setDrivers(snap.docs.map(d=>({id:d.id,...d.data()}))));
+    const u2 = onSnapshot(collection(db,'bookings'), snap => setRides(snap.docs.map(d=>({id:d.id,...d.data()}))));
+    return () => { u1(); u2(); };
+  }, []);
+  const approved = drivers.filter(d => d.status==='approved' || d.status==='suspended');
+  return (
+    <div>
+      <div style={s.card}>
+        <div style={{ fontSize:14, fontWeight:500, marginBottom:14, color:WHITE }}>📈 Driver Performance</div>
+        <div style={{ overflowX:'auto' }}>
+          <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13, minWidth:640 }}>
+            <thead>
+              <tr>
+                {['Driver','Rating','Rides','Cancelled','Cancel %','Earned (85%)','Status'].map(h => (
+                  <th key={h} style={{ textAlign:'left', padding:'8px 10px', fontSize:11, color:'rgba(255,255,255,0.4)', borderBottom:'0.5px solid rgba(255,255,255,0.1)', whiteSpace:'nowrap' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {approved.map(d => {
+                const dr = rides.filter(r=>r.driverId===d.id);
+                const done = dr.filter(r=>r.status==='completed');
+                const canc = dr.filter(r=>r.status==='cancelled');
+                const pct = dr.length ? Math.round(canc.length/dr.length*100) : 0;
+                const earned = Math.round(done.reduce((s,r)=>s+(r.fare||0),0)*0.85);
+                return (
+                  <tr key={d.id}>
+                    <td style={{ padding:'8px 10px', color:WHITE, fontWeight:500, whiteSpace:'nowrap' }}>{d.name||'—'}</td>
+                    <td style={{ padding:'8px 10px', color:'rgba(255,255,255,0.7)', whiteSpace:'nowrap' }}>⭐ {(d.rating||5).toFixed(1)}</td>
+                    <td style={{ padding:'8px 10px', color:'rgba(255,255,255,0.7)' }}>{done.length}</td>
+                    <td style={{ padding:'8px 10px', color: canc.length>0?'#f09595':'rgba(255,255,255,0.7)' }}>{canc.length}</td>
+                    <td style={{ padding:'8px 10px', color: pct>=20?'#f09595':pct>=10?YELLOW:GREEN, fontWeight:500 }}>{pct}%</td>
+                    <td style={{ padding:'8px 10px', color:GREEN, whiteSpace:'nowrap' }}>J${earned.toLocaleString()}</td>
+                    <td style={{ padding:'8px 10px' }}>
+                      <span style={{ ...s.badge, background: d.isOnline?'rgba(26,158,90,0.15)':'rgba(255,255,255,0.08)', color: d.isOnline?GREEN:'rgba(255,255,255,0.4)' }}>{d.isOnline?'Online':(d.status||'—')}</span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {approved.length===0 && <div style={{ color:'rgba(255,255,255,0.4)', fontSize:13, textAlign:'center', padding:20 }}>No approved drivers yet.</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── BROADCAST TAB ─────────────────────────────────────────────────────────────
+function BroadcastTab() {
+  const [drivers, setDrivers] = useState([]);
+  const [msg,     setMsg]     = useState('');
+  useEffect(() => {
+    const unsub = onSnapshot(query(collection(db,'drivers'), where('status','==','approved')), snap => setDrivers(snap.docs.map(d=>({id:d.id,...d.data()}))), ()=>{});
+    return () => unsub();
+  }, []);
+  const normalizePhone = (raw) => {
+    if (!raw) return null;
+    let d = String(raw).replace(/\D/g,'');
+    if (d.length===7) d='876'+d;
+    if (d.length===10) d='1'+d;
+    if (d.length===11 && d.startsWith('1')) return d;
+    return d.length>=10 ? d : null;
+  };
+  const targets = drivers.map(d=>({ ...d, wa:normalizePhone(d.phone) })).filter(d=>d.wa);
+  return (
+    <div>
+      <div style={s.card}>
+        <div style={{ fontSize:14, fontWeight:500, marginBottom:6, color:WHITE }}>📢 Broadcast to Drivers</div>
+        <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', marginBottom:14 }}>Type one message, then tap each driver to open WhatsApp with it pre-filled. {targets.length} approved driver{targets.length!==1?'s':''} with valid numbers.</div>
+        <textarea value={msg} onChange={e=>setMsg(e.target.value)} rows={4} placeholder="e.g. Heavy rain expected this evening — surge pricing is ON. Drive safe!"
+          style={{ width:'100%', padding:12, borderRadius:8, border:'0.5px solid rgba(255,255,255,0.2)', background:'#0f1015', color:WHITE, fontSize:14, fontFamily:'inherit', resize:'vertical', boxSizing:'border-box', marginBottom:12 }}/>
+        <button onClick={()=>{ navigator.clipboard?.writeText(msg).catch(()=>{}); }} disabled={!msg.trim()} style={{ ...s.btnApprove, background:'rgba(255,255,255,0.1)', color:WHITE, opacity: msg.trim()?1:0.5 }}>📋 Copy Message</button>
+      </div>
+      {targets.map(d => (
+        <div key={d.id} style={{ ...s.card, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+          <div>
+            <div style={{ fontSize:14, color:WHITE }}>{d.name||'Driver'} {d.isOnline && <span style={{ fontSize:11, color:GREEN }}>● online</span>}</div>
+            <div style={{ fontSize:12, color:'rgba(255,255,255,0.4)' }}>+{d.wa}</div>
+          </div>
+          <a href={`https://wa.me/${d.wa}?text=${encodeURIComponent(msg||'')}`} target="_blank" rel="noreferrer"
+            style={{ padding:'8px 14px', background: msg.trim()?'#25D366':'rgba(255,255,255,0.1)', color: msg.trim()?'#fff':'rgba(255,255,255,0.4)', borderRadius:8, fontSize:12, fontWeight:600, textDecoration:'none', pointerEvents: msg.trim()?'auto':'none' }}>💬 WhatsApp</a>
+        </div>
+      ))}
+      {targets.length===0 && <div style={s.card}><div style={{ color:'rgba(255,255,255,0.4)', fontSize:13, textAlign:'center', padding:20 }}>No approved drivers with phone numbers yet.</div></div>}
+    </div>
+  );
+}
+
 export default function AdminPanel() {
   const [adminUser, setAdminUser] = useState(null);
   const [loading,   setLoading]   = useState(true);
@@ -780,13 +1116,20 @@ export default function AdminPanel() {
   if (!adminUser) return <AdminLogin onLogin={setAdminUser}/>;
 
   const tabs = [
-    { id:'overview',  label:'Overview',  icon:'📊' },
-    { id:'drivers',   label:'Drivers',   icon:'🚗' },
-    { id:'rides',     label:'Rides',     icon:'🚕' },
-    { id:'customers', label:'Customers', icon:'👥' },
-    { id:'revenue',   label:'Revenue',   icon:'💰' },
-    { id:'contacts',  label:'Messages',  icon:'📬' },
-    { id:'promos',    label:'Promos',    icon:'🎟️' },
+    { id:'overview',  label:'Overview',    icon:'📊' },
+    { id:'drivers',   label:'Drivers',     icon:'🚗' },
+    { id:'rides',     label:'Rides',       icon:'🚕' },
+    { id:'livemap',   label:'Live Map',    icon:'🗺️' },
+    { id:'scheduled', label:'Scheduled',   icon:'🗓️' },
+    { id:'customers', label:'Customers',   icon:'👥' },
+    { id:'revenue',   label:'Revenue',     icon:'💰' },
+    { id:'performance',label:'Performance',icon:'📈' },
+    { id:'partners',  label:'Partners',    icon:'🤝' },
+    { id:'contacts',  label:'Messages',    icon:'📬' },
+    { id:'alerts',    label:'Alerts',      icon:'🆘' },
+    { id:'unfulfilled',label:'No Driver',  icon:'📍' },
+    { id:'broadcast', label:'Broadcast',   icon:'📢' },
+    { id:'promos',    label:'Promos',      icon:'🎟️' },
   ];
 
   return (
@@ -819,14 +1162,21 @@ export default function AdminPanel() {
 
         <div style={s.main}>
           <div style={{ fontSize:20, fontWeight:500, marginBottom:20, color:WHITE, textTransform:'capitalize' }}>
-            {tab==='overview'?'📊 Dashboard Overview':tab==='drivers'?'🚗 Driver Management':tab==='rides'?'🚕 Ride Management':tab==='customers'?'👥 Customers':tab==='revenue'?'💰 Revenue':tab==='contacts'?'📬 Messages':'🎟️ Promo Codes'}
+            {tab==='overview'?'📊 Dashboard Overview':tab==='drivers'?'🚗 Driver Management':tab==='rides'?'🚕 Ride Management':tab==='livemap'?'🗺️ Live Operations Map':tab==='scheduled'?'🗓️ Scheduled Rides':tab==='customers'?'👥 Customers':tab==='revenue'?'💰 Revenue':tab==='performance'?'📈 Driver Performance':tab==='partners'?'🤝 Partner Requests':tab==='contacts'?'📬 Messages':tab==='alerts'?'🆘 Safety Alerts':tab==='unfulfilled'?'📍 No Driver Available':tab==='broadcast'?'📢 Broadcast to Drivers':'🎟️ Promo Codes'}
           </div>
           {tab === 'overview'  && <OverviewTab setTab={setTab}/>}
           {tab === 'drivers'   && <DriversTab/>}
           {tab === 'rides'     && <RidesTab/>}
+          {tab === 'livemap'   && <LiveMapTab/>}
+          {tab === 'scheduled' && <ScheduledTab/>}
           {tab === 'customers' && <CustomersTab/>}
           {tab === 'revenue'   && <RevenueTab/>}
+          {tab === 'performance' && <PerformanceTab/>}
+          {tab === 'partners'  && <PartnersTab/>}
           {tab === 'contacts'  && <ContactsTab/>}
+          {tab === 'alerts'    && <AlertsTab/>}
+          {tab === 'unfulfilled' && <UnfulfilledTab/>}
+          {tab === 'broadcast' && <BroadcastTab/>}
           {tab === 'promos'    && <PromoCodesTab/>}
         </div>
       </div>

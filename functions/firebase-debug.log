@@ -1,0 +1,376 @@
+[debug] [2026-07-03T01:42:38.596Z] ----------------------------------------------------------------------
+[debug] [2026-07-03T01:42:38.601Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\Comfort Basic\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy --only functions
+[debug] [2026-07-03T01:42:38.601Z] CLI Version:   15.20.0
+[debug] [2026-07-03T01:42:38.602Z] Platform:      win32
+[debug] [2026-07-03T01:42:38.602Z] Node Version:  v24.16.0
+[debug] [2026-07-03T01:42:38.602Z] Time:          Thu Jul 02 2026 20:42:38 GMT-0500 (Eastern Standard Time)
+[debug] [2026-07-03T01:42:38.602Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-07-03T01:42:42.680Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-07-03T01:42:42.680Z] > authorizing via signed-in user (daviskeneile@gmail.com)
+[debug] [2026-07-03T01:42:42.680Z] [iam] checking project villecabs for permissions ["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]
+[debug] [2026-07-03T01:42:42.682Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:42:42.682Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:42:42.683Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/villecabs:testIamPermissions [none]
+[debug] [2026-07-03T01:42:42.683Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/villecabs:testIamPermissions  x-goog-user-project=villecabs
+[debug] [2026-07-03T01:42:42.683Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/villecabs:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[debug] [2026-07-03T01:42:43.081Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/villecabs:testIamPermissions 200
+[debug] [2026-07-03T01:42:43.081Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/villecabs:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}
+[debug] [2026-07-03T01:42:43.081Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:42:43.081Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:42:43.082Z] >>> [apiv2][query] POST https://iam.googleapis.com/v1/projects/villecabs/serviceAccounts/villecabs@appspot.gserviceaccount.com:testIamPermissions [none]
+[debug] [2026-07-03T01:42:43.082Z] >>> [apiv2][body] POST https://iam.googleapis.com/v1/projects/villecabs/serviceAccounts/villecabs@appspot.gserviceaccount.com:testIamPermissions {"permissions":["iam.serviceAccounts.actAs"]}
+[debug] [2026-07-03T01:42:43.453Z] <<< [apiv2][status] POST https://iam.googleapis.com/v1/projects/villecabs/serviceAccounts/villecabs@appspot.gserviceaccount.com:testIamPermissions 200
+[debug] [2026-07-03T01:42:43.453Z] <<< [apiv2][body] POST https://iam.googleapis.com/v1/projects/villecabs/serviceAccounts/villecabs@appspot.gserviceaccount.com:testIamPermissions {"permissions":["iam.serviceAccounts.actAs"]}
+[info] 
+[info] === Deploying to 'villecabs'...
+[info] 
+[info] i  deploying functions 
+[debug] [2026-07-03T01:42:43.464Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:42:43.464Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:42:43.465Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/villecabs [none]
+[debug] [2026-07-03T01:42:43.601Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/villecabs 200
+[debug] [2026-07-03T01:42:43.602Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/villecabs {"projectNumber":"889842675525","projectId":"villecabs","lifecycleState":"ACTIVE","name":"VilleCabs","labels":{"firebase":"enabled","firebase-core":"disabled"},"createTime":"2026-06-14T17:55:03.715Z"}
+[info] i  functions: preparing codebase villecabs for deployment 
+[info] i  functions: ensuring required API cloudfunctions.googleapis.com is enabled... 
+[info] i  functions: ensuring required API cloudbuild.googleapis.com is enabled... 
+[debug] [2026-07-03T01:42:43.615Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:42:43.615Z] Checked if tokens are valid: true, expires at: 1783045914427
+[info] i  artifactregistry: ensuring required API artifactregistry.googleapis.com is enabled... 
+[debug] [2026-07-03T01:42:43.618Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:42:43.619Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:42:43.619Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/villecabs/services/cloudbuild.googleapis.com [none]
+[debug] [2026-07-03T01:42:43.620Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/villecabs/services/cloudbuild.googleapis.com  x-goog-user-project=villecabs
+[debug] [2026-07-03T01:42:43.624Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/villecabs/services/artifactregistry.googleapis.com [none]
+[debug] [2026-07-03T01:42:43.625Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/villecabs/services/artifactregistry.googleapis.com  x-goog-user-project=villecabs
+[debug] [2026-07-03T01:42:44.176Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/villecabs/services/artifactregistry.googleapis.com 200
+[debug] [2026-07-03T01:42:44.176Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/villecabs/services/artifactregistry.googleapis.com [omitted]
+[warn] !  artifactregistry: missing required API artifactregistry.googleapis.com. Enabling now... 
+[debug] [2026-07-03T01:42:44.177Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:42:44.177Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:42:44.177Z] >>> [apiv2][query] POST https://serviceusage.googleapis.com/v1/projects/villecabs/services/artifactregistry.googleapis.com:enable [none]
+[debug] [2026-07-03T01:42:44.177Z] >>> [apiv2][(partial)header] POST https://serviceusage.googleapis.com/v1/projects/villecabs/services/artifactregistry.googleapis.com:enable  x-goog-user-project=villecabs
+[debug] [2026-07-03T01:42:44.184Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/villecabs/services/cloudbuild.googleapis.com 200
+[debug] [2026-07-03T01:42:44.184Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/villecabs/services/cloudbuild.googleapis.com [omitted]
+[warn] !  functions: missing required API cloudbuild.googleapis.com. Enabling now... 
+[debug] [2026-07-03T01:42:44.185Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:42:44.185Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:42:44.185Z] >>> [apiv2][query] POST https://serviceusage.googleapis.com/v1/projects/villecabs/services/cloudbuild.googleapis.com:enable [none]
+[debug] [2026-07-03T01:42:44.185Z] >>> [apiv2][(partial)header] POST https://serviceusage.googleapis.com/v1/projects/villecabs/services/cloudbuild.googleapis.com:enable  x-goog-user-project=villecabs
+[debug] [2026-07-03T01:42:44.991Z] <<< [apiv2][status] POST https://serviceusage.googleapis.com/v1/projects/villecabs/services/artifactregistry.googleapis.com:enable 200
+[debug] [2026-07-03T01:42:44.991Z] <<< [apiv2][body] POST https://serviceusage.googleapis.com/v1/projects/villecabs/services/artifactregistry.googleapis.com:enable [omitted]
+[debug] [2026-07-03T01:42:45.017Z] <<< [apiv2][status] POST https://serviceusage.googleapis.com/v1/projects/villecabs/services/cloudbuild.googleapis.com:enable 200
+[debug] [2026-07-03T01:42:45.018Z] <<< [apiv2][body] POST https://serviceusage.googleapis.com/v1/projects/villecabs/services/cloudbuild.googleapis.com:enable [omitted]
+[debug] [2026-07-03T01:42:55.037Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:42:55.037Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:42:55.037Z] >>> [apiv2][query] GET https://firebase.googleapis.com/v1beta1/projects/villecabs/adminSdkConfig [none]
+[debug] [2026-07-03T01:42:55.429Z] <<< [apiv2][status] GET https://firebase.googleapis.com/v1beta1/projects/villecabs/adminSdkConfig 200
+[debug] [2026-07-03T01:42:55.429Z] <<< [apiv2][body] GET https://firebase.googleapis.com/v1beta1/projects/villecabs/adminSdkConfig {"projectId":"villecabs","storageBucket":"villecabs.firebasestorage.app"}
+[debug] [2026-07-03T01:42:55.431Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:42:55.431Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:42:55.432Z] >>> [apiv2][query] GET https://runtimeconfig.googleapis.com/v1beta1/projects/villecabs/configs [none]
+[debug] [2026-07-03T01:42:55.822Z] <<< [apiv2][status] GET https://runtimeconfig.googleapis.com/v1beta1/projects/villecabs/configs 200
+[debug] [2026-07-03T01:42:55.823Z] <<< [apiv2][body] GET https://runtimeconfig.googleapis.com/v1beta1/projects/villecabs/configs {"configs":[{"name":"projects/villecabs/configs/stripe"}]}
+[debug] [2026-07-03T01:42:55.824Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:42:55.824Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:42:55.826Z] >>> [apiv2][query] GET https://runtimeconfig.googleapis.com/v1beta1/projects/villecabs/configs/stripe/variables [none]
+[debug] [2026-07-03T01:42:56.178Z] <<< [apiv2][status] GET https://runtimeconfig.googleapis.com/v1beta1/projects/villecabs/configs/stripe/variables 200
+[debug] [2026-07-03T01:42:56.178Z] <<< [apiv2][body] GET https://runtimeconfig.googleapis.com/v1beta1/projects/villecabs/configs/stripe/variables {"variables":[{"name":"projects/villecabs/configs/stripe/variables/secret_key","updateTime":"2026-06-15T02:39:57.698482565Z"}]}
+[debug] [2026-07-03T01:42:56.179Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:42:56.180Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:42:56.180Z] >>> [apiv2][query] GET https://runtimeconfig.googleapis.com/v1beta1/projects/villecabs/configs/stripe/variables/secret_key [none]
+[debug] [2026-07-03T01:42:56.353Z] <<< [apiv2][status] GET https://runtimeconfig.googleapis.com/v1beta1/projects/villecabs/configs/stripe/variables/secret_key 200
+[debug] [2026-07-03T01:42:56.353Z] <<< [apiv2][body] GET https://runtimeconfig.googleapis.com/v1beta1/projects/villecabs/configs/stripe/variables/secret_key {"name":"projects/villecabs/configs/stripe/variables/secret_key","updateTime":"2026-06-15T02:39:57.698482565Z","text":"sk_test_YOUR_SECRET_KEY_HERE"}
+[debug] [2026-07-03T01:42:56.360Z] Validating nodejs source
+[debug] [2026-07-03T01:42:57.532Z] > [functions] package.json contents: {
+  "name": "functions",
+  "description": "Cloud Functions for Firebase",
+  "scripts": {
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "24"
+  },
+  "main": "index.js",
+  "dependencies": {
+    "firebase-admin": "^13.10.0",
+    "firebase-functions": "^7.2.5"
+  },
+  "devDependencies": {
+    "firebase-functions-test": "^3.4.1"
+  },
+  "private": true
+}
+[debug] [2026-07-03T01:42:57.532Z] Building nodejs source
+[info] i  functions: Loading and analyzing source code for codebase villecabs to determine what to deploy 
+[debug] [2026-07-03T01:42:57.534Z] Could not find functions.yaml. Must use http discovery
+[debug] [2026-07-03T01:42:57.547Z] Found firebase-functions binary at 'C:\Users\Comfort Basic\Desktop\villecabs-web\functions\node_modules\.bin\firebase-functions'
+[info] Serving at port 8216
+
+[debug] [2026-07-03T01:42:59.253Z] Got response from /__/functions.yaml {"endpoints":{"notifyDriverTwoMinutesAway":{"availableMemoryMb":null,"timeoutSeconds":null,"minInstances":null,"maxInstances":null,"ingressSettings":null,"concurrency":null,"serviceAccountEmail":null,"vpc":null,"platform":"gcfv2","labels":{},"eventTrigger":{"eventType":"google.cloud.firestore.document.v1.updated","eventFilters":{"database":"(default)","namespace":"(default)"},"eventFilterPathPatterns":{"document":"bookings/{bookingId}"},"retry":false},"entryPoint":"notifyDriverTwoMinutesAway"}},"specVersion":"v1alpha1","requiredAPIs":[],"extensions":{}}
+[debug] [2026-07-03T01:43:03.315Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:03.315Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:03.315Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v1/projects/villecabs/locations/-/functions [none]
+[debug] [2026-07-03T01:43:04.102Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v1/projects/villecabs/locations/-/functions 200
+[debug] [2026-07-03T01:43:04.102Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v1/projects/villecabs/locations/-/functions {}
+[debug] [2026-07-03T01:43:04.103Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:04.104Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:04.106Z] >>> [apiv2][query] GET https://cloudfunctions.googleapis.com/v2/projects/villecabs/locations/-/functions filter=environment%3D%22GEN_2%22
+[debug] [2026-07-03T01:43:04.635Z] <<< [apiv2][status] GET https://cloudfunctions.googleapis.com/v2/projects/villecabs/locations/-/functions 200
+[debug] [2026-07-03T01:43:04.635Z] <<< [apiv2][body] GET https://cloudfunctions.googleapis.com/v2/projects/villecabs/locations/-/functions {}
+[info] i  extensions: ensuring required API firebaseextensions.googleapis.com is enabled... 
+[debug] [2026-07-03T01:43:04.641Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:04.642Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:04.642Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/villecabs/services/firebaseextensions.googleapis.com [none]
+[debug] [2026-07-03T01:43:04.642Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/villecabs/services/firebaseextensions.googleapis.com  x-goog-user-project=villecabs
+[debug] [2026-07-03T01:43:05.082Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/villecabs/services/firebaseextensions.googleapis.com 200
+[debug] [2026-07-03T01:43:05.082Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/villecabs/services/firebaseextensions.googleapis.com [omitted]
+[warn] !  extensions: missing required API firebaseextensions.googleapis.com. Enabling now... 
+[debug] [2026-07-03T01:43:05.083Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:05.083Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:05.083Z] >>> [apiv2][query] POST https://serviceusage.googleapis.com/v1/projects/villecabs/services/firebaseextensions.googleapis.com:enable [none]
+[debug] [2026-07-03T01:43:05.083Z] >>> [apiv2][(partial)header] POST https://serviceusage.googleapis.com/v1/projects/villecabs/services/firebaseextensions.googleapis.com:enable  x-goog-user-project=villecabs
+[debug] [2026-07-03T01:43:05.642Z] <<< [apiv2][status] POST https://serviceusage.googleapis.com/v1/projects/villecabs/services/firebaseextensions.googleapis.com:enable 200
+[debug] [2026-07-03T01:43:05.643Z] <<< [apiv2][body] POST https://serviceusage.googleapis.com/v1/projects/villecabs/services/firebaseextensions.googleapis.com:enable [omitted]
+[debug] [2026-07-03T01:43:15.682Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-07-03T01:43:15.682Z] > authorizing via signed-in user (daviskeneile@gmail.com)
+[debug] [2026-07-03T01:43:15.682Z] [iam] checking project villecabs for permissions ["firebase.projects.get","firebaseextensions.instances.list"]
+[debug] [2026-07-03T01:43:15.683Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:15.683Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:15.683Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/villecabs:testIamPermissions [none]
+[debug] [2026-07-03T01:43:15.683Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/villecabs:testIamPermissions  x-goog-user-project=villecabs
+[debug] [2026-07-03T01:43:15.683Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/villecabs:testIamPermissions {"permissions":["firebase.projects.get","firebaseextensions.instances.list"]}
+[debug] [2026-07-03T01:43:16.010Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/villecabs:testIamPermissions 200
+[debug] [2026-07-03T01:43:16.010Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/villecabs:testIamPermissions {"permissions":["firebase.projects.get","firebaseextensions.instances.list"]}
+[debug] [2026-07-03T01:43:16.010Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:16.010Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:16.010Z] >>> [apiv2][query] GET https://firebaseextensions.googleapis.com/v1beta/projects/villecabs/instances pageSize=100&pageToken=
+[debug] [2026-07-03T01:43:17.804Z] <<< [apiv2][status] GET https://firebaseextensions.googleapis.com/v1beta/projects/villecabs/instances 200
+[debug] [2026-07-03T01:43:17.804Z] <<< [apiv2][body] GET https://firebaseextensions.googleapis.com/v1beta/projects/villecabs/instances {}
+[debug] [2026-07-03T01:43:17.805Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:17.805Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:17.805Z] >>> [apiv2][query] GET https://firestore.googleapis.com/v1/projects/villecabs/databases/(default) [none]
+[debug] [2026-07-03T01:43:18.264Z] <<< [apiv2][status] GET https://firestore.googleapis.com/v1/projects/villecabs/databases/(default) 200
+[debug] [2026-07-03T01:43:18.265Z] <<< [apiv2][body] GET https://firestore.googleapis.com/v1/projects/villecabs/databases/(default) {"name":"projects/villecabs/databases/(default)","uid":"73ccd563-077b-4dcf-b63d-66cf3e537014","createTime":"2026-06-14T18:31:14.943863Z","updateTime":"2026-06-14T18:31:14.943863Z","locationId":"us-central1","type":"FIRESTORE_NATIVE","concurrencyMode":"PESSIMISTIC","versionRetentionPeriod":"3600s","earliestVersionTime":"2026-07-03T00:43:18.537220Z","appEngineIntegrationMode":"DISABLED","pointInTimeRecoveryEnablement":"POINT_IN_TIME_RECOVERY_DISABLED","deleteProtectionState":"DELETE_PROTECTION_DISABLED","databaseEdition":"STANDARD","freeTier":true,"realtimeUpdatesMode":"REALTIME_UPDATES_MODE_ENABLED","etag":"ILyRsOSwtZUDMMbdg7Ovh5UD"}
+[info] i  functions: preparing functions directory for uploading... 
+[info] i  functions: packaged C:\Users\Comfort Basic\Desktop\villecabs-web\functions (72.01 KB) for uploading 
+[info] i  functions: ensuring required API run.googleapis.com is enabled... 
+[debug] [2026-07-03T01:43:18.318Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:18.318Z] Checked if tokens are valid: true, expires at: 1783045914427
+[info] i  functions: ensuring required API eventarc.googleapis.com is enabled... 
+[debug] [2026-07-03T01:43:18.318Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:18.319Z] Checked if tokens are valid: true, expires at: 1783045914427
+[info] i  functions: ensuring required API pubsub.googleapis.com is enabled... 
+[debug] [2026-07-03T01:43:18.319Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:18.319Z] Checked if tokens are valid: true, expires at: 1783045914427
+[info] i  functions: ensuring required API storage.googleapis.com is enabled... 
+[debug] [2026-07-03T01:43:18.320Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:18.320Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:18.320Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/889842675525/services/run.googleapis.com [none]
+[debug] [2026-07-03T01:43:18.320Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/889842675525/services/run.googleapis.com  x-goog-user-project=889842675525
+[debug] [2026-07-03T01:43:18.322Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/889842675525/services/eventarc.googleapis.com [none]
+[debug] [2026-07-03T01:43:18.322Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/889842675525/services/eventarc.googleapis.com  x-goog-user-project=889842675525
+[debug] [2026-07-03T01:43:18.323Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/889842675525/services/pubsub.googleapis.com [none]
+[debug] [2026-07-03T01:43:18.324Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/889842675525/services/pubsub.googleapis.com  x-goog-user-project=889842675525
+[debug] [2026-07-03T01:43:18.325Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/889842675525/services/storage.googleapis.com [none]
+[debug] [2026-07-03T01:43:18.326Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/889842675525/services/storage.googleapis.com  x-goog-user-project=889842675525
+[debug] [2026-07-03T01:43:18.784Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/889842675525/services/pubsub.googleapis.com 200
+[debug] [2026-07-03T01:43:18.784Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/889842675525/services/pubsub.googleapis.com [omitted]
+[info] +  functions: required API pubsub.googleapis.com is enabled 
+[debug] [2026-07-03T01:43:18.801Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/889842675525/services/run.googleapis.com 200
+[debug] [2026-07-03T01:43:18.801Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/889842675525/services/run.googleapis.com [omitted]
+[warn] !  functions: missing required API run.googleapis.com. Enabling now... 
+[debug] [2026-07-03T01:43:18.801Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:18.801Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:18.801Z] >>> [apiv2][query] POST https://serviceusage.googleapis.com/v1/projects/889842675525/services/run.googleapis.com:enable [none]
+[debug] [2026-07-03T01:43:18.802Z] >>> [apiv2][(partial)header] POST https://serviceusage.googleapis.com/v1/projects/889842675525/services/run.googleapis.com:enable  x-goog-user-project=889842675525
+[debug] [2026-07-03T01:43:18.831Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/889842675525/services/storage.googleapis.com 200
+[debug] [2026-07-03T01:43:18.831Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/889842675525/services/storage.googleapis.com [omitted]
+[info] +  functions: required API storage.googleapis.com is enabled 
+[debug] [2026-07-03T01:43:18.845Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/889842675525/services/eventarc.googleapis.com 200
+[debug] [2026-07-03T01:43:18.846Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/889842675525/services/eventarc.googleapis.com [omitted]
+[warn] !  functions: missing required API eventarc.googleapis.com. Enabling now... 
+[debug] [2026-07-03T01:43:18.846Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:18.846Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:18.846Z] >>> [apiv2][query] POST https://serviceusage.googleapis.com/v1/projects/889842675525/services/eventarc.googleapis.com:enable [none]
+[debug] [2026-07-03T01:43:18.846Z] >>> [apiv2][(partial)header] POST https://serviceusage.googleapis.com/v1/projects/889842675525/services/eventarc.googleapis.com:enable  x-goog-user-project=889842675525
+[debug] [2026-07-03T01:43:19.479Z] <<< [apiv2][status] POST https://serviceusage.googleapis.com/v1/projects/889842675525/services/eventarc.googleapis.com:enable 200
+[debug] [2026-07-03T01:43:19.480Z] <<< [apiv2][body] POST https://serviceusage.googleapis.com/v1/projects/889842675525/services/eventarc.googleapis.com:enable [omitted]
+[debug] [2026-07-03T01:43:19.522Z] <<< [apiv2][status] POST https://serviceusage.googleapis.com/v1/projects/889842675525/services/run.googleapis.com:enable 200
+[debug] [2026-07-03T01:43:19.522Z] <<< [apiv2][body] POST https://serviceusage.googleapis.com/v1/projects/889842675525/services/run.googleapis.com:enable [omitted]
+[info] i  functions: generating the service identity for pubsub.googleapis.com... 
+[debug] [2026-07-03T01:43:29.548Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:29.548Z] Checked if tokens are valid: true, expires at: 1783045914427
+[info] i  functions: generating the service identity for eventarc.googleapis.com... 
+[debug] [2026-07-03T01:43:29.549Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:29.550Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:29.550Z] >>> [apiv2][query] POST https://serviceusage.googleapis.com/v1beta1/projects/889842675525/services/pubsub.googleapis.com:generateServiceIdentity [none]
+[debug] [2026-07-03T01:43:29.550Z] >>> [apiv2][(partial)header] POST https://serviceusage.googleapis.com/v1beta1/projects/889842675525/services/pubsub.googleapis.com:generateServiceIdentity  x-goog-user-project=889842675525
+[debug] [2026-07-03T01:43:29.551Z] >>> [apiv2][body] POST https://serviceusage.googleapis.com/v1beta1/projects/889842675525/services/pubsub.googleapis.com:generateServiceIdentity {}
+[debug] [2026-07-03T01:43:29.553Z] >>> [apiv2][query] POST https://serviceusage.googleapis.com/v1beta1/projects/889842675525/services/eventarc.googleapis.com:generateServiceIdentity [none]
+[debug] [2026-07-03T01:43:29.554Z] >>> [apiv2][(partial)header] POST https://serviceusage.googleapis.com/v1beta1/projects/889842675525/services/eventarc.googleapis.com:generateServiceIdentity  x-goog-user-project=889842675525
+[debug] [2026-07-03T01:43:29.554Z] >>> [apiv2][body] POST https://serviceusage.googleapis.com/v1beta1/projects/889842675525/services/eventarc.googleapis.com:generateServiceIdentity {}
+[debug] [2026-07-03T01:43:30.205Z] <<< [apiv2][status] POST https://serviceusage.googleapis.com/v1beta1/projects/889842675525/services/eventarc.googleapis.com:generateServiceIdentity 200
+[debug] [2026-07-03T01:43:30.205Z] <<< [apiv2][body] POST https://serviceusage.googleapis.com/v1beta1/projects/889842675525/services/eventarc.googleapis.com:generateServiceIdentity {"name":"operations/finished.DONE_OPERATION","done":true,"response":{"@type":"type.googleapis.com/google.api.serviceusage.v1beta1.ServiceIdentity","email":"service-889842675525@gcp-sa-eventarc.iam.gserviceaccount.com","uniqueId":"100100981022461002612"}}
+[debug] [2026-07-03T01:43:30.410Z] <<< [apiv2][status] POST https://serviceusage.googleapis.com/v1beta1/projects/889842675525/services/pubsub.googleapis.com:generateServiceIdentity 200
+[debug] [2026-07-03T01:43:30.410Z] <<< [apiv2][body] POST https://serviceusage.googleapis.com/v1beta1/projects/889842675525/services/pubsub.googleapis.com:generateServiceIdentity {"name":"operations/finished.DONE_OPERATION","done":true,"response":{"@type":"type.googleapis.com/google.api.serviceusage.v1beta1.ServiceIdentity","email":"service-889842675525@gcp-sa-pubsub.iam.gserviceaccount.com","uniqueId":"100739788625149807557"}}
+[debug] [2026-07-03T01:43:30.416Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:30.416Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:30.416Z] >>> [apiv2][query] GET https://compute.googleapis.com/compute/v1/projects/889842675525 [none]
+[debug] [2026-07-03T01:43:30.733Z] <<< [apiv2][status] GET https://compute.googleapis.com/compute/v1/projects/889842675525 403
+[debug] [2026-07-03T01:43:30.733Z] <<< [apiv2][body] GET https://compute.googleapis.com/compute/v1/projects/889842675525 {"error":{"code":403,"message":"Compute Engine API has not been used in project 889842675525 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/compute.googleapis.com/overview?project=889842675525 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.","errors":[{"message":"Compute Engine API has not been used in project 889842675525 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/compute.googleapis.com/overview?project=889842675525 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.","domain":"usageLimits","reason":"accessNotConfigured","extendedHelp":"https://console.developers.google.com"}],"status":"PERMISSION_DENIED","details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"SERVICE_DISABLED","domain":"googleapis.com","metadata":{"service":"compute.googleapis.com","activationUrl":"https://console.developers.google.com/apis/api/compute.googleapis.com/overview?project=889842675525","containerInfo":"889842675525","consumer":"projects/889842675525","serviceTitle":"Compute Engine API"}},{"@type":"type.googleapis.com/google.rpc.LocalizedMessage","locale":"en-US","message":"Compute Engine API has not been used in project 889842675525 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/compute.googleapis.com/overview?project=889842675525 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry."},{"@type":"type.googleapis.com/google.rpc.Help","links":[{"description":"Google developers console API activation","url":"https://console.developers.google.com/apis/api/compute.googleapis.com/overview?project=889842675525"}]}]}}
+[debug] [2026-07-03T01:43:30.734Z] unable to look up default compute service account. Falling back to 889842675525-compute@developer.gserviceaccount.com. Error: {"name":"FirebaseError","children":[],"context":{"body":{"error":{"code":403,"message":"Compute Engine API has not been used in project 889842675525 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/compute.googleapis.com/overview?project=889842675525 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.","errors":[{"message":"Compute Engine API has not been used in project 889842675525 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/compute.googleapis.com/overview?project=889842675525 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.","domain":"usageLimits","reason":"accessNotConfigured","extendedHelp":"https://console.developers.google.com"}],"status":"PERMISSION_DENIED","details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"SERVICE_DISABLED","domain":"googleapis.com","metadata":{"service":"compute.googleapis.com","activationUrl":"https://console.developers.google.com/apis/api/compute.googleapis.com/overview?project=889842675525","containerInfo":"889842675525","consumer":"projects/889842675525","serviceTitle":"Compute Engine API"}},{"@type":"type.googleapis.com/google.rpc.LocalizedMessage","locale":"en-US","message":"Compute Engine API has not been used in project 889842675525 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/compute.googleapis.com/overview?project=889842675525 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry."},{"@type":"type.googleapis.com/google.rpc.Help","links":[{"description":"Google developers console API activation","url":"https://console.developers.google.com/apis/api/compute.googleapis.com/overview?project=889842675525"}]}]}},"response":{"statusCode":403}},"exit":1,"message":"Request to https://compute.googleapis.com/compute/v1/projects/889842675525 had HTTP Error: 403, Compute Engine API has not been used in project 889842675525 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/compute.googleapis.com/overview?project=889842675525 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.","status":403}
+[debug] [2026-07-03T01:43:30.735Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:30.735Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:30.735Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/889842675525:getIamPolicy [none]
+[debug] [2026-07-03T01:43:31.165Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/889842675525:getIamPolicy 200
+[debug] [2026-07-03T01:43:31.166Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/889842675525:getIamPolicy {"version":1,"etag":"BwZVqwzYFKI=","bindings":[{"role":"roles/cloudbuild.builds.builder","members":["serviceAccount:889842675525@cloudbuild.gserviceaccount.com"]},{"role":"roles/cloudbuild.serviceAgent","members":["serviceAccount:service-889842675525@gcp-sa-cloudbuild.iam.gserviceaccount.com"]},{"role":"roles/cloudfunctions.serviceAgent","members":["serviceAccount:service-889842675525@gcf-admin-robot.iam.gserviceaccount.com"]},{"role":"roles/containerregistry.ServiceAgent","members":["serviceAccount:service-889842675525@containerregistry.iam.gserviceaccount.com"]},{"role":"roles/editor","members":["serviceAccount:889842675525-compute@developer.gserviceaccount.com","serviceAccount:889842675525@cloudservices.gserviceaccount.com","serviceAccount:villecabs@appspot.gserviceaccount.com"]},{"role":"roles/firebase.managementServiceAgent","members":["serviceAccount:service-889842675525@gcp-sa-firebase.iam.gserviceaccount.com"]},{"role":"roles/firebase.sdkAdminServiceAgent","members":["serviceAccount:firebase-adminsdk-fbsvc@villecabs.iam.gserviceaccount.com"]},{"role":"roles/firebaseauth.admin","members":["serviceAccount:firebase-adminsdk-fbsvc@villecabs.iam.gserviceaccount.com"]},{"role":"roles/firebasemods.serviceAgent","members":["serviceAccount:service-889842675525@gcp-sa-firebasemods.iam.gserviceaccount.com"]},{"role":"roles/firebaserules.system","members":["serviceAccount:service-889842675525@firebase-rules.iam.gserviceaccount.com"]},{"role":"roles/firebasestorage.serviceAgent","members":["serviceAccount:service-889842675525@gcp-sa-firebasestorage.iam.gserviceaccount.com"]},{"role":"roles/firestore.serviceAgent","members":["serviceAccount:service-889842675525@gcp-sa-firestore.iam.gserviceaccount.com"]},{"role":"roles/iam.serviceAccountTokenCreator","members":["serviceAccount:firebase-adminsdk-fbsvc@villecabs.iam.gserviceaccount.com"]},{"role":"roles/owner","members":["user:daviskeneile@gmail.com"]},{"role":"roles/run.serviceAgent","members":["serviceAccount:service-889842675525@serverless-robot-prod.iam.gserviceaccount.com"]},{"role":"roles/storage.admin","members":["serviceAccount:firebase-adminsdk-fbsvc@villecabs.iam.gserviceaccount.com"]}]}
+[debug] [2026-07-03T01:43:31.167Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:31.167Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:31.167Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/889842675525:setIamPolicy [none]
+[debug] [2026-07-03T01:43:31.167Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/889842675525:setIamPolicy {"policy":{"version":1,"etag":"BwZVqwzYFKI=","bindings":[{"role":"roles/cloudbuild.builds.builder","members":["serviceAccount:889842675525@cloudbuild.gserviceaccount.com"]},{"role":"roles/cloudbuild.serviceAgent","members":["serviceAccount:service-889842675525@gcp-sa-cloudbuild.iam.gserviceaccount.com"]},{"role":"roles/cloudfunctions.serviceAgent","members":["serviceAccount:service-889842675525@gcf-admin-robot.iam.gserviceaccount.com"]},{"role":"roles/containerregistry.ServiceAgent","members":["serviceAccount:service-889842675525@containerregistry.iam.gserviceaccount.com"]},{"role":"roles/editor","members":["serviceAccount:889842675525-compute@developer.gserviceaccount.com","serviceAccount:889842675525@cloudservices.gserviceaccount.com","serviceAccount:villecabs@appspot.gserviceaccount.com"]},{"role":"roles/firebase.managementServiceAgent","members":["serviceAccount:service-889842675525@gcp-sa-firebase.iam.gserviceaccount.com"]},{"role":"roles/firebase.sdkAdminServiceAgent","members":["serviceAccount:firebase-adminsdk-fbsvc@villecabs.iam.gserviceaccount.com"]},{"role":"roles/firebaseauth.admin","members":["serviceAccount:firebase-adminsdk-fbsvc@villecabs.iam.gserviceaccount.com"]},{"role":"roles/firebasemods.serviceAgent","members":["serviceAccount:service-889842675525@gcp-sa-firebasemods.iam.gserviceaccount.com"]},{"role":"roles/firebaserules.system","members":["serviceAccount:service-889842675525@firebase-rules.iam.gserviceaccount.com"]},{"role":"roles/firebasestorage.serviceAgent","members":["serviceAccount:service-889842675525@gcp-sa-firebasestorage.iam.gserviceaccount.com"]},{"role":"roles/firestore.serviceAgent","members":["serviceAccount:service-889842675525@gcp-sa-firestore.iam.gserviceaccount.com"]},{"role":"roles/iam.serviceAccountTokenCreator","members":["serviceAccount:firebase-adminsdk-fbsvc@villecabs.iam.gserviceaccount.com","serviceAccount:service-889842675525@gcp-sa-pubsub.iam.gserviceaccount.com"]},{"role":"roles/owner","members":["user:daviskeneile@gmail.com"]},{"role":"roles/run.serviceAgent","members":["serviceAccount:service-889842675525@serverless-robot-prod.iam.gserviceaccount.com"]},{"role":"roles/storage.admin","members":["serviceAccount:firebase-adminsdk-fbsvc@villecabs.iam.gserviceaccount.com"]},{"role":"roles/run.invoker","members":["serviceAccount:889842675525-compute@developer.gserviceaccount.com"]},{"role":"roles/eventarc.eventReceiver","members":["serviceAccount:889842675525-compute@developer.gserviceaccount.com"]}]},"updateMask":"bindings"}
+[debug] [2026-07-03T01:43:32.080Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/889842675525:setIamPolicy 200
+[debug] [2026-07-03T01:43:32.081Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/889842675525:setIamPolicy {"version":1,"etag":"BwZVqw1enVI=","bindings":[{"role":"roles/cloudbuild.builds.builder","members":["serviceAccount:889842675525@cloudbuild.gserviceaccount.com"]},{"role":"roles/cloudbuild.serviceAgent","members":["serviceAccount:service-889842675525@gcp-sa-cloudbuild.iam.gserviceaccount.com"]},{"role":"roles/cloudfunctions.serviceAgent","members":["serviceAccount:service-889842675525@gcf-admin-robot.iam.gserviceaccount.com"]},{"role":"roles/containerregistry.ServiceAgent","members":["serviceAccount:service-889842675525@containerregistry.iam.gserviceaccount.com"]},{"role":"roles/editor","members":["serviceAccount:889842675525-compute@developer.gserviceaccount.com","serviceAccount:889842675525@cloudservices.gserviceaccount.com","serviceAccount:villecabs@appspot.gserviceaccount.com"]},{"role":"roles/eventarc.eventReceiver","members":["serviceAccount:889842675525-compute@developer.gserviceaccount.com"]},{"role":"roles/firebase.managementServiceAgent","members":["serviceAccount:service-889842675525@gcp-sa-firebase.iam.gserviceaccount.com"]},{"role":"roles/firebase.sdkAdminServiceAgent","members":["serviceAccount:firebase-adminsdk-fbsvc@villecabs.iam.gserviceaccount.com"]},{"role":"roles/firebaseauth.admin","members":["serviceAccount:firebase-adminsdk-fbsvc@villecabs.iam.gserviceaccount.com"]},{"role":"roles/firebasemods.serviceAgent","members":["serviceAccount:service-889842675525@gcp-sa-firebasemods.iam.gserviceaccount.com"]},{"role":"roles/firebaserules.system","members":["serviceAccount:service-889842675525@firebase-rules.iam.gserviceaccount.com"]},{"role":"roles/firebasestorage.serviceAgent","members":["serviceAccount:service-889842675525@gcp-sa-firebasestorage.iam.gserviceaccount.com"]},{"role":"roles/firestore.serviceAgent","members":["serviceAccount:service-889842675525@gcp-sa-firestore.iam.gserviceaccount.com"]},{"role":"roles/iam.serviceAccountTokenCreator","members":["serviceAccount:firebase-adminsdk-fbsvc@villecabs.iam.gserviceaccount.com","serviceAccount:service-889842675525@gcp-sa-pubsub.iam.gserviceaccount.com"]},{"role":"roles/owner","members":["user:daviskeneile@gmail.com"]},{"role":"roles/run.invoker","members":["serviceAccount:889842675525-compute@developer.gserviceaccount.com"]},{"role":"roles/run.serviceAgent","members":["serviceAccount:service-889842675525@serverless-robot-prod.iam.gserviceaccount.com"]},{"role":"roles/storage.admin","members":["serviceAccount:firebase-adminsdk-fbsvc@villecabs.iam.gserviceaccount.com"]}]}
+[debug] [2026-07-03T01:43:32.084Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:32.084Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:32.084Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/villecabs [none]
+[debug] [2026-07-03T01:43:32.218Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/villecabs 200
+[debug] [2026-07-03T01:43:32.219Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/villecabs {"projectNumber":"889842675525","projectId":"villecabs","lifecycleState":"ACTIVE","name":"VilleCabs","labels":{"firebase":"enabled","firebase-core":"disabled"},"createTime":"2026-06-14T17:55:03.715Z"}
+[debug] [2026-07-03T01:43:32.219Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:32.219Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:32.219Z] >>> [apiv2][query] GET https://compute.googleapis.com/compute/v1/projects/889842675525 [none]
+[debug] [2026-07-03T01:43:32.291Z] <<< [apiv2][status] GET https://compute.googleapis.com/compute/v1/projects/889842675525 403
+[debug] [2026-07-03T01:43:32.291Z] <<< [apiv2][body] GET https://compute.googleapis.com/compute/v1/projects/889842675525 {"error":{"code":403,"message":"Compute Engine API has not been used in project 889842675525 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/compute.googleapis.com/overview?project=889842675525 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.","errors":[{"message":"Compute Engine API has not been used in project 889842675525 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/compute.googleapis.com/overview?project=889842675525 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.","domain":"usageLimits","reason":"accessNotConfigured","extendedHelp":"https://console.developers.google.com"}],"status":"PERMISSION_DENIED","details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"SERVICE_DISABLED","domain":"googleapis.com","metadata":{"containerInfo":"889842675525","consumer":"projects/889842675525","service":"compute.googleapis.com","activationUrl":"https://console.developers.google.com/apis/api/compute.googleapis.com/overview?project=889842675525","serviceTitle":"Compute Engine API"}},{"@type":"type.googleapis.com/google.rpc.LocalizedMessage","locale":"en-US","message":"Compute Engine API has not been used in project 889842675525 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/compute.googleapis.com/overview?project=889842675525 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry."},{"@type":"type.googleapis.com/google.rpc.Help","links":[{"description":"Google developers console API activation","url":"https://console.developers.google.com/apis/api/compute.googleapis.com/overview?project=889842675525"}]}]}}
+[debug] [2026-07-03T01:43:32.292Z] unable to look up default compute service account. Falling back to 889842675525-compute@developer.gserviceaccount.com. Error: {"name":"FirebaseError","children":[],"context":{"body":{"error":{"code":403,"message":"Compute Engine API has not been used in project 889842675525 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/compute.googleapis.com/overview?project=889842675525 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.","errors":[{"message":"Compute Engine API has not been used in project 889842675525 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/compute.googleapis.com/overview?project=889842675525 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.","domain":"usageLimits","reason":"accessNotConfigured","extendedHelp":"https://console.developers.google.com"}],"status":"PERMISSION_DENIED","details":[{"@type":"type.googleapis.com/google.rpc.ErrorInfo","reason":"SERVICE_DISABLED","domain":"googleapis.com","metadata":{"containerInfo":"889842675525","consumer":"projects/889842675525","service":"compute.googleapis.com","activationUrl":"https://console.developers.google.com/apis/api/compute.googleapis.com/overview?project=889842675525","serviceTitle":"Compute Engine API"}},{"@type":"type.googleapis.com/google.rpc.LocalizedMessage","locale":"en-US","message":"Compute Engine API has not been used in project 889842675525 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/compute.googleapis.com/overview?project=889842675525 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry."},{"@type":"type.googleapis.com/google.rpc.Help","links":[{"description":"Google developers console API activation","url":"https://console.developers.google.com/apis/api/compute.googleapis.com/overview?project=889842675525"}]}]}},"response":{"statusCode":403}},"exit":1,"message":"Request to https://compute.googleapis.com/compute/v1/projects/889842675525 had HTTP Error: 403, Compute Engine API has not been used in project 889842675525 before or it is disabled. Enable it by visiting https://console.developers.google.com/apis/api/compute.googleapis.com/overview?project=889842675525 then retry. If you enabled this API recently, wait a few minutes for the action to propagate to our systems and retry.","status":403}
+[debug] [2026-07-03T01:43:32.295Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:32.295Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:32.295Z] >>> [apiv2][query] GET https://cloudbilling.googleapis.com/v1/projects/villecabs/billingInfo [none]
+[debug] [2026-07-03T01:43:32.625Z] <<< [apiv2][status] GET https://cloudbilling.googleapis.com/v1/projects/villecabs/billingInfo 200
+[debug] [2026-07-03T01:43:32.625Z] <<< [apiv2][body] GET https://cloudbilling.googleapis.com/v1/projects/villecabs/billingInfo {"name":"projects/villecabs/billingInfo","projectId":"villecabs","billingAccountName":"billingAccounts/0186B7-329D9D-6975DF","billingEnabled":true}
+[debug] [2026-07-03T01:43:32.631Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:32.631Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:32.631Z] >>> [apiv2][query] POST https://cloudfunctions.googleapis.com/v2/projects/villecabs/locations/us-central1/functions:generateUploadUrl [none]
+[debug] [2026-07-03T01:43:34.412Z] <<< [apiv2][status] POST https://cloudfunctions.googleapis.com/v2/projects/villecabs/locations/us-central1/functions:generateUploadUrl 200
+[debug] [2026-07-03T01:43:34.412Z] <<< [apiv2][body] POST https://cloudfunctions.googleapis.com/v2/projects/villecabs/locations/us-central1/functions:generateUploadUrl {"uploadUrl":"https://storage.googleapis.com/gcf-v2-uploads-889842675525.us-central1.cloudfunctions.appspot.com/7ffab2a8-6699-4fb1-875c-ca7bc2371b46.zip?GoogleAccessId=service-889842675525@gcf-admin-robot.iam.gserviceaccount.com&Expires=1783044814&Signature=K2tpRhPEJIh4xmwA95NTV9c4nkq5VevmH2oAhgvbw%2B%2BEm0C6kkRhStwGDjp54LDjT0T93jMn%2B57Jg3RTQcKkd%2F1pUphcca5DXTC2lqVLb9IZKpt8W3Sr%2Ff76VdtxyBYk4cW%2BAYAfWfWTzWgVBk1X1dMVRV5Q8xGNftAKFGbAe6wEu0ndSiHE3TOwM1GcptwBB4JAgtHhzexuIAqvyUyTcMv3GSFSE4LrvmIfW3zltdkwXjtqLdoQ7cgsqbgjM7YjH40TsFOoydV8rrNYpIEVyb%2FRfdtNA5E7VqLPGNnTWDfvpVMJGd0HW5TgF7xrcW77U25dxn%2B76OSNpm0XHU%2Ffmg%3D%3D","storageSource":{"bucket":"gcf-v2-uploads-889842675525.us-central1.cloudfunctions.appspot.com","object":"7ffab2a8-6699-4fb1-875c-ca7bc2371b46.zip"}}
+[debug] [2026-07-03T01:43:34.414Z] >>> [apiv2][query] PUT https://storage.googleapis.com/gcf-v2-uploads-889842675525.us-central1.cloudfunctions.appspot.com/7ffab2a8-6699-4fb1-875c-ca7bc2371b46.zip GoogleAccessId=service-889842675525%40gcf-admin-robot.iam.gserviceaccount.com&Expires=1783044814&Signature=K2tpRhPEJIh4xmwA95NTV9c4nkq5VevmH2oAhgvbw%2B%2BEm0C6kkRhStwGDjp54LDjT0T93jMn%2B57Jg3RTQcKkd%2F1pUphcca5DXTC2lqVLb9IZKpt8W3Sr%2Ff76VdtxyBYk4cW%2BAYAfWfWTzWgVBk1X1dMVRV5Q8xGNftAKFGbAe6wEu0ndSiHE3TOwM1GcptwBB4JAgtHhzexuIAqvyUyTcMv3GSFSE4LrvmIfW3zltdkwXjtqLdoQ7cgsqbgjM7YjH40TsFOoydV8rrNYpIEVyb%2FRfdtNA5E7VqLPGNnTWDfvpVMJGd0HW5TgF7xrcW77U25dxn%2B76OSNpm0XHU%2Ffmg%3D%3D
+[debug] [2026-07-03T01:43:34.414Z] >>> [apiv2][body] PUT https://storage.googleapis.com/gcf-v2-uploads-889842675525.us-central1.cloudfunctions.appspot.com/7ffab2a8-6699-4fb1-875c-ca7bc2371b46.zip [stream]
+[debug] [2026-07-03T01:43:34.821Z] <<< [apiv2][status] PUT https://storage.googleapis.com/gcf-v2-uploads-889842675525.us-central1.cloudfunctions.appspot.com/7ffab2a8-6699-4fb1-875c-ca7bc2371b46.zip 200
+[debug] [2026-07-03T01:43:34.821Z] <<< [apiv2][body] PUT https://storage.googleapis.com/gcf-v2-uploads-889842675525.us-central1.cloudfunctions.appspot.com/7ffab2a8-6699-4fb1-875c-ca7bc2371b46.zip [omitted]
+[info] +  functions: functions source uploaded successfully 
+[info] i  functions: creating Node.js 24 (2nd Gen) function villecabs:notifyDriverTwoMinutesAway(us-central1)... 
+[debug] [2026-07-03T01:43:34.829Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:34.829Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:34.829Z] >>> [apiv2][query] POST https://cloudfunctions.googleapis.com/v2/projects/villecabs/locations/us-central1/functions functionId=notifyDriverTwoMinutesAway
+[debug] [2026-07-03T01:43:34.829Z] >>> [apiv2][body] POST https://cloudfunctions.googleapis.com/v2/projects/villecabs/locations/us-central1/functions {"name":"projects/villecabs/locations/us-central1/functions/notifyDriverTwoMinutesAway","buildConfig":{"runtime":"nodejs24","entryPoint":"notifyDriverTwoMinutesAway","source":{"storageSource":{"bucket":"gcf-v2-uploads-889842675525.us-central1.cloudfunctions.appspot.com","object":"7ffab2a8-6699-4fb1-875c-ca7bc2371b46.zip"}},"environmentVariables":{"GOOGLE_NODE_RUN_SCRIPTS":""}},"serviceConfig":{"environmentVariables":{"FIREBASE_CONFIG":"{\"projectId\":\"villecabs\",\"storageBucket\":\"villecabs.firebasestorage.app\"}","GCLOUD_PROJECT":"villecabs","EVENTARC_CLOUD_EVENT_SOURCE":"projects/villecabs/locations/us-central1/services/notifyDriverTwoMinutesAway","FUNCTION_SIGNATURE_TYPE":"cloudevent","FUNCTION_TARGET":"notifyDriverTwoMinutesAway","LOG_EXECUTION_ID":"true"},"ingressSettings":null,"timeoutSeconds":null,"serviceAccountEmail":null,"availableMemory":"256Mi","minInstanceCount":null,"maxInstanceCount":null,"maxInstanceRequestConcurrency":80,"availableCpu":"1","vpcConnector":null,"vpcConnectorEgressSettings":null,"directVpcNetworkInterface":null,"directVpcEgress":null},"labels":{"deployment-tool":"cli-firebase","firebase-functions-codebase":"villecabs","firebase-functions-hash":"620d66f3d636bbe6c395ff9d2b32a37bffdc4a29"},"eventTrigger":{"eventType":"google.cloud.firestore.document.v1.updated","retryPolicy":"RETRY_POLICY_DO_NOT_RETRY","eventFilters":[{"attribute":"database","value":"(default)"},{"attribute":"namespace","value":"(default)"},{"attribute":"document","value":"bookings/{bookingId}","operator":"match-path-pattern"}],"triggerRegion":"us-central1"}}
+[debug] [2026-07-03T01:43:51.083Z] <<< [apiv2][status] POST https://cloudfunctions.googleapis.com/v2/projects/villecabs/locations/us-central1/functions 400
+[debug] [2026-07-03T01:43:51.084Z] <<< [apiv2][body] POST https://cloudfunctions.googleapis.com/v2/projects/villecabs/locations/us-central1/functions {"error":{"code":400,"message":"Validation failed for trigger projects/villecabs/locations/us-central1/triggers/notifydrivertwominutesaway-221813: Invalid resource state for \"\": Permission denied while using the Eventarc Service Agent. If you recently started to use Eventarc, it may take a few minutes before all necessary permissions are propagated to the Service Agent. Otherwise, verify that it has Eventarc Service Agent role.","status":"FAILED_PRECONDITION"}}
+[warn] !  functions: Request to https://cloudfunctions.googleapis.com/v2/projects/villecabs/locations/us-central1/functions?functionId=notifyDriverTwoMinutesAway had HTTP Error: 400, Validation failed for trigger projects/villecabs/locations/us-central1/triggers/notifydrivertwominutesaway-221813: Invalid resource state for "": Permission denied while using the Eventarc Service Agent. If you recently started to use Eventarc, it may take a few minutes before all necessary permissions are propagated to the Service Agent. Otherwise, verify that it has Eventarc Service Agent role. 
+[warn] !  functions: Since this is your first time using 2nd gen functions, we need a little bit longer to finish setting everything up. Retry the deployment in a few minutes. 
+[warn] !  functions:  failed to create function projects/villecabs/locations/us-central1/functions/notifyDriverTwoMinutesAway 
+[error] Failed to create function projects/villecabs/locations/us-central1/functions/notifyDriverTwoMinutesAway
+[warn] !  functions: Deploys failed. Skipping deletes. 
+[debug] [2026-07-03T01:43:51.099Z] Total Function Deployment time: 16256
+[debug] [2026-07-03T01:43:51.099Z] 1 Functions Deployed
+[debug] [2026-07-03T01:43:51.099Z] 1 Functions Errored
+[debug] [2026-07-03T01:43:51.100Z] 0 Function Deployments Aborted
+[debug] [2026-07-03T01:43:51.100Z] Average Function Deployment time: 16254
+[info] 
+[info] Functions deploy had errors with the following functions:
+	villecabs:notifyDriverTwoMinutesAway(us-central1)
+[debug] [2026-07-03T01:43:51.336Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:51.336Z] Checked if tokens are valid: true, expires at: 1783045914427
+[debug] [2026-07-03T01:43:51.336Z] >>> [apiv2][query] GET https://artifactregistry.googleapis.com/v1/projects/villecabs/locations/us-central1/repositories/gcf-artifacts [none]
+[debug] [2026-07-03T01:43:52.035Z] <<< [apiv2][status] GET https://artifactregistry.googleapis.com/v1/projects/villecabs/locations/us-central1/repositories/gcf-artifacts 404
+[debug] [2026-07-03T01:43:52.036Z] <<< [apiv2][body] GET https://artifactregistry.googleapis.com/v1/projects/villecabs/locations/us-central1/repositories/gcf-artifacts {"error":{"code":404,"message":"Requested entity was not found.","status":"NOT_FOUND"}}
+[debug] [2026-07-03T01:43:52.036Z] Failed to check artifact cleanup policy for region us-central1: Request to https://artifactregistry.googleapis.com/v1/projects/villecabs/locations/us-central1/repositories/gcf-artifacts had HTTP Error: 404, Requested entity was not found. {"name":"FirebaseError","children":[],"context":{"body":{"error":{"code":404,"message":"Requested entity was not found.","status":"NOT_FOUND"}},"response":{"statusCode":404}},"exit":1,"message":"Request to https://artifactregistry.googleapis.com/v1/projects/villecabs/locations/us-central1/repositories/gcf-artifacts had HTTP Error: 404, Requested entity was not found.","status":404}
+[debug] [2026-07-03T01:43:52.037Z] Functions deploy failed.
+[debug] [2026-07-03T01:43:52.037Z] {
+  "endpoint": {
+    "id": "notifyDriverTwoMinutesAway",
+    "project": "villecabs",
+    "region": "us-central1",
+    "entryPoint": "notifyDriverTwoMinutesAway",
+    "platform": "gcfv2",
+    "runtime": "nodejs24",
+    "eventTrigger": {
+      "eventType": "google.cloud.firestore.document.v1.updated",
+      "retry": false,
+      "eventFilters": {
+        "database": "(default)",
+        "namespace": "(default)"
+      },
+      "eventFilterPathPatterns": {
+        "document": "bookings/{bookingId}"
+      },
+      "region": "us-central1"
+    },
+    "labels": {
+      "deployment-tool": "cli-firebase"
+    },
+    "serviceAccount": null,
+    "ingressSettings": null,
+    "availableMemoryMb": null,
+    "timeoutSeconds": null,
+    "maxInstances": null,
+    "minInstances": null,
+    "concurrency": 80,
+    "vpc": null,
+    "environmentVariables": {
+      "FIREBASE_CONFIG": "{\"projectId\":\"villecabs\",\"storageBucket\":\"villecabs.firebasestorage.app\"}",
+      "GCLOUD_PROJECT": "villecabs",
+      "EVENTARC_CLOUD_EVENT_SOURCE": "projects/villecabs/locations/us-central1/services/notifyDriverTwoMinutesAway"
+    },
+    "codebase": "villecabs",
+    "cpu": 1,
+    "targetedByOnly": false,
+    "hash": "620d66f3d636bbe6c395ff9d2b32a37bffdc4a29"
+  },
+  "op": "create",
+  "original": {
+    "name": "FirebaseError",
+    "children": [],
+    "context": {
+      "function": "projects/villecabs/locations/us-central1/functions/notifyDriverTwoMinutesAway"
+    },
+    "exit": 1,
+    "message": "Failed to create function projects/villecabs/locations/us-central1/functions/notifyDriverTwoMinutesAway",
+    "original": {
+      "name": "FirebaseError",
+      "children": [],
+      "context": {
+        "body": {
+          "error": {
+            "code": 400,
+            "message": "Validation failed for trigger projects/villecabs/locations/us-central1/triggers/notifydrivertwominutesaway-221813: Invalid resource state for \"\": Permission denied while using the Eventarc Service Agent. If you recently started to use Eventarc, it may take a few minutes before all necessary permissions are propagated to the Service Agent. Otherwise, verify that it has Eventarc Service Agent role.",
+            "status": "FAILED_PRECONDITION"
+          }
+        },
+        "response": {
+          "statusCode": 400
+        }
+      },
+      "exit": 1,
+      "message": "Request to https://cloudfunctions.googleapis.com/v2/projects/villecabs/locations/us-central1/functions?functionId=notifyDriverTwoMinutesAway had HTTP Error: 400, Validation failed for trigger projects/villecabs/locations/us-central1/triggers/notifydrivertwominutesaway-221813: Invalid resource state for \"\": Permission denied while using the Eventarc Service Agent. If you recently started to use Eventarc, it may take a few minutes before all necessary permissions are propagated to the Service Agent. Otherwise, verify that it has Eventarc Service Agent role.",
+      "status": 400
+    },
+    "status": 400,
+    "code": 400
+  }
+}
+[debug] [2026-07-03T01:43:52.310Z] Error: Failed to create function notifyDriverTwoMinutesAway in region us-central1
+    at C:\Users\Comfort Basic\AppData\Roaming\npm\node_modules\firebase-tools\lib\deploy\functions\release\fabricator.js:332:27
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async Fabricator.createV2Function (C:\Users\Comfort Basic\AppData\Roaming\npm\node_modules\firebase-tools\lib\deploy\functions\release\fabricator.js:311:30)
+    at async Fabricator.createEndpoint (C:\Users\Comfort Basic\AppData\Roaming\npm\node_modules\firebase-tools\lib\deploy\functions\release\fabricator.js:153:13)
+    at async Fabricator.wrapOperation (C:\Users\Comfort Basic\AppData\Roaming\npm\node_modules\firebase-tools\lib\deploy\functions\release\fabricator.js:138:13)
+    at async Promise.all (index 0)
+    at async Promise.allSettled (index 0)
+    at async Fabricator.applyPlan (C:\Users\Comfort Basic\AppData\Roaming\npm\node_modules\firebase-tools\lib\deploy\functions\release\fabricator.js:77:45)
+    at async release (C:\Users\Comfort Basic\AppData\Roaming\npm\node_modules\firebase-tools\lib\deploy\functions\release\index.js:87:21)
+    at async chain (C:\Users\Comfort Basic\AppData\Roaming\npm\node_modules\firebase-tools\lib\deploy\index.js:45:9)
+[error] 
+[error] Error: There was an error deploying functions

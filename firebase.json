@@ -15,13 +15,15 @@
   },
   "functions": [
     {
-      "source": "functions",
       "codebase": "villecabs",
       "ignore": [
         "node_modules",
         ".git",
-        "firebase-debug.log"
-      ]
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "source": "functions"
     }
   ]
 }
