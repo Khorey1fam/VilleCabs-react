@@ -385,7 +385,7 @@ function TopBar({ title, onBack, go, user }) {
     <div style={s.topBar}>
       {onBack && <button style={s.backBtn} onClick={onBack}>←</button>}
       <img src="/logo.png" alt="VilleCabs"
-        onClick={() => go ? go(user ? 'customer-dash' : 'splash') : null}
+        onClick={() => go ? go(user ? (user.role === 'driver' ? 'driver-dash' : 'customer-dash') : 'splash') : null}
         style={{ height:32, width:'auto', objectFit:'contain', cursor:'pointer', flexShrink:0, maxWidth:160 }}/>
       <div style={{ display:'flex', gap:5, marginLeft:'auto' }}>
         <button onClick={() => setDarkPref(!getDarkPref())} title="Toggle dark mode"
@@ -5964,6 +5964,7 @@ function PaymentsPage({ go }) {
     <div style={{ ...s.content, background:'#f5f6fa' }}>
       <div style={s.topBar}>
         
+        <img src="/logo.png" alt="VilleCabs" onClick={() => go('customer-dash')} style={{ height:28, objectFit:'contain', cursor:'pointer', flexShrink:0, marginRight:10 }}/>
         <span style={s.topTitle}>Payments</span>
       </div>
       <div style={{ padding:20 }}>
@@ -6019,6 +6020,7 @@ function PromotionsPage({ go, user }) {
     <div style={{ ...s.content, background:'#f5f6fa' }}>
       <div style={s.topBar}>
         
+        <img src="/logo.png" alt="VilleCabs" onClick={() => go('customer-dash')} style={{ height:28, objectFit:'contain', cursor:'pointer', flexShrink:0, marginRight:10 }}/>
         <span style={s.topTitle}>Promotions</span>
       </div>
       <div style={{ padding:20 }}>
@@ -6078,6 +6080,7 @@ function SafetyCentre({ go }) {
     <div style={{ ...s.content, background:'#f5f6fa' }}>
       <div style={s.topBar}>
         
+        <img src="/logo.png" alt="VilleCabs" onClick={() => go('customer-dash')} style={{ height:28, objectFit:'contain', cursor:'pointer', flexShrink:0, marginRight:10 }}/>
         <span style={s.topTitle}>Safety Centre</span>
       </div>
       <div style={{ padding:20 }}>
