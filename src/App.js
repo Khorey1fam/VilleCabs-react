@@ -1577,8 +1577,8 @@ function ContactUs({ go, user }) {
     if (!form.name||!form.email||!form.subject||!form.message) { setError('Please fill in all fields.'); return; }
     setLoading(true);
     try {
-      // Save to Firestore contactMessages collection (read by AdminDash's Support Messages tab)
-      await addDoc(collection(db,'contactMessages'), {
+      // Save to Firestore contact_submissions collection (read by the admin Messages tab)
+      await addDoc(collection(db,'contact_submissions'), {
         name:      form.name,
         email:     form.email,
         subject:   form.subject,
@@ -4658,7 +4658,7 @@ function DriverContactUs({ go, user }) {
     if (!form.name||!form.email||!form.subject||!form.message) { setError('Please fill in all fields.'); return; }
     setLoading(true);
     try {
-      await addDoc(collection(db,'contactMessages'), {
+      await addDoc(collection(db,'contact_submissions'), {
         name:form.name, email:form.email, subject:form.subject, message:form.message,
         userId:user?.uid||null, role:'driver', status:'new', createdAt:serverTimestamp(),
       });
