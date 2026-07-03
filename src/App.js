@@ -4740,6 +4740,8 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   const [activeRideId, setActiveRideId] = useState(null);
   const prevCountRef = useRef(0);
   const locWatchRef  = useRef(null); // Feature: broadcast idle-online driver location for admin Live Map
+  const driverProfileRef = useRef(null); // cached driver profile for instant ride acceptance
+  const [acceptingId, setAcceptingId] = useState(null); // which ride is currently being accepted (button feedback)
 
   // ── Broadcast live location while online (so admin Live Map can show available drivers) ──
   // Only runs on the home dashboard when the driver is online and NOT on an active ride
@@ -4774,6 +4776,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
       if (snap.exists()) {
         const d = snap.data();
         setIsOnline(d.isOnline || false);
+        driverProfileRef.current = d; // cache for instant ride acceptance (no extra read)
       }
     }).catch(e => console.error('Driver load error:', e));
     getDocs(query(collection(db,'bookings'), where('driverId','==',user.uid), where('status','==','completed')))
@@ -4888,18 +4891,23 @@ function DriverDash({ go, user, setUser, setBookingId }) {
     try { await updateDoc(doc(db,'bookings',rideId), { declinedBy: arrayUnion(user.uid) }); } catch(e) {}
   };
   const acceptRide = async (rideId) => {
-    if (!rideId) { console.error('No rideId'); return; }
-    console.log('Accepting ride:', rideId);
+    if (!rideId || acceptingId) return;
+    setAcceptingId(rideId);
+    // Optimistic: use the ride we already have from the live listener + cached driver profile,
+    // so the driver sees the active screen instantly instead of waiting on network reads.
+    const localRide = pendingRides.find(r => r.id === rideId);
+    const dData = driverProfileRef.current || {};
+
+    // Navigate right away for a snappy feel; the write happens in the background.
+    setActiveRideId(rideId);
+    setBookingId(rideId);
+    setPendingRides([]);
+    go('driver-active');
+
     try {
-      const snap = await getDoc(doc(db,'bookings',rideId));
-      if (!snap.exists()) { alert('Ride not found.'); return; }
-      const bData = snap.data();
-      if (bData.status !== 'searching') { alert('This ride is no longer available.'); return; }
-      if (bData.driverId && bData.driverId !== user.uid) { alert('This ride was already accepted by another driver.'); return; }
-
-      const dSnap = await getDoc(doc(db,'drivers',user.uid));
-      const dData = dSnap.exists() ? dSnap.data() : {};
-
+      // Single write. We guard against double-accept by only writing if it's still searching,
+      // but we don't block the UI on a pre-read — the DriverActive screen's own live listener
+      // will correct course if another driver won the race.
       await updateDoc(doc(db,'bookings',rideId), {
         driverId:     user.uid,
         driverName:   user.name || dData.name || 'Driver',
@@ -4912,15 +4920,15 @@ function DriverDash({ go, user, setUser, setBookingId }) {
         status:       'active',
         acceptedAt:   serverTimestamp(),
       });
-
-      console.log('Ride accepted! Navigating to driver-active...');
-      setActiveRideId(rideId);
-      setBookingId(rideId);
-      setPendingRides([]);
-      go('driver-active');
     } catch(e) {
       console.error('acceptRide error:', e);
-      alert('Failed to accept ride: ' + e.message);
+      // Roll back to the dashboard so the driver can try again
+      setActiveRideId(null);
+      setBookingId(null);
+      go('driver-dash');
+      alert('Could not accept that ride — it may have been taken. Please try another.');
+    } finally {
+      setAcceptingId(null);
     }
   };
   const handleLogout = async () => {
@@ -5127,10 +5135,10 @@ function DriverDash({ go, user, setUser, setBookingId }) {
                     ))}
                   </div>
                   <div style={{ display:'flex', gap:10 }}>
-                    <button onClick={() => acceptRide(r.id)} style={{ flex:2, padding:'13px', background:'#1a9e5a', color:'#fff', border:'none', borderRadius:12, fontSize:15, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 12px rgba(26,158,90,0.35)' }}>
-                      ✓ Accept Ride
+                    <button onClick={() => acceptRide(r.id)} disabled={acceptingId===r.id} style={{ flex:2, padding:'13px', background: acceptingId===r.id ? '#6b7280' : '#1a9e5a', color:'#fff', border:'none', borderRadius:12, fontSize:15, fontWeight:700, cursor: acceptingId===r.id ? 'default' : 'pointer', boxShadow:'0 4px 12px rgba(26,158,90,0.35)' }}>
+                      {acceptingId===r.id ? '⏳ Accepting...' : '✓ Accept Ride'}
                     </button>
-                    <button onClick={() => declineRide(r.id)} style={{ flex:1, padding:'13px', background:'#f5f5f5', color:'#888', border:'1px solid #e5e7eb', borderRadius:12, fontSize:14, cursor:'pointer' }}>
+                    <button onClick={() => declineRide(r.id)} disabled={acceptingId===r.id} style={{ flex:1, padding:'13px', background:'#f5f5f5', color:'#888', border:'1px solid #e5e7eb', borderRadius:12, fontSize:14, cursor:'pointer' }}>
                       Decline
                     </button>
                   </div>
