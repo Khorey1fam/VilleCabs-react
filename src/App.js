@@ -1768,7 +1768,7 @@ function DashPartnersSlider() {
   );
 }
 
-function CustomerDash({ go, user, setUser, setBookingId, bookingId }) {
+function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupData, setDropoffData }) {
   const [tab,        setTab]        = useState('book');
   const [menuOpen,   setMenuOpen]   = useState(false);
   const [history,    setHistory]    = useState([]);
@@ -2187,24 +2187,24 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId }) {
         <div style={{ flex:1, display:'flex', flexDirection:'column' }}>
           <div style={{ flex:1, overflowY:'auto', padding:16 }}>
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
-              <div style={{ background:'rgba(232,180,0,0.1)', border:'0.5px solid rgba(232,180,0,0.25)', borderRadius:12, padding:14, textAlign:'center' }}>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginBottom:4 }}>Total rides</div>
-                <div style={{ fontSize:26, fontWeight:500, color:YELLOW }}>{history.length}</div>
+              <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:12, padding:14, textAlign:'center' }}>
+                <div style={{ fontSize:11, color:'#6b7280', marginBottom:4 }}>Total rides</div>
+                <div style={{ fontSize:26, fontWeight:700, color:'#6b21a8' }}>{history.length}</div>
               </div>
-              <div style={{ background:'rgba(26,158,90,0.1)', border:'0.5px solid rgba(26,158,90,0.25)', borderRadius:12, padding:14, textAlign:'center' }}>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginBottom:4 }}>Total spent</div>
-                <div style={{ fontSize:22, fontWeight:500, color:GREEN }}>J${totalSpent.toLocaleString()}</div>
+              <div style={{ background:'#f0fff4', border:'1px solid #86efac', borderRadius:12, padding:14, textAlign:'center' }}>
+                <div style={{ fontSize:11, color:'#6b7280', marginBottom:4 }}>Total spent</div>
+                <div style={{ fontSize:22, fontWeight:700, color:GREEN }}>J${totalSpent.toLocaleString()}</div>
               </div>
             </div>
 
             {loadingH ? (
-              <div style={{ textAlign:'center', padding:40, color:'rgba(255,255,255,0.4)' }}>
+              <div style={{ textAlign:'center', padding:40, color:'#9199ad' }}>
                 <div style={{ fontSize:32, marginBottom:10 }}>⏳</div>Loading rides...
               </div>
             ) : history.length === 0 ? (
-              <div style={{ textAlign:'center', padding:40, color:'rgba(255,255,255,0.4)' }}>
+              <div style={{ textAlign:'center', padding:40, color:'#9199ad' }}>
                 <div style={{ fontSize:40, marginBottom:12 }}>🚕</div>
-                <div style={{ fontSize:15, marginBottom:6 }}>No rides yet</div>
+                <div style={{ fontSize:15, marginBottom:6, color:'#374151' }}>No rides yet</div>
                 <div style={{ fontSize:13 }}>Your completed rides will appear here</div>
                 <button style={{ ...s.btnY, marginTop:20 }} onClick={() => { if (activeRide) { alert('You already have an active ride in progress.'); return; } setTab('book'); }}>Book your first ride</button>
               </div>
@@ -2218,40 +2218,57 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId }) {
                 ? new Date(ride.completedAt.seconds*1000).toLocaleTimeString('en-JM',{hour:'2-digit',minute:'2-digit'}) : '';
               const from = (ride.pickup?.address||'--').split(',')[0];
               const to   = (ride.dropoff?.address||'--').split(',')[0];
+              const canRebook = ride.pickup?.lat && ride.pickup?.lng && ride.dropoff?.lat && ride.dropoff?.lng;
+              const handleBookAgain = () => {
+                if (activeRide) { alert('You already have an active ride in progress. Please complete or cancel it before booking a new ride.'); return; }
+                if (typeof setPickupData === 'function') {
+                  setPickupData({ address: ride.pickup.address, coords: { lat: ride.pickup.lat, lng: ride.pickup.lng }, passengers: ride.passengers || 1 });
+                }
+                if (typeof setDropoffData === 'function') {
+                  setDropoffData({ address: ride.dropoff.address, coords: { lat: ride.dropoff.lat, lng: ride.dropoff.lng } });
+                }
+                go('vehicle-select');
+              };
               return (
-                <div key={ride.id} style={{ background:'rgba(15,20,40,0.6)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:14, marginBottom:10 }}>
+                <div key={ride.id} style={{ background:'#ffffff', border:'1px solid #e5e7eb', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.05)' }}>
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
                     <div>
-                      <div style={{ fontSize:13, fontWeight:500, color:WHITE }}>{date}</div>
-                      <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>{time}</div>
+                      <div style={{ fontSize:13, fontWeight:600, color:'#1a1a2e' }}>{date}</div>
+                      <div style={{ fontSize:11, color:'#9199ad' }}>{time}</div>
                     </div>
                     <div style={{ textAlign:'right' }}>
-                      <div style={{ fontSize:16, fontWeight:500, color:GREEN }}>J${(ride.fare||0).toLocaleString()}</div>
-                      <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)' }}>{ride.vehicleType||'VilleRide'}</div>
+                      <div style={{ fontSize:16, fontWeight:700, color:GREEN }}>J${(ride.fare||0).toLocaleString()}</div>
+                      <div style={{ fontSize:10, color:'#9199ad' }}>{ride.vehicleType||'VilleRide'}</div>
                     </div>
                   </div>
                   <div style={{ marginBottom:10 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
                       <div style={{ width:8, height:8, borderRadius:'50%', background:GREEN, flexShrink:0 }}/>
-                      <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)' }}>{from}</div>
+                      <div style={{ fontSize:12, color:'#374151' }}>{from}</div>
                     </div>
-                    <div style={{ width:2, height:10, background:'rgba(255,255,255,0.15)', marginLeft:3, marginBottom:4 }}/>
+                    <div style={{ width:2, height:10, background:'#e5e7eb', marginLeft:3, marginBottom:4 }}/>
                     <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                      <div style={{ width:8, height:8, borderRadius:'50%', background:YELLOW, flexShrink:0 }}/>
-                      <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)' }}>{to}</div>
+                      <div style={{ width:8, height:8, borderRadius:'50%', background:'#6b21a8', flexShrink:0 }}/>
+                      <div style={{ fontSize:12, color:'#374151' }}>{to}</div>
                     </div>
                   </div>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'0.5px solid rgba(255,255,255,0.07)', paddingTop:8 }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'1px solid #f0f0f0', paddingTop:8, marginBottom: canRebook?10:0 }}>
                     <div style={{ display:'flex', alignItems:'center', gap:6 }}>
                       <span style={{ fontSize:13 }}>👤</span>
                       <span style={{ fontSize:12, color:'#6b7280' }}>{ride.driverName||'VilleCabs driver'}</span>
                     </div>
                     <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                      {ride.distanceKm && <span style={{ fontSize:11, color:'rgba(255,255,255,0.35)' }}>{ride.distanceKm} km</span>}
-                      {ride.customerRating && <span style={{ fontSize:11, color:YELLOW }}>{'⭐'.repeat(ride.customerRating)}</span>}
-                      <span style={{ background:'rgba(26,158,90,0.15)', color:GREEN, borderRadius:20, padding:'2px 8px', fontSize:10, fontWeight:500 }}>✓ Done</span>
+                      {ride.distanceKm && <span style={{ fontSize:11, color:'#9199ad' }}>{ride.distanceKm} km</span>}
+                      {ride.customerRating && <span style={{ fontSize:11, color:'#e8b400' }}>{'⭐'.repeat(ride.customerRating)}</span>}
+                      <span style={{ background:'#f0fff4', color:GREEN, borderRadius:20, padding:'2px 8px', fontSize:10, fontWeight:600 }}>✓ Done</span>
                     </div>
                   </div>
+                  {canRebook && (
+                    <button onClick={handleBookAgain}
+                      style={{ width:'100%', padding:'10px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:10, color:'#6b21a8', fontSize:12, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+                      🔁 Book Again — Same Trip
+                    </button>
+                  )}
                 </div>
               );
             })}
