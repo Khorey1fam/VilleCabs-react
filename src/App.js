@@ -4732,6 +4732,33 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   const [loading,      setLoading]      = useState(true);
   const [activeRideId, setActiveRideId] = useState(null);
   const prevCountRef = useRef(0);
+  const locWatchRef  = useRef(null); // Feature: broadcast idle-online driver location for admin Live Map
+
+  // ── Broadcast live location while online (so admin Live Map can show available drivers) ──
+  // Only runs on the home dashboard when the driver is online and NOT on an active ride
+  // (the active-ride screen already tracks a finer-grained location during trips).
+  useEffect(() => {
+    const stop = () => {
+      if (locWatchRef.current !== null && navigator.geolocation) {
+        navigator.geolocation.clearWatch(locWatchRef.current);
+        locWatchRef.current = null;
+      }
+    };
+    if (!isOnline || activeRideId || !user?.uid || !navigator.geolocation) { stop(); return; }
+    let lastWrite = 0;
+    locWatchRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const now = Date.now();
+        if (now - lastWrite < 20000) return; // throttle writes to once per ~20s
+        lastWrite = now;
+        const { latitude, longitude } = pos.coords;
+        updateDoc(doc(db,'drivers',user.uid), { currentLocation:{ lat:latitude, lng:longitude, updatedAt:serverTimestamp() } }).catch(()=>{});
+      },
+      (err) => console.warn('Driver location watch:', err.message),
+      { enableHighAccuracy:true, maximumAge:15000, timeout:30000 }
+    );
+    return stop;
+  }, [isOnline, activeRideId, user?.uid]);
 
   // ── Load driver online status + earnings on mount ─────────────────────────
   useEffect(() => {
@@ -4828,7 +4855,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   const goOffline = async () => {
     setIsOnline(false);
     try {
-      await updateDoc(doc(db,'drivers',user.uid), { isOnline:false });
+      await updateDoc(doc(db,'drivers',user.uid), { isOnline:false, currentLocation:null });
       // Check if any other drivers are still online
       const onlineSnap = await getDocs(query(collection(db,'drivers'), where('isOnline','==',true), where('status','==','approved')));
       const hour = new Date().getHours();
@@ -6559,6 +6586,7 @@ function AdminDash({ go, user }) {
   const updateMessage = async (id, data) => { await updateDoc(doc(db,'contactMessages',id), data); setMessages(p=>p.map(d=>d.id===id?{...d,...data}:d)); };
   const updateAlert   = async (id, data) => { await updateDoc(doc(db,'sosAlerts',id), data); setAlerts(p=>p.map(d=>d.id===id?{...d,...data}:d)); };
   const updateCustomer = async (id, data) => { await updateDoc(doc(db,'customers',id), data); setCustomers(p=>p.map(c=>c.id===id?{...c,...data}:c)); }; // Feature: Customer Blacklist
+  const updateBooking = async (id, data) => { await updateDoc(doc(db,'bookings',id), data); setRides(p=>p.map(r=>r.id===id?{...r,...data}:r)); }; // Feature: Scheduled Queue
   const toggleSurge = async (next) => { // Feature: Surge Pricing
     const cfg = { surgeActive: next, surgeMultiplier: surgeCfg.surgeMultiplier || 1.5, updatedAt: serverTimestamp(), updatedBy: user.email };
     await setDoc(doc(db,'settings','pricing'), cfg, { merge:true });
@@ -6592,7 +6620,8 @@ function AdminDash({ go, user }) {
 
   const tabs = [
     ['overview','📊 Overview'], ['drivers','🚗 Drivers'], ['customers','👥 Customers'],
-    ['rides','🛣️ Rides'], ['partners','🤝 Partners'], ['revenue','💰 Revenue'],
+    ['rides','🛣️ Rides'], ['livemap','🗺️ Live Map'], ['scheduled','🗓️ Scheduled'],
+    ['partners','🤝 Partners'], ['revenue','💰 Revenue'],
     ['promos','🎟️ Promos'], ['messages','📩 Messages'], ['alerts','🆘 Alerts'],
     ['unfulfilled','📍 No Driver'], ['performance','📈 Performance'], ['broadcast','📢 Broadcast'],
   ];
@@ -6778,6 +6807,153 @@ function AdminDash({ go, user }) {
             {customers.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}>No customers yet</div>}
           </div>
         )}
+
+        {/* ══ LIVE OPERATIONS MAP (Feature: Live Ops Map) ══ */}
+        {tab === 'livemap' && (() => {
+          const activeRides = rides.filter(r => ['active','enroute','arrived'].includes(r.status));
+          const onlineDrivers = drivers.filter(d => d.isOnline);
+          const nowMs = Date.now();
+          const isFresh = (loc) => loc?.lat && (!loc.updatedAt?.seconds || (nowMs - loc.updatedAt.seconds*1000) < 5*60*1000);
+          const locatedDrivers = onlineDrivers.filter(d => isFresh(d.currentLocation));
+          const mapMarkers = [];
+          activeRides.forEach(r => {
+            if (r.driverLocation?.lat) mapMarkers.push({ position:{ lat:r.driverLocation.lat, lng:r.driverLocation.lng }, title:`🚗 ${r.driverName||'Driver'} → ${r.customerName||'rider'}` });
+            if (r.pickup?.lat)  mapMarkers.push({ position:{ lat:r.pickup.lat,  lng:r.pickup.lng  }, title:`📍 Pickup: ${r.customerName||'rider'}` });
+          });
+          locatedDrivers.forEach(d => {
+            if (!activeRides.some(r => r.driverId === d.id)) mapMarkers.push({ position:{ lat:d.currentLocation.lat, lng:d.currentLocation.lng }, title:`🟢 ${d.name||'Driver'} (available)` });
+          });
+          return (
+            <div>
+              <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:12 }}>Live Operations Map</div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginBottom:14 }}>
+                {[
+                  ['Online Drivers', onlineDrivers.length, '#1a9e5a','#f0fff4','#86efac'],
+                  ['Active Rides',   activeRides.length,   '#6b21a8','#f9f5ff','#e9d5ff'],
+                  ['On Map',         mapMarkers.length,    '#1a1a2e','#fff','#e5e7eb'],
+                ].map(([l,v,c,bg,border],i) => (
+                  <div key={i} style={{ background:bg, border:`1px solid ${border}`, borderRadius:12, padding:'12px 10px', textAlign:'center' }}>
+                    <div style={{ fontSize:22, fontWeight:800, color:c }}>{v}</div>
+                    <div style={{ fontSize:9, color:'#888', textTransform:'uppercase', letterSpacing:0.4, marginTop:2 }}>{l}</div>
+                  </div>
+                ))}
+              </div>
+
+              {mapMarkers.length > 0 ? (
+                <div style={{ borderRadius:14, overflow:'hidden', boxShadow:'0 1px 6px rgba(0,0,0,0.1)', marginBottom:14 }}>
+                  <VilleMap height={340} center={mapMarkers[0].position} zoom={13} markers={mapMarkers} expandable={true}/>
+                </div>
+              ) : (
+                <div style={{ background:'#fff', borderRadius:14, padding:30, textAlign:'center', color:'#888', marginBottom:14, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
+                  <div style={{ fontSize:32, marginBottom:8 }}>🗺️</div>
+                  <div style={{ fontSize:14, fontWeight:700, color:'#374151', marginBottom:4 }}>No live positions right now</div>
+                  <div style={{ fontSize:12 }}>Driver pins appear here when drivers are online and sharing location during a ride.</div>
+                </div>
+              )}
+
+              {/* Active rides list */}
+              <div style={{ fontSize:13, fontWeight:700, color:'#6b21a8', marginBottom:8 }}>Active Rides ({activeRides.length})</div>
+              {activeRides.map(r => (
+                <div key={r.id} style={{ background:'#fff', borderRadius:12, padding:12, marginBottom:8, boxShadow:'0 1px 4px rgba(0,0,0,0.05)', borderLeft:'3px solid #6b21a8' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
+                    <span style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>{r.driverName||'Driver'} → {r.customerName||'Rider'}</span>
+                    <StatusBadge status={r.status}/>
+                  </div>
+                  <div style={{ fontSize:12, color:'#555' }}>{(r.pickup?.address||'—').split(',')[0]} → {(r.dropoff?.address||'—').split(',')[0]} · J${(r.fare||0).toLocaleString()}</div>
+                  <div style={{ fontSize:11, color:'#888', marginTop:2 }}>{r.driverLocation?.lat ? '📍 Live location active' : '⏳ Awaiting driver GPS'}</div>
+                </div>
+              ))}
+              {activeRides.length===0 && <div style={{ fontSize:12, color:'#888', padding:'4px 0' }}>No rides in progress.</div>}
+
+              {/* Idle online drivers note */}
+              {onlineDrivers.length > locatedDrivers.length && (
+                <div style={{ background:'#fffbeb', border:'1px solid #fde047', borderRadius:10, padding:'10px 12px', marginTop:12, fontSize:11, color:'#854d0e' }}>
+                  ℹ️ {onlineDrivers.length - locatedDrivers.length} online driver{onlineDrivers.length - locatedDrivers.length !== 1 ? 's are' : ' is'} available but not shown on the map — drivers only broadcast GPS during an active ride.
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* ══ SCHEDULED RIDES QUEUE (Feature: Scheduled Queue) ══ */}
+        {tab === 'scheduled' && (() => {
+          const now = Date.now();
+          const scheduled = rides
+            .filter(r => r.status === 'scheduled')
+            .sort((a,b) => (a.scheduledFor?.seconds||0) - (b.scheduledFor?.seconds||0));
+          const unassigned = scheduled.filter(r => !r.driverId);
+          const assigned   = scheduled.filter(r => r.driverId);
+          const approvedDrivers = drivers.filter(d => d.status === 'approved');
+
+          const reassign = (rideId, driverId) => {
+            if (!driverId) { updateBooking(rideId, { driverId:null, driverName:null }); return; }
+            const drv = drivers.find(d => d.id === driverId);
+            updateBooking(rideId, { driverId, driverName: drv?.name || 'Driver' });
+          };
+          const cancelScheduled = (rideId) => {
+            if (window.confirm('Cancel this scheduled ride? The customer will see it as cancelled.')) {
+              updateBooking(rideId, { status:'cancelled', cancelledBy:'admin', cancelledAt: serverTimestamp() });
+            }
+          };
+          const fmt = (val) => {
+            const sec = val?.seconds; if (!sec) return '—';
+            return new Date(sec*1000).toLocaleString('en-JM',{ weekday:'short', day:'numeric', month:'short', hour:'numeric', minute:'2-digit' });
+          };
+          const isSoon = (val) => val?.seconds && (val.seconds*1000 - now) < 2*3600*1000 && (val.seconds*1000 - now) > 0;
+          const isPast = (val) => val?.seconds && (val.seconds*1000 < now);
+
+          const RideCard = ({ r }) => (
+            <div style={{ background:'#fff', borderRadius:12, padding:13, marginBottom:9, boxShadow:'0 1px 4px rgba(0,0,0,0.05)', borderLeft:`3px solid ${isPast(r.scheduledFor)?'#dc2626':isSoon(r.scheduledFor)?'#f59e0b':'#1d4ed8'}` }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+                <span style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>🗓️ {fmt(r.scheduledFor)}</span>
+                <span style={{ fontSize:14, fontWeight:800, color:'#1a9e5a' }}>J${(r.fare||0).toLocaleString()}</span>
+              </div>
+              {isPast(r.scheduledFor) && <div style={{ fontSize:10, color:'#dc2626', fontWeight:700, marginBottom:4 }}>⚠️ Pickup time has passed</div>}
+              {isSoon(r.scheduledFor) && <div style={{ fontSize:10, color:'#b45309', fontWeight:700, marginBottom:4 }}>⏰ Within 2 hours</div>}
+              <div style={{ fontSize:12, color:'#555', marginBottom:3 }}>👤 {r.customerName||'Customer'} · {r.vehicleType||'VilleRide'}</div>
+              <div style={{ fontSize:12, color:'#555', marginBottom:8 }}>{(r.pickup?.address||'—').split(',')[0]} → {(r.dropoff?.address||'—').split(',')[0]}</div>
+              <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
+                <span style={{ fontSize:11, color:'#6b7280' }}>Driver:</span>
+                <select value={r.driverId||''} onChange={e => reassign(r.id, e.target.value)}
+                  style={{ flex:1, minWidth:130, padding:'6px 8px', borderRadius:8, border:'1px solid #e2e4ed', fontSize:12, background:'#fff' }}>
+                  <option value="">— Unassigned (any driver can claim) —</option>
+                  {approvedDrivers.map(d => <option key={d.id} value={d.id}>{d.name||'Driver'}{d.isOnline?' 🟢':''}</option>)}
+                </select>
+                <button onClick={() => cancelScheduled(r.id)} style={{ padding:'6px 10px', background:'#fff0f0', color:'#dc2626', border:'1px solid #fca5a5', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>Cancel</button>
+              </div>
+            </div>
+          );
+
+          return (
+            <div>
+              <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:12 }}>Scheduled Rides Queue</div>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
+                <div style={{ background:'#fffbeb', border:'1px solid #fde047', borderRadius:12, padding:12, textAlign:'center' }}>
+                  <div style={{ fontSize:22, fontWeight:800, color:'#b45309' }}>{unassigned.length}</div>
+                  <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', letterSpacing:0.4 }}>Unassigned</div>
+                </div>
+                <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:12, padding:12, textAlign:'center' }}>
+                  <div style={{ fontSize:22, fontWeight:800, color:'#1d4ed8' }}>{assigned.length}</div>
+                  <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', letterSpacing:0.4 }}>Assigned</div>
+                </div>
+              </div>
+
+              {scheduled.length === 0 && (
+                <div style={{ background:'#fff', borderRadius:14, padding:30, textAlign:'center', color:'#888', boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
+                  <div style={{ fontSize:32, marginBottom:8 }}>🗓️</div>
+                  <div style={{ fontSize:14, fontWeight:700, color:'#374151', marginBottom:4 }}>No scheduled rides</div>
+                  <div style={{ fontSize:12 }}>Future bookings customers schedule will appear here.</div>
+                </div>
+              )}
+
+              {unassigned.length > 0 && <div style={{ fontSize:13, fontWeight:700, color:'#b45309', marginBottom:8 }}>⚠️ Needs a Driver ({unassigned.length})</div>}
+              {unassigned.map(r => <RideCard key={r.id} r={r}/>)}
+
+              {assigned.length > 0 && <div style={{ fontSize:13, fontWeight:700, color:'#1d4ed8', margin:'14px 0 8px' }}>✅ Assigned ({assigned.length})</div>}
+              {assigned.map(r => <RideCard key={r.id} r={r}/>)}
+            </div>
+          );
+        })()}
 
         {/* ══ DRIVER PERFORMANCE (Feature: Performance Report) ══ */}
         {tab === 'performance' && (
