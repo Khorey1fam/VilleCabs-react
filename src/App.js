@@ -206,6 +206,33 @@ const MAP_STYLE = [
   { featureType:'administrative.locality', elementType:'labels.text.fill', stylers:[{ color:'#e8b400' }] },
 ];
 
+// ── Rotated car marker + bearing helper (Feature: Live-tracking map polish) ────
+// Computes the compass bearing (0=N, 90=E, ...) from one lat/lng point to another,
+// so the car icon can visually point the direction the driver is actually heading.
+const calcBearing = (from, to) => {
+  if (!from || !to) return 0;
+  const toRad = d => d * Math.PI / 180;
+  const toDeg = r => r * 180 / Math.PI;
+  const lat1 = toRad(from.lat), lat2 = toRad(to.lat);
+  const dLng = toRad(to.lng - from.lng);
+  const y = Math.sin(dLng) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
+  return (toDeg(Math.atan2(y, x)) + 360) % 360;
+};
+// Top-down taxi glyph baked with a rotation transform so it visually points along the route.
+const carIconSVG = (bearing = 0, color = '#e8b400') =>
+  'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44">
+      <circle cx="22" cy="22" r="19" fill="rgba(10,15,30,0.4)"/>
+      <circle cx="22" cy="22" r="19" fill="none" stroke="white" stroke-width="1.5" opacity="0.6"/>
+      <g transform="rotate(${bearing} 22 22)">
+        <rect x="14" y="9" width="16" height="26" rx="7" fill="${color}" stroke="#1a1a2e" stroke-width="1.8"/>
+        <rect x="17" y="13" width="10" height="7" rx="2.5" fill="#1a1a2e" opacity="0.6"/>
+        <rect x="17" y="24" width="10" height="6" rx="2" fill="#1a1a2e" opacity="0.35"/>
+      </g>
+    </svg>`
+  );
+
 const s = {
   screen:    { minHeight:'100vh', fontFamily:"'Segoe UI', sans-serif", background:'#ffffff', color:'#1a1a2e', position:'relative', zIndex:1 },
   mapBg:     { display:'none' },
@@ -320,7 +347,12 @@ function VilleMap({ height = 260, center = MANCHESTER_CENTER, zoom = 14, onClick
       {markers.map((m, i) => (
         <Marker key={i} position={m.position} label={m.label} title={m.title}/>
       ))}
-      {directions && <DirectionsRenderer directions={directions} options={{ suppressMarkers:false }}/>}
+      {directions && (
+        <>
+          <DirectionsRenderer directions={directions} options={{ suppressMarkers:true, preserveViewport:true, polylineOptions:{ strokeColor:'#8b5cf6', strokeOpacity:0.35, strokeWeight:10, zIndex:1 } }}/>
+          <DirectionsRenderer directions={directions} options={{ suppressMarkers:true, preserveViewport:true, polylineOptions:{ strokeColor:'#8b5cf6', strokeOpacity:1, strokeWeight:5, zIndex:2 } }}/>
+        </>
+      )}
       {children}
     </GoogleMap>
   );
@@ -4062,6 +4094,19 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   const dropoffCoords = booking?.dropoff?.lat   ? { lat:booking.dropoff.lat,        lng:booking.dropoff.lng        } : null;
   const driverCoords  = booking?.driverLocation ? { lat:booking.driverLocation.lat, lng:booking.driverLocation.lng } : null;
 
+  // Track heading so the driver's car icon visually points the way they're travelling (Feature: Live map polish)
+  const [driverBearing, setDriverBearing] = useState(0);
+  const prevDriverCoordsRef = useRef(null);
+  useEffect(() => {
+    if (driverCoords) {
+      if (prevDriverCoordsRef.current) {
+        const moved = Math.abs(driverCoords.lat - prevDriverCoordsRef.current.lat) > 0.00003 || Math.abs(driverCoords.lng - prevDriverCoordsRef.current.lng) > 0.00003;
+        if (moved) setDriverBearing(calcBearing(prevDriverCoordsRef.current, driverCoords));
+      }
+      prevDriverCoordsRef.current = driverCoords;
+    }
+  }, [driverCoords?.lat, driverCoords?.lng]);
+
   // Compute directions: driver→pickup OR pickup→dropoff
   useEffect(() => {
     if (!window.google?.maps?.DirectionsService) return;
@@ -4226,7 +4271,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
           )}
           {driverCoords && (
             <Marker position={driverCoords} title="Your driver"
-              icon={{ url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="20" fill="#1a1a2e" stroke="#e8b400" stroke-width="3"/><text x="22" y="29" text-anchor="middle" font-size="20">🚗</text></svg>'), scaledSize:{width:44,height:44} }}/>
+              icon={{ url:carIconSVG(driverBearing, '#e8b400'), scaledSize:{width:44,height:44}, anchor:{x:22,y:22} }}/>
           )}
         </VilleMap>
         <div style={{ position:'absolute', bottom:0, left:0, right:0, background:'rgba(10,15,35,0.88)', backdropFilter:'blur(8px)', padding:'7px 14px', textAlign:'center', fontSize:12, color:YELLOW, fontWeight:500 }}>
@@ -5435,6 +5480,19 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
   const dropoffCoords = booking?.dropoff?.lat
     ? { lat: booking.dropoff.lat, lng: booking.dropoff.lng }
     : null;
+
+  // Track heading so the car icon visually points the way the driver is travelling (Feature: Live map polish)
+  const [driverBearing, setDriverBearing] = useState(0);
+  const prevDriverCoordsRef = useRef(null);
+  useEffect(() => {
+    if (driverCoords) {
+      if (prevDriverCoordsRef.current) {
+        const moved = Math.abs(driverCoords.lat - prevDriverCoordsRef.current.lat) > 0.00003 || Math.abs(driverCoords.lng - prevDriverCoordsRef.current.lng) > 0.00003;
+        if (moved) setDriverBearing(calcBearing(prevDriverCoordsRef.current, driverCoords));
+      }
+      prevDriverCoordsRef.current = driverCoords;
+    }
+  }, [driverCoords?.lat, driverCoords?.lng]);
   const markers = [
     ...(pickupCoords  ? [{ position: pickupCoords,  label:'A', title:'Pickup'   }] : []),
     ...(dropoffCoords ? [{ position: dropoffCoords, label:'B', title:'Drop-off' }] : []),
@@ -5481,11 +5539,11 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
       <VilleMap height={typeof window!=='undefined'?Math.max(320,window.innerHeight*0.45):320} center={driverCoords||pickupCoords} zoom={14} markers={arrived?[]:markers} directions={directions} expandable={true}>
         {driverCoords && !directions && (
           <Marker position={driverCoords} title="Your location"
-            icon={{ url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36"><circle cx="18" cy="18" r="16" fill="#e8b400" stroke="white" stroke-width="3"/><text x="18" y="24" text-anchor="middle" font-size="16">🚗</text></svg>'), scaledSize:{width:36,height:36} }}/>
+            icon={{ url:carIconSVG(driverBearing, '#e8b400'), scaledSize:{width:36,height:36}, anchor:{x:18,y:18} }}/>
         )}
         {driverCoords && directions && (
           <Marker position={driverCoords} title="You"
-            icon={{ url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="#e8b400" stroke="white" stroke-width="2.5"/><text x="20" y="26" text-anchor="middle" font-size="18">🚗</text></svg>'), scaledSize:{width:40,height:40} }}/>
+            icon={{ url:carIconSVG(driverBearing, '#e8b400'), scaledSize:{width:40,height:40}, anchor:{x:20,y:20} }}/>
         )}
       </VilleMap>
       <div style={{ padding:14 }}>
