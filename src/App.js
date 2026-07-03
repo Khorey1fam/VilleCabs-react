@@ -380,10 +380,18 @@ function getDirections(origin, destination) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function TopBar({ title, onBack, go, user }) {
+function TopBar({ title, onBack, go, user, showMenu }) {
   return (
     <div style={s.topBar}>
       {onBack && <button style={s.backBtn} onClick={onBack}>←</button>}
+      {showMenu && (
+        <button onClick={() => go && go(user ? (user.role === 'driver' ? 'driver-dash' : 'customer-dash') : 'splash')}
+          style={{ background:'none', border:'none', cursor:'pointer', padding:'0 6px 0 0', display:'flex', flexDirection:'column', gap:4, flexShrink:0 }}>
+          <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+          <div style={{ width:13, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+          <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+        </button>
+      )}
       <img src="/logo.png" alt="VilleCabs"
         onClick={() => go ? go(user ? (user.role === 'driver' ? 'driver-dash' : 'customer-dash') : 'splash') : null}
         style={{ height:32, width:'auto', objectFit:'contain', cursor:'pointer', flexShrink:0, maxWidth:160 }}/>
@@ -1232,7 +1240,12 @@ function TermsScreen({ go, user }) {
   return (
     <div style={{ ...s.content, background:'#f5f6fa' }}>
       <div style={{ background:'#ffffff', borderBottom:'1px solid #e5e7eb', padding:'16px 18px', display:'flex', alignItems:'center', gap:10 }}>
-        <img src="/logo.png" alt="V" onClick={() => go('customer-dash')} style={{cursor:'pointer',  width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
+        <button onClick={() => go('customer-dash')} style={{ background:'none', border:'none', cursor:'pointer', padding:'0 8px 0 0', display:'flex', flexDirection:'column', gap:4, flexShrink:0 }}>
+            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+            <div style={{ width:13, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+          </button>
+          <img src="/logo.png" alt="V" onClick={() => go('customer-dash')} style={{cursor:'pointer',  width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
         <span style={{ color:'#1a1a2e', fontSize:16, fontWeight:600 }}>VilleCabs</span>
       </div>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:100 }}>
@@ -1380,7 +1393,7 @@ function WelcomeTips({ go, user }) {
 function AboutUs({ go, user }) {
   return (
     <div style={{ ...s.content, background:'#f5f6fa' }}>
-      <TopBar title="About VilleCabs" go={go} user={user}/>
+      <TopBar title="About VilleCabs" go={go} user={user} showMenu/>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:40 }}>
         <div style={{ textAlign:'center', marginBottom:24 }}>
           <img src="/logo.png" alt="VilleCabs" onClick={() => go('customer-dash')} style={{cursor:'pointer',  width:80, height:80, borderRadius:'50%', objectFit:'cover', border:'2px solid rgba(107,33,168,0.35)', marginBottom:12 }}/>
@@ -1479,7 +1492,15 @@ function ContactUs({ go, user }) {
 
   return (
     <div style={{ ...s.content, background:'#f5f6fa' }}>
-      <div style={s.topBar}><span style={s.topTitle}>Contact Support</span></div>
+      <div style={s.topBar}>
+        <button onClick={() => go('customer-dash')} style={{ background:'none', border:'none', cursor:'pointer', padding:'0 8px 0 0', display:'flex', flexDirection:'column', gap:4, flexShrink:0 }}>
+            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+            <div style={{ width:13, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+          </button>
+          <img src="/logo.png" alt="VilleCabs" onClick={() => go('customer-dash')} style={{ height:26, objectFit:'contain', cursor:'pointer', marginRight:8 }}/>
+        <span style={s.topTitle}>Contact Support</span>
+      </div>
       <div style={{ padding:'14px 16px 0' }}>
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
           {[
@@ -1536,7 +1557,7 @@ function HelpScreen({ go, user }) {
 
   return (
     <div style={{ ...s.content, background:'#f5f6fa' }}>
-      <TopBar title="Help & Info" go={go} user={user}/>
+      <TopBar title="Help & Info" go={go} user={user} showMenu/>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto' }}>
         {[
           { icon:'📋', title:'Terms & Agreements', desc:'View VilleCabs terms of service and privacy policy', action:() => setSection('terms') },
@@ -2351,7 +2372,15 @@ function CustomerProfile({ go, user, setUser }) {
 
   return (
     <div style={{ ...s.content, background:'#f5f6fa' }}>
-      <div style={s.topBar}><span style={s.topTitle}>My Profile</span></div>
+      <div style={s.topBar}>
+        <button onClick={() => go('customer-dash')} style={{ background:'none', border:'none', cursor:'pointer', padding:'0 8px 0 0', display:'flex', flexDirection:'column', gap:4, flexShrink:0 }}>
+            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+            <div style={{ width:13, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+          </button>
+          <img src="/logo.png" alt="VilleCabs" onClick={() => go('customer-dash')} style={{ height:26, objectFit:'contain', cursor:'pointer', marginRight:8 }}/>
+        <span style={s.topTitle}>My Profile</span>
+      </div>
       <div style={{ background:'linear-gradient(135deg, #0f1a35 0%, #1a2744 100%)', padding:'24px 20px 28px', textAlign:'center' }}>
         <div style={{ width:72, height:72, borderRadius:'50%', background:'rgba(232,180,0,0.2)', border:'2px solid rgba(232,180,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:30, margin:'0 auto 12px' }}>👤</div>
         <div style={{ fontSize:20, fontWeight:700, color:'#ffffff', marginBottom:2 }}>{user?.name}</div>
@@ -2467,7 +2496,7 @@ function CustomerSettings({ go, user, setUser }) {
 
   return (
     <div style={{ ...s.content, background:'#f5f6fa' }}>
-      <TopBar title="Settings" go={go} user={user}/>
+      <TopBar title="Settings" go={go} user={user} showMenu/>
       <div style={{ padding:20, maxWidth:420, margin:'0 auto' }}>
 
         {/* Change Password */}
@@ -4286,7 +4315,12 @@ function DriverTermsScreen({ go, user }) {
   return (
     <div style={{ ...s.content, background:'#f5f6fa' }}>
       <div style={{ background:'#ffffff', borderBottom:'1px solid #e5e7eb', padding:'16px 18px', display:'flex', alignItems:'center', gap:10 }}>
-        <img src="/logo.png" alt="V" onClick={() => go('driver-dash')} style={{cursor:'pointer',  width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
+        <button onClick={() => go('driver-dash')} style={{ background:'none', border:'none', cursor:'pointer', padding:'0 8px 0 0', display:'flex', flexDirection:'column', gap:4, flexShrink:0 }}>
+            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+            <div style={{ width:13, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+          </button>
+          <img src="/logo.png" alt="V" onClick={() => go('driver-dash')} style={{cursor:'pointer',  width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
         <span style={{ color:'#1a1a2e', fontSize:16, fontWeight:600 }}>VilleCabs — Driver Agreement</span>
       </div>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:100 }}>
@@ -4429,7 +4463,7 @@ function DriverWelcomeTips({ go, user }) {
 function DriverAboutUs({ go, user }) {
   return (
     <div style={{ ...s.content, background:'#f5f6fa' }}>
-      <TopBar title="About VilleCabs" go={go} user={user}/>
+      <TopBar title="About VilleCabs" go={go} user={user} showMenu/>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:40 }}>
         <div style={{ textAlign:'center', marginBottom:24 }}>
           <img src="/logo.png" alt="VilleCabs" onClick={() => go('driver-dash')} style={{cursor:'pointer',  width:80, height:80, borderRadius:'50%', objectFit:'cover', border:'2px solid rgba(107,33,168,0.35)', marginBottom:12 }}/>
@@ -4489,7 +4523,7 @@ function DriverContactUs({ go, user }) {
 
   return (
     <div style={{ ...s.content, background:'#f5f6fa' }}>
-      <TopBar title="Contact Us" go={go} user={user}/>
+      <TopBar title="Contact Us" go={go} user={user} showMenu/>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:40 }}>
         <div style={{ background:'rgba(107,33,168,0.06)', border:'0.5px solid rgba(107,33,168,0.18)', borderRadius:12, padding:14, marginBottom:20, display:'flex', alignItems:'center', gap:12 }}>
           <span style={{ fontSize:28 }}>💬</span>
@@ -4518,7 +4552,7 @@ function DriverHelp({ go, user }) {
   if (section === 'tips')  return <DriverWelcomeTips go={() => setSection(null)} user={user}/>;
   return (
     <div style={{ ...s.content, background:'#f5f6fa' }}>
-      <TopBar title="Help & Info" go={go} user={user}/>
+      <TopBar title="Help & Info" go={go} user={user} showMenu/>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto' }}>
         {[
           { icon:'📋', title:'Driver Agreement', desc:'View VilleCabs driver terms and service fee details', action:() => setSection('terms') },
@@ -5532,7 +5566,12 @@ function DriverProfile({ go, user }) {
       {/* Header */}
       <div style={{ background:'#fff', padding:'10px 16px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', position:'sticky', top:0, zIndex:10 }}>
         
-        <img src="/logo.png" onClick={() => go('driver-dash')} style={{cursor:'pointer',  height:26, objectFit:'contain' }} alt="VilleCabs"/>
+        <button onClick={() => go('driver-dash')} style={{ background:'none', border:'none', cursor:'pointer', padding:'0 8px 0 0', display:'flex', flexDirection:'column', gap:4, flexShrink:0 }}>
+            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+            <div style={{ width:13, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+          </button>
+          <img src="/logo.png" onClick={() => go('driver-dash')} style={{cursor:'pointer',  height:26, objectFit:'contain' }} alt="VilleCabs"/>
         <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:4 }}>My Profile</span>
         <button onClick={() => setEditing(!editing)} style={{ marginLeft:'auto', padding:'6px 14px', background:editing?'#f3f4f6':'#6b21a8', color:editing?'#555':'#fff', border:'none', borderRadius:20, fontSize:12, fontWeight:600, cursor:'pointer' }}>
           {editing ? 'Cancel' : '✏️ Edit'}
@@ -5726,7 +5765,7 @@ function DriverSettings({ go, user, setUser }) {
 
   return (
     <div style={{ ...s.content, background:'#f5f6fa' }}>
-      <TopBar title="Settings" go={go} user={user}/>
+      <TopBar title="Settings" go={go} user={user} showMenu/>
       <div style={{ padding:20, maxWidth:420, margin:'0 auto' }}>
 
         {/* Change Password */}
@@ -5986,7 +6025,12 @@ function PaymentsPage({ go }) {
     <div style={{ ...s.content, background:'#f5f6fa' }}>
       <div style={s.topBar}>
         
-        <img src="/logo.png" alt="VilleCabs" onClick={() => go('customer-dash')} style={{ height:28, objectFit:'contain', cursor:'pointer', flexShrink:0, marginRight:10 }}/>
+        <button onClick={() => go('customer-dash')} style={{ background:'none', border:'none', cursor:'pointer', padding:'0 8px 0 0', display:'flex', flexDirection:'column', gap:4, flexShrink:0 }}>
+            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+            <div style={{ width:13, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+          </button>
+          <img src="/logo.png" alt="VilleCabs" onClick={() => go('customer-dash')} style={{ height:28, objectFit:'contain', cursor:'pointer', flexShrink:0, marginRight:10 }}/>
         <span style={s.topTitle}>Payments</span>
       </div>
       <div style={{ padding:20 }}>
@@ -6042,7 +6086,12 @@ function PromotionsPage({ go, user }) {
     <div style={{ ...s.content, background:'#f5f6fa' }}>
       <div style={s.topBar}>
         
-        <img src="/logo.png" alt="VilleCabs" onClick={() => go('customer-dash')} style={{ height:28, objectFit:'contain', cursor:'pointer', flexShrink:0, marginRight:10 }}/>
+        <button onClick={() => go('customer-dash')} style={{ background:'none', border:'none', cursor:'pointer', padding:'0 8px 0 0', display:'flex', flexDirection:'column', gap:4, flexShrink:0 }}>
+            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+            <div style={{ width:13, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+          </button>
+          <img src="/logo.png" alt="VilleCabs" onClick={() => go('customer-dash')} style={{ height:28, objectFit:'contain', cursor:'pointer', flexShrink:0, marginRight:10 }}/>
         <span style={s.topTitle}>Promotions</span>
       </div>
       <div style={{ padding:20 }}>
@@ -6102,7 +6151,12 @@ function SafetyCentre({ go }) {
     <div style={{ ...s.content, background:'#f5f6fa' }}>
       <div style={s.topBar}>
         
-        <img src="/logo.png" alt="VilleCabs" onClick={() => go('customer-dash')} style={{ height:28, objectFit:'contain', cursor:'pointer', flexShrink:0, marginRight:10 }}/>
+        <button onClick={() => go('customer-dash')} style={{ background:'none', border:'none', cursor:'pointer', padding:'0 8px 0 0', display:'flex', flexDirection:'column', gap:4, flexShrink:0 }}>
+            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+            <div style={{ width:13, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+          </button>
+          <img src="/logo.png" alt="VilleCabs" onClick={() => go('customer-dash')} style={{ height:28, objectFit:'contain', cursor:'pointer', flexShrink:0, marginRight:10 }}/>
         <span style={s.topTitle}>Safety Centre</span>
       </div>
       <div style={{ padding:20 }}>
@@ -6983,7 +7037,12 @@ function DriverEarnings({ go, user }) {
 
       <div style={{ background:'#111827', padding:'12px 16px', display:'flex', alignItems:'center', gap:12, boxShadow:'0 2px 12px rgba(0,0,0,0.3)', flexShrink:0 }}>
         <button onClick={() => go('driver-dash')} style={{ background:'none', border:'none', color:'#fff', fontSize:20, cursor:'pointer' }}>←</button>
-        <img src="/logo.png" alt="VilleCabs" onClick={() => go('driver-dash')} style={{ height:26, objectFit:'contain', cursor:'pointer' }}/>
+        <button onClick={() => go('driver-dash')} style={{ background:'none', border:'none', cursor:'pointer', padding:0, display:'flex', flexDirection:'column', gap:4, flexShrink:0 }}>
+        <div style={{ width:18, height:2, background:'#fff', borderRadius:1 }}/>
+        <div style={{ width:13, height:2, background:'#fff', borderRadius:1 }}/>
+        <div style={{ width:18, height:2, background:'#fff', borderRadius:1 }}/>
+      </button>
+      <img src="/logo.png" alt="VilleCabs" onClick={() => go('driver-dash')} style={{ height:26, objectFit:'contain', cursor:'pointer' }}/>
         <span style={{ color:'#ffffff', fontSize:14, fontWeight:700, flex:1, textAlign:'center' }}>My Earnings</span>
         <div style={{ width:60 }}/>
       </div>
@@ -7131,7 +7190,7 @@ function PrivacyPolicy({ go, user }) {
   ];
   return (
     <div style={{ ...s.content, background:'#f5f6fa' }}>
-      <TopBar title="Privacy Policy" onBack={() => go(user ? (user.role==='driver'?'driver-dash':'customer-dash') : 'splash')} go={go} user={user}/>
+      <TopBar title="Privacy Policy" onBack={() => go(user ? (user.role==='driver'?'driver-dash':'customer-dash') : 'splash')} go={go} user={user} showMenu/>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:44 }}>
 
         {/* Header */}
@@ -7225,7 +7284,12 @@ function DriverDocuments({ go, user }) {
   return (
     <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
       <div style={{ background:'#fff', padding:'8px 14px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #e5e7eb', position:'sticky', top:0, zIndex:10 }}>
-        <img src="/logo.png" onClick={() => go('driver-dash')} style={{cursor:'pointer',  height:26, objectFit:'contain' }} alt="VilleCabs"/>
+        <button onClick={() => go('driver-dash')} style={{ background:'none', border:'none', cursor:'pointer', padding:'0 8px 0 0', display:'flex', flexDirection:'column', gap:4, flexShrink:0 }}>
+            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+            <div style={{ width:13, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+          </button>
+          <img src="/logo.png" onClick={() => go('driver-dash')} style={{cursor:'pointer',  height:26, objectFit:'contain' }} alt="VilleCabs"/>
         <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:4 }}>My Documents</span>
       </div>
       <div style={{ padding:'14px 14px 90px' }}>
@@ -7265,7 +7329,12 @@ function DriverNotifications({ go, user }) {
   return (
     <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
       <div style={{ background:'#fff', padding:'8px 14px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #e5e7eb', position:'sticky', top:0, zIndex:10 }}>
-        <img src="/logo.png" onClick={() => go('driver-dash')} style={{cursor:'pointer',  height:26, objectFit:'contain' }} alt="VilleCabs"/>
+        <button onClick={() => go('driver-dash')} style={{ background:'none', border:'none', cursor:'pointer', padding:'0 8px 0 0', display:'flex', flexDirection:'column', gap:4, flexShrink:0 }}>
+            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+            <div style={{ width:13, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+          </button>
+          <img src="/logo.png" onClick={() => go('driver-dash')} style={{cursor:'pointer',  height:26, objectFit:'contain' }} alt="VilleCabs"/>
         <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:4 }}>Notifications</span>
         {unread>0&&<div style={{ background:'#6b21a8', color:'#fff', borderRadius:10, fontSize:10, fontWeight:700, padding:'2px 7px' }}>{unread}</div>}
         <button onClick={()=>setNotifs(p=>p.map(n=>({...n,read:true})))} style={{ marginLeft:'auto', background:'none', border:'none', fontSize:11, color:'#6b21a8', cursor:'pointer', fontWeight:600 }}>Mark all read</button>
