@@ -1899,7 +1899,7 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId }) {
                 <button onClick={() => setMenuOpen(false)} style={{ background:'rgba(255,255,255,0.1)', border:'none', color:'#ffffff', width:34, height:34, borderRadius:'50%', cursor:'pointer', fontSize:16 }}>✕</button>
               </div>
               <div style={{ fontSize:18, fontWeight:700, color:'#ffffff', marginBottom:2 }}>{user?.name}</div>
-              <div style={{ fontSize:12, color:'#6b7280', marginBottom:10 }}>{user?.email}</div>
+              <div style={{ fontSize:12, color:'#c3c9d6', marginBottom:10 }}>{user?.email}</div>
               <div style={{ display:'inline-flex', alignItems:'center', gap:5, background:'rgba(26,158,90,0.15)', border:'1px solid rgba(26,158,90,0.3)', borderRadius:20, padding:'4px 12px' }}>
                 <div style={{ width:6, height:6, borderRadius:'50%', background:'#1a9e5a' }}/>
                 <span style={{ fontSize:11, color:'#1a9e5a', fontWeight:600 }}>Verified Rider</span>
@@ -1908,15 +1908,15 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId }) {
               <div style={{ display:'flex', gap:16, marginTop:14 }}>
                 <div style={{ textAlign:'center' }}>
                   <div style={{ fontSize:16, fontWeight:700, color:'#e8b400' }}>{history.length}</div>
-                  <div style={{ fontSize:9, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.5 }}>Rides</div>
+                  <div style={{ fontSize:9, color:'rgba(255,255,255,0.72)', textTransform:'uppercase', letterSpacing:0.5 }}>Rides</div>
                 </div>
                 <div style={{ textAlign:'center' }}>
                   <div style={{ fontSize:16, fontWeight:700, color:'#e8b400' }}>J${totalSpent.toLocaleString()}</div>
-                  <div style={{ fontSize:9, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.5 }}>Spent</div>
+                  <div style={{ fontSize:9, color:'rgba(255,255,255,0.72)', textTransform:'uppercase', letterSpacing:0.5 }}>Spent</div>
                 </div>
                 <div style={{ textAlign:'center' }}>
                   <div style={{ fontSize:16, fontWeight:700, color:'#e8b400' }}>⭐ 5.0</div>
-                  <div style={{ fontSize:9, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.5 }}>Rating</div>
+                  <div style={{ fontSize:9, color:'rgba(255,255,255,0.72)', textTransform:'uppercase', letterSpacing:0.5 }}>Rating</div>
                 </div>
               </div>
             </div>
@@ -1942,7 +1942,7 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId }) {
                   onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,0.06)'}
                   onMouseLeave={e => e.currentTarget.style.background='transparent'}>
                   <span style={{ fontSize:18, width:26, textAlign:'center' }}>{icon}</span>
-                  <span style={{ fontSize:14, color:'rgba(255,255,255,0.85)', fontWeight:500 }}>{label}</span>
+                  <span style={{ fontSize:14, color:'rgba(255,255,255,0.95)', fontWeight:500 }}>{label}</span>
                 </div>
               ))}
               {/* Divider */}
@@ -1956,7 +1956,7 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId }) {
                   onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,0.04)'}
                   onMouseLeave={e => e.currentTarget.style.background='transparent'}>
                   <span style={{ fontSize:18, width:26, textAlign:'center' }}>{icon}</span>
-                  <span style={{ fontSize:13, color:'rgba(255,255,255,0.45)' }}>{label}</span>
+                  <span style={{ fontSize:13, color:'rgba(255,255,255,0.8)' }}>{label}</span>
                 </div>
               ))}
             </div>
@@ -4723,7 +4723,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
             <div style={{ background:'linear-gradient(135deg,#6b21a8,#4c1d95)', padding:'28px 20px 20px' }}>
               <div style={{ width:52, height:52, borderRadius:'50%', background:'rgba(255,255,255,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, marginBottom:10 }}>👤</div>
               <div style={{ fontSize:16, fontWeight:700, color:'#fff' }}>{user?.name||'Driver'}</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}>{user?.email||''}</div>
+              <div style={{ fontSize:12, color:'rgba(255,255,255,0.85)', marginTop:2 }}>{user?.email||''}</div>
             </div>
             <div style={{ flex:1, overflowY:'auto', padding:'0 0 24px', WebkitOverflowScrolling:'touch' }}>
               {[
