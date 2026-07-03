@@ -1145,11 +1145,9 @@ function CustomerLogin({ go, setUser, user }) {
     setLoading(true);
     try {
       const cred = await signInWithEmailAndPassword(auth, email, password);
-      // Admins go straight to the admin dashboard, regardless of any customer doc
+      // Admins go straight to the dedicated /admin dashboard page (AdminPanel)
       if (['daviskeneile@gmail.com','admin@villecabs.com'].includes((cred.user.email||'').toLowerCase())) {
-        setUser({ uid:cred.user.uid, name:'Admin', email:cred.user.email, role:'admin' });
-        go('admin');
-        setLoading(false);
+        window.location.href = '/admin';
         return;
       }
       let data = {};
@@ -8228,10 +8226,12 @@ export default function App() {
       }
       // Logged in - restore session
       try {
-        // Admins bypass customer/driver lookup entirely
+        // Admins are handled by the dedicated /admin page — send them there
         if (['daviskeneile@gmail.com','admin@villecabs.com'].includes((fu.email||'').toLowerCase())) {
-          setUser({ uid:fu.uid, name:'Admin', email:fu.email, role:'admin' });
-          setScreen('admin');
+          if (!window.location.pathname.startsWith('/admin')) {
+            window.location.href = '/admin';
+            return;
+          }
           clearTimeout(safety);
           done = true;
           setTimeout(() => setLoading(false), 100);
