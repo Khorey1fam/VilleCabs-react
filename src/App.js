@@ -1230,17 +1230,17 @@ function TermsScreen({ go, user }) {
   };
 
   return (
-    <div style={{ ...s.content, background:'#0f1a35' }}>
-      <div style={{ background:'rgba(10,15,35,0.92)', padding:'16px 18px', backdropFilter:'blur(10px)', display:'flex', alignItems:'center', gap:10 }}>
+    <div style={{ ...s.content, background:'#f5f6fa' }}>
+      <div style={{ background:'#ffffff', borderBottom:'1px solid #e5e7eb', padding:'16px 18px', display:'flex', alignItems:'center', gap:10 }}>
         <img src="/logo.png" alt="V" onClick={() => go('customer-dash')} style={{cursor:'pointer',  width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
-        <span style={{ color:WHITE, fontSize:16, fontWeight:600 }}>VilleCabs</span>
+        <span style={{ color:'#1a1a2e', fontSize:16, fontWeight:600 }}>VilleCabs</span>
       </div>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:100 }}>
-        <h2 style={{ fontSize:20, fontWeight:600, color:WHITE, marginBottom:4 }}>Terms & Agreements</h2>
+        <h2 style={{ fontSize:20, fontWeight:600, color:'#1a1a2e', marginBottom:4 }}>Terms & Agreements</h2>
         <p style={{ fontSize:13, color:'#6b7280', marginBottom:20 }}>Please read and agree to continue</p>
 
         {/* Terms Box */}
-        <div style={{ background:'rgba(15,20,40,0.8)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:14, padding:18, marginBottom:16, maxHeight:300, overflowY:'auto' }}>
+        <div style={{ background:'#ffffff', border:'0.5px solid #e5e7eb', borderRadius:14, padding:18, marginBottom:16, maxHeight:300, overflowY:'auto' }}>
           <div style={{ fontSize:16, fontWeight:800, color:'#6b21a8', marginBottom:12 }}>VilleCabs Terms of Service</div>
           {[
             ['1. Acceptance', 'By using VilleCabs you agree to these terms. If you do not agree, please do not use the service.'],
@@ -1255,8 +1255,8 @@ function TermsScreen({ go, user }) {
             ['10. Contact', 'For questions or concerns contact us via WhatsApp at +1876-515-8113 or email daviskeneile@gmail.com'],
           ].map(([title, text], i) => (
             <div key={i} style={{ marginBottom:14 }}>
-              <div style={{ fontSize:12, fontWeight:600, color:WHITE, marginBottom:4 }}>{title}</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.55)', lineHeight:1.7 }}>{text}</div>
+              <div style={{ fontSize:12, fontWeight:600, color:'#1a1a2e', marginBottom:4 }}>{title}</div>
+              <div style={{ fontSize:12, color:'#4b5563', lineHeight:1.7 }}>{text}</div>
             </div>
           ))}
         </div>
@@ -1268,11 +1268,11 @@ function TermsScreen({ go, user }) {
           [agreed3, setAgreed3, 'I agree to the VilleCabs Privacy Policy and consent to my data being used to provide the service'],
         ].map(([val, setter, label], i) => (
           <div key={i} onClick={() => setter(!val)}
-            style={{ display:'flex', alignItems:'flex-start', gap:12, padding:'12px 14px', background:'rgba(15,20,40,0.6)', border:`1px solid ${val?YELLOW:'rgba(255,255,255,0.1)'}`, borderRadius:10, marginBottom:10, cursor:'pointer' }}>
-            <div style={{ width:22, height:22, borderRadius:6, border:`2px solid ${val?YELLOW:'rgba(255,255,255,0.3)'}`, background:val?YELLOW:'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, marginTop:1 }}>
-              {val && <span style={{ color:DARK, fontSize:13, fontWeight:700 }}>✓</span>}
+            style={{ display:'flex', alignItems:'flex-start', gap:12, padding:'12px 14px', background:'#ffffff', border:`1px solid ${val?'#6b21a8':'#e2e4ed'}`, borderRadius:10, marginBottom:10, cursor:'pointer' }}>
+            <div style={{ width:22, height:22, borderRadius:6, border:`2px solid ${val?'#6b21a8':'#c7cbd6'}`, background:val?'#6b21a8':'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, marginTop:1 }}>
+              {val && <span style={{ color:'#ffffff', fontSize:13, fontWeight:700 }}>✓</span>}
             </div>
-            <span style={{ fontSize:13, color:'rgba(255,255,255,0.8)', lineHeight:1.5 }}>{label}</span>
+            <span style={{ fontSize:13, color:'#374151', lineHeight:1.5 }}>{label}</span>
           </div>
         ))}
 
@@ -1379,13 +1379,13 @@ function WelcomeTips({ go, user }) {
 // ── ABOUT US ──────────────────────────────────────────────────────────────────
 function AboutUs({ go, user }) {
   return (
-    <div style={{ ...s.content, background:'#0f1a35' }}>
+    <div style={{ ...s.content, background:'#f5f6fa' }}>
       <TopBar title="About VilleCabs" go={go} user={user}/>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:40 }}>
         <div style={{ textAlign:'center', marginBottom:24 }}>
-          <img src="/logo.png" alt="VilleCabs" onClick={() => go('customer-dash')} style={{cursor:'pointer',  width:80, height:80, borderRadius:'50%', objectFit:'cover', border:'2px solid rgba(232,180,0,0.4)', marginBottom:12 }}/>
-          <h2 style={{ fontSize:20, fontWeight:700, color:WHITE, marginBottom:4 }}>Welcome to VilleCabs</h2>
-          <p style={{ fontSize:13, color:YELLOW, fontStyle:'italic' }}>Your city. Your ride. Your way.</p>
+          <img src="/logo.png" alt="VilleCabs" onClick={() => go('customer-dash')} style={{cursor:'pointer',  width:80, height:80, borderRadius:'50%', objectFit:'cover', border:'2px solid rgba(107,33,168,0.35)', marginBottom:12 }}/>
+          <h2 style={{ fontSize:20, fontWeight:700, color:'#1a1a2e', marginBottom:4 }}>Welcome to VilleCabs</h2>
+          <p style={{ fontSize:13, color:'#6b21a8', fontStyle:'italic' }}>Your city. Your ride. Your way.</p>
         </div>
 
         {[
@@ -1393,13 +1393,13 @@ function AboutUs({ go, user }) {
           { text:"We're bringing the ease and flexibility of app-based transportation to Mandeville while supporting local drivers and creating new earning opportunities within our parish." },
           { text:"Whether you need a quick ride across town, transportation to work, school, appointments, shopping, or getting home safely — VilleCabs is designed to make moving around easier." },
         ].map((p,i) => (
-          <p key={i} style={{ fontSize:13, color:'rgba(255,255,255,0.7)', lineHeight:1.8, marginBottom:14 }}>{p.text}</p>
+          <p key={i} style={{ fontSize:13, color:'#374151', lineHeight:1.8, marginBottom:14 }}>{p.text}</p>
         ))}
 
-        <div style={{ background:'rgba(232,180,0,0.08)', border:'0.5px solid rgba(232,180,0,0.25)', borderRadius:14, padding:16, marginBottom:16 }}>
+        <div style={{ background:'rgba(107,33,168,0.06)', border:'0.5px solid rgba(107,33,168,0.2)', borderRadius:14, padding:16, marginBottom:16 }}>
           <div style={{ fontSize:16, fontWeight:800, color:'#6b21a8', marginBottom:10 }}>Why Choose VilleCabs?</div>
           {['Fast and reliable rides','Local drivers who know Mandeville','Safe and convenient transportation','Flexible earning opportunities for drivers','Built with the community in mind'].map((item,i) => (
-            <div key={i} style={{ fontSize:13, color:'rgba(255,255,255,0.7)', marginBottom:6, display:'flex', gap:8 }}>
+            <div key={i} style={{ fontSize:13, color:'#374151', marginBottom:6, display:'flex', gap:8 }}>
               <span style={{ color:GREEN }}>✔</span>{item}
             </div>
           ))}
@@ -1407,20 +1407,20 @@ function AboutUs({ go, user }) {
 
         <div style={{ background:'rgba(26,158,90,0.08)', border:'0.5px solid rgba(26,158,90,0.25)', borderRadius:14, padding:16, marginBottom:16 }}>
           <div style={{ fontSize:14, fontWeight:600, color:GREEN, marginBottom:8 }}>Our Mission</div>
-          <p style={{ fontSize:13, color:'rgba(255,255,255,0.7)', lineHeight:1.7, margin:0 }}>To provide safe, dependable, and affordable transportation while empowering local drivers and improving how people move across Mandeville and Manchester.</p>
+          <p style={{ fontSize:13, color:'#374151', lineHeight:1.7, margin:0 }}>To provide safe, dependable, and affordable transportation while empowering local drivers and improving how people move across Mandeville and Manchester.</p>
         </div>
 
         <div style={{ background:'rgba(168,139,250,0.08)', border:'0.5px solid rgba(168,139,250,0.25)', borderRadius:14, padding:16, marginBottom:20 }}>
           <div style={{ fontSize:14, fontWeight:600, color:'#a78bfa', marginBottom:8 }}>Our Vision</div>
-          <p style={{ fontSize:13, color:'rgba(255,255,255,0.7)', lineHeight:1.7, margin:0 }}>To become the leading ride-hailing service in Manchester and expand transportation access across Jamaica through innovation, trust, and community.</p>
+          <p style={{ fontSize:13, color:'#374151', lineHeight:1.7, margin:0 }}>To become the leading ride-hailing service in Manchester and expand transportation access across Jamaica through innovation, trust, and community.</p>
         </div>
 
-        <p style={{ fontSize:13, color:YELLOW, textAlign:'center', fontStyle:'italic', marginBottom:20 }}>Ride local. Move smarter. Grow together with VilleCabs.</p>
+        <p style={{ fontSize:13, color:'#6b21a8', textAlign:'center', fontStyle:'italic', marginBottom:20 }}>Ride local. Move smarter. Grow together with VilleCabs.</p>
 
-        <div style={{ background:'rgba(15,20,40,0.7)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, padding:14, fontSize:13, color:'rgba(255,255,255,0.6)', lineHeight:2 }}>
+        <div style={{ background:'#ffffff', border:'0.5px solid #e5e7eb', borderRadius:12, padding:14, fontSize:13, color:'#4b5563', lineHeight:2 }}>
           <div>📍 Serving Mandeville & Manchester, Jamaica</div>
           <div>🌐 villecabs.com</div>
-          <div>📞 Call / WhatsApp: <a href="https://wa.me/18765158113+1876-515-8113" style={{ color:YELLOW, textDecoration:'none' }}>+1876-515-8113</a></div>
+          <div>📞 Call / WhatsApp: <a href="https://wa.me/18765158113+1876-515-8113" style={{ color:'#6b21a8', textDecoration:'none' }}>+1876-515-8113</a></div>
         </div>
       </div>
       <Footer go={go}/>
@@ -1478,7 +1478,7 @@ function ContactUs({ go, user }) {
   };
 
   return (
-    <div style={{ ...s.content, background:'#0f1a35' }}>
+    <div style={{ ...s.content, background:'#f5f6fa' }}>
       <div style={s.topBar}><span style={s.topTitle}>Contact Support</span></div>
       <div style={{ padding:'14px 16px 0' }}>
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
@@ -1497,16 +1497,16 @@ function ContactUs({ go, user }) {
       </div>
       <div style={{ padding:'0 18px 40px', maxWidth:480, margin:'0 auto' }}>
 
-        <div style={{ background:'rgba(232,180,0,0.08)', border:'0.5px solid rgba(232,180,0,0.2)', borderRadius:12, padding:14, marginBottom:20, display:'flex', alignItems:'center', gap:12 }}>
+        <div style={{ background:'rgba(107,33,168,0.06)', border:'0.5px solid rgba(107,33,168,0.18)', borderRadius:12, padding:14, marginBottom:20, display:'flex', alignItems:'center', gap:12 }}>
           <span style={{ fontSize:28 }}>💬</span>
           <div>
-            <div style={{ fontSize:13, color:WHITE, fontWeight:500 }}>WhatsApp us directly</div>
+            <div style={{ fontSize:13, color:'#1a1a2e', fontWeight:500 }}>WhatsApp us directly</div>
             <a href="https://wa.me/18765158113+1876-515-8113" target="_blank" rel="noopener noreferrer"
-              style={{ fontSize:13, color:YELLOW, textDecoration:'none' }}>+1876-515-8113</a>
+              style={{ fontSize:13, color:'#6b21a8', textDecoration:'none' }}>+1876-515-8113</a>
           </div>
         </div>
 
-        <div style={{ fontSize:14, fontWeight:500, color:WHITE, marginBottom:14 }}>Send us a message</div>
+        <div style={{ fontSize:14, fontWeight:500, color:'#1a1a2e', marginBottom:14 }}>Send us a message</div>
         {error   && <div style={s.errBox}>⚠️ {error}</div>}
         {success && <div style={s.successBox}>✅ {success}</div>}
 
@@ -1535,7 +1535,7 @@ function HelpScreen({ go, user }) {
   if (section === 'tips')  return <WelcomeTips go={(s) => s==='customer-dash'?setSection(null):go(s)} user={user} readOnly/>;
 
   return (
-    <div style={{ ...s.content, background:'#0f1a35' }}>
+    <div style={{ ...s.content, background:'#f5f6fa' }}>
       <TopBar title="Help & Info" go={go} user={user}/>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto' }}>
         {[
@@ -1545,13 +1545,13 @@ function HelpScreen({ go, user }) {
           { icon:'ℹ️', title:'About VilleCabs', desc:'Learn more about who we are', action:() => go('about-us') },
         ].map((item,i) => (
           <div key={i} onClick={item.action}
-            style={{ background:'rgba(15,20,40,0.7)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, padding:'16px 18px', marginBottom:10, display:'flex', alignItems:'center', gap:14, cursor:'pointer' }}>
-            <div style={{ fontSize:26, width:44, height:44, background:'rgba(255,255,255,0.05)', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>{item.icon}</div>
+            style={{ background:'#ffffff', border:'0.5px solid #e5e7eb', borderRadius:12, padding:'16px 18px', marginBottom:10, display:'flex', alignItems:'center', gap:14, cursor:'pointer' }}>
+            <div style={{ fontSize:26, width:44, height:44, background:'#f5f0ff', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>{item.icon}</div>
             <div style={{ flex:1 }}>
-              <div style={{ fontSize:14, fontWeight:500, color:WHITE }}>{item.title}</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.45)', marginTop:2 }}>{item.desc}</div>
+              <div style={{ fontSize:14, fontWeight:500, color:'#1a1a2e' }}>{item.title}</div>
+              <div style={{ fontSize:12, color:'#6b7280', marginTop:2 }}>{item.desc}</div>
             </div>
-            <span style={{ color:'rgba(255,255,255,0.3)', fontSize:18 }}>›</span>
+            <span style={{ color:'#8a93a6', fontSize:18 }}>›</span>
           </div>
         ))}
       </div>
@@ -2466,13 +2466,13 @@ function CustomerSettings({ go, user, setUser }) {
   };
 
   return (
-    <div style={{ ...s.content, background:'#0f1a35' }}>
+    <div style={{ ...s.content, background:'#f5f6fa' }}>
       <TopBar title="Settings" go={go} user={user}/>
       <div style={{ padding:20, maxWidth:420, margin:'0 auto' }}>
 
         {/* Change Password */}
-        <div style={{ background:'rgba(15,20,40,0.8)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:16, marginBottom:14 }}>
-          <div style={{ fontSize:15, fontWeight:500, color:WHITE, marginBottom:14 }}>🔒 Change Password</div>
+        <div style={{ background:'#ffffff', border:'0.5px solid #e5e7eb', borderRadius:14, padding:16, marginBottom:14 }}>
+          <div style={{ fontSize:15, fontWeight:500, color:'#1a1a2e', marginBottom:14 }}>🔒 Change Password</div>
           {errPass && <div style={s.errBox}>{errPass}</div>}
           {msgPass && <div style={s.successBox}>{msgPass}</div>}
           <label style={s.lbl}>New Password</label>
@@ -2485,9 +2485,9 @@ function CustomerSettings({ go, user, setUser }) {
         </div>
 
         {/* Change Email */}
-        <div style={{ background:'rgba(15,20,40,0.8)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:16, marginBottom:14 }}>
-          <div style={{ fontSize:15, fontWeight:500, color:WHITE, marginBottom:4 }}>✉️ Change Email</div>
-          <div style={{ fontSize:12, color:'rgba(255,255,255,0.4)', marginBottom:14 }}>Current: {user?.email}</div>
+        <div style={{ background:'#ffffff', border:'0.5px solid #e5e7eb', borderRadius:14, padding:16, marginBottom:14 }}>
+          <div style={{ fontSize:15, fontWeight:500, color:'#1a1a2e', marginBottom:4 }}>✉️ Change Email</div>
+          <div style={{ fontSize:12, color:'#6b7280', marginBottom:14 }}>Current: {user?.email}</div>
           {errEmail && <div style={s.errBox}>{errEmail}</div>}
           {msgEmail && <div style={s.successBox}>{msgEmail}</div>}
           <label style={s.lbl}>New Email Address</label>
@@ -2498,21 +2498,21 @@ function CustomerSettings({ go, user, setUser }) {
         </div>
 
         {/* Notifications */}
-        <div style={{ background:'rgba(15,20,40,0.8)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:16, marginBottom:14 }}>
-          <div style={{ fontSize:15, fontWeight:500, color:WHITE, marginBottom:12 }}>🔔 Notifications</div>
+        <div style={{ background:'#ffffff', border:'0.5px solid #e5e7eb', borderRadius:14, padding:16, marginBottom:14 }}>
+          <div style={{ fontSize:15, fontWeight:500, color:'#1a1a2e', marginBottom:12 }}>🔔 Notifications</div>
           <div style={{ fontSize:13, color:'#6b7280' }}>You will receive updates when your driver accepts your ride and when the ride is completed.</div>
         </div>
 
         {/* Logout */}
-        <div style={{ background:'rgba(15,20,40,0.8)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:16, marginBottom:14 }}>
-          <div style={{ fontSize:15, fontWeight:500, color:WHITE, marginBottom:12 }}>🚪 Logout</div>
+        <div style={{ background:'#ffffff', border:'0.5px solid #e5e7eb', borderRadius:14, padding:16, marginBottom:14 }}>
+          <div style={{ fontSize:15, fontWeight:500, color:'#1a1a2e', marginBottom:12 }}>🚪 Logout</div>
           <button style={s.btnO} onClick={handleLogout}>Log out of VilleCabs</button>
         </div>
 
         {/* Deactivate */}
         <div style={{ background:'rgba(226,75,74,0.08)', border:'0.5px solid rgba(226,75,74,0.2)', borderRadius:14, padding:16 }}>
           <div style={{ fontSize:15, fontWeight:500, color:'#f09595', marginBottom:6 }}>⚠️ Deactivate Account</div>
-          <div style={{ fontSize:12, color:'rgba(255,255,255,0.4)', marginBottom:14, lineHeight:1.6 }}>
+          <div style={{ fontSize:12, color:'#6b7280', marginBottom:14, lineHeight:1.6 }}>
             Deactivating your account will remove your access to VilleCabs. Contact support to reactivate.
           </div>
           <button onClick={handleDeactivate} disabled={loadingDeact}
@@ -3460,13 +3460,13 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
         )}
 
         {/* ── Ride timing: now or scheduled (Feature: Scheduled Rides) ── */}
-        <div style={{ background:'rgba(255,255,255,0.04)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:12, padding:'12px 14px', marginBottom:10 }}>
+        <div style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:12, padding:'12px 14px', marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.05)' }}>
           <div style={{ display:'flex', gap:8, marginBottom: rideTime==='later' ? 10 : 0 }}>
             {[['now','🚕 Ride Now'],['later','🗓️ Schedule']].map(([k,l]) => (
               <button key={k} onClick={() => setRideTime(k)}
-                style={{ flex:1, padding:'9px 0', borderRadius:9, border: rideTime===k ? 'none' : '1px solid rgba(255,255,255,0.25)', fontWeight:700, fontSize:12, cursor:'pointer',
-                  background: rideTime===k ? YELLOW : 'rgba(255,255,255,0.14)',
-                  color: rideTime===k ? DARK : 'rgba(255,255,255,0.92)' }}>{l}</button>
+                style={{ flex:1, padding:'9px 0', borderRadius:9, border: rideTime===k ? 'none' : '1px solid #d0d3e0', fontWeight:700, fontSize:12, cursor:'pointer',
+                  background: rideTime===k ? '#6b21a8' : '#f3f4f6',
+                  color: rideTime===k ? '#ffffff' : '#1a1a2e' }}>{l}</button>
             ))}
           </div>
           {rideTime==='later' && (
@@ -3475,8 +3475,8 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
                 min={(d => new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,16))(new Date(Date.now()+30*60000))}
                 onChange={e => setScheduledAt(e.target.value)}
                 onClick={e => { try { e.target.showPicker && e.target.showPicker(); } catch(err) {} }}
-                style={{ width:'100%', padding:'11px 12px', background:'rgba(255,255,255,0.1)', border:'1px solid rgba(255,255,255,0.3)', borderRadius:9, color:'#fff', fontSize:14, outline:'none', colorScheme:'dark', boxSizing:'border-box' }}/>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.45)', marginTop:6 }}>Pick a time at least 30 minutes ahead — e.g. tomorrow 6:00 AM for the airport. A driver will accept it in advance.</div>
+                style={{ width:'100%', padding:'11px 12px', background:'#ffffff', border:'1px solid #d0d3e0', borderRadius:9, color:'#1a1a2e', fontSize:14, outline:'none', colorScheme:'light', boxSizing:'border-box' }}/>
+              <div style={{ fontSize:11, color:'#6b7280', marginTop:6 }}>Pick a time at least 30 minutes ahead — e.g. tomorrow 6:00 AM for the airport. A driver will accept it in advance.</div>
             </div>
           )}
         </div>
@@ -4284,16 +4284,16 @@ function DriverTermsScreen({ go, user }) {
   };
 
   return (
-    <div style={{ ...s.content, background:'#0f1a35' }}>
-      <div style={{ background:'rgba(10,15,35,0.92)', padding:'16px 18px', backdropFilter:'blur(10px)', display:'flex', alignItems:'center', gap:10 }}>
+    <div style={{ ...s.content, background:'#f5f6fa' }}>
+      <div style={{ background:'#ffffff', borderBottom:'1px solid #e5e7eb', padding:'16px 18px', display:'flex', alignItems:'center', gap:10 }}>
         <img src="/logo.png" alt="V" onClick={() => go('driver-dash')} style={{cursor:'pointer',  width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
-        <span style={{ color:WHITE, fontSize:16, fontWeight:600 }}>VilleCabs — Driver Agreement</span>
+        <span style={{ color:'#1a1a2e', fontSize:16, fontWeight:600 }}>VilleCabs — Driver Agreement</span>
       </div>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:100 }}>
-        <h2 style={{ fontSize:20, fontWeight:600, color:WHITE, marginBottom:4 }}>Driver Terms & Agreement</h2>
+        <h2 style={{ fontSize:20, fontWeight:600, color:'#1a1a2e', marginBottom:4 }}>Driver Terms & Agreement</h2>
         <p style={{ fontSize:13, color:'#6b7280', marginBottom:20 }}>Please read carefully before driving with VilleCabs</p>
 
-        <div style={{ background:'rgba(15,20,40,0.8)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:14, padding:18, marginBottom:16, maxHeight:320, overflowY:'auto' }}>
+        <div style={{ background:'#ffffff', border:'0.5px solid #e5e7eb', borderRadius:14, padding:18, marginBottom:16, maxHeight:320, overflowY:'auto' }}>
           <div style={{ fontSize:16, fontWeight:800, color:'#6b21a8', marginBottom:12 }}>VilleCabs Driver Agreement</div>
           {[
             ['1. Independent Contractor', 'You are an independent contractor, not an employee of VilleCabs. You are responsible for your own taxes, insurance, and vehicle maintenance.'],
@@ -4308,8 +4308,8 @@ function DriverTermsScreen({ go, user }) {
             ['10. Account Suspension', 'VilleCabs reserves the right to suspend or terminate your driver account for breach of these terms, poor ratings, or conduct unbecoming of a VilleCabs driver.'],
           ].map(([title, text], i) => (
             <div key={i} style={{ marginBottom:14 }}>
-              <div style={{ fontSize:12, fontWeight:600, color:WHITE, marginBottom:4 }}>{title}</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.55)', lineHeight:1.7 }}>{text}</div>
+              <div style={{ fontSize:12, fontWeight:600, color:'#1a1a2e', marginBottom:4 }}>{title}</div>
+              <div style={{ fontSize:12, color:'#4b5563', lineHeight:1.7 }}>{text}</div>
             </div>
           ))}
         </div>
@@ -4321,11 +4321,11 @@ function DriverTermsScreen({ go, user }) {
           [agreed4, setAgreed4, 'I agree to treat all passengers with respect and drive safely at all times'],
         ].map(([val, setter, label], i) => (
           <div key={i} onClick={() => setter(!val)}
-            style={{ display:'flex', alignItems:'flex-start', gap:12, padding:'12px 14px', background:'rgba(15,20,40,0.6)', border:`1px solid ${val?YELLOW:'rgba(255,255,255,0.1)'}`, borderRadius:10, marginBottom:10, cursor:'pointer' }}>
-            <div style={{ width:22, height:22, borderRadius:6, border:`2px solid ${val?YELLOW:'rgba(255,255,255,0.3)'}`, background:val?YELLOW:'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, marginTop:1 }}>
-              {val && <span style={{ color:DARK, fontSize:13, fontWeight:700 }}>✓</span>}
+            style={{ display:'flex', alignItems:'flex-start', gap:12, padding:'12px 14px', background:'#ffffff', border:`1px solid ${val?'#6b21a8':'#e2e4ed'}`, borderRadius:10, marginBottom:10, cursor:'pointer' }}>
+            <div style={{ width:22, height:22, borderRadius:6, border:`2px solid ${val?'#6b21a8':'#c7cbd6'}`, background:val?'#6b21a8':'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, marginTop:1 }}>
+              {val && <span style={{ color:'#ffffff', fontSize:13, fontWeight:700 }}>✓</span>}
             </div>
-            <span style={{ fontSize:13, color:'rgba(255,255,255,0.8)', lineHeight:1.5 }}>{label}</span>
+            <span style={{ fontSize:13, color:'#374151', lineHeight:1.5 }}>{label}</span>
           </div>
         ))}
 
@@ -4428,28 +4428,28 @@ function DriverWelcomeTips({ go, user }) {
 // ── DRIVER ABOUT US ───────────────────────────────────────────────────────────
 function DriverAboutUs({ go, user }) {
   return (
-    <div style={{ ...s.content, background:'#0f1a35' }}>
+    <div style={{ ...s.content, background:'#f5f6fa' }}>
       <TopBar title="About VilleCabs" go={go} user={user}/>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:40 }}>
         <div style={{ textAlign:'center', marginBottom:24 }}>
-          <img src="/logo.png" alt="VilleCabs" onClick={() => go('driver-dash')} style={{cursor:'pointer',  width:80, height:80, borderRadius:'50%', objectFit:'cover', border:'2px solid rgba(232,180,0,0.4)', marginBottom:12 }}/>
-          <h2 style={{ fontSize:20, fontWeight:700, color:WHITE, marginBottom:4 }}>Welcome to VilleCabs</h2>
-          <p style={{ fontSize:13, color:YELLOW, fontStyle:'italic' }}>Your city. Your ride. Your way.</p>
+          <img src="/logo.png" alt="VilleCabs" onClick={() => go('driver-dash')} style={{cursor:'pointer',  width:80, height:80, borderRadius:'50%', objectFit:'cover', border:'2px solid rgba(107,33,168,0.35)', marginBottom:12 }}/>
+          <h2 style={{ fontSize:20, fontWeight:700, color:'#1a1a2e', marginBottom:4 }}>Welcome to VilleCabs</h2>
+          <p style={{ fontSize:13, color:'#6b21a8', fontStyle:'italic' }}>Your city. Your ride. Your way.</p>
         </div>
         {[
           'VilleCabs is a modern ride-hailing and taxi platform built for the people of Mandeville, Manchester, Jamaica. Created to bring convenience, reliability, and opportunity to our community.',
           "We are bringing the ease and flexibility of app-based transportation to Mandeville while supporting local drivers and creating new earning opportunities within our parish.",
-        ].map((t,i) => <p key={i} style={{ fontSize:13, color:'rgba(255,255,255,0.7)', lineHeight:1.8, marginBottom:14 }}>{t}</p>)}
-        <div style={{ background:'rgba(232,180,0,0.08)', border:'0.5px solid rgba(232,180,0,0.25)', borderRadius:14, padding:16, marginBottom:16 }}>
+        ].map((t,i) => <p key={i} style={{ fontSize:13, color:'#374151', lineHeight:1.8, marginBottom:14 }}>{t}</p>)}
+        <div style={{ background:'rgba(107,33,168,0.06)', border:'0.5px solid rgba(107,33,168,0.2)', borderRadius:14, padding:16, marginBottom:16 }}>
           <div style={{ fontSize:16, fontWeight:800, color:'#6b21a8', marginBottom:10 }}>Driver Earnings</div>
-          <div style={{ fontSize:13, color:'rgba(255,255,255,0.7)', lineHeight:1.8 }}>
-            You keep <strong style={{ color:GREEN }}>85%</strong> of every fare. VilleCabs charges a <strong style={{ color:YELLOW }}>15% monthly platform fee</strong> settled at the end of each month.
+          <div style={{ fontSize:13, color:'#374151', lineHeight:1.8 }}>
+            You keep <strong style={{ color:GREEN }}>85%</strong> of every fare. VilleCabs charges a <strong style={{ color:'#6b21a8' }}>15% monthly platform fee</strong> settled at the end of each month.
           </div>
         </div>
-        <div style={{ background:'rgba(15,20,40,0.7)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, padding:14, fontSize:13, color:'rgba(255,255,255,0.6)', lineHeight:2 }}>
+        <div style={{ background:'#ffffff', border:'0.5px solid #e5e7eb', borderRadius:12, padding:14, fontSize:13, color:'#4b5563', lineHeight:2 }}>
           <div>📍 Serving Mandeville & Manchester, Jamaica</div>
           <div>🌐 villecabs.com</div>
-          <div>📞 Call / WhatsApp: <a href="https://wa.me/18765158113+1876-515-8113" style={{ color:YELLOW, textDecoration:'none' }}>+1876-515-8113</a></div>
+          <div>📞 Call / WhatsApp: <a href="https://wa.me/18765158113+1876-515-8113" style={{ color:'#6b21a8', textDecoration:'none' }}>+1876-515-8113</a></div>
         </div>
       </div>
       <Footer go={go}/>
@@ -4488,14 +4488,14 @@ function DriverContactUs({ go, user }) {
   };
 
   return (
-    <div style={{ ...s.content, background:'#0f1a35' }}>
+    <div style={{ ...s.content, background:'#f5f6fa' }}>
       <TopBar title="Contact Us" go={go} user={user}/>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:40 }}>
-        <div style={{ background:'rgba(232,180,0,0.08)', border:'0.5px solid rgba(232,180,0,0.2)', borderRadius:12, padding:14, marginBottom:20, display:'flex', alignItems:'center', gap:12 }}>
+        <div style={{ background:'rgba(107,33,168,0.06)', border:'0.5px solid rgba(107,33,168,0.18)', borderRadius:12, padding:14, marginBottom:20, display:'flex', alignItems:'center', gap:12 }}>
           <span style={{ fontSize:28 }}>💬</span>
           <div>
-            <div style={{ fontSize:13, color:WHITE, fontWeight:500 }}>WhatsApp us directly</div>
-            <a href="https://wa.me/18765158113+1876-515-8113" target="_blank" rel="noopener noreferrer" style={{ fontSize:13, color:YELLOW, textDecoration:'none' }}>+1876-515-8113</a>
+            <div style={{ fontSize:13, color:'#1a1a2e', fontWeight:500 }}>WhatsApp us directly</div>
+            <a href="https://wa.me/18765158113+1876-515-8113" target="_blank" rel="noopener noreferrer" style={{ fontSize:13, color:'#6b21a8', textDecoration:'none' }}>+1876-515-8113</a>
           </div>
         </div>
         {error   && <div style={s.errBox}>⚠️ {error}</div>}
@@ -4517,7 +4517,7 @@ function DriverHelp({ go, user }) {
   if (section === 'terms') return <DriverTermsScreen go={() => setSection(null)} user={user}/>;
   if (section === 'tips')  return <DriverWelcomeTips go={() => setSection(null)} user={user}/>;
   return (
-    <div style={{ ...s.content, background:'#0f1a35' }}>
+    <div style={{ ...s.content, background:'#f5f6fa' }}>
       <TopBar title="Help & Info" go={go} user={user}/>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto' }}>
         {[
@@ -4526,13 +4526,13 @@ function DriverHelp({ go, user }) {
           { icon:'🙋', title:'Contact Us', desc:'Get in touch with our support team', action:() => go('driver-contact') },
           { icon:'ℹ️', title:'About VilleCabs', desc:'Learn more about who we are', action:() => go('driver-about') },
         ].map((item,i) => (
-          <div key={i} onClick={item.action} style={{ background:'rgba(15,20,40,0.7)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, padding:'16px 18px', marginBottom:10, display:'flex', alignItems:'center', gap:14, cursor:'pointer' }}>
-            <div style={{ fontSize:26, width:44, height:44, background:'rgba(255,255,255,0.05)', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>{item.icon}</div>
+          <div key={i} onClick={item.action} style={{ background:'#ffffff', border:'0.5px solid #e5e7eb', borderRadius:12, padding:'16px 18px', marginBottom:10, display:'flex', alignItems:'center', gap:14, cursor:'pointer' }}>
+            <div style={{ fontSize:26, width:44, height:44, background:'#f5f0ff', borderRadius:10, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>{item.icon}</div>
             <div style={{ flex:1 }}>
-              <div style={{ fontSize:14, fontWeight:500, color:WHITE }}>{item.title}</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.45)', marginTop:2 }}>{item.desc}</div>
+              <div style={{ fontSize:14, fontWeight:500, color:'#1a1a2e' }}>{item.title}</div>
+              <div style={{ fontSize:12, color:'#6b7280', marginTop:2 }}>{item.desc}</div>
             </div>
-            <span style={{ color:'rgba(255,255,255,0.3)', fontSize:18 }}>›</span>
+            <span style={{ color:'#8a93a6', fontSize:18 }}>›</span>
           </div>
         ))}
       </div>
@@ -5725,13 +5725,13 @@ function DriverSettings({ go, user, setUser }) {
   };
 
   return (
-    <div style={{ ...s.content, background:'#0f1a35' }}>
+    <div style={{ ...s.content, background:'#f5f6fa' }}>
       <TopBar title="Settings" go={go} user={user}/>
       <div style={{ padding:20, maxWidth:420, margin:'0 auto' }}>
 
         {/* Change Password */}
-        <div style={{ background:'rgba(15,20,40,0.8)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:16, marginBottom:16 }}>
-          <div style={{ fontSize:15, fontWeight:500, color:WHITE, marginBottom:14 }}>🔒 Change Password</div>
+        <div style={{ background:'#ffffff', border:'0.5px solid #e5e7eb', borderRadius:14, padding:16, marginBottom:16 }}>
+          <div style={{ fontSize:15, fontWeight:500, color:'#1a1a2e', marginBottom:14 }}>🔒 Change Password</div>
           {errPass && <div style={s.errBox}>{errPass}</div>}
           {msgPass && <div style={s.successBox}>{msgPass}</div>}
           <label style={s.lbl}>New Password</label>
@@ -5744,9 +5744,9 @@ function DriverSettings({ go, user, setUser }) {
         </div>
 
         {/* Change Email */}
-        <div style={{ background:'rgba(15,20,40,0.8)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:16, marginBottom:16 }}>
-          <div style={{ fontSize:15, fontWeight:500, color:WHITE, marginBottom:4 }}>✉️ Change Email</div>
-          <div style={{ fontSize:12, color:'rgba(255,255,255,0.4)', marginBottom:14 }}>Current: {user?.email}</div>
+        <div style={{ background:'#ffffff', border:'0.5px solid #e5e7eb', borderRadius:14, padding:16, marginBottom:16 }}>
+          <div style={{ fontSize:15, fontWeight:500, color:'#1a1a2e', marginBottom:4 }}>✉️ Change Email</div>
+          <div style={{ fontSize:12, color:'#6b7280', marginBottom:14 }}>Current: {user?.email}</div>
           {errEmail && <div style={s.errBox}>{errEmail}</div>}
           {msgEmail && <div style={s.successBox}>{msgEmail}</div>}
           <label style={s.lbl}>New Email Address</label>
@@ -5757,15 +5757,15 @@ function DriverSettings({ go, user, setUser }) {
         </div>
 
         {/* Logout */}
-        <div style={{ background:'rgba(15,20,40,0.8)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:16, marginBottom:16 }}>
-          <div style={{ fontSize:15, fontWeight:500, color:WHITE, marginBottom:12 }}>🚪 Logout</div>
+        <div style={{ background:'#ffffff', border:'0.5px solid #e5e7eb', borderRadius:14, padding:16, marginBottom:16 }}>
+          <div style={{ fontSize:15, fontWeight:500, color:'#1a1a2e', marginBottom:12 }}>🚪 Logout</div>
           <button style={s.btnO} onClick={handleLogout}>Log out of VilleCabs</button>
         </div>
 
         {/* Deactivate */}
         <div style={{ background:'rgba(226,75,74,0.08)', border:'0.5px solid rgba(226,75,74,0.25)', borderRadius:14, padding:16 }}>
           <div style={{ fontSize:15, fontWeight:500, color:'#f09595', marginBottom:6 }}>⚠️ Deactivate Account</div>
-          <div style={{ fontSize:12, color:'rgba(255,255,255,0.45)', marginBottom:14, lineHeight:1.6 }}>
+          <div style={{ fontSize:12, color:'#6b7280', marginBottom:14, lineHeight:1.6 }}>
             Deactivating your account will suspend your driver profile. You will no longer receive ride requests. Contact admin to reactivate.
           </div>
           <button style={{ width:'100%', padding:'12px', background:'rgba(226,75,74,0.15)', color:'#f09595', border:'0.5px solid rgba(226,75,74,0.4)', borderRadius:12, fontSize:14, cursor:'pointer', opacity:loadingDeact?0.7:1 }}
@@ -7130,51 +7130,51 @@ function PrivacyPolicy({ go, user }) {
     { n:'10', title:'Policy Updates', body:'VilleCabs may update this Privacy Policy periodically. Updates become effective once published.' },
   ];
   return (
-    <div style={{ ...s.content, background:'#0f1a35' }}>
+    <div style={{ ...s.content, background:'#f5f6fa' }}>
       <TopBar title="Privacy Policy" onBack={() => go(user ? (user.role==='driver'?'driver-dash':'customer-dash') : 'splash')} go={go} user={user}/>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:44 }}>
 
         {/* Header */}
         <div style={{ textAlign:'center', marginBottom:22 }}>
           <div style={{ fontSize:44, marginBottom:10 }}>🔒</div>
-          <h2 style={{ fontSize:20, fontWeight:800, color:WHITE, marginBottom:6 }}>VilleCabs Privacy Policy</h2>
-          <p style={{ fontSize:12, color:YELLOW, fontStyle:'italic' }}>Effective Date: June 19, 2026</p>
+          <h2 style={{ fontSize:20, fontWeight:800, color:'#1a1a2e', marginBottom:6 }}>VilleCabs Privacy Policy</h2>
+          <p style={{ fontSize:12, color:'#6b21a8', fontStyle:'italic' }}>Effective Date: June 19, 2026</p>
         </div>
 
         {/* Intro */}
-        <div style={{ background:'rgba(15,20,40,0.7)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:16, marginBottom:18 }}>
-          <p style={{ fontSize:13, color:'rgba(255,255,255,0.72)', lineHeight:1.8, margin:'0 0 10px' }}>
+        <div style={{ background:'#ffffff', border:'0.5px solid #e5e7eb', borderRadius:14, padding:16, marginBottom:18 }}>
+          <p style={{ fontSize:13, color:'#374151', lineHeight:1.8, margin:'0 0 10px' }}>
             VilleCabs Limited (“VilleCabs”, “we”, “our”, “us”) respects your privacy and is committed to protecting personal information collected through villecabs.com and related services.
           </p>
-          <p style={{ fontSize:13, color:YELLOW, lineHeight:1.7, margin:0, fontWeight:600 }}>
+          <p style={{ fontSize:13, color:'#6b21a8', lineHeight:1.7, margin:0, fontWeight:600 }}>
             By using VilleCabs, you agree to this Privacy Policy.
           </p>
         </div>
 
         {/* Numbered sections */}
         {sections.map((sec) => (
-          <div key={sec.n} style={{ background:'rgba(15,20,40,0.6)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:16, marginBottom:12 }}>
+          <div key={sec.n} style={{ background:'#ffffff', border:'0.5px solid #e5e7eb', borderRadius:14, padding:16, marginBottom:12 }}>
             <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:sec.body?10:0 }}>
-              <span style={{ flexShrink:0, width:26, height:26, borderRadius:8, background:'rgba(232,180,0,0.15)', border:'0.5px solid rgba(232,180,0,0.4)', color:YELLOW, fontSize:12, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center' }}>{sec.n}</span>
-              <span style={{ fontSize:14, fontWeight:700, color:WHITE }}>{sec.title}</span>
+              <span style={{ flexShrink:0, width:26, height:26, borderRadius:8, background:'rgba(107,33,168,0.12)', border:'0.5px solid rgba(107,33,168,0.35)', color:'#6b21a8', fontSize:12, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center' }}>{sec.n}</span>
+              <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>{sec.title}</span>
             </div>
-            {sec.body && <p style={{ fontSize:13, color:'rgba(255,255,255,0.7)', lineHeight:1.75, margin:'0 0 6px' }}>{sec.body}</p>}
+            {sec.body && <p style={{ fontSize:13, color:'#374151', lineHeight:1.75, margin:'0 0 6px' }}>{sec.body}</p>}
             {sec.groups && sec.groups.map((g,gi) => (
               <div key={gi} style={{ marginTop:10 }}>
                 <div style={{ fontSize:12, fontWeight:700, color:'#a78bfa', marginBottom:6 }}>{g.h}</div>
                 {g.items.map((it,ii) => (
-                  <div key={ii} style={{ fontSize:13, color:'rgba(255,255,255,0.7)', marginBottom:5, display:'flex', gap:8 }}>
+                  <div key={ii} style={{ fontSize:13, color:'#374151', marginBottom:5, display:'flex', gap:8 }}>
                     <span style={{ color:GREEN, flexShrink:0 }}>•</span>{it}
                   </div>
                 ))}
               </div>
             ))}
             {sec.items && sec.items.map((it,ii) => (
-              <div key={ii} style={{ fontSize:13, color:'rgba(255,255,255,0.7)', marginBottom:5, display:'flex', gap:8 }}>
+              <div key={ii} style={{ fontSize:13, color:'#374151', marginBottom:5, display:'flex', gap:8 }}>
                 <span style={{ color:GREEN, flexShrink:0 }}>•</span>{it}
               </div>
             ))}
-            {sec.foot && <p style={{ fontSize:12, color:'rgba(255,255,255,0.55)', lineHeight:1.7, margin:'8px 0 0', fontStyle:'italic' }}>{sec.foot}</p>}
+            {sec.foot && <p style={{ fontSize:12, color:'#4b5563', lineHeight:1.7, margin:'8px 0 0', fontStyle:'italic' }}>{sec.foot}</p>}
           </div>
         ))}
 
@@ -7182,17 +7182,17 @@ function PrivacyPolicy({ go, user }) {
         <div style={{ background:'rgba(26,158,90,0.08)', border:'0.5px solid rgba(26,158,90,0.3)', borderRadius:14, padding:16, marginBottom:16 }}>
           <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:10 }}>
             <span style={{ flexShrink:0, width:26, height:26, borderRadius:8, background:'rgba(26,158,90,0.15)', border:'0.5px solid rgba(26,158,90,0.4)', color:GREEN, fontSize:12, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center' }}>11</span>
-            <span style={{ fontSize:14, fontWeight:700, color:WHITE }}>Contact Us</span>
+            <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>Contact Us</span>
           </div>
-          <div style={{ fontSize:13, color:'rgba(255,255,255,0.72)', lineHeight:1.9 }}>
-            <div><strong style={{ color:WHITE }}>VilleCabs Limited</strong></div>
-            <div>Website: <a href="https://villecabs.com" target="_blank" rel="noreferrer" style={{ color:YELLOW, textDecoration:'none' }}>villecabs.com</a></div>
-            <div>Email: <a href="mailto:admin@villecabs.com" style={{ color:YELLOW, textDecoration:'none' }}>admin@villecabs.com</a></div>
-            <div>Phone / WhatsApp: <a href="https://wa.me/18765158113" target="_blank" rel="noreferrer" style={{ color:YELLOW, textDecoration:'none' }}>876-515-8113</a></div>
+          <div style={{ fontSize:13, color:'#374151', lineHeight:1.9 }}>
+            <div><strong style={{ color:'#1a1a2e' }}>VilleCabs Limited</strong></div>
+            <div>Website: <a href="https://villecabs.com" target="_blank" rel="noreferrer" style={{ color:'#6b21a8', textDecoration:'none' }}>villecabs.com</a></div>
+            <div>Email: <a href="mailto:admin@villecabs.com" style={{ color:'#6b21a8', textDecoration:'none' }}>admin@villecabs.com</a></div>
+            <div>Phone / WhatsApp: <a href="https://wa.me/18765158113" target="_blank" rel="noreferrer" style={{ color:'#6b21a8', textDecoration:'none' }}>876-515-8113</a></div>
           </div>
         </div>
 
-        <p style={{ fontSize:12, color:'rgba(255,255,255,0.55)', textAlign:'center', fontStyle:'italic', lineHeight:1.7, marginBottom:8 }}>
+        <p style={{ fontSize:12, color:'#4b5563', textAlign:'center', fontStyle:'italic', lineHeight:1.7, marginBottom:8 }}>
           By using VilleCabs services, users acknowledge and accept this Privacy Policy.
         </p>
       </div>
