@@ -1043,6 +1043,13 @@ function CustomerLogin({ go, setUser, user }) {
     setLoading(true);
     try {
       const cred = await signInWithEmailAndPassword(auth, email, password);
+      // Admins go straight to the admin dashboard, regardless of any customer doc
+      if (['daviskeneile@gmail.com','admin@villecabs.com'].includes((cred.user.email||'').toLowerCase())) {
+        setUser({ uid:cred.user.uid, name:'Admin', email:cred.user.email, role:'admin' });
+        go('admin');
+        setLoading(false);
+        return;
+      }
       let data = {};
       try {
         const snap = await Promise.race([
@@ -8085,6 +8092,15 @@ export default function App() {
       }
       // Logged in - restore session
       try {
+        // Admins bypass customer/driver lookup entirely
+        if (['daviskeneile@gmail.com','admin@villecabs.com'].includes((fu.email||'').toLowerCase())) {
+          setUser({ uid:fu.uid, name:'Admin', email:fu.email, role:'admin' });
+          setScreen('admin');
+          clearTimeout(safety);
+          done = true;
+          setTimeout(() => setLoading(false), 100);
+          return;
+        }
         const [cSnap, dSnap] = await Promise.all([
           getDoc(doc(db, 'customers', fu.uid)),
           getDoc(doc(db, 'drivers',   fu.uid)),
