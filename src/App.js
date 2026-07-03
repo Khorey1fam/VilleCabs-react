@@ -77,6 +77,48 @@ const sendWelcomeEmail = async (toEmail, toName, role = 'customer') => {
 };
 const LIBRARIES       = ['places'];
 
+// ── Dark mode helpers (Feature: Dark Mode) ───────────────────────────────────
+const getDarkPref = () => { try { return localStorage.getItem('vc_theme') === 'dark'; } catch(e) { return false; } };
+const setDarkPref = (on) => {
+  try { localStorage.setItem('vc_theme', on ? 'dark' : 'light'); } catch(e) {}
+  try { window.dispatchEvent(new Event('vc-theme')); } catch(e) {}
+};
+
+// ── Jamaican phone → WhatsApp format (Feature: Bulk Driver Broadcast) ────────
+const normalizeJmPhone = (raw) => {
+  if (!raw) return null;
+  let d = String(raw).replace(/\D/g, '');
+  if (d.length === 7)  d = '876' + d;           // local 7-digit
+  if (d.length === 10) d = '1' + d;             // 876XXXXXXX → 1876XXXXXXX
+  if (d.length === 11 && d.startsWith('1')) return d;
+  return d.length >= 10 ? d : null;
+};
+
+// ── Register customer FCM push token (Feature: Push Notifications) ──────────
+// NOTE: true background push (app fully closed) also requires
+// public/firebase-messaging-sw.js and a Cloud Function that sends to
+// customers/{uid}.fcmToken when the driver is ~2 min away. This stores the
+// token so that function can target this customer.
+const registerCustomerPushToken = async (uid) => {
+  try {
+    if (!messaging || !uid) return;
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    const vapid = process.env.REACT_APP_FIREBASE_VAPID_KEY;
+    if (!vapid) return;
+    const token = await getToken(messaging, { vapidKey: vapid });
+    if (token) await updateDoc(doc(db,'customers',uid), { fcmToken: token });
+  } catch(e) { console.warn('Customer push token skipped:', e.message); }
+};
+
+// ── Format a scheduled ride time (Feature: Scheduled Rides) ──────────────────
+const fmtScheduled = (val) => {
+  try {
+    const d = val?.seconds ? new Date(val.seconds*1000) : new Date(val);
+    if (isNaN(d)) return '—';
+    return d.toLocaleString('en-JM', { weekday:'short', day:'numeric', month:'short', hour:'numeric', minute:'2-digit' });
+  } catch(e) { return '—'; }
+};
+
 // Send ride receipt email to customer after ride completes
 const sendRideReceipt = async (booking, customerEmail, customerName) => {
   if (!customerEmail) return;
@@ -182,6 +224,18 @@ function GlobalStyles() {
         '@keyframes spin { to { transform:rotate(360deg) } }',
       ].join(' ');
       document.head.appendChild(el);
+    }
+    // Dark mode (Feature: Dark Mode) — inverts light screens; media & maps stay natural
+    const darkId = 'villecabs-darkmode';
+    if (!document.getElementById(darkId)) {
+      const dk = document.createElement('style');
+      dk.id = darkId;
+      dk.textContent = [
+        'html[data-vc-dark="1"] { background:#0d1117; }',
+        'html[data-vc-dark="1"] body { filter: invert(1) hue-rotate(180deg); background:#0d1117 !important; }',
+        'html[data-vc-dark="1"] img, html[data-vc-dark="1"] video, html[data-vc-dark="1"] canvas, html[data-vc-dark="1"] iframe, html[data-vc-dark="1"] .gm-style, html[data-vc-dark="1"] [data-noinvert] { filter: invert(1) hue-rotate(180deg); }',
+      ].join(' ');
+      document.head.appendChild(dk);
     }
     document.body.style.height = '100%';
     document.body.style.overscrollBehavior = 'none';
@@ -334,6 +388,10 @@ function TopBar({ title, onBack, go, user }) {
         onClick={() => go ? go(user ? 'customer-dash' : 'splash') : null}
         style={{ height:32, width:'auto', objectFit:'contain', cursor:'pointer', flexShrink:0, maxWidth:160 }}/>
       <div style={{ display:'flex', gap:5, marginLeft:'auto' }}>
+        <button onClick={() => setDarkPref(!getDarkPref())} title="Toggle dark mode"
+          style={{ padding:'4px 8px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, fontSize:11, cursor:'pointer' }}>
+          🌙
+        </button>
         <button onClick={() => go && go('partner-with-us')}
           style={{ padding:'4px 10px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, color:'#6b21a8', fontSize:10, fontWeight:600, cursor:'pointer' }}>
           Business
@@ -395,6 +453,7 @@ function Footer({ go }) {
               ['Privacy Policy',      () => window.open('/privacy','_blank')],
               ['Terms & Conditions',  () => go('terms')],
               ['Become a Driver',     () => go('driver-signup')],
+              ['Partner Locations',   () => go('partner-locations')],
               ['Partner With Us',     () => window.open('mailto:admin@villecabs.com?subject=VilleCabs Partnership', '_blank')],
             ].map(([label, action], i) => (
               <div key={i} onClick={action}
@@ -483,6 +542,7 @@ function Splash({ go }) {
       <div style={{ background:'#ffffff', borderBottom:'1px solid #eee', padding:'10px 16px', display:'flex', alignItems:'center', position:'sticky', top:0, zIndex:100 }}>
         <img src="/logo.png" alt="VilleCabs" style={{ height:30, objectFit:'contain' }}/>
         <div style={{ marginLeft:'auto', display:'flex', gap:6 }}>
+          <button onClick={() => setDarkPref(!getDarkPref())} title="Toggle dark mode" style={{ padding:'5px 9px', background:'#f5f0ff', border:'1px solid #d8b4fe', borderRadius:12, fontSize:11, cursor:'pointer' }}>🌙</button>
           <button onClick={() => go('partner-with-us')} style={{ padding:'5px 10px', background:'#f5f0ff', border:'1px solid #d8b4fe', borderRadius:12, color:'#6b21a8', fontSize:11, fontWeight:600, cursor:'pointer' }}>Partners</button>
           <button onClick={() => go('customer-login')} style={{ padding:'5px 10px', background:'#fff', border:'1px solid #e2e4ed', borderRadius:12, color:'#1a1a2e', fontSize:11, fontWeight:600, cursor:'pointer' }}>Login</button>
           <button onClick={() => go('role')} style={{ padding:'5px 10px', background:'#6b21a8', border:'none', borderRadius:12, color:'#fff', fontSize:11, fontWeight:700, cursor:'pointer' }}>Sign Up</button>
@@ -1641,6 +1701,7 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId }) {
   const [activeRide, setActiveRide] = useState(null);
   const [rideNotif, setRideNotif] = useState(null);
   const prevStatusRef = useRef(null);
+  const twoMinNotifiedRef = useRef(false); // Feature: Push Notifications
   const handleLogout = async () => {
     try {
       setMenuOpen(false);
@@ -1739,14 +1800,16 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId }) {
     return () => unsub();
   }, [user]);
 
-  // Request rideNotif permission on mount
+  // Request rideNotif permission on mount + register push token (Feature: Push Notifications)
   useEffect(() => {
     try {
       if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-        Notification.requestPermission();
+        Notification.requestPermission().then(() => registerCustomerPushToken(user?.uid)).catch(()=>{});
+      } else {
+        registerCustomerPushToken(user?.uid);
       }
     } catch(e) {}
-  }, []);
+  }, [user?.uid]);
 
   // Watch active booking directly for driverArrived field
   useEffect(() => {
@@ -1754,6 +1817,24 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId }) {
     const unsub = onSnapshot(doc(db,'bookings',activeRide.id), snap => {
       if (!snap.exists()) return;
       const data = snap.data();
+      // ── Driver ~2 minutes away push (Feature: Push Notifications) ──
+      if (data.driverLocation && data.pickup && !data.driverArrived && ['active','enroute'].includes(data.status) && !twoMinNotifiedRef.current) {
+        const R2=6371;
+        const dLat2=(data.pickup.lat-data.driverLocation.lat)*Math.PI/180;
+        const dLon2=(data.pickup.lng-data.driverLocation.lng)*Math.PI/180;
+        const a2=Math.sin(dLat2/2)**2+Math.cos(data.driverLocation.lat*Math.PI/180)*Math.cos(data.pickup.lat*Math.PI/180)*Math.sin(dLon2/2)**2;
+        const km2=R2*2*Math.atan2(Math.sqrt(a2),Math.sqrt(1-a2));
+        const mins2=Math.max(1,Math.round(km2/0.5));
+        if (mins2 <= 2) {
+          twoMinNotifiedRef.current = true;
+          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            new Notification('🚗 Your driver is 2 minutes away!', {
+              body: `${data.driverName||'Your driver'} is almost at your pickup. Get ready!`,
+              icon: '/logo.png', tag: 'vc-2min',
+            });
+          }
+        }
+      }
       // Fire arrived rideNotif regardless of prevStatusRef
       if (data.driverArrived && prevStatusRef.current !== 'arrived') {
         prevStatusRef.current = 'arrived';
@@ -1774,6 +1855,7 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId }) {
         setRideNotif(null);
         setActiveRide(null);
         prevStatusRef.current = 'completed';
+        twoMinNotifiedRef.current = false;
       }
     });
     return () => unsub();
@@ -1889,6 +1971,9 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId }) {
       {/* BOOK TAB */}
       {tab === 'book' && (
         <div style={{ flex:1, display:'flex', flexDirection:'column' }}>
+
+          {/* Scheduled rides (Feature: Scheduled Rides) */}
+          <ScheduledRidesCard user={user} go={go}/>
 
           {/* Notification banners */}
           {rideNotif?.type === 'driver_accepted' && (
@@ -2932,6 +3017,19 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
   const [promoMsg,   setPromoMsg]   = useState('');
   const [promoData,  setPromoData]  = useState(null); // { id, discount, code }
   const [promoLoading, setPromoLoading] = useState(false);
+  const [rideTime,    setRideTime]    = useState('now');   // 'now' | 'later' (Feature: Scheduled Rides)
+  const [scheduledAt, setScheduledAt] = useState('');
+  const [scheduledOk, setScheduledOk] = useState(false);
+  const [surgeCfg,    setSurgeCfg]    = useState(null);    // (Feature: Surge Pricing)
+
+  // Live surge pricing config controlled by admin (settings/pricing)
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db,'settings','pricing'), snap => {
+      setSurgeCfg(snap.exists() ? snap.data() : null);
+    }, ()=>{});
+    return () => unsub();
+  }, []);
+  const SURGE_MULT = surgeCfg?.surgeActive ? (surgeCfg.surgeMultiplier || 1.5) : 1.0;
 
   const vehicles = [
     { name:'VilleRide', eta:'4 min away',      icon:'🚗', multiplier:1.0 },
@@ -2982,7 +3080,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
 
   const calcPrice = (v) => {
     const base = baseFare(dist);
-    return Math.round(base * v.multiplier * SURCHARGE_MULT);
+    return Math.round(base * v.multiplier * SURCHARGE_MULT * SURGE_MULT); // SURGE_MULT: Feature: Surge Pricing
   };
 
   const fareBreakdown = (v) => {
@@ -3100,6 +3198,46 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
       const price      = calcPrice(v);
       const finalPrice = calcFinalPrice(v);
 
+      // ── CUSTOMER BLACKLIST CHECK (Feature: Customer Blacklist) ───────
+      try {
+        const meSnap = await getDoc(doc(db,'customers',user.uid));
+        if (meSnap.exists() && meSnap.data().status === 'banned') {
+          setChecking(false); setLoading(false);
+          setError('Your account has been suspended from booking rides. Please contact admin@villecabs.com.');
+          return;
+        }
+      } catch(e) {}
+
+      // ── SCHEDULED RIDE (Feature: Scheduled Rides) ────────────────────
+      if (rideTime === 'later') {
+        const when = new Date(scheduledAt);
+        if (!scheduledAt || isNaN(when) || when.getTime() < Date.now() + 25*60000) {
+          setChecking(false); setLoading(false);
+          setError('Please pick a date and time at least 30 minutes from now.');
+          return;
+        }
+        await addDoc(collection(db,'bookings'), {
+          customerId:      user.uid,
+          customerName:    user.name,
+          passengers:      pickupData?.passengers || 1,
+          pickup:          { address: pickupData?.address||'Manchester, Jamaica', lat: pickupData?.coords?.lat||MANCHESTER_CENTER.lat, lng: pickupData?.coords?.lng||MANCHESTER_CENTER.lng },
+          dropoff:         { address: dropoffData?.address||'Destination', lat: dropoffData?.coords?.lat||18.02, lng: dropoffData?.coords?.lng||-77.48 },
+          vehicleType:     v.name,
+          fare:            finalPrice,
+          originalFare:    price,
+          surgeMultiplier: SURGE_MULT > 1 ? SURGE_MULT : null,
+          promoCode:       promoData?.code || null,
+          promoDiscount:   promoData?.discount || null,
+          distanceKm:      dist,
+          status:          'scheduled',
+          scheduledFor:    when,
+          createdAt:       serverTimestamp(),
+        });
+        setChecking(false); setLoading(false);
+        setScheduledOk(true);
+        return;
+      }
+
       // ── CHECK DRIVER AVAILABILITY ────────────────────────────────────
       const driversAvailable = await checkDriverAvailability();
       setChecking(false);
@@ -3121,6 +3259,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
         vehicleType:  v.name,
         fare:         finalPrice,
         originalFare: price,
+        surgeMultiplier: SURGE_MULT > 1 ? SURGE_MULT : null,
         promoCode:    promoData?.code || null,
         promoDiscount:promoData?.discount || null,
         distanceKm:   dist,
@@ -3161,6 +3300,24 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
   };
 
   const v = vehicles[sel];
+
+  // ── Scheduled ride confirmation screen (Feature: Scheduled Rides) ─────────
+  if (scheduledOk) {
+    return (
+      <div style={{ ...s.content, background:'#f5f6fa', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'100vh', padding:24 }}>
+        <div style={{ fontSize:56, marginBottom:14 }}>🗓️</div>
+        <div style={{ fontSize:20, fontWeight:800, color:'#1a1a2e', marginBottom:8, textAlign:'center' }}>Ride Scheduled!</div>
+        <div style={{ fontSize:13, color:'#555', textAlign:'center', lineHeight:1.6, marginBottom:6 }}>
+          {pickupData?.address?.split(',')[0]||'Pickup'} → {dropoffData?.address?.split(',')[0]||'Drop-off'}
+        </div>
+        <div style={{ fontSize:14, fontWeight:700, color:'#6b21a8', marginBottom:20 }}>{fmtScheduled(scheduledAt)}</div>
+        <div style={{ fontSize:12, color:'#888', textAlign:'center', maxWidth:300, marginBottom:24, lineHeight:1.6 }}>
+          A driver will accept your ride ahead of time and you'll see it on your dashboard. You can cancel anytime.
+        </div>
+        <button onClick={() => go('customer-dash')} style={{ ...s.btnY, maxWidth:300 }}>Back to Home</button>
+      </div>
+    );
+  }
 
   return (
     <div style={{ ...s.content, background:'#f5f6fa' }}>
@@ -3285,9 +3442,40 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
           </div>
         )}
 
+        {/* ── Surge pricing banner (Feature: Surge Pricing) ── */}
+        {SURGE_MULT > 1 && (
+          <div style={{ background:'rgba(232,180,0,0.12)', border:'0.5px solid rgba(232,180,0,0.4)', borderRadius:10, padding:'10px 14px', marginBottom:10, display:'flex', gap:10, alignItems:'center' }}>
+            <span style={{ fontSize:18 }}>⚡</span>
+            <div style={{ fontSize:12, color:YELLOW, fontWeight:600 }}>Surge pricing active — fares are {SURGE_MULT}x due to high demand</div>
+          </div>
+        )}
+
+        {/* ── Ride timing: now or scheduled (Feature: Scheduled Rides) ── */}
+        <div style={{ background:'rgba(255,255,255,0.04)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:12, padding:'12px 14px', marginBottom:10 }}>
+          <div style={{ display:'flex', gap:8, marginBottom: rideTime==='later' ? 10 : 0 }}>
+            {[['now','🚕 Ride Now'],['later','🗓️ Schedule']].map(([k,l]) => (
+              <button key={k} onClick={() => setRideTime(k)}
+                style={{ flex:1, padding:'9px 0', borderRadius:9, border:'none', fontWeight:700, fontSize:12, cursor:'pointer',
+                  background: rideTime===k ? YELLOW : 'rgba(255,255,255,0.08)',
+                  color: rideTime===k ? DARK : 'rgba(255,255,255,0.6)' }}>{l}</button>
+            ))}
+          </div>
+          {rideTime==='later' && (
+            <div>
+              <input type="datetime-local" value={scheduledAt}
+                min={(d => new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,16))(new Date(Date.now()+30*60000))}
+                onChange={e => setScheduledAt(e.target.value)}
+                style={{ width:'100%', padding:'11px 12px', background:'rgba(255,255,255,0.08)', border:'0.5px solid rgba(255,255,255,0.2)', borderRadius:9, color:'#fff', fontSize:14, outline:'none', colorScheme:'dark', boxSizing:'border-box' }}/>
+              <div style={{ fontSize:11, color:'rgba(255,255,255,0.45)', marginTop:6 }}>Pick a time at least 30 minutes ahead — e.g. tomorrow 6:00 AM for the airport. A driver will accept it in advance.</div>
+            </div>
+          )}
+        </div>
+
         <button onClick={handleBook} disabled={loading}
           style={{ width:'100%', padding:'16px', background:loading?'#2a2a2a':'linear-gradient(135deg,#6A1BB9,#4c1d95)', color:loading?'rgba(255,255,255,0.3)':'#ffffff', border:'none', borderRadius:14, fontSize:15, fontWeight:700, cursor:loading?'default':'pointer', boxShadow:loading?'none':'0 4px 20px rgba(106,27,185,0.5)', letterSpacing:0.3, marginTop:4 }}>
-          {loading ? 'Creating booking...' : 'Book Ride — J$' + calcFinalPrice(v).toLocaleString()}
+          {loading
+            ? (rideTime==='later' ? 'Scheduling ride...' : 'Creating booking...')
+            : (rideTime==='later' ? '🗓️ Schedule Ride — J$' : 'Book Ride — J$') + calcFinalPrice(v).toLocaleString()}
         </button>
       </div>
 
@@ -4626,6 +4814,9 @@ function DriverDash({ go, user, setUser, setBookingId }) {
                 borderRadius:'50%', background: isOnline ? '#1a9e5a' : '#6b7280', transition:'left 0.3s' }}/>
             </div>
           </div>
+
+          {/* Scheduled rides for drivers (Feature: Scheduled Rides) */}
+          <DriverScheduledRides user={user} go={go} setBookingId={setBookingId}/>
 
           {/* Peak hours banner */}
           {(() => { const h=new Date().getHours(),d=new Date().getDay(); return d>=1&&d<=5&&h>=17&&h<19 ? (
@@ -6000,6 +6191,8 @@ function AdminDash({ go, user }) {
   const [rideFilter,  setRideFilter] = useState('all');
   const [driverFilter,setDriverFilter]=useState('all');
   const [detail,      setDetail]     = useState(null);
+  const [surgeCfg,    setSurgeCfg]   = useState({ surgeActive:false, surgeMultiplier:1.5 }); // Feature: Surge Pricing
+  const [broadcastMsg,setBroadcastMsg]= useState(''); // Feature: Bulk Driver Broadcast
 
   // Access control
   if (!user || !ADMIN_EMAILS.includes(user.email)) {
@@ -6040,6 +6233,11 @@ function AdminDash({ go, user }) {
         setMessages(md); setAlerts(ad2); setUnfulfilled(ud); setPromos(prd);
         setStats({ customers:cd.length, drivers:dd.length, pendingDrivers:dd.filter(d=>d.status==='pending').length, activeDrivers:dd.filter(d=>d.isOnline).length, rides:rd.length, completed:completed.length, cancelled:rd.filter(r=>r.status==='cancelled').length, totalFare, partnerRequests:pd.filter(p=>p.status==='new').length });
       } catch(e) { console.error(e); }
+      // Load surge pricing config (Feature: Surge Pricing)
+      try {
+        const sSnap = await getDoc(doc(db,'settings','pricing'));
+        if (sSnap.exists()) setSurgeCfg(prev => ({ ...prev, ...sSnap.data() }));
+      } catch(e) {}
       setLoading(false);
     };
     load();
@@ -6049,6 +6247,12 @@ function AdminDash({ go, user }) {
   const updatePartner = async (id, data) => { await updateDoc(doc(db,'partnerRequests',id), data); setPartners(p=>p.map(d=>d.id===id?{...d,...data}:d)); };
   const updateMessage = async (id, data) => { await updateDoc(doc(db,'contactMessages',id), data); setMessages(p=>p.map(d=>d.id===id?{...d,...data}:d)); };
   const updateAlert   = async (id, data) => { await updateDoc(doc(db,'sosAlerts',id), data); setAlerts(p=>p.map(d=>d.id===id?{...d,...data}:d)); };
+  const updateCustomer = async (id, data) => { await updateDoc(doc(db,'customers',id), data); setCustomers(p=>p.map(c=>c.id===id?{...c,...data}:c)); }; // Feature: Customer Blacklist
+  const toggleSurge = async (next) => { // Feature: Surge Pricing
+    const cfg = { surgeActive: next, surgeMultiplier: surgeCfg.surgeMultiplier || 1.5, updatedAt: serverTimestamp(), updatedBy: user.email };
+    await setDoc(doc(db,'settings','pricing'), cfg, { merge:true });
+    setSurgeCfg(prev => ({ ...prev, surgeActive: next }));
+  };
 
   const vcRevenue  = Math.round(stats.totalFare * 0.15);
   const driverPayout = Math.round(stats.totalFare * 0.85);
@@ -6079,11 +6283,11 @@ function AdminDash({ go, user }) {
     ['overview','📊 Overview'], ['drivers','🚗 Drivers'], ['customers','👥 Customers'],
     ['rides','🛣️ Rides'], ['partners','🤝 Partners'], ['revenue','💰 Revenue'],
     ['promos','🎟️ Promos'], ['messages','📩 Messages'], ['alerts','🆘 Alerts'],
-    ['unfulfilled','📍 No Driver'],
+    ['unfulfilled','📍 No Driver'], ['performance','📈 Performance'], ['broadcast','📢 Broadcast'],
   ];
 
   const StatusBadge = ({ status }) => {
-    const cfg = { pending:{bg:'#fefce8',color:'#854d0e'}, approved:{bg:'#f0fff4',color:'#1a9e5a'}, active:{bg:'#f0fff4',color:'#1a9e5a'}, rejected:{bg:'#fff0f0',color:'#dc2626'}, suspended:{bg:'#fff0f0',color:'#dc2626'}, new:{bg:'#f5f0ff',color:'#6b21a8'}, completed:{bg:'#f0fff4',color:'#1a9e5a'}, cancelled:{bg:'#fff0f0',color:'#dc2626'}, searching:{bg:'#fefce8',color:'#854d0e'}, contacted:{bg:'#fefce8',color:'#854d0e'}, featured:{bg:'#f5f0ff',color:'#6b21a8'}, online:{bg:'#f0fff4',color:'#1a9e5a'}, offline:{bg:'#f5f5f5',color:'#888'} };
+    const cfg = { pending:{bg:'#fefce8',color:'#854d0e'}, approved:{bg:'#f0fff4',color:'#1a9e5a'}, active:{bg:'#f0fff4',color:'#1a9e5a'}, rejected:{bg:'#fff0f0',color:'#dc2626'}, suspended:{bg:'#fff0f0',color:'#dc2626'}, banned:{bg:'#1a1a2e',color:'#ffffff'}, scheduled:{bg:'#eff6ff',color:'#1d4ed8'}, new:{bg:'#f5f0ff',color:'#6b21a8'}, completed:{bg:'#f0fff4',color:'#1a9e5a'}, cancelled:{bg:'#fff0f0',color:'#dc2626'}, searching:{bg:'#fefce8',color:'#854d0e'}, contacted:{bg:'#fefce8',color:'#854d0e'}, featured:{bg:'#f5f0ff',color:'#6b21a8'}, online:{bg:'#f0fff4',color:'#1a9e5a'}, offline:{bg:'#f5f5f5',color:'#888'} };
     const c = cfg[status?.toLowerCase()] || {bg:'#f5f5f5',color:'#888'};
     return <span style={{ fontSize:10, background:c.bg, color:c.color, padding:'2px 8px', borderRadius:8, fontWeight:600, textTransform:'capitalize' }}>{status||'unknown'}</span>;
   };
@@ -6120,6 +6324,21 @@ function AdminDash({ go, user }) {
         {tab === 'overview' && (
           <div>
             <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:14 }}>Overview</div>
+            {/* ── Surge Pricing Toggle (Feature: Surge Pricing) ── */}
+            <div style={{ background: surgeCfg.surgeActive ? '#fffbeb' : '#fff', border:`1px solid ${surgeCfg.surgeActive ? '#fde047' : '#e5e7eb'}`, borderRadius:14, padding:'14px 16px', marginBottom:14, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap' }}>
+              <div>
+                <div style={{ fontSize:14, fontWeight:800, color: surgeCfg.surgeActive ? '#b45309' : '#1a1a2e' }}>⚡ Surge Pricing {surgeCfg.surgeActive ? `ACTIVE (${surgeCfg.surgeMultiplier||1.5}x)` : 'Off'}</div>
+                <div style={{ fontSize:11, color:'#888', marginTop:2 }}>Turn on during events or rain — all new fares are multiplied by {surgeCfg.surgeMultiplier||1.5}x instantly</div>
+              </div>
+              <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+                <select value={surgeCfg.surgeMultiplier||1.5} onChange={async e => { const m=Number(e.target.value); setSurgeCfg(prev=>({...prev,surgeMultiplier:m})); try { await setDoc(doc(db,'settings','pricing'), { surgeMultiplier:m }, { merge:true }); } catch(err){} }} style={{ padding:'8px 10px', borderRadius:10, border:'1px solid #e5e7eb', fontSize:12, fontWeight:700 }}>
+                  {[1.25,1.5,1.75,2].map(m => <option key={m} value={m}>{m}x</option>)}
+                </select>
+                <button onClick={() => toggleSurge(!surgeCfg.surgeActive)} style={{ padding:'9px 16px', borderRadius:10, border:'none', fontSize:12, fontWeight:800, cursor:'pointer', background: surgeCfg.surgeActive ? '#dc2626' : '#1a9e5a', color:'#fff' }}>
+                  {surgeCfg.surgeActive ? 'Turn OFF' : 'Turn ON'}
+                </button>
+              </div>
+            </div>
             <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))', gap:10, marginBottom:16 }}>
               {[
                 ['Total Customers',    stats.customers,       '#6b21a8','#f9f5ff','#e9d5ff'],
@@ -6236,12 +6455,93 @@ function AdminDash({ go, user }) {
                     <span>💰 J${spent.toLocaleString()} spent</span>
                     <span>📅 {c.createdAt ? new Date((c.createdAt?.seconds||0)*1000).toLocaleDateString() : '—'}</span>
                   </div>
+                  {/* ── Blacklist controls (Feature: Customer Blacklist) ── */}
+                  <div style={{ display:'flex', gap:6, marginTop:10 }}>
+                    {c.status === 'banned'
+                      ? <button onClick={() => updateCustomer(c.id, { status:'active' })} style={{ padding:'6px 12px', background:'#1a9e5a', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>✅ Unban — allow bookings</button>
+                      : <button onClick={() => { if (window.confirm(`Ban ${c.name||'this customer'} from booking rides?`)) updateCustomer(c.id, { status:'banned' }); }} style={{ padding:'6px 12px', background:'#dc2626', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>🚫 Ban from booking</button>}
+                  </div>
                 </div>
               );
             })}
             {customers.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}>No customers yet</div>}
           </div>
         )}
+
+        {/* ══ DRIVER PERFORMANCE (Feature: Performance Report) ══ */}
+        {tab === 'performance' && (
+          <div>
+            <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:12 }}>Driver Performance Report</div>
+            <div style={{ background:'#fff', borderRadius:14, boxShadow:'0 1px 6px rgba(0,0,0,0.06)', overflowX:'auto' }}>
+              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12, minWidth:640 }}>
+                <thead>
+                  <tr style={{ background:'#f9fafb' }}>
+                    {['Driver','Status','Rating','Rides','Cancelled','Cancel %','Earned (85%)','Last Active'].map(h => (
+                      <th key={h} style={{ textAlign:'left', padding:'10px 12px', fontSize:10, textTransform:'uppercase', letterSpacing:0.5, color:'#888', borderBottom:'1px solid #e5e7eb', whiteSpace:'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {drivers.filter(d => d.status==='approved' || d.status==='suspended').map(d => {
+                    const dRides    = rides.filter(r => r.driverId === d.id);
+                    const done      = dRides.filter(r => r.status === 'completed');
+                    const cancelled = dRides.filter(r => r.status === 'cancelled');
+                    const cancelPct = dRides.length ? Math.round(cancelled.length / dRides.length * 100) : 0;
+                    const earned    = Math.round(done.reduce((sum,r)=>sum+(r.fare||0),0) * 0.85);
+                    const lastRide  = Math.max(0, ...dRides.map(r => r.completedAt?.seconds || r.createdAt?.seconds || 0));
+                    const lastActive = d.isOnline ? 'Online now' : (d.lastOnlineAt?.seconds ? new Date(d.lastOnlineAt.seconds*1000).toLocaleDateString('en-JM',{day:'numeric',month:'short'}) : (lastRide ? new Date(lastRide*1000).toLocaleDateString('en-JM',{day:'numeric',month:'short'}) : '—'));
+                    return (
+                      <tr key={d.id} style={{ borderBottom:'1px solid #f5f5f5' }}>
+                        <td style={{ padding:'10px 12px', fontWeight:700, color:'#1a1a2e', whiteSpace:'nowrap' }}>{d.name||'—'}</td>
+                        <td style={{ padding:'10px 12px' }}><StatusBadge status={d.isOnline?'online':d.status}/></td>
+                        <td style={{ padding:'10px 12px', whiteSpace:'nowrap' }}>⭐ {(d.rating||5.0).toFixed(1)} <span style={{color:'#aaa'}}>({d.ratingCount||0})</span></td>
+                        <td style={{ padding:'10px 12px', fontWeight:700 }}>{done.length}</td>
+                        <td style={{ padding:'10px 12px', color: cancelled.length>0?'#dc2626':'#555' }}>{cancelled.length}</td>
+                        <td style={{ padding:'10px 12px', fontWeight:700, color: cancelPct>=20?'#dc2626':cancelPct>=10?'#b45309':'#1a9e5a' }}>{cancelPct}%</td>
+                        <td style={{ padding:'10px 12px', whiteSpace:'nowrap' }}>J${earned.toLocaleString()}</td>
+                        <td style={{ padding:'10px 12px', color: d.isOnline?'#1a9e5a':'#555', fontWeight: d.isOnline?700:400, whiteSpace:'nowrap' }}>{lastActive}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {drivers.filter(d=>d.status==='approved'||d.status==='suspended').length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}>No approved drivers yet</div>}
+            </div>
+          </div>
+        )}
+
+        {/* ══ BULK WHATSAPP BROADCAST (Feature: Bulk Message to Drivers) ══ */}
+        {tab === 'broadcast' && (() => {
+          const targets = drivers
+            .filter(d => d.status === 'approved')
+            .map(d => ({ ...d, wa: normalizeJmPhone(d.phone) }))
+            .filter(d => d.wa);
+          return (
+            <div>
+              <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:6 }}>Broadcast to Drivers</div>
+              <div style={{ fontSize:12, color:'#888', marginBottom:14 }}>Type one message, then tap each driver to open WhatsApp with it pre-filled. {targets.length} approved driver{targets.length!==1?'s':''} with valid phone numbers.</div>
+              <textarea value={broadcastMsg} onChange={e=>setBroadcastMsg(e.target.value)} placeholder="e.g. Heavy rain expected this evening — surge pricing is now ON. Drive safe!" rows={4}
+                style={{ width:'100%', padding:14, border:'1px solid #d0d3e0', borderRadius:12, fontSize:14, marginBottom:12, boxSizing:'border-box', fontFamily:'inherit', resize:'vertical' }}/>
+              <div style={{ display:'flex', gap:8, marginBottom:16, flexWrap:'wrap' }}>
+                <button onClick={() => { navigator.clipboard?.writeText(broadcastMsg).catch(()=>{}); }} disabled={!broadcastMsg.trim()} style={{ padding:'9px 16px', borderRadius:10, border:'1px solid #e5e7eb', background:'#fff', fontSize:12, fontWeight:700, cursor:'pointer', color:'#1a1a2e' }}>📋 Copy Message</button>
+                <button onClick={() => { navigator.clipboard?.writeText(targets.map(t=>'+'+t.wa).join(', ')).catch(()=>{}); }} disabled={!targets.length} style={{ padding:'9px 16px', borderRadius:10, border:'1px solid #e5e7eb', background:'#fff', fontSize:12, fontWeight:700, cursor:'pointer', color:'#1a1a2e' }}>📞 Copy All Numbers</button>
+              </div>
+              {targets.map(d => (
+                <div key={d.id} style={{ background:'#fff', borderRadius:12, padding:'12px 14px', marginBottom:8, display:'flex', alignItems:'center', justifyContent:'space-between', boxShadow:'0 1px 4px rgba(0,0,0,0.05)' }}>
+                  <div>
+                    <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>{d.name||'Driver'} {d.isOnline && <span style={{ fontSize:10, color:'#1a9e5a' }}>● online</span>}</div>
+                    <div style={{ fontSize:11, color:'#888' }}>+{d.wa}</div>
+                  </div>
+                  <a href={`https://wa.me/${d.wa}?text=${encodeURIComponent(broadcastMsg||'')}`} target="_blank" rel="noreferrer"
+                    style={{ padding:'8px 14px', background: broadcastMsg.trim() ? '#25D366' : '#e5e7eb', color: broadcastMsg.trim() ? '#fff' : '#999', borderRadius:10, fontSize:12, fontWeight:700, textDecoration:'none', pointerEvents: broadcastMsg.trim() ? 'auto' : 'none' }}>
+                    💬 Send on WhatsApp
+                  </a>
+                </div>
+              ))}
+              {targets.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888', background:'#fff', borderRadius:14 }}>No approved drivers with phone numbers yet</div>}
+            </div>
+          );
+        })()}
 
         {/* ══ RIDES ══ */}
         {tab === 'rides' && (
@@ -6584,6 +6884,39 @@ function DriverEarnings({ go, user }) {
   const [loading, setLoading] = useState(true);
   const [period,  setPeriod]  = useState('week');
 
+  // ── Payout tracking (Feature: Driver Payouts) ────────────────────────────
+  const [payouts,        setPayouts]        = useState([]);
+  const [payoutAmt,      setPayoutAmt]      = useState('');
+  const [payoutNote,     setPayoutNote]     = useState('');
+  const [payoutSaving,   setPayoutSaving]   = useState(false);
+  const [showPayoutForm, setShowPayoutForm] = useState(false);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    getDocs(query(collection(db,'payouts'), where('driverId','==',user.uid)))
+      .then(snap => setPayouts(snap.docs.map(d => ({ id:d.id, ...d.data() }))
+        .sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0))))
+      .catch(()=>{});
+  }, [user]);
+
+  const logPayout = async () => {
+    const amt = Math.round(Number(payoutAmt));
+    if (!amt || amt <= 0) return;
+    setPayoutSaving(true);
+    try {
+      const ref = await addDoc(collection(db,'payouts'), {
+        driverId:   user.uid,
+        driverName: user.name || '',
+        amount:     amt,
+        note:       payoutNote.trim() || null,
+        createdAt:  serverTimestamp(),
+      });
+      setPayouts(p => [{ id:ref.id, driverId:user.uid, amount:amt, note:payoutNote.trim()||null, createdAt:{ seconds: Date.now()/1000 } }, ...p]);
+      setPayoutAmt(''); setPayoutNote(''); setShowPayoutForm(false);
+    } catch(e) { console.error('Payout log error:', e); }
+    setPayoutSaving(false);
+  };
+
   useEffect(() => {
     if (!user?.uid) return;
     getDocs(query(
@@ -6609,6 +6942,10 @@ function DriverEarnings({ go, user }) {
   const totalEarn = Math.round(totalFare * 0.85);
   const totalFee  = Math.round(totalFare * 0.15);
   const avgFare   = filtered.length ? Math.round(totalFare / filtered.length) : 0;
+  // Unpaid balance = ALL-TIME earnings minus everything logged as paid out (Feature: Driver Payouts)
+  const allTimeEarn   = Math.round(rides.reduce((s,r) => s + (r.fare||0), 0) * 0.85);
+  const totalPaidOut  = payouts.reduce((s,p) => s + (p.amount||0), 0);
+  const unpaidBalance = allTimeEarn - totalPaidOut;
 
   return (
     <div style={{ ...s.content, background:'#f5f6fa', display:'flex', flexDirection:'column' }}>
@@ -6655,6 +6992,41 @@ function DriverEarnings({ go, user }) {
               <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.8, marginBottom:6 }}>Completed</div>
               <div style={{ fontSize:22, fontWeight:800, color:'#1a9e5a' }}>{filtered.length}</div>
             </div>
+          </div>
+
+          {/* ── Payout Tracking (Feature: Driver Payouts) ── */}
+          <div style={{ background:'#ffffff', borderRadius:14, padding:16, marginBottom:14, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+              <div style={{ fontSize:11, fontWeight:700, color:'#6b7280', textTransform:'uppercase', letterSpacing:0.8 }}>Payouts</div>
+              <button onClick={() => setShowPayoutForm(v=>!v)} style={{ padding:'6px 12px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:10, color:'#6b21a8', fontSize:11, fontWeight:700, cursor:'pointer' }}>{showPayoutForm ? 'Close' : '+ Log Payout'}</button>
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
+              <div style={{ background: unpaidBalance>0 ? '#fffbeb' : '#f0fff4', border:`1px solid ${unpaidBalance>0 ? '#fde047' : '#86efac'}`, borderRadius:12, padding:12 }}>
+                <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', letterSpacing:0.6, marginBottom:4 }}>Unpaid Balance</div>
+                <div style={{ fontSize:19, fontWeight:800, color: unpaidBalance>0 ? '#b45309' : '#1a9e5a' }}>J${unpaidBalance.toLocaleString()}</div>
+              </div>
+              <div style={{ background:'#f9fafb', border:'1px solid #e5e7eb', borderRadius:12, padding:12 }}>
+                <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', letterSpacing:0.6, marginBottom:4 }}>Total Paid Out</div>
+                <div style={{ fontSize:19, fontWeight:800, color:'#1a1a2e' }}>J${totalPaidOut.toLocaleString()}</div>
+              </div>
+            </div>
+            {showPayoutForm && (
+              <div style={{ background:'#f9fafb', borderRadius:12, padding:12, marginBottom:12 }}>
+                <input type="number" placeholder="Amount received (J$)" value={payoutAmt} onChange={e=>setPayoutAmt(e.target.value)} style={{ ...s.inp, marginBottom:8 }}/>
+                <input placeholder="Note (optional) — e.g. Bank transfer, Cash from office" value={payoutNote} onChange={e=>setPayoutNote(e.target.value)} style={{ ...s.inp, marginBottom:8 }}/>
+                <button onClick={logPayout} disabled={payoutSaving} style={{ ...s.btnG, marginBottom:0 }}>{payoutSaving ? 'Saving...' : '✅ Confirm — I received this payout'}</button>
+              </div>
+            )}
+            {payouts.slice(0,10).map(p => (
+              <div key={p.id} style={{ display:'flex', justifyContent:'space-between', padding:'8px 0', borderBottom:'1px solid #f5f5f5', fontSize:12 }}>
+                <div>
+                  <div style={{ color:'#1a1a2e', fontWeight:600 }}>J${(p.amount||0).toLocaleString()}</div>
+                  {p.note && <div style={{ color:'#888', fontSize:11 }}>{p.note}</div>}
+                </div>
+                <div style={{ color:'#888' }}>{p.createdAt?.seconds ? new Date(p.createdAt.seconds*1000).toLocaleDateString('en-JM',{day:'numeric',month:'short',year:'numeric'}) : '—'}</div>
+              </div>
+            ))}
+            {payouts.length===0 && !showPayoutForm && <div style={{ fontSize:12, color:'#888' }}>No payouts logged yet. Tap "+ Log Payout" when you receive money from VilleCabs.</div>}
           </div>
 
           <div style={{ fontSize:11, fontWeight:700, color:'#6b7280', textTransform:'uppercase', letterSpacing:0.8, marginBottom:10 }}>
@@ -6798,6 +7170,212 @@ function DriverNotifications({ go, user }) {
 }
 
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  NEW FEATURE COMPONENTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ══ Feature: Onboarding — first-launch 3-slide walkthrough ══
+function OnboardingFlow({ onDone }) {
+  const [i, setI] = useState(0);
+  const slides = [
+    { emoji:'🚕', bg:'#6b21a8', title:'Book a Ride',       sub:'Set your pickup and drop-off anywhere in Mandeville & Manchester. See your fare before you book.' },
+    { emoji:'📍', bg:'#4c1d95', title:'Track Your Driver', sub:'Watch your driver approach live on the map, chat in-app, and share your trip with family.' },
+    { emoji:'💵', bg:'#1e1b4b', title:'Pay on Arrival',    sub:'No card needed — pay your driver in cash when you reach. Simple and safe.' },
+  ];
+  const cur = slides[i];
+  const last = i === slides.length - 1;
+  return (
+    <div style={{ minHeight:'100vh', background:cur.bg, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'40px 28px', transition:'background 0.4s', position:'relative' }}>
+      <button onClick={onDone} style={{ position:'absolute', top:18, right:18, background:'rgba(255,255,255,0.12)', border:'none', color:'rgba(255,255,255,0.8)', fontSize:12, fontWeight:600, padding:'7px 14px', borderRadius:16, cursor:'pointer' }}>Skip</button>
+      <img src="/logo.png" alt="VilleCabs" style={{ height:34, objectFit:'contain', marginBottom:40, filter:'brightness(0) invert(1)' }}/>
+      <div style={{ fontSize:76, marginBottom:20, animation:'gentleBounce 2.4s ease-in-out infinite' }}>{cur.emoji}</div>
+      <h1 style={{ fontSize:26, fontWeight:800, color:'#fff', margin:'0 0 12px', textAlign:'center' }}>{cur.title}</h1>
+      <p style={{ fontSize:14, color:'rgba(255,255,255,0.85)', margin:'0 0 36px', textAlign:'center', lineHeight:1.7, maxWidth:300 }}>{cur.sub}</p>
+      <div style={{ display:'flex', gap:8, marginBottom:32 }}>
+        {slides.map((_, k) => <div key={k} onClick={() => setI(k)} style={{ width: k===i ? 22 : 8, height:8, borderRadius:4, background: k===i ? '#fff' : 'rgba(255,255,255,0.35)', cursor:'pointer', transition:'all 0.3s' }}/>)}
+      </div>
+      <button onClick={() => last ? onDone() : setI(i+1)}
+        style={{ width:'100%', maxWidth:300, padding:'15px', background:'#fff', color:cur.bg, border:'none', borderRadius:14, fontSize:15, fontWeight:800, cursor:'pointer' }}>
+        {last ? "Let's Go 🚕" : 'Next →'}
+      </button>
+    </div>
+  );
+}
+
+// ══ Feature: Scheduled Rides — customer's upcoming rides card ══
+function ScheduledRidesCard({ user, go }) {
+  const [upcoming, setUpcoming] = useState([]);
+  useEffect(() => {
+    if (!user?.uid) return;
+    const q = query(collection(db,'bookings'), where('customerId','==',user.uid), where('status','==','scheduled'));
+    const unsub = onSnapshot(q, snap => {
+      setUpcoming(snap.docs.map(d=>({id:d.id,...d.data()}))
+        .sort((a,b)=>(a.scheduledFor?.seconds||0)-(b.scheduledFor?.seconds||0)));
+    }, ()=>{});
+    return () => unsub();
+  }, [user]);
+  if (!upcoming.length) return null;
+  const cancelRide = async (id) => {
+    if (!window.confirm('Cancel this scheduled ride?')) return;
+    try { await updateDoc(doc(db,'bookings',id), { status:'cancelled', cancelledBy:'customer', cancelledAt:serverTimestamp() }); } catch(e) {}
+  };
+  return (
+    <div style={{ margin:'10px 14px 0' }}>
+      {upcoming.map(r => (
+        <div key={r.id} style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:12, padding:'12px 14px', marginBottom:8 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:'#1d4ed8' }}>🗓️ Scheduled — {fmtScheduled(r.scheduledFor)}</div>
+            <button onClick={() => cancelRide(r.id)} style={{ background:'none', border:'none', color:'#dc2626', fontSize:11, fontWeight:700, cursor:'pointer' }}>Cancel</button>
+          </div>
+          <div style={{ fontSize:12, color:'#333' }}>{r.pickup?.address?.split(',')[0]||'Pickup'} → {r.dropoff?.address?.split(',')[0]||'Drop-off'} · {r.vehicleType} · J${(r.fare||0).toLocaleString()}</div>
+          <div style={{ fontSize:11, color:'#555', marginTop:4 }}>{r.driverId ? `✅ ${r.driverName||'A driver'} has accepted this ride` : '⏳ Waiting for a driver to accept'}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ══ Feature: Scheduled Rides — driver view: claim & start scheduled rides ══
+function DriverScheduledRides({ user, go, setBookingId }) {
+  const [scheduled, setScheduled] = useState([]);
+  const [busy,      setBusy]      = useState('');
+  useEffect(() => {
+    if (!user?.uid) return;
+    const q = query(collection(db,'bookings'), where('status','==','scheduled'));
+    const unsub = onSnapshot(q, snap => {
+      setScheduled(snap.docs.map(d=>({id:d.id,...d.data()}))
+        .filter(r => !r.driverId || r.driverId === user.uid)
+        .sort((a,b)=>(a.scheduledFor?.seconds||0)-(b.scheduledFor?.seconds||0)));
+    }, ()=>{});
+    return () => unsub();
+  }, [user]);
+  if (!scheduled.length) return null;
+  const acceptRide = async (r) => {
+    setBusy(r.id);
+    try {
+      const dSnap = await getDoc(doc(db,'drivers',user.uid));
+      const d = dSnap.exists() ? dSnap.data() : {};
+      await updateDoc(doc(db,'bookings',r.id), {
+        driverId: user.uid, driverName: d.name || user.name || 'Driver',
+        vehicleMake: d.vehicleMake||'', vehicleModel: d.vehicleModel||'', licensePlate: d.licensePlate||'',
+        acceptedAt: serverTimestamp(),
+      });
+    } catch(e) { console.error(e); }
+    setBusy('');
+  };
+  const startRide = async (r) => {
+    setBusy(r.id);
+    try {
+      await updateDoc(doc(db,'bookings',r.id), { status:'active', startedAt: serverTimestamp() });
+      setBookingId(r.id);
+      go('driver-active');
+    } catch(e) { console.error(e); }
+    setBusy('');
+  };
+  const canStart = (r) => {
+    const t = r.scheduledFor?.seconds ? r.scheduledFor.seconds*1000 : new Date(r.scheduledFor).getTime();
+    return t - Date.now() < 30*60000; // unlocks 30 min before pickup time
+  };
+  return (
+    <div style={{ margin:'0 14px 12px' }}>
+      <div style={{ fontSize:11, fontWeight:700, color:'#1d4ed8', textTransform:'uppercase', letterSpacing:0.8, marginBottom:8 }}>🗓️ Scheduled Rides ({scheduled.length})</div>
+      {scheduled.map(r => {
+        const mine = r.driverId === user.uid;
+        return (
+          <div key={r.id} style={{ background: mine ? '#eff6ff' : '#fff', border:`1px solid ${mine ? '#bfdbfe' : '#e5e7eb'}`, borderRadius:12, padding:'12px 14px', marginBottom:8 }}>
+            <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:4 }}>{fmtScheduled(r.scheduledFor)} · J${(r.fare||0).toLocaleString()}</div>
+            <div style={{ fontSize:12, color:'#555', marginBottom:8 }}>{r.pickup?.address?.split(',')[0]||'Pickup'} → {r.dropoff?.address?.split(',')[0]||'Drop-off'} · {r.vehicleType} · {r.customerName||'Customer'}</div>
+            {!mine && <button disabled={busy===r.id} onClick={() => acceptRide(r)} style={{ padding:'8px 14px', background:'#1d4ed8', color:'#fff', border:'none', borderRadius:10, fontSize:12, fontWeight:700, cursor:'pointer' }}>{busy===r.id?'Accepting...':'✋ Accept Scheduled Ride'}</button>}
+            {mine && (canStart(r)
+              ? <button disabled={busy===r.id} onClick={() => startRide(r)} style={{ padding:'8px 14px', background:'#1a9e5a', color:'#fff', border:'none', borderRadius:10, fontSize:12, fontWeight:700, cursor:'pointer' }}>{busy===r.id?'Starting...':'🚗 Start This Ride Now'}</button>
+              : <div style={{ fontSize:11, color:'#1d4ed8', fontWeight:600 }}>✅ Yours — the Start button unlocks 30 minutes before pickup</div>)}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ══ Feature: Partner Locations — preferred pickup spots across Manchester ══
+function PartnerLocations({ go, user, setPickupData }) {
+  const [partners,      setPartners]      = useState([]);
+  const [onlineDrivers, setOnlineDrivers] = useState(0);
+  const [pLoading,      setPLoading]      = useState(true);
+  useEffect(() => {
+    getDocs(collection(db,'partnerRequests')).then(snap => {
+      setPartners(snap.docs.map(d=>({id:d.id,...d.data()}))
+        .filter(p => ['approved','featured'].includes((p.status||'').toLowerCase())));
+      setPLoading(false);
+    }).catch(() => setPLoading(false));
+    getDocs(query(collection(db,'drivers'), where('status','==','approved'), where('isOnline','==',true)))
+      .then(snap => setOnlineDrivers(snap.size)).catch(()=>{});
+  }, []);
+  const typeIcon = (t) => ({ restaurant:'🍽️', hotel:'🏨', hospital:'🏥', school:'🏫', supermarket:'🛒', pharmacy:'💊', bar:'🍹', church:'⛪' }[(t||'').toLowerCase()] || '🏢');
+  const bookFromHere = (p) => {
+    if (!user) { go('customer-login'); return; }
+    const applyAndGo = (coords) => {
+      if (typeof setPickupData === 'function') {
+        setPickupData({ address: `${p.businessName||p.name||'Partner'} — ${p.address||'Manchester, Jamaica'}`, coords: coords || MANCHESTER_CENTER, passengers: 1 });
+      }
+      go('pin-dropoff');
+    };
+    try {
+      if (window.google?.maps?.Geocoder && p.address) {
+        new window.google.maps.Geocoder().geocode({ address: p.address + ', Jamaica' }, (res, status) => {
+          if (status === 'OK' && res?.[0]) {
+            const loc = res[0].geometry.location;
+            applyAndGo({ lat: loc.lat(), lng: loc.lng() });
+          } else applyAndGo(null);
+        });
+      } else applyAndGo(null);
+    } catch(e) { applyAndGo(null); }
+  };
+  return (
+    <div style={{ ...s.content, background:'#f5f6fa' }}>
+      <TopBar title="Partner Pickup Locations" onBack={() => go(user ? 'customer-dash' : 'splash')} go={go} user={user}/>
+      <div style={{ background:'linear-gradient(135deg,#6b21a8,#4c1d95)', padding:'22px 18px', textAlign:'center' }}>
+        <div style={{ fontSize:34, marginBottom:6 }}>🤝</div>
+        <div style={{ fontSize:17, fontWeight:800, color:'#fff' }}>VilleCabs Preferred Pickups</div>
+        <div style={{ fontSize:12, color:'rgba(255,255,255,0.8)', marginTop:4 }}>Trusted businesses across Manchester where VilleCabs picks up</div>
+        <div style={{ display:'inline-flex', alignItems:'center', gap:6, marginTop:12, background:'rgba(255,255,255,0.14)', borderRadius:16, padding:'6px 14px' }}>
+          <span style={{ width:8, height:8, borderRadius:'50%', background: onlineDrivers>0 ? '#4ade80' : '#f87171', animation: onlineDrivers>0 ? 'pulse 1.6s infinite' : 'none' }}/>
+          <span style={{ fontSize:12, color:'#fff', fontWeight:700 }}>{onlineDrivers>0 ? `${onlineDrivers} driver${onlineDrivers!==1?'s':''} online now` : 'No drivers online right now'}</span>
+        </div>
+      </div>
+      <div style={{ padding:'16px 16px 40px', maxWidth:600, margin:'0 auto' }}>
+        {pLoading && <div style={{ textAlign:'center', padding:40, color:'#888' }}>Loading partners...</div>}
+        {!pLoading && partners.length===0 && (
+          <div style={{ background:'#fff', borderRadius:14, padding:28, textAlign:'center' }}>
+            <div style={{ fontSize:32, marginBottom:8 }}>🏢</div>
+            <div style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginBottom:4 }}>Partner locations coming soon</div>
+            <div style={{ fontSize:12, color:'#888' }}>Restaurants, hotels and hospitals across Manchester are joining VilleCabs.</div>
+          </div>
+        )}
+        {partners.map(p => (
+          <div key={p.id} style={{ background:'#fff', borderRadius:14, padding:16, marginBottom:12, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
+            <div style={{ display:'flex', gap:12, alignItems:'flex-start', marginBottom:10 }}>
+              <div style={{ fontSize:28 }}>{typeIcon(p.businessType)}</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:15, fontWeight:800, color:'#1a1a2e' }}>{p.businessName||p.name||'Partner Business'}</div>
+                <div style={{ fontSize:12, color:'#888', marginTop:2 }}>{p.businessType ? p.businessType.charAt(0).toUpperCase()+p.businessType.slice(1) : 'Business'} · {p.address||'Manchester, Jamaica'}</div>
+              </div>
+              {(p.status||'').toLowerCase()==='featured' && <span style={{ fontSize:10, background:'#f5f0ff', color:'#6b21a8', padding:'3px 8px', borderRadius:8, fontWeight:700 }}>⭐ Featured</span>}
+            </div>
+            <button onClick={() => bookFromHere(p)} style={{ width:'100%', padding:'11px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:11, fontSize:13, fontWeight:700, cursor:'pointer' }}>
+              🚕 Book pickup from here
+            </button>
+          </div>
+        ))}
+        <div style={{ background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:14, padding:16, textAlign:'center', marginTop:6 }}>
+          <div style={{ fontSize:13, fontWeight:700, color:'#6b21a8', marginBottom:4 }}>Own a business in Manchester?</div>
+          <div style={{ fontSize:12, color:'#555', marginBottom:10 }}>Become a preferred pickup location and give your customers safe rides home.</div>
+          <button onClick={() => go('partner-with-us')} style={{ padding:'9px 18px', background:'#fff', border:'1px solid #d8b4fe', borderRadius:10, color:'#6b21a8', fontSize:12, fontWeight:700, cursor:'pointer' }}>Partner With Us →</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [screen,      setScreen]      = useState('splash');
   const [user,        setUser]        = useState(null);
@@ -6805,6 +7383,24 @@ export default function App() {
   const [pickupData,  setPickupData]  = useState(null);
   const [dropoffData, setDropoffData] = useState(null);
   const [loading,     setLoading]     = useState(true);
+
+  // Feature: Onboarding — show 3-slide walkthrough on first launch
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    try { return !localStorage.getItem('vc_onboarded'); } catch(e) { return false; }
+  });
+
+  // Feature: Dark Mode — global theme preference
+  const [darkPref, setDarkPrefState] = useState(getDarkPref());
+  useEffect(() => {
+    const sync = () => setDarkPrefState(getDarkPref());
+    window.addEventListener('vc-theme', sync);
+    return () => window.removeEventListener('vc-theme', sync);
+  }, []);
+  useEffect(() => {
+    // These screens already use the VilleCabs dark design — don't double-invert them
+    const nativeDark = ['pin-pickup','pin-dropoff','live-ride'];
+    try { document.documentElement.setAttribute('data-vc-dark', darkPref && !nativeDark.includes(screen) ? '1' : '0'); } catch(e) {}
+  }, [darkPref, screen]);
 
   useEffect(() => {
     let done = false;
@@ -6949,6 +7545,7 @@ export default function App() {
     'login':                  <CustomerLogin {...props}/>,
     'login-choice':           <CustomerLogin {...props}/>,
     admin:                    <AdminDash {...props}/>,
+    'partner-locations':      <PartnerLocations {...props}/>,
   };
 
   return (
@@ -6956,7 +7553,9 @@ export default function App() {
       <div style={s.screen}>
         <GlobalStyles/>
         <MapBg/>
-        {screens[screen]||<Splash {...props}/>}
+        {showOnboarding && !user && screen === 'splash'
+          ? <OnboardingFlow onDone={() => { try { localStorage.setItem('vc_onboarded','1'); } catch(e) {} setShowOnboarding(false); }}/>
+          : (screens[screen]||<Splash {...props}/>)}
       </div>
     </ErrorBoundary>
   );
