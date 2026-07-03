@@ -1230,7 +1230,7 @@ function TermsScreen({ go, user }) {
   };
 
   return (
-    <div style={{ ...s.content, background:'transparent' }}>
+    <div style={{ ...s.content, background:'#0f1a35' }}>
       <div style={{ background:'rgba(10,15,35,0.92)', padding:'16px 18px', backdropFilter:'blur(10px)', display:'flex', alignItems:'center', gap:10 }}>
         <img src="/logo.png" alt="V" onClick={() => go('customer-dash')} style={{cursor:'pointer',  width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
         <span style={{ color:WHITE, fontSize:16, fontWeight:600 }}>VilleCabs</span>
@@ -1335,7 +1335,7 @@ function WelcomeTips({ go, user }) {
   const t = tips[step];
 
   return (
-    <div style={{ ...s.content, background:'transparent' }}>
+    <div style={{ ...s.content, background:'#0f1a35' }}>
       <div style={{ background:'rgba(10,15,35,0.92)', padding:'16px 18px', backdropFilter:'blur(10px)', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
           <img src="/logo.png" alt="V" onClick={() => go('customer-dash')} style={{cursor:'pointer',  width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
@@ -1379,7 +1379,7 @@ function WelcomeTips({ go, user }) {
 // ── ABOUT US ──────────────────────────────────────────────────────────────────
 function AboutUs({ go, user }) {
   return (
-    <div style={{ ...s.content, background:'transparent' }}>
+    <div style={{ ...s.content, background:'#0f1a35' }}>
       <TopBar title="About VilleCabs" go={go} user={user}/>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:40 }}>
         <div style={{ textAlign:'center', marginBottom:24 }}>
@@ -1478,7 +1478,7 @@ function ContactUs({ go, user }) {
   };
 
   return (
-    <div style={{ ...s.content, background:'transparent' }}>
+    <div style={{ ...s.content, background:'#0f1a35' }}>
       <div style={s.topBar}><span style={s.topTitle}>Contact Support</span></div>
       <div style={{ padding:'14px 16px 0' }}>
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
@@ -1535,7 +1535,7 @@ function HelpScreen({ go, user }) {
   if (section === 'tips')  return <WelcomeTips go={(s) => s==='customer-dash'?setSection(null):go(s)} user={user} readOnly/>;
 
   return (
-    <div style={{ ...s.content, background:'transparent' }}>
+    <div style={{ ...s.content, background:'#0f1a35' }}>
       <TopBar title="Help & Info" go={go} user={user}/>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto' }}>
         {[
@@ -2466,7 +2466,7 @@ function CustomerSettings({ go, user, setUser }) {
   };
 
   return (
-    <div style={{ ...s.content, background:'transparent' }}>
+    <div style={{ ...s.content, background:'#0f1a35' }}>
       <TopBar title="Settings" go={go} user={user}/>
       <div style={{ padding:20, maxWidth:420, margin:'0 auto' }}>
 
@@ -3023,6 +3023,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
   const [scheduledAt, setScheduledAt] = useState('');
   const [scheduledOk, setScheduledOk] = useState(false);
   const [surgeCfg,    setSurgeCfg]    = useState(null);    // (Feature: Surge Pricing)
+  const scheduledInputRef = useRef(null); // lets us open the native date/time picker programmatically
 
   // Live surge pricing config controlled by admin (settings/pricing)
   useEffect(() => {
@@ -3304,6 +3305,12 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
   const v = vehicles[sel];
 
   // ── Scheduled ride confirmation screen (Feature: Scheduled Rides) ─────────
+  useEffect(() => {
+    if (!scheduledOk) return;
+    const t = setTimeout(() => go('customer-dash'), 2500);
+    return () => clearTimeout(t);
+  }, [scheduledOk]);
+
   if (scheduledOk) {
     return (
       <div style={{ ...s.content, background:'#f5f6fa', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'100vh', padding:24 }}>
@@ -3457,23 +3464,38 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
           <div style={{ display:'flex', gap:8, marginBottom: rideTime==='later' ? 10 : 0 }}>
             {[['now','🚕 Ride Now'],['later','🗓️ Schedule']].map(([k,l]) => (
               <button key={k} onClick={() => setRideTime(k)}
-                style={{ flex:1, padding:'9px 0', borderRadius:9, border:'none', fontWeight:700, fontSize:12, cursor:'pointer',
-                  background: rideTime===k ? YELLOW : 'rgba(255,255,255,0.08)',
-                  color: rideTime===k ? DARK : 'rgba(255,255,255,0.6)' }}>{l}</button>
+                style={{ flex:1, padding:'9px 0', borderRadius:9, border: rideTime===k ? 'none' : '1px solid rgba(255,255,255,0.25)', fontWeight:700, fontSize:12, cursor:'pointer',
+                  background: rideTime===k ? YELLOW : 'rgba(255,255,255,0.14)',
+                  color: rideTime===k ? DARK : 'rgba(255,255,255,0.92)' }}>{l}</button>
             ))}
           </div>
           {rideTime==='later' && (
             <div>
-              <input type="datetime-local" value={scheduledAt}
+              <input ref={scheduledInputRef} type="datetime-local" value={scheduledAt}
                 min={(d => new Date(d.getTime() - d.getTimezoneOffset()*60000).toISOString().slice(0,16))(new Date(Date.now()+30*60000))}
                 onChange={e => setScheduledAt(e.target.value)}
-                style={{ width:'100%', padding:'11px 12px', background:'rgba(255,255,255,0.08)', border:'0.5px solid rgba(255,255,255,0.2)', borderRadius:9, color:'#fff', fontSize:14, outline:'none', colorScheme:'dark', boxSizing:'border-box' }}/>
+                onClick={e => { try { e.target.showPicker && e.target.showPicker(); } catch(err) {} }}
+                style={{ width:'100%', padding:'11px 12px', background:'rgba(255,255,255,0.1)', border:'1px solid rgba(255,255,255,0.3)', borderRadius:9, color:'#fff', fontSize:14, outline:'none', colorScheme:'dark', boxSizing:'border-box' }}/>
               <div style={{ fontSize:11, color:'rgba(255,255,255,0.45)', marginTop:6 }}>Pick a time at least 30 minutes ahead — e.g. tomorrow 6:00 AM for the airport. A driver will accept it in advance.</div>
             </div>
           )}
         </div>
 
-        <button onClick={handleBook} disabled={loading}
+        {/* Error shown right above the button too, so it's visible without scrolling up (Fix: scheduling silently failing off-screen) */}
+        {error && <div style={{ ...s.errBox, marginTop:0 }}>⚠️ {error}</div>}
+
+        <button onClick={() => {
+            if (rideTime === 'later' && !scheduledAt) {
+              // Nothing picked yet — open the native calendar instead of silently failing
+              try { scheduledInputRef.current && scheduledInputRef.current.showPicker && scheduledInputRef.current.showPicker(); } catch(err) {}
+              if (!scheduledInputRef.current || !scheduledInputRef.current.showPicker) {
+                scheduledInputRef.current && scheduledInputRef.current.focus();
+              }
+              setError('Please pick a date and time for your ride first.');
+              return;
+            }
+            handleBook();
+          }} disabled={loading}
           style={{ width:'100%', padding:'16px', background:loading?'#2a2a2a':'linear-gradient(135deg,#6A1BB9,#4c1d95)', color:loading?'rgba(255,255,255,0.3)':'#ffffff', border:'none', borderRadius:14, fontSize:15, fontWeight:700, cursor:loading?'default':'pointer', boxShadow:loading?'none':'0 4px 20px rgba(106,27,185,0.5)', letterSpacing:0.3, marginTop:4 }}>
           {loading
             ? (rideTime==='later' ? 'Scheduling ride...' : 'Creating booking...')
@@ -4262,7 +4284,7 @@ function DriverTermsScreen({ go, user }) {
   };
 
   return (
-    <div style={{ ...s.content, background:'transparent' }}>
+    <div style={{ ...s.content, background:'#0f1a35' }}>
       <div style={{ background:'rgba(10,15,35,0.92)', padding:'16px 18px', backdropFilter:'blur(10px)', display:'flex', alignItems:'center', gap:10 }}>
         <img src="/logo.png" alt="V" onClick={() => go('driver-dash')} style={{cursor:'pointer',  width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
         <span style={{ color:WHITE, fontSize:16, fontWeight:600 }}>VilleCabs — Driver Agreement</span>
@@ -4368,7 +4390,7 @@ function DriverWelcomeTips({ go, user }) {
   const t = tips[step];
 
   return (
-    <div style={{ ...s.content, background:'transparent' }}>
+    <div style={{ ...s.content, background:'#0f1a35' }}>
       <div style={{ background:'rgba(10,15,35,0.92)', padding:'16px 18px', backdropFilter:'blur(10px)', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
           <img src="/logo.png" alt="V" onClick={() => go('driver-dash')} style={{cursor:'pointer',  width:32, height:32, borderRadius:'50%', objectFit:'cover' }}/>
@@ -4406,7 +4428,7 @@ function DriverWelcomeTips({ go, user }) {
 // ── DRIVER ABOUT US ───────────────────────────────────────────────────────────
 function DriverAboutUs({ go, user }) {
   return (
-    <div style={{ ...s.content, background:'transparent' }}>
+    <div style={{ ...s.content, background:'#0f1a35' }}>
       <TopBar title="About VilleCabs" go={go} user={user}/>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:40 }}>
         <div style={{ textAlign:'center', marginBottom:24 }}>
@@ -4466,7 +4488,7 @@ function DriverContactUs({ go, user }) {
   };
 
   return (
-    <div style={{ ...s.content, background:'transparent' }}>
+    <div style={{ ...s.content, background:'#0f1a35' }}>
       <TopBar title="Contact Us" go={go} user={user}/>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:40 }}>
         <div style={{ background:'rgba(232,180,0,0.08)', border:'0.5px solid rgba(232,180,0,0.2)', borderRadius:12, padding:14, marginBottom:20, display:'flex', alignItems:'center', gap:12 }}>
@@ -4495,7 +4517,7 @@ function DriverHelp({ go, user }) {
   if (section === 'terms') return <DriverTermsScreen go={() => setSection(null)} user={user}/>;
   if (section === 'tips')  return <DriverWelcomeTips go={() => setSection(null)} user={user}/>;
   return (
-    <div style={{ ...s.content, background:'transparent' }}>
+    <div style={{ ...s.content, background:'#0f1a35' }}>
       <TopBar title="Help & Info" go={go} user={user}/>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto' }}>
         {[
@@ -5703,7 +5725,7 @@ function DriverSettings({ go, user, setUser }) {
   };
 
   return (
-    <div style={{ ...s.content, background:'transparent' }}>
+    <div style={{ ...s.content, background:'#0f1a35' }}>
       <TopBar title="Settings" go={go} user={user}/>
       <div style={{ padding:20, maxWidth:420, margin:'0 auto' }}>
 
@@ -5857,7 +5879,7 @@ function ChatScreen({ go, user, bookingId }) {
   };
 
   return (
-    <div style={{ ...s.content, background:'transparent', display:'flex', flexDirection:'column', height:'100vh', maxHeight:'100vh', overflow:'hidden' }}>
+    <div style={{ ...s.content, background:'#0f1a35', display:'flex', flexDirection:'column', height:'100vh', maxHeight:'100vh', overflow:'hidden' }}>
 
       {/* Header */}
       <div style={{ background:DARK, padding:'12px 16px', display:'flex', alignItems:'center', gap:12, flexShrink:0, borderBottom:'0.5px solid rgba(255,255,255,0.1)' }}>
@@ -7108,7 +7130,7 @@ function PrivacyPolicy({ go, user }) {
     { n:'10', title:'Policy Updates', body:'VilleCabs may update this Privacy Policy periodically. Updates become effective once published.' },
   ];
   return (
-    <div style={{ ...s.content, background:'transparent' }}>
+    <div style={{ ...s.content, background:'#0f1a35' }}>
       <TopBar title="Privacy Policy" onBack={() => go(user ? (user.role==='driver'?'driver-dash':'customer-dash') : 'splash')} go={go} user={user}/>
       <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:44 }}>
 
