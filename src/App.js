@@ -1199,7 +1199,7 @@ function DriverLogin({ go, user, setUser }) {
 
 // ── DRIVER SIGNUP ─────────────────────────────────────────────────────────────
 function DriverSignup({ go, user }) {
-  const [form, setForm]       = useState({ name:'',trn:'',dob:'',phone:'',email:'',password:'',make:'',model:'',plate:'' });
+  const [form, setForm]       = useState({ name:'',trn:'',dob:'',phone:'',email:'',password:'',make:'',model:'',color:'',plate:'' });
   const [docs, setDocs]       = useState({ license:null, fitness:null, registration:null, profilePhoto:null, vehiclePhoto:null });
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState('');
@@ -1236,7 +1236,7 @@ function DriverSignup({ go, user }) {
       setError('Saving your profile...');
       await setDoc(doc(db,'drivers',cred.user.uid), {
         name:form.name, trn:form.trn, dob:form.dob, phone:form.phone, email:form.email,
-        vehicleMake:form.make, vehicleModel:form.model, licensePlate:form.plate,
+        vehicleMake:form.make, vehicleModel:form.model, vehicleColor:form.color, licensePlate:form.plate,
         status:'pending', role:'driver', createdAt:serverTimestamp(),
         profilePhotoUrl, vehiclePhotoUrl,
         docs:{ license:licenseUrl, fitness:fitnessUrl, registration:registrationUrl, profilePhoto:profilePhotoUrl, vehiclePhoto:vehiclePhotoUrl },
@@ -1269,6 +1269,8 @@ function DriverSignup({ go, user }) {
           <input style={s.inp} type="text" placeholder="e.g. Toyota" value={form.make} onChange={e => set('make',e.target.value)}/>
           <label style={s.lbl}>Vehicle Model</label>
           <input style={s.inp} type="text" placeholder="e.g. Corolla" value={form.model} onChange={e => set('model',e.target.value)}/>
+          <label style={s.lbl}>Vehicle Color</label>
+          <input style={s.inp} type="text" placeholder="e.g. Silver" value={form.color} onChange={e => set('color',e.target.value)}/>
           <label style={s.lbl}>Licence Plate</label>
           <input style={s.inp} type="text" placeholder="e.g. 1234AB" value={form.plate} onChange={e => set('plate',e.target.value)}/>
         </div>
@@ -4222,12 +4224,13 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
                   return `~${mins} min away`;
                 })()]] : []),
                 ['Vehicle', booking.vehicleMake ? `${booking.vehicleMake} ${booking.vehicleModel||''}` : '--'],
+                ...(booking.vehicleColor ? [['Color', booking.vehicleColor]] : []),
                 ['Plate', booking.licensePlate||'--'],
                 ['Distance', `${booking.distanceKm||'--'} km`],
                 ['Vehicle type', booking.vehicleType||'--'],
                 ['Payment', booking.paymentMethod||'Cash'],
-              ].map(([k,v],i) => (
-                <div key={i} style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:i<5?8:0 }}>
+              ].map(([k,v],i,arr) => (
+                <div key={i} style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:i<arr.length-1?8:0 }}>
                   <span style={{ color:'rgba(255,255,255,0.5)' }}>{k}</span>
                   <span style={{ color:WHITE, fontWeight:500 }}>{v}</span>
                 </div>
@@ -4321,6 +4324,12 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
                   </div>
                 </div>
               </div>
+              {/* Vehicle photo (Feature: show driver's vehicle to customer) */}
+              {booking.vehiclePhotoUrl && (
+                <div style={{ marginBottom:8, borderRadius:12, overflow:'hidden', border:'1px solid rgba(255,255,255,0.1)' }}>
+                  <img src={booking.vehiclePhotoUrl} alt="Your driver's vehicle" style={{ width:'100%', height:130, objectFit:'cover', display:'block' }}/>
+                </div>
+              )}
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
                 <div style={{ background:'rgba(255,255,255,0.04)', borderRadius:10, padding:'10px 12px' }}>
                   <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', marginBottom:3 }}>Make & Model</div>
@@ -4330,6 +4339,12 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
                   <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', marginBottom:3 }}>License Plate</div>
                   <div style={{ fontSize:15, fontWeight:700, color:YELLOW, letterSpacing:1 }}>{booking.licensePlate||'--'}</div>
                 </div>
+                {booking.vehicleColor && (
+                  <div style={{ background:'rgba(255,255,255,0.04)', borderRadius:10, padding:'10px 12px', gridColumn:'1 / -1' }}>
+                    <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', marginBottom:3 }}>Color</div>
+                    <div style={{ fontSize:13, fontWeight:500, color:WHITE }}>{booking.vehicleColor}</div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -4916,6 +4931,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
         vehicleColor: dData.vehicleColor || '',
         licensePlate: dData.licensePlate || '',
         profilePhotoUrl: dData.profilePhotoUrl || '',
+        vehiclePhotoUrl: dData.vehiclePhotoUrl || '',
         rating:       dData.rating || 5.0,
         status:       'active',
         acceptedAt:   serverTimestamp(),
@@ -7936,7 +7952,8 @@ function DriverScheduledRides({ user, go, setBookingId }) {
       const d = dSnap.exists() ? dSnap.data() : {};
       await updateDoc(doc(db,'bookings',r.id), {
         driverId: user.uid, driverName: d.name || user.name || 'Driver',
-        vehicleMake: d.vehicleMake||'', vehicleModel: d.vehicleModel||'', licensePlate: d.licensePlate||'',
+        vehicleMake: d.vehicleMake||'', vehicleModel: d.vehicleModel||'', vehicleColor: d.vehicleColor||'', licensePlate: d.licensePlate||'',
+        profilePhotoUrl: d.profilePhotoUrl||'', vehiclePhotoUrl: d.vehiclePhotoUrl||'',
         acceptedAt: serverTimestamp(),
       });
     } catch(e) { console.error(e); }
