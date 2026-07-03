@@ -75,6 +75,36 @@ const sendWelcomeEmail = async (toEmail, toName, role = 'customer') => {
     console.warn('Welcome email failed:', e);
   }
 };
+
+// Send an admin support reply via EmailJS (Feature: Support Inbox Replies)
+// Reuses the same working service/template already proven for contact notifications —
+// admin can refine the wording of template_ss6rofa in the EmailJS dashboard any time
+// without needing a code change.
+const sendReplyEmail = async (toEmail, toName, subject, replyText) => {
+  try {
+    const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        service_id:  'service_8fp53l4',
+        template_id: 'template_ss6rofa',
+        user_id:     'NYE1IvkRipsFf-pQg',
+        template_params: {
+          to_email:   toEmail,
+          to_name:    toName || 'VilleCabs Customer',
+          from_name:  'VilleCabs Support',
+          from_email: 'admin@villecabs.com',
+          subject:    subject ? `Re: ${subject}` : 'Re: Your message to VilleCabs',
+          otp_code:   replyText,
+        },
+      }),
+    });
+    return res.ok;
+  } catch(e) {
+    console.warn('Support reply email failed:', e);
+    return false;
+  }
+};
 const LIBRARIES       = ['places'];
 
 // ── Dark mode helpers (Feature: Dark Mode) ───────────────────────────────────
@@ -1508,13 +1538,14 @@ function ContactUs({ go, user }) {
     if (!form.name||!form.email||!form.subject||!form.message) { setError('Please fill in all fields.'); return; }
     setLoading(true);
     try {
-      // Save to Firestore contact_submissions collection
-      await addDoc(collection(db,'contact_submissions'), {
+      // Save to Firestore contactMessages collection (read by AdminDash's Support Messages tab)
+      await addDoc(collection(db,'contactMessages'), {
         name:      form.name,
         email:     form.email,
         subject:   form.subject,
         message:   form.message,
         userId:    user?.uid || null,
+        status:    'new',
         createdAt: serverTimestamp(),
       });
       // Send via EmailJS
@@ -4575,9 +4606,9 @@ function DriverContactUs({ go, user }) {
     if (!form.name||!form.email||!form.subject||!form.message) { setError('Please fill in all fields.'); return; }
     setLoading(true);
     try {
-      await addDoc(collection(db,'contact_submissions'), {
+      await addDoc(collection(db,'contactMessages'), {
         name:form.name, email:form.email, subject:form.subject, message:form.message,
-        userId:user?.uid||null, role:'driver', createdAt:serverTimestamp(),
+        userId:user?.uid||null, role:'driver', status:'new', createdAt:serverTimestamp(),
       });
       await fetch('https://api.emailjs.com/api/v1.0/email/send', {
         method:'POST', headers:{'Content-Type':'application/json'},
@@ -6328,6 +6359,71 @@ function FeaturedPage({ go, user }) {
 }
 
 
+// ── SUPPORT MESSAGE CARD (Feature: Customer Support Inbox) ─────────────────────
+// Self-contained so each card manages its own reply textarea without re-rendering
+// the whole AdminDash on every keystroke.
+function SupportMessageCard({ m, updateMessage }) {
+  const [replyText, setReplyText] = useState('');
+  const [sending,   setSending]   = useState(false);
+  const [sent,      setSent]      = useState('');
+  const badgeCfg = { new:{bg:'#f5f0ff',color:'#6b21a8'}, 'in-progress':{bg:'#fffbeb',color:'#b45309'}, resolved:{bg:'#f0fff4',color:'#1a9e5a'} };
+  const badge = badgeCfg[m.status] || badgeCfg.new;
+
+  const handleSendReply = async () => {
+    if (!replyText.trim() || !m.email) return;
+    setSending(true); setSent('');
+    const ok = await sendReplyEmail(m.email, m.name, m.subject, replyText.trim());
+    try {
+      await updateMessage(m.id, {
+        replies: arrayUnion({ text: replyText.trim(), sentAt: new Date().toISOString(), sentBy: 'Admin' }),
+        status: 'in-progress',
+      });
+    } catch(e) {}
+    setSent(ok ? '✅ Reply sent to customer' : '⚠️ Saved, but email delivery may have failed — check EmailJS');
+    setReplyText('');
+    setSending(false);
+  };
+
+  return (
+    <div style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)', borderLeft:`3px solid ${m.status==='new'?'#6b21a8':m.status==='resolved'?'#1a9e5a':'#f59e0b'}` }}>
+      <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
+        <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>{m.name||'—'}</div>
+        <span style={{ fontSize:10, background:badge.bg, color:badge.color, padding:'2px 8px', borderRadius:8, fontWeight:600, textTransform:'capitalize' }}>{m.status||'new'}</span>
+      </div>
+      <div style={{ fontSize:11, color:'#888', marginBottom:6 }}>{m.email||''} · {m.createdAt ? new Date((m.createdAt?.seconds||0)*1000).toLocaleDateString() : '—'}{m.role==='driver' ? ' · 🚗 Driver' : ''}</div>
+      {m.subject && <div style={{ fontSize:12, fontWeight:600, color:'#374151', marginBottom:4 }}>{m.subject}</div>}
+      <div style={{ fontSize:12, color:'#555', marginBottom:10, lineHeight:1.5 }}>{m.message||'—'}</div>
+
+      {/* Reply thread */}
+      {(m.replies||[]).length > 0 && (
+        <div style={{ background:'#f9fafb', borderRadius:10, padding:10, marginBottom:10 }}>
+          <div style={{ fontSize:10, fontWeight:700, color:'#6b7280', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6 }}>Reply History</div>
+          {m.replies.map((r, i) => (
+            <div key={i} style={{ fontSize:12, color:'#374151', padding:'6px 0', borderTop:i>0?'1px solid #eee':'none' }}>
+              <div style={{ marginBottom:2 }}>{r.text}</div>
+              <div style={{ fontSize:10, color:'#9199ad' }}>{r.sentBy||'Admin'} · {r.sentAt ? new Date(r.sentAt).toLocaleString('en-JM',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : ''}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Reply composer */}
+      <textarea value={replyText} onChange={e=>setReplyText(e.target.value)} placeholder={m.email ? `Reply to ${m.name||'this customer'}...` : 'No email on file — cannot reply in-app'} disabled={!m.email}
+        rows={2} style={{ width:'100%', padding:'8px 10px', border:'1px solid #e2e4ed', borderRadius:8, fontSize:12, fontFamily:'inherit', resize:'vertical', marginBottom:8, boxSizing:'border-box', background: m.email ? '#fff' : '#f5f5f5' }}/>
+      {sent && <div style={{ fontSize:11, color: sent.startsWith('✅') ? '#1a9e5a' : '#b45309', marginBottom:8 }}>{sent}</div>}
+      <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+        <button onClick={handleSendReply} disabled={sending || !replyText.trim() || !m.email}
+          style={{ padding:'6px 12px', background: sending||!replyText.trim()||!m.email ? '#e5e7eb' : '#6b21a8', color: sending||!replyText.trim()||!m.email ? '#999' : '#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:700, cursor: sending||!replyText.trim()||!m.email ? 'default' : 'pointer' }}>
+          {sending ? 'Sending...' : '💬 Send Reply'}
+        </button>
+        {m.status!=='in-progress' && <button onClick={() => updateMessage(m.id,{status:'in-progress'})} style={{ padding:'6px 10px', background:'#f59e0b', color:'#fff', border:'none', borderRadius:8, fontSize:10, fontWeight:600, cursor:'pointer' }}>In Progress</button>}
+        {m.status!=='resolved' && <button onClick={() => updateMessage(m.id,{status:'resolved'})} style={{ padding:'6px 10px', background:'#1a9e5a', color:'#fff', border:'none', borderRadius:8, fontSize:10, fontWeight:600, cursor:'pointer' }}>✅ Resolved</button>}
+        {m.email && <a href={'mailto:'+m.email} style={{ padding:'6px 10px', background:'#f5f0ff', color:'#6b21a8', border:'none', borderRadius:8, fontSize:10, fontWeight:600, textDecoration:'none' }}>📧 Open in Email App</a>}
+      </div>
+    </div>
+  );
+}
+
 // ── ADMIN DASHBOARD ───────────────────────────────────────────────────────────
 const ADMIN_EMAILS = ['daviskeneile@gmail.com', 'admin@villecabs.com'];
 
@@ -6347,6 +6443,7 @@ function AdminDash({ go, user }) {
   const [rideFilter,  setRideFilter] = useState('all');
   const [driverFilter,setDriverFilter]=useState('all');
   const [detail,      setDetail]     = useState(null);
+  const [breakdownPeriod, setBreakdownPeriod] = useState('day'); // 'day' | 'week' — Feature: Financial Reporting
   const [surgeCfg,    setSurgeCfg]   = useState({ surgeActive:false, surgeMultiplier:1.5 }); // Feature: Surge Pricing
   const [broadcastMsg,setBroadcastMsg]= useState(''); // Feature: Bulk Driver Broadcast
 
@@ -6829,6 +6926,86 @@ function AdminDash({ go, user }) {
               style={{ width:'100%', padding:'13px', background:'linear-gradient(135deg,#6b21a8,#4c1d95)', color:'#fff', border:'none', borderRadius:12, fontSize:14, fontWeight:700, cursor:'pointer', marginTop:8, boxShadow:'0 4px 12px rgba(107,33,168,0.3)' }}>
               📥 Export Ride Data (CSV)
             </button>
+
+            {/* ── Revenue Breakdown: Daily/Weekly (Feature: Financial Reporting) ── */}
+            {(() => {
+              const completed = rides.filter(r => r.status === 'completed');
+              const groupRevenue = (period) => {
+                const map = {};
+                completed.forEach(r => {
+                  const sec = r.completedAt?.seconds || r.createdAt?.seconds;
+                  if (!sec) return;
+                  const d = new Date(sec*1000);
+                  let key, label;
+                  if (period === 'day') {
+                    key = d.toISOString().slice(0,10);
+                    label = d.toLocaleDateString('en-JM',{ weekday:'short', day:'numeric', month:'short' });
+                  } else {
+                    const dow = d.getDay();
+                    const diffToMon = dow===0 ? -6 : 1-dow;
+                    const monday = new Date(d); monday.setDate(d.getDate()+diffToMon); monday.setHours(0,0,0,0);
+                    const sunday = new Date(monday); sunday.setDate(monday.getDate()+6);
+                    key = monday.toISOString().slice(0,10);
+                    label = `${monday.toLocaleDateString('en-JM',{day:'numeric',month:'short'})} – ${sunday.toLocaleDateString('en-JM',{day:'numeric',month:'short'})}`;
+                  }
+                  if (!map[key]) map[key] = { key, label, rides:0, fare:0 };
+                  map[key].rides += 1;
+                  map[key].fare  += (r.fare||0);
+                });
+                return Object.values(map).sort((a,b) => b.key.localeCompare(a.key));
+              };
+              const breakdown = groupRevenue(breakdownPeriod).slice(0, breakdownPeriod==='day' ? 30 : 12);
+              const exportBreakdown = () => {
+                const header = breakdownPeriod==='day' ? 'Date,Rides,Total Fare,VilleCabs Revenue (15%),Driver Payout (85%)' : 'Week,Rides,Total Fare,VilleCabs Revenue (15%),Driver Payout (85%)';
+                const csv = [header, ...breakdown.map(row => [
+                  row.label.replace(/,/g,' '), row.rides, row.fare, Math.round(row.fare*0.15), Math.round(row.fare*0.85)
+                ].join(','))].join(String.fromCharCode(10));
+                const blob = new Blob([csv], { type:'text/csv' });
+                const url  = URL.createObjectURL(blob);
+                const a    = document.createElement('a');
+                a.href = url; a.download = `villecabs-revenue-${breakdownPeriod}ly-${new Date().toISOString().slice(0,10)}.csv`;
+                a.click(); URL.revokeObjectURL(url);
+              };
+              return (
+                <div style={{ marginTop:20 }}>
+                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12, flexWrap:'wrap', gap:8 }}>
+                    <div style={{ fontSize:14, fontWeight:800, color:'#1a1a2e' }}>Revenue Breakdown</div>
+                    <div style={{ display:'flex', gap:6 }}>
+                      {[['day','Daily'],['week','Weekly']].map(([k,l]) => (
+                        <button key={k} onClick={() => setBreakdownPeriod(k)} style={{ padding:'6px 14px', borderRadius:20, border:'none', background:breakdownPeriod===k?'#6b21a8':'#f3f4f6', color:breakdownPeriod===k?'#fff':'#555', fontSize:11, fontWeight:600, cursor:'pointer' }}>{l}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div style={{ background:'#fff', borderRadius:14, boxShadow:'0 1px 6px rgba(0,0,0,0.06)', overflowX:'auto' }}>
+                    <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12, minWidth:520 }}>
+                      <thead>
+                        <tr style={{ background:'#f9fafb' }}>
+                          {[breakdownPeriod==='day'?'Date':'Week', 'Rides', 'Total Fare', 'VC Revenue (15%)', 'Driver Payout (85%)'].map(h => (
+                            <th key={h} style={{ textAlign:'left', padding:'10px 12px', fontSize:10, textTransform:'uppercase', letterSpacing:0.5, color:'#888', borderBottom:'1px solid #e5e7eb', whiteSpace:'nowrap' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {breakdown.map(row => (
+                          <tr key={row.key} style={{ borderBottom:'1px solid #f5f5f5' }}>
+                            <td style={{ padding:'10px 12px', fontWeight:700, color:'#1a1a2e', whiteSpace:'nowrap' }}>{row.label}</td>
+                            <td style={{ padding:'10px 12px' }}>{row.rides}</td>
+                            <td style={{ padding:'10px 12px', whiteSpace:'nowrap' }}>J${row.fare.toLocaleString()}</td>
+                            <td style={{ padding:'10px 12px', color:'#1a9e5a', fontWeight:700, whiteSpace:'nowrap' }}>J${Math.round(row.fare*0.15).toLocaleString()}</td>
+                            <td style={{ padding:'10px 12px', color:'#6b21a8', whiteSpace:'nowrap' }}>J${Math.round(row.fare*0.85).toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {breakdown.length===0 && <div style={{ textAlign:'center', padding:30, color:'#888' }}>No completed rides yet</div>}
+                  </div>
+                  <button onClick={exportBreakdown} disabled={breakdown.length===0}
+                    style={{ width:'100%', padding:'12px', background:breakdown.length===0?'#e5e7eb':'#fff', color:breakdown.length===0?'#999':'#6b21a8', border:'1px solid #e9d5ff', borderRadius:12, fontSize:13, fontWeight:700, cursor:breakdown.length===0?'default':'pointer', marginTop:10 }}>
+                    📥 Export {breakdownPeriod==='day'?'Daily':'Weekly'} Breakdown (CSV)
+                  </button>
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -6855,20 +7032,7 @@ function AdminDash({ go, user }) {
           <div>
             <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:14 }}>Support Messages</div>
             {messages.map((m, i) => (
-              <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)', borderLeft:`3px solid ${m.status==='new'?'#6b21a8':m.status==='resolved'?'#1a9e5a':'#f59e0b'}` }}>
-                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
-                  <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>{m.name||'—'}</div>
-                  <StatusBadge status={m.status||'new'}/>
-                </div>
-                <div style={{ fontSize:11, color:'#888', marginBottom:6 }}>{m.email||''} · {m.createdAt ? new Date((m.createdAt?.seconds||0)*1000).toLocaleDateString() : '—'}</div>
-                {m.subject && <div style={{ fontSize:12, fontWeight:600, color:'#374151', marginBottom:4 }}>{m.subject}</div>}
-                <div style={{ fontSize:12, color:'#555', marginBottom:10, lineHeight:1.5 }}>{m.message||'—'}</div>
-                <div style={{ display:'flex', gap:6 }}>
-                  {m.status!=='in-progress' && <button onClick={() => updateMessage(m.id,{status:'in-progress'})} style={{ padding:'5px 10px', background:'#f59e0b', color:'#fff', border:'none', borderRadius:8, fontSize:10, fontWeight:600, cursor:'pointer' }}>In Progress</button>}
-                  {m.status!=='resolved' && <button onClick={() => updateMessage(m.id,{status:'resolved'})} style={{ padding:'5px 10px', background:'#1a9e5a', color:'#fff', border:'none', borderRadius:8, fontSize:10, fontWeight:600, cursor:'pointer' }}>✅ Resolved</button>}
-                  {m.email && <a href={'mailto:'+m.email} style={{ padding:'5px 10px', background:'#f5f0ff', color:'#6b21a8', border:'none', borderRadius:8, fontSize:10, fontWeight:600, textDecoration:'none' }}>📧 Reply</a>}
-                </div>
-              </div>
+              <SupportMessageCard key={m.id||i} m={m} updateMessage={updateMessage}/>
             ))}
             {messages.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}>No messages yet</div>}
           </div>
