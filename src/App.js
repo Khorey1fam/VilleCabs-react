@@ -605,23 +605,25 @@ function GoogleBtn({ onClick, loading }) {
 
 // ── FOOTER COMPONENT ─────────────────────────────────────────────────────────
 function Footer({ go }) {
+  const linkBase = '#5b5470';   // readable link color on light bg
+  const linkHover = '#6b21a8';  // purple hover
   return (
-    <div style={{ background:'#000000', borderTop:'none', padding:'40px 24px 24px', marginTop:'auto' }}>
+    <div style={{ background:'linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(250,245,252,0.94) 55%, rgba(248,240,248,0.92) 100%)', borderTop:'1px solid #efe6f4', padding:'40px 24px 24px', marginTop:'auto', backdropFilter:'blur(2px)' }}>
       <div style={{ maxWidth:900, margin:'0 auto' }}>
         {/* Logo + tagline */}
         <div style={{ marginBottom:32 }}>
           <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
             <img src="/logo.png" alt="V" style={{ width:36, height:36, borderRadius:'50%', objectFit:'cover' }}/>
-            <span style={{ fontSize:18, fontWeight:700, color:WHITE }}>VilleCabs</span>
+            <span style={{ fontSize:18, fontWeight:700, color:'#2a1a4a' }}>VilleCabs</span>
           </div>
-          <p style={{ fontSize:13, color:'rgba(255,255,255,0.4)', margin:0 }}>Your city. Your ride. Your way.</p>
+          <p style={{ fontSize:13, color:'#8a83a0', margin:0 }}>Your city. Your ride. Your way.</p>
         </div>
 
         {/* Columns */}
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:32, marginBottom:32 }}>
           {/* Company */}
           <div>
-            <div style={{ fontSize:13, fontWeight:600, color:WHITE, marginBottom:14, textTransform:'uppercase', letterSpacing:1 }}>Company</div>
+            <div style={{ fontSize:13, fontWeight:700, color:'#2a1a4a', marginBottom:14, textTransform:'uppercase', letterSpacing:1 }}>Company</div>
             {[
               ['About VilleCabs',     () => go('about-us')],
               ['Contact Us',          () => go('contact-us')],
@@ -633,9 +635,9 @@ function Footer({ go }) {
               ['Partner With Us',     () => window.open('mailto:admin@villecabs.com?subject=VilleCabs Partnership', '_blank')],
             ].map(([label, action], i) => (
               <div key={i} onClick={action}
-                style={{ fontSize:13, color:'#6b7280', marginBottom:10, cursor:'pointer' }}
-                onMouseEnter={e => e.target.style.color=YELLOW}
-                onMouseLeave={e => e.target.style.color='rgba(255,255,255,0.5)'}>
+                style={{ fontSize:13, color:linkBase, marginBottom:10, cursor:'pointer' }}
+                onMouseEnter={e => e.target.style.color=linkHover}
+                onMouseLeave={e => e.target.style.color=linkBase}>
                 {label}
               </div>
             ))}
@@ -643,7 +645,7 @@ function Footer({ go }) {
 
           {/* Products */}
           <div>
-            <div style={{ fontSize:13, fontWeight:600, color:WHITE, marginBottom:14, textTransform:'uppercase', letterSpacing:1 }}>Products</div>
+            <div style={{ fontSize:13, fontWeight:700, color:'#2a1a4a', marginBottom:14, textTransform:'uppercase', letterSpacing:1 }}>Products</div>
             {[
               ['🚕 VilleCabs Ride', null],
               ['🍔 VilleCabs Food', null, true],
@@ -651,43 +653,43 @@ function Footer({ go }) {
               ['💼 VilleCabs Business', null, true],
             ].map(([label, action, soon], i) => (
               <div key={i} style={{ display:'flex', alignItems:'center', gap:6, marginBottom:10 }}>
-                <span style={{ fontSize:13, color:soon?'rgba(255,255,255,0.25)':'rgba(255,255,255,0.5)', cursor:action?'pointer':'default' }}
-                  onMouseEnter={e => { if(action) e.target.style.color=YELLOW; }}
-                  onMouseLeave={e => { if(action) e.target.style.color='rgba(255,255,255,0.5)'; }}
+                <span style={{ fontSize:13, color:soon?'#a9a3ba':linkBase, cursor:action?'pointer':'default' }}
+                  onMouseEnter={e => { if(action) e.target.style.color=linkHover; }}
+                  onMouseLeave={e => { if(action) e.target.style.color=linkBase; }}
                   onClick={action||undefined}>
                   {label}
                 </span>
-                {soon && <span style={{ fontSize:9, background:'rgba(232,180,0,0.15)', color:YELLOW, borderRadius:4, padding:'1px 5px', fontWeight:500 }}>SOON</span>}
+                {soon && <span style={{ fontSize:9, background:'#f5f0ff', color:'#6b21a8', border:'1px solid #e9d5ff', borderRadius:4, padding:'1px 5px', fontWeight:600 }}>SOON</span>}
               </div>
             ))}
           </div>
 
           {/* Travel */}
           <div>
-            <div style={{ fontSize:13, fontWeight:600, color:WHITE, marginBottom:14, textTransform:'uppercase', letterSpacing:1 }}>Travel</div>
+            <div style={{ fontSize:13, fontWeight:700, color:'#2a1a4a', marginBottom:14, textTransform:'uppercase', letterSpacing:1 }}>Travel</div>
             <div onClick={() => window.open('https://www.tripadvisor.com/Tourism-g1877491-Mandeville_Manchester_Parish_Jamaica-Vacations.html','_blank')}
-              style={{ fontSize:13, color:'#6b7280', marginBottom:10, cursor:'pointer' }}
-              onMouseEnter={e => e.target.style.color=YELLOW}
-              onMouseLeave={e => e.target.style.color='rgba(255,255,255,0.5)'}>
+              style={{ fontSize:13, color:linkBase, marginBottom:10, cursor:'pointer' }}
+              onMouseEnter={e => e.target.style.color=linkHover}
+              onMouseLeave={e => e.target.style.color=linkBase}>
               Explore Mandeville
             </div>
           </div>
         </div>
 
         {/* Bottom bar */}
-        <div style={{ borderTop:'0.5px solid rgba(255,255,255,0.06)', paddingTop:20, display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10 }}>
-          <p style={{ fontSize:11, color:'rgba(255,255,255,0.25)', margin:0 }}>© 2026 VilleCabs · Mandeville, Manchester, Jamaica</p>
+        <div style={{ borderTop:'1px solid #efe6f4', paddingTop:20, display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10 }}>
+          <p style={{ fontSize:11, color:'#a9a3ba', margin:0 }}>© 2026 VilleCabs · Mandeville, Manchester, Jamaica</p>
           <div style={{ display:'flex', gap:16 }}>
-            <a href="https://wa.me/18765158113+1876-515-8113" target="_blank" rel="noopener noreferrer" style={{ fontSize:12, color:'rgba(255,255,255,0.35)', textDecoration:'none' }}
-              onMouseEnter={e => e.target.style.color=YELLOW} onMouseLeave={e => e.target.style.color='rgba(255,255,255,0.35)'}>
+            <a href="https://wa.me/18765158113+1876-515-8113" target="_blank" rel="noopener noreferrer" style={{ fontSize:12, color:'#8a83a0', textDecoration:'none' }}
+              onMouseEnter={e => e.target.style.color=linkHover} onMouseLeave={e => e.target.style.color='#8a83a0'}>
               💬 WhatsApp
             </a>
-            <a href="mailto:daviskeneile@gmail.com" style={{ fontSize:12, color:'rgba(255,255,255,0.35)', textDecoration:'none' }}
-              onMouseEnter={e => e.target.style.color=YELLOW} onMouseLeave={e => e.target.style.color='rgba(255,255,255,0.35)'}>
+            <a href="mailto:daviskeneile@gmail.com" style={{ fontSize:12, color:'#8a83a0', textDecoration:'none' }}
+              onMouseEnter={e => e.target.style.color=linkHover} onMouseLeave={e => e.target.style.color='#8a83a0'}>
               📧 Email
             </a>
-            <a href="https://www.villecabs.com" style={{ fontSize:12, color:'rgba(255,255,255,0.35)', textDecoration:'none' }}
-              onMouseEnter={e => e.target.style.color=YELLOW} onMouseLeave={e => e.target.style.color='rgba(255,255,255,0.35)'}>
+            <a href="https://www.villecabs.com" style={{ fontSize:12, color:'#8a83a0', textDecoration:'none' }}
+              onMouseEnter={e => e.target.style.color=linkHover} onMouseLeave={e => e.target.style.color='#8a83a0'}>
               🌐 villecabs.com
             </a>
           </div>
