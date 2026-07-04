@@ -412,7 +412,7 @@ function GlobalStyles() {
 
 function MapBg() { return null; }
 
-function VilleMap({ height = 260, center = MANCHESTER_CENTER, zoom = 14, onClick, markers = [], directions = null, children, expandable = false }) {
+function VilleMap({ height = 620, center = MANCHESTER_CENTER, zoom = 14, onClick, markers = [], directions = null, children, expandable = false }) {
   const [expanded, setExpanded] = useState(false);
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: GOOGLE_MAPS_KEY,
@@ -426,8 +426,8 @@ function VilleMap({ height = 260, center = MANCHESTER_CENTER, zoom = 14, onClick
     }
   }, [isLoaded]);
 
-  // Use window height for mobile-aware sizing
-  const mobileHeight = Math.min(height, window.innerHeight * 0.45);
+  // Use window height for mobile-aware sizing (allow the map to fill most of the screen)
+  const mobileHeight = Math.min(height, window.innerHeight * 0.82);
 
   if (!isLoaded) return (
     <div style={{ height:mobileHeight, background:'#1a2744', display:'flex', alignItems:'center', justifyContent:'center', color:YELLOW, fontSize:13 }}>
@@ -3181,7 +3181,7 @@ function PinPickup({ go, setPickupData, user }) {
 
       {/* ── MAP ── */}
       <div style={{ flexShrink:0 }}>
-        <VilleMap height={300} center={pinPos||MANCHESTER_CENTER} zoom={14}
+        <VilleMap height={typeof window!=='undefined'?Math.round(window.innerHeight*0.60):560} center={pinPos||MANCHESTER_CENTER} zoom={14}
           onClick={handleMapClick} markers={[{ position:pinPos, title:'Pickup' }]} expandable={true}/>
       </div>
 
@@ -3378,7 +3378,7 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
 
       {/* ── MAP ── */}
       <div style={{ flexShrink:0 }}>
-        <VilleMap height={300} center={mapCenter} zoom={14}
+        <VilleMap height={typeof window!=='undefined'?Math.round(window.innerHeight*0.60):560} center={mapCenter} zoom={14}
           onClick={handleMapClick} markers={markers} expandable={true}/>
       </div>
 
@@ -3797,7 +3797,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
   return (
     <div style={{ ...s.content, background:'#f5f6fa' }}>
       <TopBar title="Choose Ride" onBack={() => go('pin-dropoff')} go={go} user={user}/>
-      <VilleMap height={220} center={pickupData?.coords||MANCHESTER_CENTER} zoom={12} markers={markers} directions={directions} expandable={true}/>
+      <VilleMap height={typeof window!=='undefined'?Math.round(window.innerHeight*0.62):520} center={pickupData?.coords||MANCHESTER_CENTER} zoom={12} markers={markers} directions={directions} expandable={true}/>
       {/* SOS + cash reminder */}
       <div style={{ background:'#111111', padding:'12px 16px', display:'flex', gap:10, alignItems:'flex-start' }}>
         <span style={{ fontSize:18, flexShrink:0 }}>🆘</span>
@@ -4566,7 +4566,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   return (
     <div style={{ ...s.content }}>
       <div style={{ position:'relative' }}>
-        <VilleMap height={typeof window!=='undefined'?Math.max(320,window.innerHeight*0.45):320} center={driverCoords||pickupCoords} zoom={15} expandable={true} directions={directions}>
+        <VilleMap height={typeof window!=='undefined'?Math.max(560,window.innerHeight*0.80):640} center={driverCoords||pickupCoords} zoom={15} expandable={true} directions={directions}>
           <Marker position={pickupCoords} title="Pickup"
             icon={{ url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><circle cx="14" cy="14" r="11" fill="#1a9e5a" stroke="white" stroke-width="2.5"/></svg>'), scaledSize:{width:28,height:28} }}/>
           {dropoffCoords && (
@@ -5897,7 +5897,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
            <span>⚠️ Location denied — <span style={{textDecoration:'underline',cursor:'pointer'}} onClick={() => vcToast('To enable location: tap the 🔒 lock icon in your address bar, set Location to Allow, then refresh.', 'info')}>tap here to fix</span></span>
          ) : '📍 Getting your location...'}
       </div>
-      <VilleMap height={typeof window!=='undefined'?Math.max(320,window.innerHeight*0.45):320} center={driverCoords||pickupCoords} zoom={14} markers={arrived?[]:markers} directions={directions} expandable={true}>
+      <VilleMap height={typeof window!=='undefined'?Math.max(560,window.innerHeight*0.80):640} center={driverCoords||pickupCoords} zoom={14} markers={arrived?[]:markers} directions={directions} expandable={true}>
         {driverCoords && !directions && (
           <Marker position={driverCoords} title="Your location"
             icon={{ url:carIconSVG(driverBearing, '#e8b400'), scaledSize:{width:36,height:36}, anchor:{x:18,y:18} }}/>
@@ -7175,7 +7175,7 @@ function AdminDash({ go, user }) {
 
               {mapMarkers.length > 0 ? (
                 <div style={{ borderRadius:14, overflow:'hidden', boxShadow:'0 1px 6px rgba(0,0,0,0.1)', marginBottom:14 }}>
-                  <VilleMap height={340} center={mapMarkers[0].position} zoom={13} markers={mapMarkers} expandable={true}/>
+                  <VilleMap height={typeof window!=='undefined'?Math.round(window.innerHeight*0.70):600} center={mapMarkers[0].position} zoom={13} markers={mapMarkers} expandable={true}/>
                 </div>
               ) : (
                 <div style={{ background:'#fff', borderRadius:14, padding:30, textAlign:'center', color:'#888', marginBottom:14, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
