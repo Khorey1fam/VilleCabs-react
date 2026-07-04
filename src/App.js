@@ -931,7 +931,7 @@ function Splash({ go }) {
             </div>
             {/* live stats */}
             <div style={{ display:'flex', gap:22, marginBottom:20 }}>
-              {[['10,000+','Rides done'],['24/7','Support'],['4.9★','Rating']].map(([n,l],i)=>(
+              {[['10+','Verified Drivers'],['24/7','Support'],['4.9★','Rating']].map(([n,l],i)=>(
                 <div key={i}>
                   <div style={{ fontSize:20, fontWeight:800, color:'#2a1a4a' }}>{n}</div>
                   <div style={{ fontSize:11, color:'#8a83a0' }}>{l}</div>
