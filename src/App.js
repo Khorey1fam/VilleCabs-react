@@ -706,6 +706,25 @@ function Splash({ go }) {
     { bg:'#1e1b4b', emoji:'🚗', title:'Drive With VilleCabs',          sub:'Use your vehicle, set your hours, and keep 85% of every fare.' },
     { bg:'#2d1b69', emoji:'🤝', title:'Partner With VilleCabs',        sub:'Help your customers move safely across Manchester.' },
   ];
+
+  // ── Local places showcase (real Mandeville hotels & restaurants) ──
+  // To show a real photo, paste an image URL into `photo`. Empty = styled gradient card.
+  const places = [
+    { name:'The Garden Hotel',      kind:'Hotel',      tag:'🏨', rating:4.5, area:'Hotel St, Mandeville',      grad:'linear-gradient(135deg,#6b21a8,#9333ea)', photo:'' },
+    { name:'Voilà by Lilee',        kind:'Restaurant', tag:'🍽️', rating:4.3, area:'Caledonia Rd, Mandeville',   grad:'linear-gradient(135deg,#b45309,#f59e0b)', photo:'' },
+    { name:'Golf View Hotel',       kind:'Hotel',      tag:'🏨', rating:3.6, area:'Caledonia Rd, Mandeville',   grad:'linear-gradient(135deg,#1e3a8a,#3b82f6)', photo:'' },
+    { name:'The Ultimate Dining',   kind:'Restaurant', tag:'🍽️', rating:4.2, area:'Ward Ave, Mandeville',       grad:'linear-gradient(135deg,#065f46,#10b981)', photo:'' },
+    { name:'Villa Nova',            kind:'Fine Dining',tag:'🥂', rating:4.0, area:'Villa Rd, Mandeville',        grad:'linear-gradient(135deg,#831843,#db2777)', photo:'' },
+    { name:'Toast Restaurant & Gelato', kind:'Restaurant', tag:'🍨', rating:3.6, area:'Ward Ave, Mandeville',   grad:'linear-gradient(135deg,#4338ca,#818cf8)', photo:'' },
+  ];
+  const [pslide, setPslide] = useState(0);
+
+  // Rotate the places showcase
+  useEffect(() => {
+    const t = setInterval(() => setPslide(p => (p + 1) % places.length), 3500);
+    return () => clearInterval(t);
+  }, [places.length]);
+
   useEffect(() => {
     const t = setInterval(() => setSlide(s => (s + 1) % 4), 5000);
     return () => clearInterval(t);
@@ -725,19 +744,91 @@ function Splash({ go }) {
         </div>
       </div>
 
-      {/* HERO */}
-      <div style={{ background:cur.bg, padding:'48px 20px 40px', textAlign:'center' }}>
-        <div style={{ fontSize:60, marginBottom:12 }}>{cur.emoji}</div>
-        <h1 style={{ fontSize:26, fontWeight:800, color:'#fff', margin:'0 0 10px', lineHeight:1.2 }}>{cur.title}</h1>
-        <p style={{ fontSize:14, color:'rgba(255,255,255,0.8)', margin:'0 0 24px', lineHeight:1.6 }}>{cur.sub}</p>
-        <div style={{ display:'flex', gap:10, justifyContent:'center', flexWrap:'wrap', marginBottom:24 }}>
-          <button onClick={() => go('customer-login')} style={{ padding:'12px 22px', background:'#fff', color:'#6b21a8', border:'none', borderRadius:24, fontSize:14, fontWeight:700, cursor:'pointer' }}>Book a Ride</button>
-          <button onClick={() => go('driver-signup')} style={{ padding:'12px 22px', background:'transparent', color:'#fff', border:'2px solid rgba(255,255,255,0.5)', borderRadius:24, fontSize:14, fontWeight:600, cursor:'pointer' }}>Drive With Us</button>
-        </div>
-        <div style={{ display:'flex', gap:6, justifyContent:'center' }}>
-          {[0,1,2,3].map(i => (
-            <button key={i} onClick={() => setSlide(i)} style={{ width:i===slide?22:6, height:6, borderRadius:3, border:'none', background:i===slide?'#fff':'rgba(255,255,255,0.35)', cursor:'pointer', padding:0 }}/>
-          ))}
+      {/* HERO — two panels */}
+      <div style={{ background:cur.bg, transition:'background 0.6s ease', padding:'32px 16px 36px' }}>
+        <div style={{ maxWidth:1080, margin:'0 auto', display:'flex', gap:24, flexWrap:'wrap', alignItems:'stretch' }}>
+
+          {/* LEFT PANEL — text slideshow + CTAs */}
+          <div style={{ flex:'1 1 320px', minWidth:280, textAlign:'left', display:'flex', flexDirection:'column', justifyContent:'center' }}>
+            <div style={{ display:'inline-flex', alignItems:'center', gap:6, alignSelf:'flex-start', background:'rgba(255,255,255,0.15)', borderRadius:20, padding:'5px 12px', marginBottom:16, fontSize:11, fontWeight:600, color:'#fff' }}>
+              <span style={{ color:'#f59e0b' }}>●</span> Trusted by riders across Manchester
+            </div>
+            <div style={{ fontSize:44, marginBottom:8 }}>{cur.emoji}</div>
+            <h1 style={{ fontSize:32, fontWeight:800, color:'#fff', margin:'0 0 12px', lineHeight:1.15 }}>{cur.title}</h1>
+            <p style={{ fontSize:15, color:'rgba(255,255,255,0.82)', margin:'0 0 24px', lineHeight:1.6, maxWidth:440 }}>{cur.sub}</p>
+            <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:22 }}>
+              <button onClick={() => go('customer-login')} style={{ padding:'13px 24px', background:'#fff', color:'#6b21a8', border:'none', borderRadius:24, fontSize:14, fontWeight:700, cursor:'pointer' }}>Book a Ride →</button>
+              <button onClick={() => go('driver-signup')} style={{ padding:'13px 24px', background:'transparent', color:'#fff', border:'2px solid rgba(255,255,255,0.5)', borderRadius:24, fontSize:14, fontWeight:600, cursor:'pointer' }}>Drive With Us</button>
+            </div>
+            {/* live stats */}
+            <div style={{ display:'flex', gap:22, marginBottom:20 }}>
+              {[['10,000+','Rides done'],['24/7','Support'],['4.9★','Rating']].map(([n,l],i)=>(
+                <div key={i}>
+                  <div style={{ fontSize:20, fontWeight:800, color:'#fff' }}>{n}</div>
+                  <div style={{ fontSize:11, color:'rgba(255,255,255,0.7)' }}>{l}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display:'flex', gap:6 }}>
+              {[0,1,2,3].map(i => (
+                <button key={i} onClick={() => setSlide(i)} style={{ width:i===slide?22:6, height:6, borderRadius:3, border:'none', background:i===slide?'#fff':'rgba(255,255,255,0.35)', cursor:'pointer', padding:0 }}/>
+              ))}
+            </div>
+          </div>
+
+          {/* RIGHT PANEL — places photo slideshow (tap to sign in) */}
+          <div style={{ flex:'1 1 340px', minWidth:280 }}>
+            <div
+              onClick={() => go('customer-login')}
+              style={{ position:'relative', borderRadius:20, overflow:'hidden', height:360, cursor:'pointer', boxShadow:'0 12px 40px rgba(0,0,0,0.28)', background: places[pslide].grad }}
+              title="Sign in to book a ride here">
+
+              {/* Real photo layer (shows when a photo URL is set) */}
+              {places[pslide].photo && (
+                <img src={places[pslide].photo} alt={places[pslide].name}
+                  style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }}/>
+              )}
+
+              {/* Decorative emoji when no photo set */}
+              {!places[pslide].photo && (
+                <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:96, opacity:0.5 }}>{places[pslide].tag}</div>
+              )}
+
+              {/* gradient scrim for legibility */}
+              <div style={{ position:'absolute', inset:0, background:'linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.1) 45%, rgba(0,0,0,0.15) 100%)' }}/>
+
+              {/* category pill */}
+              <div style={{ position:'absolute', top:14, left:14, background:'#f59e0b', color:'#fff', fontSize:11, fontWeight:700, padding:'5px 12px', borderRadius:20 }}>
+                {places[pslide].tag} {places[pslide].kind}
+              </div>
+              {/* rating pill */}
+              <div style={{ position:'absolute', top:14, right:14, background:'rgba(255,255,255,0.95)', color:'#1a1a2e', fontSize:11, fontWeight:800, padding:'5px 10px', borderRadius:20 }}>
+                ★ {places[pslide].rating.toFixed(1)}
+              </div>
+
+              {/* caption */}
+              <div style={{ position:'absolute', left:16, right:16, bottom:44 }}>
+                <div style={{ fontSize:22, fontWeight:800, color:'#fff', lineHeight:1.2 }}>{places[pslide].name}</div>
+                <div style={{ fontSize:13, color:'rgba(255,255,255,0.85)', marginTop:2 }}>📍 {places[pslide].area}</div>
+              </div>
+              {/* CTA hint */}
+              <div style={{ position:'absolute', left:16, bottom:14, fontSize:12, fontWeight:700, color:'#fff', display:'flex', alignItems:'center', gap:6 }}>
+                Tap to book a ride here <span>→</span>
+              </div>
+
+              {/* dots */}
+              <div style={{ position:'absolute', bottom:14, right:16, display:'flex', gap:5 }}>
+                {places.map((_,i) => (
+                  <button key={i} onClick={(e) => { e.stopPropagation(); setPslide(i); }}
+                    style={{ width:i===pslide?18:6, height:6, borderRadius:3, border:'none', background:i===pslide?'#fff':'rgba(255,255,255,0.45)', cursor:'pointer', padding:0 }}/>
+                ))}
+              </div>
+            </div>
+            <div style={{ textAlign:'center', marginTop:10, fontSize:12, color:'rgba(255,255,255,0.7)' }}>
+              Discover Mandeville — sign in to ride anywhere
+            </div>
+          </div>
+
         </div>
       </div>
 
