@@ -341,10 +341,10 @@ const s = {
   screen:    { minHeight:'100vh', fontFamily:"'Segoe UI', sans-serif", background:'#ffffff', color:'#1a1a2e', position:'relative', zIndex:1 },
   mapBg:     { display:'none' },
   overlay:   { position:'fixed', inset:0, zIndex:1, background:'rgba(15,25,50,0.72)', backdropFilter:'blur(4px)' },
-  content:   { position:'relative', zIndex:2, minHeight:'100vh', background:'#f5f6fa' },
+  content:   { position:'relative', zIndex:2, minHeight:'100vh', background:'linear-gradient(160deg, #ffffff 0%, #f6f2fb 45%, #efe8f7 100%)' },
   center:    { display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:'100vh', padding:'0 24px', background:'#f5f6fa' },
   card:      { background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:20, padding:'28px 24px', width:'100%', maxWidth:380, boxShadow:'0 4px 24px rgba(0,0,0,0.08)' },
-  btnY:      { width:'100%', padding:'14px 20px', background:YELLOW, color:DARK, border:'none', borderRadius:12, fontSize:15, fontWeight:700, cursor:'pointer', marginBottom:10 },
+  btnY:      { width:'100%', padding:'14px 20px', background:'#6b21a8', color:'#ffffff', border:'none', borderRadius:12, fontSize:15, fontWeight:700, cursor:'pointer', marginBottom:10 },
   btnO:      { width:'100%', padding:'14px 20px', background:'#ffffff', color:'#1a1a2e', border:'1.5px solid #d0d3e0', borderRadius:12, fontSize:15, fontWeight:500, cursor:'pointer', marginBottom:10 },
   btnG:      { width:'100%', padding:'14px 20px', background:GREEN, color:WHITE, border:'none', borderRadius:12, fontSize:15, fontWeight:600, cursor:'pointer', marginBottom:10 },
   inp:       { width:'100%', padding:'14px', background:'#ffffff', border:'1px solid #d0d3e0', borderRadius:10, color:'#1a1a2e', fontSize:16, marginBottom:12, boxSizing:'border-box', outline:'none' },
@@ -3973,7 +3973,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
         <span style={{ fontSize:18, flexShrink:0 }}>🆘</span>
         <div>
           <div style={{ fontSize:12, fontWeight:600, color:'#e8b400', marginBottom:2 }}>Reminder — Before You Go</div>
-          <div style={{ fontSize:11, color:'rgba(255,255,255,0.65)', lineHeight:1.5 }}>Your driver is almost there! Hold the <strong style={{color:'#f09595'}}>SOS button 5 seconds</strong> in any emergency. Don't forget your <strong style={{color:'#ffffff'}}>cash, keys, and phone</strong> before you step out.</div>
+          <div style={{ fontSize:11, color:'#5b5470', lineHeight:1.5 }}>Your driver is almost there! Hold the <strong style={{color:'#dc2626'}}>SOS button 5 seconds</strong> in any emergency. Don't forget your <strong style={{color:'#2a1a4a'}}>cash, keys, and phone</strong> before you step out.</div>
         </div>
       </div>
       <div style={{ padding:14 }}>
@@ -3997,7 +3997,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
             <span style={{ fontSize:18 }}>{surcharge.key==='night'?'🌙':surcharge.key==='holiday'?'🎉':'⚡'}</span>
             <div>
               <div style={{ fontSize:13, fontWeight:600, color:'#dc2626' }}>{surcharge.label}</div>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Added to your estimated fare</div>
+              <div style={{ fontSize:11, color:'#6b6b80', marginTop:2 }}>Added to your estimated fare</div>
             </div>
           </div>
         )}
@@ -4013,17 +4013,17 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
                 <span style={{ color:'#f09595', fontWeight:500 }}>+J${bd.surchargeAmt.toLocaleString()}</span>
               </div>
             )}
-            <div style={{ display:'flex', justifyContent:'space-between', fontSize:15, fontWeight:700, color:'#6b21a8', borderTop:'0.5px solid rgba(255,255,255,0.15)', paddingTop:8, marginTop:4 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:15, fontWeight:700, color:'#6b21a8', borderTop:'1px solid #e0d3f5', paddingTop:8, marginTop:4 }}>
               <span>Estimated Fare</span>
               <span>J${bd.total.toLocaleString()}</span>
             </div>
           </div>
         ); })()}
         {/* Referral Code */}
-        <div style={{ background:'rgba(15,20,40,0.6)', border:'0.5px solid rgba(168,139,250,0.2)', borderRadius:12, padding:12, marginBottom:10 }}>
+        <div style={{ background:'#ffffff', border:'1px solid #e0d3f5', borderRadius:12, padding:12, marginBottom:10 }}>
           <div style={{ fontSize:12, color:'rgba(168,139,250,0.9)', marginBottom:8, fontWeight:500 }}>🎁 Have a referral code?</div>
           <input
-            style={{ width:'100%', padding:'9px 12px', background:'rgba(255,255,255,0.08)', border:'0.5px solid rgba(168,139,250,0.3)', borderRadius:8, color:'#fff', fontSize:13, outline:'none', boxSizing:'border-box' }}
+            style={{ width:'100%', padding:'9px 12px', background:'#f6f2fb', border:'1px solid #d8b4fe', borderRadius:8, color:'#2a1a4a', fontSize:13, outline:'none', boxSizing:'border-box' }}
             placeholder="Enter referral code e.g. VCABC12"
             onChange={async (e) => {
               const code = e.target.value.toUpperCase().trim();
@@ -4044,23 +4044,23 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
               }
             }}
           />
-          <div style={{ fontSize:12, marginTop:6, color:'rgba(255,255,255,0.4)' }}></div>
+          <div style={{ fontSize:12, marginTop:6, color:'#8a83a0' }}></div>
         </div>
 
         {/* Promo Code */}
-        <div style={{ background:'rgba(15,20,40,0.6)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:12, padding:12, marginBottom:10 }}>
+        <div style={{ background:'#ffffff', border:'1px solid #ece3f5', borderRadius:12, padding:12, marginBottom:10 }}>
           <div style={{ fontSize:12, color:'#6b7280', marginBottom:8, fontWeight:500 }}>🎟️ Promo Code</div>
           {!promoData ? (
             <div style={{ display:'flex', gap:8 }}>
               <input
-                style={{ flex:1, padding:'9px 12px', background:'rgba(255,255,255,0.08)', border:'0.5px solid rgba(255,255,255,0.2)', borderRadius:8, color:'#fff', fontSize:13, outline:'none' }}
+                style={{ flex:1, padding:'9px 12px', background:'#f6f2fb', border:'1px solid #d8b4fe', borderRadius:8, color:'#2a1a4a', fontSize:13, outline:'none' }}
                 placeholder="Enter code e.g. VILLE20"
                 value={promoCode}
                 onChange={e => { setPromoCode(e.target.value.toUpperCase()); setPromoMsg(''); }}
                 onKeyDown={e => { if (e.key==='Enter') applyPromo(); }}
               />
               <button onClick={applyPromo} disabled={promoLoading||!promoCode.trim()}
-                style={{ padding:'9px 16px', background:YELLOW, color:DARK, border:'none', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer', opacity:promoLoading||!promoCode.trim()?0.5:1 }}>
+                style={{ padding:'9px 16px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:8, fontSize:13, fontWeight:600, cursor:'pointer', opacity:promoLoading||!promoCode.trim()?0.5:1 }}>
                 {promoLoading ? '...' : 'Apply'}
               </button>
             </div>
@@ -4068,7 +4068,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
               <div>
                 <span style={{ color:GREEN, fontWeight:600 }}>{promoData.code}</span>
-                <span style={{ color:'rgba(255,255,255,0.5)', fontSize:12, marginLeft:8 }}>{promoData.discount}% off applied</span>
+                <span style={{ color:'#6b6b80', fontSize:12, marginLeft:8 }}>{promoData.discount}% off applied</span>
               </div>
               <button onClick={removePromo} style={{ background:'none', border:'none', color:'#f09595', cursor:'pointer', fontSize:12 }}>✕ Remove</button>
             </div>
@@ -4091,7 +4091,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
         {SURGE_MULT > 1 && (
           <div style={{ background:'rgba(232,180,0,0.12)', border:'0.5px solid rgba(232,180,0,0.4)', borderRadius:10, padding:'10px 14px', marginBottom:10, display:'flex', gap:10, alignItems:'center' }}>
             <span style={{ fontSize:18 }}>⚡</span>
-            <div style={{ fontSize:12, color:YELLOW, fontWeight:600 }}>Surge pricing active — fares are {SURGE_MULT}x due to high demand</div>
+            <div style={{ fontSize:12, color:'#b45309', fontWeight:600 }}>Surge pricing active — fares are {SURGE_MULT}x due to high demand</div>
           </div>
         )}
 
@@ -4146,7 +4146,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
           <div style={{ fontSize:28, flexShrink:0 }}>🆘</div>
           <div>
             <div style={{ fontSize:14, fontWeight:700, color:'#e8b400', marginBottom:6 }}>SOS Emergency Button</div>
-            <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', lineHeight:1.7 }}>During your ride, hold the <strong style={{color:'#f09595'}}>SOS button for 5 seconds</strong> at any time to send an emergency alert with your live location to our admin team. Your safety always comes first.</div>
+            <div style={{ fontSize:12, color:'#5b5470', lineHeight:1.7 }}>During your ride, hold the <strong style={{color:'#dc2626'}}>SOS button for 5 seconds</strong> at any time to send an emergency alert with your live location to our admin team. Your safety always comes first.</div>
           </div>
         </div>
 
@@ -4154,7 +4154,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
           <div style={{ fontSize:28, flexShrink:0 }}>💳</div>
           <div>
             <div style={{ fontSize:14, fontWeight:700, color:'#e8b400', marginBottom:6 }}>Get Ready — Driver Coming Soon!</div>
-            <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', lineHeight:1.7 }}>Make sure you have your <strong style={{color:'#ffffff'}}>cash ready</strong> to pay your driver on arrival. Also grab your <strong style={{color:'#ffffff'}}>keys, phone, and any belongings</strong> — your driver will be at your pickup point shortly!</div>
+            <div style={{ fontSize:12, color:'#5b5470', lineHeight:1.7 }}>Make sure you have your <strong style={{color:'#2a1a4a'}}>cash ready</strong> to pay your driver on arrival. Also grab your <strong style={{color:'#2a1a4a'}}>keys, phone, and any belongings</strong> — your driver will be at your pickup point shortly!</div>
           </div>
         </div>
 
@@ -4625,7 +4625,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
         <div style={{ textAlign:'center', padding:24 }}>
           <div style={{ fontSize:56, marginBottom:16 }}>❌</div>
           <h2 style={{ fontSize:20, fontWeight:500, color:'#fff', marginBottom:8 }}>Ride Cancelled</h2>
-          <p style={{ color:'rgba(255,255,255,0.5)', fontSize:13, marginBottom:28 }}>Your booking has been cancelled successfully.</p>
+          <p style={{ color:'#6b6b80', fontSize:13, marginBottom:28 }}>Your booking has been cancelled successfully.</p>
           <button style={s.btnY} onClick={() => go('customer-dash')}>Back to Dashboard</button>
         </div>
       </div>
@@ -4638,8 +4638,8 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
       <div style={{ ...s.content, display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh' }}>
         <div style={{ textAlign:'center' }}>
           <div style={{ fontSize:48, marginBottom:16 }}>🚕</div>
-          <div style={{ color:YELLOW, fontSize:16, fontWeight:500, marginBottom:8 }}>Finding your driver...</div>
-          <div style={{ color:'rgba(255,255,255,0.4)', fontSize:13 }}>Setting up your ride</div>
+          <div style={{ color:'#6b21a8', fontSize:16, fontWeight:500, marginBottom:8 }}>Finding your driver...</div>
+          <div style={{ color:'#8a83a0', fontSize:13 }}>Setting up your ride</div>
           <button style={{ ...s.btnO, marginTop:24 }} onClick={async () => {
             if (bookingId) {
               if (!(await vcConfirm('You must cancel your ride before leaving. Cancel it now?', { confirmText:'Cancel Ride', danger:true }))) return;
@@ -4661,42 +4661,42 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
       ? new Date(booking.completedAt.seconds*1000).toLocaleDateString('en-JM',{day:'numeric',month:'short',year:'numeric'})
       : '--';
     return (
-      <div style={{ ...s.content, minHeight:'100vh', background:'transparent' }}>
+      <div style={{ ...s.content, minHeight:'100vh' }}>
         <div style={{ padding:'24px 20px', display:'flex', flexDirection:'column', alignItems:'center', minHeight:'100vh' }}>
           {/* Receipt header */}
           <div style={{ textAlign:'center', marginBottom:20, paddingTop:20 }}>
             <div style={{ width:70, height:70, borderRadius:'50%', background:'rgba(26,158,90,0.15)', border:'2px solid rgba(26,158,90,0.4)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:32, margin:'0 auto 12px' }}>✅</div>
-            <h2 style={{ fontSize:22, fontWeight:700, color:WHITE, margin:'0 0 4px' }}>Ride Complete!</h2>
+            <h2 style={{ fontSize:22, fontWeight:700, color:'#2a1a4a', margin:'0 0 4px' }}>Ride Complete!</h2>
             <p style={{ fontSize:13, color:'#6b7280', margin:0 }}>You have arrived safely</p>
           </div>
 
           {/* Receipt card */}
-          <div style={{ background:'rgba(15,20,40,0.85)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:18, padding:20, width:'100%', maxWidth:400, marginBottom:16 }}>
+          <div style={{ background:'#ffffff', border:'1px solid #ece3f5', boxShadow:'0 4px 18px rgba(107,33,168,0.08)', borderRadius:18, padding:20, width:'100%', maxWidth:400, marginBottom:16 }}>
             {/* Receipt title */}
-            <div style={{ textAlign:'center', marginBottom:16, paddingBottom:14, borderBottom:'0.5px dashed rgba(255,255,255,0.1)' }}>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', letterSpacing:1, textTransform:'uppercase', marginBottom:4 }}>VilleCabs Receipt</div>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.3)' }}>{completedDate} · {completedTime}</div>
+            <div style={{ textAlign:'center', marginBottom:16, paddingBottom:14, borderBottom:'1px dashed #e0d3f5' }}>
+              <div style={{ fontSize:11, color:'#8a83a0', letterSpacing:1, textTransform:'uppercase', marginBottom:4 }}>VilleCabs Receipt</div>
+              <div style={{ fontSize:11, color:'#9199ad' }}>{completedDate} · {completedTime}</div>
             </div>
             {/* Route */}
             <div style={{ marginBottom:14 }}>
               <div style={{ display:'flex', alignItems:'flex-start', gap:10, marginBottom:8 }}>
                 <div style={{ width:10, height:10, borderRadius:'50%', background:GREEN, flexShrink:0, marginTop:3 }}/>
                 <div>
-                  <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', marginBottom:2 }}>PICKUP</div>
-                  <div style={{ fontSize:13, color:WHITE }}>{booking.pickup?.address?.split('—')[0]?.trim() || '--'}</div>
+                  <div style={{ fontSize:10, color:'#8a83a0', marginBottom:2 }}>PICKUP</div>
+                  <div style={{ fontSize:13, color:'#2a1a4a' }}>{booking.pickup?.address?.split('—')[0]?.trim() || '--'}</div>
                 </div>
               </div>
-              <div style={{ width:1, height:16, background:'rgba(255,255,255,0.1)', marginLeft:4, marginBottom:8 }}/>
+              <div style={{ width:1, height:16, background:'#e0d3f5', marginLeft:4, marginBottom:8 }}/>
               <div style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
-                <div style={{ width:10, height:10, borderRadius:'50%', background:YELLOW, flexShrink:0, marginTop:3 }}/>
+                <div style={{ width:10, height:10, borderRadius:'50%', background:'#6b21a8', flexShrink:0, marginTop:3 }}/>
                 <div>
-                  <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', marginBottom:2 }}>DROP-OFF</div>
-                  <div style={{ fontSize:13, color:WHITE }}>{booking.dropoff?.address?.split('—')[0]?.trim() || '--'}</div>
+                  <div style={{ fontSize:10, color:'#8a83a0', marginBottom:2 }}>DROP-OFF</div>
+                  <div style={{ fontSize:13, color:'#2a1a4a' }}>{booking.dropoff?.address?.split('—')[0]?.trim() || '--'}</div>
                 </div>
               </div>
             </div>
             {/* Details */}
-            <div style={{ background:'rgba(255,255,255,0.04)', borderRadius:10, padding:12, marginBottom:14 }}>
+            <div style={{ background:'#f6f2fb', borderRadius:10, padding:12, marginBottom:14 }}>
               {[
                 ['Driver', booking.driverName||'--'],
                 ...(booking.driverLocation && booking.pickup ? [['ETA', (() => {
@@ -4715,15 +4715,15 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
                 ['Payment', booking.paymentMethod||'Cash'],
               ].map(([k,v],i,arr) => (
                 <div key={i} style={{ display:'flex', justifyContent:'space-between', fontSize:13, marginBottom:i<arr.length-1?8:0 }}>
-                  <span style={{ color:'rgba(255,255,255,0.5)' }}>{k}</span>
-                  <span style={{ color:WHITE, fontWeight:500 }}>{v}</span>
+                  <span style={{ color:'#6b6b80' }}>{k}</span>
+                  <span style={{ color:'#2a1a4a', fontWeight:500 }}>{v}</span>
                 </div>
               ))}
             </div>
             {/* Total */}
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'0.5px dashed rgba(255,255,255,0.1)', paddingTop:14 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'1px dashed #e0d3f5', paddingTop:14 }}>
               <div>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:1 }}>Total Paid</div>
+                <div style={{ fontSize:11, color:'#8a83a0', textTransform:'uppercase', letterSpacing:1 }}>Total Paid</div>
                 {booking.promoCode && <div style={{ fontSize:11, color:GREEN, marginTop:2 }}>🎟️ {booking.promoCode} applied</div>}
               </div>
               <div style={{ fontSize:24, fontWeight:700, color:GREEN }}>J${booking.fare?.toLocaleString()}</div>
@@ -4732,9 +4732,9 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
 
           {/* Rating & Review */}
           {!rated ? (
-            <div style={{ width:'100%', maxWidth:400, background:'rgba(15,20,40,0.7)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:16, marginBottom:14, textAlign:'center' }}>
-              <p style={{ fontSize:15, color:WHITE, fontWeight:600, marginBottom:2 }}>How was your ride?</p>
-              <p style={{ fontSize:12, color:'rgba(255,255,255,0.4)', marginBottom:14 }}>Rate your driver{booking?.driverName?` · ${booking.driverName}`:''}</p>
+            <div style={{ width:'100%', maxWidth:400, background:'#ffffff', border:'1px solid #ece3f5', borderRadius:14, padding:16, marginBottom:14, textAlign:'center' }}>
+              <p style={{ fontSize:15, color:'#2a1a4a', fontWeight:600, marginBottom:2 }}>How was your ride?</p>
+              <p style={{ fontSize:12, color:'#8a83a0', marginBottom:14 }}>Rate your driver{booking?.driverName?` · ${booking.driverName}`:''}</p>
               <div style={{ display:'flex', gap:10, justifyContent:'center', marginBottom:14 }}>
                 {[1,2,3,4,5].map(star => (
                   <div key={star} onClick={() => setRating(star)} style={{ fontSize:38, cursor:'pointer', opacity:star<=rating?1:0.25, transform:star<=rating?'scale(1.1)':'scale(1)', transition:'all 0.15s' }}>⭐</div>
@@ -4753,9 +4753,9 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
                       return (
                         <button key={tag} onClick={() => setReviewTags(t => on ? t.filter(x=>x!==tag) : [...t, tag])}
                           style={{ fontSize:11, fontWeight:600, padding:'6px 12px', borderRadius:20, cursor:'pointer',
-                            background: on ? (rating>=4?'rgba(26,158,90,0.25)':'rgba(226,75,74,0.22)') : 'rgba(255,255,255,0.06)',
-                            border: `1px solid ${on ? (rating>=4?'#1a9e5a':'#e24b4a') : 'rgba(255,255,255,0.15)'}`,
-                            color: on ? (rating>=4?'#4ade80':'#f09595') : 'rgba(255,255,255,0.6)' }}>
+                            background: on ? (rating>=4?'rgba(26,158,90,0.25)':'rgba(226,75,74,0.22)') : '#f6f2fb',
+                            border: `1px solid ${on ? (rating>=4?'#1a9e5a':'#e24b4a') : '#e0d3f5'}`,
+                            color: on ? (rating>=4?'#1a9e5a':'#dc2626') : '#6b6b80' }}>
                           {tag}
                         </button>
                       );
@@ -4765,7 +4765,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
                   {/* optional written review */}
                   <textarea value={review} onChange={e=>setReview(e.target.value)} rows={3}
                     placeholder="Add a review (optional)…" maxLength={300}
-                    style={{ width:'100%', padding:'10px 12px', background:'rgba(255,255,255,0.06)', border:'0.5px solid rgba(255,255,255,0.15)', borderRadius:10, color:WHITE, fontSize:13, boxSizing:'border-box', outline:'none', resize:'vertical', marginBottom:12, fontFamily:'inherit' }}/>
+                    style={{ width:'100%', padding:'10px 12px', background:'#f6f2fb', border:'1px solid #e0d3f5', borderRadius:10, color:'#2a1a4a', fontSize:13, boxSizing:'border-box', outline:'none', resize:'vertical', marginBottom:12, fontFamily:'inherit' }}/>
 
                   <button style={{ ...s.btnY, width:'100%' }} onClick={submitRating}>Submit Rating</button>
                 </>
@@ -4806,7 +4806,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
               icon={{ url:carIconSVG(driverBearing, '#e8b400'), scaledSize:{width:44,height:44}, anchor:{x:22,y:22} }}/>
           )}
         </VilleMap>
-        <div style={{ position:'absolute', bottom:0, left:0, right:0, background:'rgba(10,15,35,0.88)', backdropFilter:'blur(8px)', padding:'7px 14px', textAlign:'center', fontSize:12, color:YELLOW, fontWeight:500 }}>
+        <div style={{ position:'absolute', bottom:0, left:0, right:0, background:'rgba(107,33,168,0.85)', backdropFilter:'blur(8px)', padding:'7px 14px', textAlign:'center', fontSize:12, color:'#fff', fontWeight:600 }}>
           {(booking?.status==='active'||booking?.status==='arrived'||booking?.status==='enroute')
             ? booking?.enrouteToDropoff
               ? '🚗 En route to drop-off — tracking live'
@@ -4821,8 +4821,8 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
         {booking?.driverId ? (
           <>
             {/* Driver safety card */}
-            <div style={{ background:'rgba(15,20,40,0.65)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:14, padding:14, marginBottom:12 }}>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.5, marginBottom:10, fontWeight:500 }}>🛡️ Driver & Vehicle Info</div>
+            <div style={{ background:'#ffffff', border:'1px solid #ece3f5', borderRadius:14, padding:14, marginBottom:12 }}>
+              <div style={{ fontSize:11, color:'#8a83a0', textTransform:'uppercase', letterSpacing:0.5, marginBottom:10, fontWeight:500 }}>🛡️ Driver & Vehicle Info</div>
               <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
                 {(() => {
                   const driverPhoto = driverInfo?.profilePhotoUrl || driverInfo?.photoURL || booking.profilePhotoUrl;
@@ -4836,7 +4836,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
                   );
                 })()}
                 <div style={{ flex:1 }}>
-                  <div style={{ fontSize:15, fontWeight:500, color:WHITE }}>{booking.driverName||'--'}</div>
+                  <div style={{ fontSize:15, fontWeight:500, color:'#2a1a4a' }}>{booking.driverName||'--'}</div>
                   <div style={{ fontSize:12, color:'#6b7280', marginTop:2 }}>
                     {driverInfo?.rating ? `⭐ ${driverInfo.rating.toFixed(1)} · ${driverInfo.ratingCount||0} reviews` : '⭐ New driver'}
                   </div>
@@ -4844,11 +4844,11 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
                 <div style={{ display:'flex', gap:8 }}>
                   <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, cursor:'pointer' }}>
                     <div style={{ width:38, height:38, borderRadius:'50%', background:GREEN, display:'flex', alignItems:'center', justifyContent:'center', fontSize:17 }}>📞</div>
-                    <span style={{ fontSize:9, color:'rgba(255,255,255,0.4)' }}>Call</span>
+                    <span style={{ fontSize:9, color:'#8a83a0' }}>Call</span>
                   </div>
                   <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, cursor:'pointer' }} onClick={() => go('chat')}>
-                    <div style={{ width:38, height:38, borderRadius:'50%', background:'rgba(232,180,0,0.2)', border:'1px solid #e8b400', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17 }}>💬</div>
-                    <span style={{ fontSize:9, color:YELLOW }}>Chat</span>
+                    <div style={{ width:38, height:38, borderRadius:'50%', background:'#f5f0ff', border:'1px solid #d8b4fe', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17 }}>💬</div>
+                    <span style={{ fontSize:9, color:'#6b21a8' }}>Chat</span>
                   </div>
                 </div>
               </div>
@@ -4858,30 +4858,30 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
                 const vLabel = `${booking.vehicleColor||driverInfo?.vehicleColor||''} ${booking.vehicleMake||driverInfo?.vehicleMake||''} ${booking.vehicleModel||driverInfo?.vehicleModel||''}`.trim() || 'Vehicle';
                 return vPhoto ? (
                   <div onClick={() => setLightbox({ url:vPhoto, label:vLabel })}
-                    style={{ position:'relative', marginBottom:8, borderRadius:12, overflow:'hidden', border:'1px solid rgba(255,255,255,0.1)', cursor:'pointer' }}>
+                    style={{ position:'relative', marginBottom:8, borderRadius:12, overflow:'hidden', border:'1px solid #ece3f5', cursor:'pointer' }}>
                     <img src={vPhoto} alt="Your driver's vehicle" style={{ width:'100%', height:150, objectFit:'cover', display:'block' }}/>
                     <div style={{ position:'absolute', bottom:8, right:8, background:'rgba(0,0,0,0.6)', color:'#fff', fontSize:10, fontWeight:600, padding:'3px 9px', borderRadius:12 }}>🔍 Tap to enlarge</div>
                   </div>
                 ) : (
-                  <div style={{ marginBottom:8, borderRadius:12, border:'1px dashed rgba(255,255,255,0.15)', background:'rgba(255,255,255,0.03)', height:96, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:4 }}>
+                  <div style={{ marginBottom:8, borderRadius:12, border:'1px dashed #d8b4fe', background:'#faf7fd', height:96, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:4 }}>
                     <div style={{ fontSize:26, opacity:0.5 }}>🚗</div>
-                    <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>Vehicle photo not available</div>
+                    <div style={{ fontSize:11, color:'#8a83a0' }}>Vehicle photo not available</div>
                   </div>
                 );
               })()}
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-                <div style={{ background:'rgba(255,255,255,0.04)', borderRadius:10, padding:'10px 12px' }}>
-                  <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', marginBottom:3 }}>Make & Model</div>
-                  <div style={{ fontSize:13, fontWeight:500, color:WHITE }}>{booking.vehicleMake ? `${booking.vehicleMake} ${booking.vehicleModel||''}` : '--'}</div>
+                <div style={{ background:'#f6f2fb', borderRadius:10, padding:'10px 12px' }}>
+                  <div style={{ fontSize:10, color:'#8a83a0', marginBottom:3 }}>Make & Model</div>
+                  <div style={{ fontSize:13, fontWeight:500, color:'#2a1a4a' }}>{booking.vehicleMake ? `${booking.vehicleMake} ${booking.vehicleModel||''}` : '--'}</div>
                 </div>
-                <div style={{ background:'rgba(255,255,255,0.04)', borderRadius:10, padding:'10px 12px' }}>
-                  <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', marginBottom:3 }}>License Plate</div>
-                  <div style={{ fontSize:15, fontWeight:700, color:YELLOW, letterSpacing:1 }}>{booking.licensePlate||'--'}</div>
+                <div style={{ background:'#f6f2fb', borderRadius:10, padding:'10px 12px' }}>
+                  <div style={{ fontSize:10, color:'#8a83a0', marginBottom:3 }}>License Plate</div>
+                  <div style={{ fontSize:15, fontWeight:700, color:'#6b21a8', letterSpacing:1 }}>{booking.licensePlate||'--'}</div>
                 </div>
                 {booking.vehicleColor && (
-                  <div style={{ background:'rgba(255,255,255,0.04)', borderRadius:10, padding:'10px 12px', gridColumn:'1 / -1' }}>
-                    <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', marginBottom:3 }}>Color</div>
-                    <div style={{ fontSize:13, fontWeight:500, color:WHITE }}>{booking.vehicleColor}</div>
+                  <div style={{ background:'#f6f2fb', borderRadius:10, padding:'10px 12px', gridColumn:'1 / -1' }}>
+                    <div style={{ fontSize:10, color:'#8a83a0', marginBottom:3 }}>Color</div>
+                    <div style={{ fontSize:13, fontWeight:500, color:'#2a1a4a' }}>{booking.vehicleColor}</div>
                   </div>
                 )}
               </div>
@@ -4889,17 +4889,17 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
 
             {/* Fare + status */}
             <div style={{ display:'flex', gap:10, marginBottom:12 }}>
-              <div style={{ flex:1, background:'rgba(15,20,40,0.65)', borderRadius:10, padding:10, textAlign:'center' }}>
-                <div style={{ fontSize:10, color:'rgba(255,255,255,0.45)' }}>Status</div>
-                <div style={{ fontSize:13, fontWeight:500, color:WHITE, textTransform:'capitalize' }}>{booking?.status||'searching'}</div>
+              <div style={{ flex:1, background:'#ffffff', borderRadius:10, padding:10, textAlign:'center' }}>
+                <div style={{ fontSize:10, color:'#8a83a0' }}>Status</div>
+                <div style={{ fontSize:13, fontWeight:500, color:'#2a1a4a', textTransform:'capitalize' }}>{booking?.status||'searching'}</div>
               </div>
-              <div style={{ flex:1, background:'rgba(15,20,40,0.65)', borderRadius:10, padding:10, textAlign:'center' }}>
-                <div style={{ fontSize:10, color:'rgba(255,255,255,0.45)' }}>Fare</div>
+              <div style={{ flex:1, background:'#ffffff', borderRadius:10, padding:10, textAlign:'center' }}>
+                <div style={{ fontSize:10, color:'#8a83a0' }}>Fare</div>
                 <div style={{ fontSize:13, fontWeight:500, color:GREEN }}>J${booking?.fare?.toLocaleString()||'--'}</div>
               </div>
-              <div style={{ flex:1, background:'rgba(15,20,40,0.65)', borderRadius:10, padding:10, textAlign:'center' }}>
-                <div style={{ fontSize:10, color:'rgba(255,255,255,0.45)' }}>Payment</div>
-                <div style={{ fontSize:11, fontWeight:500, color:YELLOW, textTransform:'capitalize' }}>{booking?.paymentMethod||'cash'}</div>
+              <div style={{ flex:1, background:'#ffffff', borderRadius:10, padding:10, textAlign:'center' }}>
+                <div style={{ fontSize:10, color:'#8a83a0' }}>Payment</div>
+                <div style={{ fontSize:11, fontWeight:500, color:'#b45309', textTransform:'capitalize' }}>{booking?.paymentMethod||'cash'}</div>
               </div>
             </div>
           </>
@@ -4919,7 +4919,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
         {(booking?.status === 'active' || booking?.status === 'arrived' || booking?.status === 'enroute') && (
           <div style={{ background:'#0D0D0D', border:'1px solid rgba(106,27,185,0.4)', borderRadius:14, padding:'14px 16px', marginBottom:12 }}>
             <div style={{ fontSize:12, fontWeight:700, color:'#D4AF37', marginBottom:10 }}>📤 Share Your Ride</div>
-            <div style={{ fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:12, lineHeight:1.5 }}>Let friends or family know you're on your way.</div>
+            <div style={{ fontSize:12, color:'#5b5470', marginBottom:12, lineHeight:1.5 }}>Let friends or family know you're on your way.</div>
             <div style={{ display:'flex', gap:8 }}>
               <button onClick={shareRide}
                 style={{ flex:1, padding:'11px 0', background:'linear-gradient(135deg,#6A1BB9,#4c1d95)', color:'#fff', border:'none', borderRadius:10, fontSize:13, fontWeight:700, cursor:'pointer' }}>
@@ -4975,7 +4975,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
             <div style={{ fontSize:24 }}>🚨</div>
             <div>
               <div style={{ fontSize:13, fontWeight:500, color:'#f09595' }}>SOS Alert Sent!</div>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Admin notified with your location</div>
+              <div style={{ fontSize:11, color:'#6b6b80', marginTop:2 }}>Admin notified with your location</div>
             </div>
           </div>
         ) : (
@@ -4986,7 +4986,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
             <div style={{ fontSize:26 }}>🆘</div>
             <div style={{ flex:1 }}>
               <div style={{ fontSize:13, fontWeight:700, color:'#f09595' }}>{sosHolding ? `Sending SOS in ${sosCount}s...` : 'SOS Emergency'}</div>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:2 }}>{sosHolding ? 'Release to cancel' : 'Hold 5 seconds to send emergency alert'}</div>
+              <div style={{ fontSize:11, color:'#8a83a0', marginTop:2 }}>{sosHolding ? 'Release to cancel' : 'Hold 5 seconds to send emergency alert'}</div>
             </div>
             {sosHolding && <div style={{ width:34, height:34, borderRadius:'50%', border:'3px solid #e24b4a', display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, fontWeight:700, color:'#f09595' }}>{sosCount}</div>}
           </div>
