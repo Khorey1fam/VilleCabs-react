@@ -2104,33 +2104,38 @@ function DashDriverSlider({ go }) {
 
 // ── DASH PARTNERS SLIDER ───────────────────────────────────────────────────────
 function DashPartnersSlider() {
-  const partners = [
-    { icon:'🍔', name:'Juici Patties',   cat:'Restaurant' },
-    { icon:'📚', name:'Bargain Books',   cat:'Bookstore'  },
-    { icon:'🏨', name:'Golf View Hotel', cat:'Hotel'      },
-    { icon:'🍽️', name:'Restaurants',    cat:'Food'       },
-    { icon:'🎉', name:'Clubs & Lounges', cat:'Nightlife'  },
-    { icon:'🛒', name:'Supermarkets',   cat:'Grocery'    },
-    { icon:'💊', name:'Pharmacies',     cat:'Health'     },
-    { icon:'🎫', name:'Events',         cat:'Events'     },
+  // Large "ad slot" cards — reserved space for future featured partners / flyers.
+  const slots = [
+    { icon:'🍔', cat:'Restaurants' },
+    { icon:'🏨', cat:'Hotels' },
+    { icon:'🎉', cat:'Nightlife' },
+    { icon:'🛒', cat:'Supermarkets' },
+    { icon:'💊', cat:'Pharmacies' },
+    { icon:'🎫', cat:'Events' },
   ];
   return (
     <div style={{ padding:'20px 0 20px' }}>
       <div style={{ padding:'0 16px', marginBottom:12 }}>
-        <div style={{ fontSize:12, fontWeight:700, color:'#999bbb', textTransform:'uppercase', letterSpacing:0.8, marginBottom:2 }}>Featured Partners</div>
-        <div style={{ fontSize:11, color:'#aaa', }}>Local businesses connected with VilleCabs.</div>
+        <div style={{ fontSize:12, fontWeight:700, color:'#8a83a0', textTransform:'uppercase', letterSpacing:0.8, marginBottom:2 }}>Featured Partners</div>
+        <div style={{ fontSize:11, color:'#aaa' }}>Premium ad space — your business could be here.</div>
       </div>
-      <div style={{ overflow:'hidden', position:'relative' }}>
-        <div style={{ display:'flex', gap:10, animation:'autoScroll 28s linear infinite', width:'fit-content', padding:'0 16px' }}>
-          {[...partners, ...partners].map((p, i) => (
-            <div key={i} style={{ flexShrink:0, width:130, background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:12, padding:'14px 10px', textAlign:'center', boxShadow:'0 2px 8px rgba(0,0,0,0.05)' }}>
-              <div style={{ fontSize:28, marginBottom:6 }}>{p.icon}</div>
-              <div style={{ fontSize:11, fontWeight:700, color:'#1a1a2e', marginBottom:2 }}>{p.name}</div>
-              <div style={{ fontSize:9, color:'#888aaa', marginBottom:6 }}>{p.cat}</div>
-              <div style={{ fontSize:8, background:'rgba(232,180,0,0.15)', color:'#b38600', padding:'2px 7px', borderRadius:8, fontWeight:600, display:'inline-block' }}>Coming Soon</div>
+      <div style={{ display:'flex', gap:16, overflowX:'auto', padding:'4px 16px 12px', scrollbarWidth:'none' }}>
+        {slots.map((p, i) => (
+          <div key={i} style={{
+            flexShrink:0, width:300, height:360,
+            background:'linear-gradient(160deg,#ffffff 0%,#faf5fd 100%)',
+            border:'2px dashed #d8b4fe', borderRadius:20,
+            display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+            textAlign:'center', padding:'24px 20px', boxShadow:'0 4px 18px rgba(107,33,168,0.08)',
+          }}>
+            <div style={{ fontSize:72, marginBottom:16, opacity:0.9 }}>{p.icon}</div>
+            <div style={{ fontSize:20, fontWeight:800, color:'#2a1a4a', marginBottom:8, lineHeight:1.25 }}>Featured Partner</div>
+            <div style={{ display:'inline-block', fontSize:12, background:'#f5f0ff', color:'#6b21a8', border:'1px solid #e9d5ff', padding:'6px 16px', borderRadius:20, fontWeight:700, marginBottom:16 }}>Coming Soon</div>
+            <div style={{ fontSize:13, color:'#8a83a0', lineHeight:1.6, maxWidth:230 }}>
+              This space is reserved for a featured {p.cat.toLowerCase()} partner. Advertise your business with VilleCabs.
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
     </div>
   );
