@@ -711,7 +711,7 @@ const PLACES = [
 ];
 
 // Reusable "Discover Mandeville" places slideshow card. onTap fires when tapped.
-function PlacesShowcase({ onTap, height = 360, caption = 'Discover Mandeville — tap to book a ride there' }) {
+function PlacesShowcase({ onTap, height = 440, caption = 'Discover Mandeville — tap to book a ride there' }) {
   const [i, setI] = useState(0);
   const [failed, setFailed] = useState({});
   useEffect(() => {
@@ -946,7 +946,7 @@ function Splash({ go }) {
           </div>
 
           {/* RIGHT PANEL — places photo slideshow (tap to sign in) */}
-          <div style={{ flex:'1 1 340px', minWidth:280 }}>
+          <div style={{ flex:'1.3 1 400px', minWidth:300 }}>
             <PlacesShowcase onTap={() => go('customer-login')} caption="Discover Mandeville — sign in to ride anywhere"/>
           </div>
 
@@ -986,16 +986,21 @@ function Splash({ go }) {
       </div>
 
       {/* EXPLORE MANDEVILLE */}
-      <div style={{ padding:'28px 0' }}>
-        <div style={{ padding:'0 16px', marginBottom:14 }}>
-          <p style={{ fontSize:11, color:'#6b21a8', fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', margin:'0 0 4px' }}>Mandeville</p>
-          <h2 style={{ fontSize:20, fontWeight:800, color:'#1a1a2e', margin:'0 0 4px' }}>Explore Mandeville</h2>
-          <p style={{ fontSize:12, color:'#777', margin:0 }}>Real local spots — tap any card to book a ride there</p>
+      <div style={{ padding:'32px 0', overflow:'hidden' }}>
+        <div style={{ padding:'0 16px', marginBottom:20, textAlign:'center' }}>
+          <p style={{ fontSize:12, color:'#6b21a8', fontWeight:700, letterSpacing:1.4, textTransform:'uppercase', margin:'0 0 6px' }}>Mandeville</p>
+          <h2 style={{ fontSize:30, fontWeight:800, color:'#2a1a4a', margin:'0 0 8px' }}>Explore Mandeville</h2>
+          <div style={{ width:64, height:3, background:'#6b21a8', borderRadius:2, margin:'0 auto 10px' }}/>
+          <p style={{ fontSize:13.5, color:'#5b5470', margin:0 }}>Real local spots — tap any card to book a ride there</p>
         </div>
-        <div style={{ display:'flex', gap:14, overflowX:'auto', padding:'6px 16px 10px', scrollbarWidth:'none' }}>
-          {EXPLORE_CATEGORIES.map(cat => (
-            <ExploreCard key={cat.key} cat={cat} go={go}/>
-          ))}
+        <div style={{ overflow:'hidden', position:'relative' }}>
+          <div style={{ display:'flex', gap:14, width:'max-content', animation:'autoScroll 40s linear infinite', padding:'6px 8px 10px' }}
+            onMouseEnter={e => e.currentTarget.style.animationPlayState='paused'}
+            onMouseLeave={e => e.currentTarget.style.animationPlayState='running'}>
+            {[...EXPLORE_CATEGORIES, ...EXPLORE_CATEGORIES].map((cat,i) => (
+              <ExploreCard key={cat.key+'-'+i} cat={cat} go={go}/>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -2119,24 +2124,28 @@ function DashPartnersSlider({ go }) {
         <div style={{ fontSize:12, fontWeight:700, color:'#8a83a0', textTransform:'uppercase', letterSpacing:0.8, marginBottom:2 }}>Featured Partners</div>
         <div style={{ fontSize:11, color:'#aaa' }}>Premium ad space — your business could be here.</div>
       </div>
-      <div style={{ display:'flex', gap:16, overflowX:'auto', padding:'4px 16px 12px', scrollbarWidth:'none' }}>
-        {slots.map((p, i) => (
-          <div key={i} style={{
-            flexShrink:0, width:300, height:380,
-            background:'linear-gradient(160deg,#ffffff 0%,#faf5fd 100%)',
-            border:'2px dashed #d8b4fe', borderRadius:20,
-            display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-            textAlign:'center', padding:'24px 20px', boxShadow:'0 4px 18px rgba(107,33,168,0.08)',
-          }}>
-            <div style={{ fontSize:66, marginBottom:14, opacity:0.9 }}>{p.icon}</div>
-            <div style={{ fontSize:20, fontWeight:800, color:'#2a1a4a', marginBottom:8, lineHeight:1.25 }}>Featured Partner</div>
-            <div style={{ display:'inline-block', fontSize:12, background:'#f5f0ff', color:'#6b21a8', border:'1px solid #e9d5ff', padding:'6px 16px', borderRadius:20, fontWeight:700, marginBottom:14 }}>Coming Soon</div>
-            <div style={{ fontSize:13, color:'#8a83a0', lineHeight:1.6, maxWidth:230, marginBottom:16 }}>
-              This space is reserved for a featured {p.cat.toLowerCase()} partner. Advertise your business with VilleCabs.
+      <div style={{ overflow:'hidden', position:'relative' }}>
+        <div style={{ display:'flex', gap:16, width:'max-content', animation:'autoScroll 45s linear infinite', padding:'4px 16px 12px' }}
+          onMouseEnter={e => e.currentTarget.style.animationPlayState='paused'}
+          onMouseLeave={e => e.currentTarget.style.animationPlayState='running'}>
+          {[...slots, ...slots].map((p, i) => (
+            <div key={i} style={{
+              flexShrink:0, width:300, height:380,
+              background:'linear-gradient(160deg,#ffffff 0%,#faf5fd 100%)',
+              border:'2px dashed #d8b4fe', borderRadius:20,
+              display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+              textAlign:'center', padding:'24px 20px', boxShadow:'0 4px 18px rgba(107,33,168,0.08)',
+            }}>
+              <div style={{ fontSize:66, marginBottom:14, opacity:0.9 }}>{p.icon}</div>
+              <div style={{ fontSize:20, fontWeight:800, color:'#2a1a4a', marginBottom:8, lineHeight:1.25 }}>Featured Partner</div>
+              <div style={{ display:'inline-block', fontSize:12, background:'#f5f0ff', color:'#6b21a8', border:'1px solid #e9d5ff', padding:'6px 16px', borderRadius:20, fontWeight:700, marginBottom:14 }}>Coming Soon</div>
+              <div style={{ fontSize:13, color:'#8a83a0', lineHeight:1.6, maxWidth:230, marginBottom:16 }}>
+                This space is reserved for a featured {p.cat.toLowerCase()} partner. Advertise your business with VilleCabs.
+              </div>
+              <button onClick={() => go('partner-with-us')} style={{ padding:'11px 22px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:22, fontSize:13, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 14px rgba(107,33,168,0.25)' }}>Advertise Here →</button>
             </div>
-            <button onClick={() => go('partner-with-us')} style={{ padding:'11px 22px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:22, fontSize:13, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 14px rgba(107,33,168,0.25)' }}>Advertise Here →</button>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -2631,7 +2640,7 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
                 </div>
 
                 {/* RIGHT — Discover Mandeville slideshow */}
-                <div style={{ flex:'1 1 320px', minWidth:260 }}>
+                <div style={{ flex:'1.3 1 400px', minWidth:280 }}>
                   <PlacesShowcase onTap={tryBook}/>
                 </div>
 
