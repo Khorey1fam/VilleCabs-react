@@ -698,6 +698,66 @@ function Footer({ go }) {
 }
 
 // ── SPLASH ────────────────────────────────────────────────────────────────────
+// ── Shared Mandeville places for the hero showcase (landing + dashboard) ──
+const PLACES = [
+  { name:'The Garden Hotel',      kind:'Hotel',      tag:'🏨', rating:4.5, area:'Hotel St, Mandeville',      grad:'linear-gradient(135deg,#6b21a8,#9333ea)', photo:'/places/garden-hotel.jpg' },
+  { name:'Voilà by Lilee',        kind:'Restaurant', tag:'🍽️', rating:4.3, area:'Caledonia Rd, Mandeville',   grad:'linear-gradient(135deg,#b45309,#f59e0b)', photo:'/places/voila-by-lilee.jpg' },
+  { name:'Golf View Hotel',       kind:'Hotel',      tag:'🏨', rating:3.6, area:'Caledonia Rd, Mandeville',   grad:'linear-gradient(135deg,#1e3a8a,#3b82f6)', photo:'/places/golf-view-hotel.jpg' },
+  { name:'The Ultimate Dining',   kind:'Restaurant', tag:'🍽️', rating:4.2, area:'Ward Ave, Mandeville',       grad:'linear-gradient(135deg,#065f46,#10b981)', photo:'/places/ultimate-dining.jpg' },
+  { name:'Villa Nova',            kind:'Fine Dining',tag:'🥂', rating:4.0, area:'Villa Rd, Mandeville',        grad:'linear-gradient(135deg,#831843,#db2777)', photo:'/places/villa-nova.jpg' },
+  { name:'Toast Restaurant & Gelato', kind:'Restaurant', tag:'🍨', rating:3.6, area:'Ward Ave, Mandeville',   grad:'linear-gradient(135deg,#4338ca,#818cf8)', photo:'/places/toast-gelato.jpg' },
+];
+
+// Reusable "Discover Mandeville" places slideshow card. onTap fires when tapped.
+function PlacesShowcase({ onTap, height = 360, caption = 'Discover Mandeville — tap to book a ride there' }) {
+  const [i, setI] = useState(0);
+  const [failed, setFailed] = useState({});
+  useEffect(() => {
+    const t = setInterval(() => setI(p => (p + 1) % PLACES.length), 3500);
+    return () => clearInterval(t);
+  }, []);
+  const p = PLACES[i];
+  const showPhoto = p.photo && !failed[i];
+  return (
+    <div>
+      <div
+        onClick={onTap}
+        style={{ position:'relative', borderRadius:20, overflow:'hidden', height, cursor:'pointer', boxShadow:'0 12px 40px rgba(107,33,168,0.20)', background:p.grad, border:'1px solid rgba(0,0,0,0.05)' }}
+        title="Book a ride here">
+        {showPhoto && (
+          <img src={p.photo} alt={p.name} onError={() => setFailed(f => ({ ...f, [i]:true }))}
+            style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }}/>
+        )}
+        {!showPhoto && (
+          <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:96, opacity:0.5 }}>{p.tag}</div>
+        )}
+        {/* scrim */}
+        <div style={{ position:'absolute', inset:0, background:'linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.1) 45%, rgba(0,0,0,0.15) 100%)' }}/>
+        {/* category pill */}
+        <div style={{ position:'absolute', top:14, left:14, background:'#f59e0b', color:'#fff', fontSize:11, fontWeight:700, padding:'5px 12px', borderRadius:20 }}>{p.tag} {p.kind}</div>
+        {/* rating pill */}
+        <div style={{ position:'absolute', top:14, right:14, background:'rgba(255,255,255,0.95)', color:'#1a1a2e', fontSize:11, fontWeight:800, padding:'5px 10px', borderRadius:20 }}>★ {p.rating.toFixed(1)}</div>
+        {/* caption */}
+        <div style={{ position:'absolute', left:16, right:16, bottom:44 }}>
+          <div style={{ fontSize:22, fontWeight:800, color:'#fff', lineHeight:1.2 }}>{p.name}</div>
+          <div style={{ fontSize:13, color:'rgba(255,255,255,0.85)', marginTop:2 }}>📍 {p.area}</div>
+        </div>
+        <div style={{ position:'absolute', left:16, bottom:14, fontSize:12, fontWeight:700, color:'#fff', display:'flex', alignItems:'center', gap:6 }}>
+          Tap to book a ride here <span>→</span>
+        </div>
+        {/* dots */}
+        <div style={{ position:'absolute', bottom:14, right:16, display:'flex', gap:5 }}>
+          {PLACES.map((_,d) => (
+            <button key={d} onClick={(e)=>{ e.stopPropagation(); setI(d); }}
+              style={{ width:d===i?18:6, height:6, borderRadius:3, border:'none', background:d===i?'#fff':'rgba(255,255,255,0.45)', cursor:'pointer', padding:0 }}/>
+          ))}
+        </div>
+      </div>
+      {caption && <div style={{ textAlign:'center', marginTop:10, fontSize:12, color:'#8a83a0' }}>{caption}</div>}
+    </div>
+  );
+}
+
 // ── Reusable feature card (illustration area + bullet title + description, with hover) ──
 function FeatureCard({ icon, title, desc, tint = '#fff3ec', accent = '#f97316', dark = false }) {
   const [hover, setHover] = useState(false);
@@ -832,26 +892,6 @@ function Splash({ go }) {
     { bg:'#2d1b69', emoji:'🤝', title:'Partner With VilleCabs',        sub:'Help your customers move safely across Manchester.' },
   ];
 
-  // ── Local places showcase (real Mandeville hotels & restaurants) ──
-  // Photos load from /public/places/. Drop a matching image in that folder to show it;
-  // if a file is missing, the styled gradient card shows automatically (onError fallback).
-  const places = [
-    { name:'The Garden Hotel',      kind:'Hotel',      tag:'🏨', rating:4.5, area:'Hotel St, Mandeville',      grad:'linear-gradient(135deg,#6b21a8,#9333ea)', gradSoft:'linear-gradient(135deg,rgba(147,51,234,0.45),rgba(107,33,168,0.30))', photo:'/places/garden-hotel.jpg' },
-    { name:'Voilà by Lilee',        kind:'Restaurant', tag:'🍽️', rating:4.3, area:'Caledonia Rd, Mandeville',   grad:'linear-gradient(135deg,#b45309,#f59e0b)', gradSoft:'linear-gradient(135deg,rgba(245,158,11,0.42),rgba(180,83,9,0.30))', photo:'/places/voila-by-lilee.jpg' },
-    { name:'Golf View Hotel',       kind:'Hotel',      tag:'🏨', rating:3.6, area:'Caledonia Rd, Mandeville',   grad:'linear-gradient(135deg,#1e3a8a,#3b82f6)', gradSoft:'linear-gradient(135deg,rgba(59,130,246,0.42),rgba(30,58,138,0.30))', photo:'/places/golf-view-hotel.jpg' },
-    { name:'The Ultimate Dining',   kind:'Restaurant', tag:'🍽️', rating:4.2, area:'Ward Ave, Mandeville',       grad:'linear-gradient(135deg,#065f46,#10b981)', gradSoft:'linear-gradient(135deg,rgba(16,185,129,0.42),rgba(6,95,70,0.30))', photo:'/places/ultimate-dining.jpg' },
-    { name:'Villa Nova',            kind:'Fine Dining',tag:'🥂', rating:4.0, area:'Villa Rd, Mandeville',        grad:'linear-gradient(135deg,#831843,#db2777)', gradSoft:'linear-gradient(135deg,rgba(219,39,119,0.42),rgba(131,24,67,0.30))', photo:'/places/villa-nova.jpg' },
-    { name:'Toast Restaurant & Gelato', kind:'Restaurant', tag:'🍨', rating:3.6, area:'Ward Ave, Mandeville',   grad:'linear-gradient(135deg,#4338ca,#818cf8)', gradSoft:'linear-gradient(135deg,rgba(129,140,248,0.42),rgba(67,56,202,0.30))', photo:'/places/toast-gelato.jpg' },
-  ];
-  const [pslide, setPslide] = useState(0);
-  const [imgFailed, setImgFailed] = useState({}); // index -> true if photo file missing
-
-  // Rotate the places showcase
-  useEffect(() => {
-    const t = setInterval(() => setPslide(p => (p + 1) % places.length), 3500);
-    return () => clearInterval(t);
-  }, [places.length]);
-
   useEffect(() => {
     const t = setInterval(() => setSlide(s => (s + 1) % 4), 5000);
     return () => clearInterval(t);
@@ -905,56 +945,7 @@ function Splash({ go }) {
 
           {/* RIGHT PANEL — places photo slideshow (tap to sign in) */}
           <div style={{ flex:'1 1 340px', minWidth:280 }}>
-            <div
-              onClick={() => go('customer-login')}
-              style={{ position:'relative', borderRadius:20, overflow:'hidden', height:360, cursor:'pointer', boxShadow:'0 12px 40px rgba(107,33,168,0.20)', background: places[pslide].grad, border:'1px solid rgba(0,0,0,0.05)' }}
-              title="Sign in to book a ride here">
-
-              {/* Real photo layer (shows when the image file exists) */}
-              {places[pslide].photo && !imgFailed[pslide] && (
-                <img src={places[pslide].photo} alt={places[pslide].name}
-                  onError={() => setImgFailed(prev => ({ ...prev, [pslide]:true }))}
-                  style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }}/>
-              )}
-
-              {/* Decorative emoji fallback when no photo / file missing */}
-              {(!places[pslide].photo || imgFailed[pslide]) && (
-                <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:96, opacity:0.5 }}>{places[pslide].tag}</div>
-              )}
-
-              {/* gradient scrim for legibility */}
-              <div style={{ position:'absolute', inset:0, background:'linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.1) 45%, rgba(0,0,0,0.15) 100%)' }}/>
-
-              {/* category pill */}
-              <div style={{ position:'absolute', top:14, left:14, background:'#f59e0b', color:'#fff', fontSize:11, fontWeight:700, padding:'5px 12px', borderRadius:20 }}>
-                {places[pslide].tag} {places[pslide].kind}
-              </div>
-              {/* rating pill */}
-              <div style={{ position:'absolute', top:14, right:14, background:'rgba(255,255,255,0.95)', color:'#1a1a2e', fontSize:11, fontWeight:800, padding:'5px 10px', borderRadius:20 }}>
-                ★ {places[pslide].rating.toFixed(1)}
-              </div>
-
-              {/* caption */}
-              <div style={{ position:'absolute', left:16, right:16, bottom:44 }}>
-                <div style={{ fontSize:22, fontWeight:800, color:'#fff', lineHeight:1.2 }}>{places[pslide].name}</div>
-                <div style={{ fontSize:13, color:'rgba(255,255,255,0.85)', marginTop:2 }}>📍 {places[pslide].area}</div>
-              </div>
-              {/* CTA hint */}
-              <div style={{ position:'absolute', left:16, bottom:14, fontSize:12, fontWeight:700, color:'#fff', display:'flex', alignItems:'center', gap:6 }}>
-                Tap to book a ride here <span>→</span>
-              </div>
-
-              {/* dots */}
-              <div style={{ position:'absolute', bottom:14, right:16, display:'flex', gap:5 }}>
-                {places.map((_,i) => (
-                  <button key={i} onClick={(e) => { e.stopPropagation(); setPslide(i); }}
-                    style={{ width:i===pslide?18:6, height:6, borderRadius:3, border:'none', background:i===pslide?'#fff':'rgba(255,255,255,0.45)', cursor:'pointer', padding:0 }}/>
-                ))}
-              </div>
-            </div>
-            <div style={{ textAlign:'center', marginTop:10, fontSize:12, color:'#8a83a0' }}>
-              Discover Mandeville — sign in to ride anywhere
-            </div>
+            <PlacesShowcase onTap={() => go('customer-login')} caption="Discover Mandeville — sign in to ride anywhere"/>
           </div>
 
         </div>
@@ -2477,22 +2468,33 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
           {/* ── REDESIGNED HOME DASHBOARD ── */}
           <div style={{ flex:1, overflowY:'auto', background:'linear-gradient(160deg, #ffffff 0%, #f6f2fb 45%, #efe8f7 100%)' }}>
 
-            {/* Greeting + Book a Ride */}
-            <div style={{ background:'transparent', padding:'28px 20px 24px', textAlign:'center', position:'relative', overflow:'hidden' }}>
-              <div style={{ position:'absolute', top:-40, left:'50%', transform:'translateX(-50%)', width:400, height:300, background:'radial-gradient(circle, rgba(107,33,168,0.08) 0%, transparent 70%)', pointerEvents:'none' }}/>
-              <div style={{ fontSize:26, fontWeight:800, color:'#2a1a4a', marginBottom:4, lineHeight:1.2 }}>
-                Good day, {user?.name?.split(' ')[0]||'Rider'} 👋
-              </div>
+            {/* ── TWO-PANEL HERO (left: Book a Ride · right: Discover Mandeville) ── */}
+            <div style={{ padding:'24px 16px 20px' }}>
+              <div style={{ maxWidth:1000, margin:'0 auto', display:'flex', gap:20, flexWrap:'wrap', alignItems:'stretch' }}>
 
-              <button onClick={() => { if (activeRide) { vcToast('You already have an active ride in progress. Complete or cancel it before booking a new one.', 'warn'); return; } go('pin-pickup'); }}
-                style={{ background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', margin:'14px auto 0', padding:0 }}>
-                <div style={{ width:190, height:190, borderRadius:'50%', background:'#ffffff', boxShadow:'0 8px 40px rgba(107,33,168,0.18), 0 0 0 6px rgba(107,33,168,0.15)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', position:'relative', overflow:'hidden' }}>
-                  <div style={{ position:'absolute', inset:0, background:'radial-gradient(circle at 50% 60%, rgba(107,33,168,0.12) 0%, transparent 70%)' }}/>
-                  <div style={{ fontSize:76, lineHeight:1, position:'relative', zIndex:1 }}>🚕</div>
-                  <div style={{ fontSize:13, fontWeight:800, color:'#2a1a4a', marginTop:6, letterSpacing:0.3, position:'relative', zIndex:1 }}>Book a Ride</div>
+                {/* LEFT — greeting + Book a Ride */}
+                <div style={{ flex:'1 1 300px', minWidth:260, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', textAlign:'center', position:'relative', overflow:'hidden' }}>
+                  <div style={{ position:'absolute', top:-40, left:'50%', transform:'translateX(-50%)', width:400, height:300, background:'radial-gradient(circle, rgba(107,33,168,0.08) 0%, transparent 70%)', pointerEvents:'none' }}/>
+                  <div style={{ fontSize:26, fontWeight:800, color:'#2a1a4a', marginBottom:4, lineHeight:1.2, position:'relative', zIndex:1 }}>
+                    Good day, {user?.name?.split(' ')[0]||'Rider'} 👋
+                  </div>
+                  <button onClick={() => { if (activeRide) { vcToast('You already have an active ride in progress. Complete or cancel it before booking a new one.', 'warn'); return; } go('pin-pickup'); }}
+                    style={{ background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', margin:'14px auto 0', padding:0, position:'relative', zIndex:1 }}>
+                    <div style={{ width:190, height:190, borderRadius:'50%', background:'#ffffff', boxShadow:'0 8px 40px rgba(107,33,168,0.18), 0 0 0 6px rgba(107,33,168,0.15)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', position:'relative', overflow:'hidden' }}>
+                      <div style={{ position:'absolute', inset:0, background:'radial-gradient(circle at 50% 60%, rgba(107,33,168,0.12) 0%, transparent 70%)' }}/>
+                      <div style={{ fontSize:76, lineHeight:1, position:'relative', zIndex:1 }}>🚕</div>
+                      <div style={{ fontSize:13, fontWeight:800, color:'#2a1a4a', marginTop:6, letterSpacing:0.3, position:'relative', zIndex:1 }}>Book a Ride</div>
+                    </div>
+                  </button>
+                  <div style={{ fontSize:14, color:'#8a83a0', marginTop:12, position:'relative', zIndex:1 }}>Where are you going today?</div>
                 </div>
-              </button>
-              <div style={{ fontSize:14, color:'#8a83a0', marginTop:12 }}>Where are you going today?</div>
+
+                {/* RIGHT — Discover Mandeville slideshow */}
+                <div style={{ flex:'1 1 320px', minWidth:260 }}>
+                  <PlacesShowcase onTap={() => { if (activeRide) { vcToast('You already have an active ride in progress. Complete or cancel it before booking a new one.', 'warn'); return; } go('pin-pickup'); }}/>
+                </div>
+
+              </div>
             </div>
 
             {/* ── HERO BANNER SLIDESHOW ── */}
