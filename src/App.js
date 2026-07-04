@@ -708,16 +708,18 @@ function Splash({ go }) {
   ];
 
   // ── Local places showcase (real Mandeville hotels & restaurants) ──
-  // To show a real photo, paste an image URL into `photo`. Empty = styled gradient card.
+  // Photos load from /public/places/. Drop a matching image in that folder to show it;
+  // if a file is missing, the styled gradient card shows automatically (onError fallback).
   const places = [
-    { name:'The Garden Hotel',      kind:'Hotel',      tag:'🏨', rating:4.5, area:'Hotel St, Mandeville',      grad:'linear-gradient(135deg,#6b21a8,#9333ea)', photo:'' },
-    { name:'Voilà by Lilee',        kind:'Restaurant', tag:'🍽️', rating:4.3, area:'Caledonia Rd, Mandeville',   grad:'linear-gradient(135deg,#b45309,#f59e0b)', photo:'' },
-    { name:'Golf View Hotel',       kind:'Hotel',      tag:'🏨', rating:3.6, area:'Caledonia Rd, Mandeville',   grad:'linear-gradient(135deg,#1e3a8a,#3b82f6)', photo:'' },
-    { name:'The Ultimate Dining',   kind:'Restaurant', tag:'🍽️', rating:4.2, area:'Ward Ave, Mandeville',       grad:'linear-gradient(135deg,#065f46,#10b981)', photo:'' },
-    { name:'Villa Nova',            kind:'Fine Dining',tag:'🥂', rating:4.0, area:'Villa Rd, Mandeville',        grad:'linear-gradient(135deg,#831843,#db2777)', photo:'' },
-    { name:'Toast Restaurant & Gelato', kind:'Restaurant', tag:'🍨', rating:3.6, area:'Ward Ave, Mandeville',   grad:'linear-gradient(135deg,#4338ca,#818cf8)', photo:'' },
+    { name:'The Garden Hotel',      kind:'Hotel',      tag:'🏨', rating:4.5, area:'Hotel St, Mandeville',      grad:'linear-gradient(135deg,#6b21a8,#9333ea)', photo:'/places/garden-hotel.jpg' },
+    { name:'Voilà by Lilee',        kind:'Restaurant', tag:'🍽️', rating:4.3, area:'Caledonia Rd, Mandeville',   grad:'linear-gradient(135deg,#b45309,#f59e0b)', photo:'/places/voila-by-lilee.jpg' },
+    { name:'Golf View Hotel',       kind:'Hotel',      tag:'🏨', rating:3.6, area:'Caledonia Rd, Mandeville',   grad:'linear-gradient(135deg,#1e3a8a,#3b82f6)', photo:'/places/golf-view-hotel.jpg' },
+    { name:'The Ultimate Dining',   kind:'Restaurant', tag:'🍽️', rating:4.2, area:'Ward Ave, Mandeville',       grad:'linear-gradient(135deg,#065f46,#10b981)', photo:'/places/ultimate-dining.jpg' },
+    { name:'Villa Nova',            kind:'Fine Dining',tag:'🥂', rating:4.0, area:'Villa Rd, Mandeville',        grad:'linear-gradient(135deg,#831843,#db2777)', photo:'/places/villa-nova.jpg' },
+    { name:'Toast Restaurant & Gelato', kind:'Restaurant', tag:'🍨', rating:3.6, area:'Ward Ave, Mandeville',   grad:'linear-gradient(135deg,#4338ca,#818cf8)', photo:'/places/toast-gelato.jpg' },
   ];
   const [pslide, setPslide] = useState(0);
+  const [imgFailed, setImgFailed] = useState({}); // index -> true if photo file missing
 
   // Rotate the places showcase
   useEffect(() => {
@@ -783,14 +785,15 @@ function Splash({ go }) {
               style={{ position:'relative', borderRadius:20, overflow:'hidden', height:360, cursor:'pointer', boxShadow:'0 12px 40px rgba(0,0,0,0.28)', background: places[pslide].grad }}
               title="Sign in to book a ride here">
 
-              {/* Real photo layer (shows when a photo URL is set) */}
-              {places[pslide].photo && (
+              {/* Real photo layer (shows when the image file exists) */}
+              {places[pslide].photo && !imgFailed[pslide] && (
                 <img src={places[pslide].photo} alt={places[pslide].name}
+                  onError={() => setImgFailed(prev => ({ ...prev, [pslide]:true }))}
                   style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }}/>
               )}
 
-              {/* Decorative emoji when no photo set */}
-              {!places[pslide].photo && (
+              {/* Decorative emoji fallback when no photo / file missing */}
+              {(!places[pslide].photo || imgFailed[pslide]) && (
                 <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:96, opacity:0.5 }}>{places[pslide].tag}</div>
               )}
 
