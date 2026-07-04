@@ -698,6 +698,92 @@ function Footer({ go }) {
 }
 
 // ── SPLASH ────────────────────────────────────────────────────────────────────
+// ── Explore Mandeville: category cards, each cycling real Google-Maps places ──
+// Drop photos in /public/places/ to replace the gradient fallback (filename in `photo`).
+const EXPLORE_CATEGORIES = [
+  { key:'hotels', label:'Hotels', pill:'🏨 Stay', grad:'linear-gradient(135deg,#6b21a8,#9333ea)', places:[
+    { name:'The Garden Hotel',  area:'Hotel St, Mandeville',     rating:4.5, desc:'Refined rooms and dining in the heart of Mandeville.', photo:'/places/garden-hotel.jpg' },
+    { name:'Golf View Hotel',   area:'Caledonia Rd, Mandeville',  rating:3.6, desc:'Central hotel with restaurant and event spaces.',       photo:'/places/golf-view-hotel.jpg' },
+    { name:'Mandeview Hotel',   area:'Hillview Dr, Mandeville',   rating:3.8, desc:'Great mountain views over the town.',                    photo:'/places/mandeview-hotel.jpg' },
+  ]},
+  { key:'restaurants', label:'Restaurants', pill:'🍽️ Eat', grad:'linear-gradient(135deg,#b45309,#f59e0b)', places:[
+    { name:'Voilà by Lilee',        area:'Caledonia Rd, Mandeville', rating:4.3, desc:'Popular local spot for burgers, wings and desserts.', photo:'/places/voila-by-lilee.jpg' },
+    { name:'The Ultimate Dining',   area:'Ward Ave, Mandeville',     rating:4.2, desc:'Dining, cocktails and a lively lounge atmosphere.',    photo:'/places/ultimate-dining.jpg' },
+    { name:'Villa Nova',            area:'Villa Rd, Mandeville',     rating:4.0, desc:'Cozy fine-dining with a warm, home-like feel.',        photo:'/places/villa-nova.jpg' },
+    { name:'Toast Restaurant & Gelato', area:'Ward Ave, Mandeville', rating:3.6, desc:'Rooftop dining and gelato in central Mandeville.',    photo:'/places/toast-gelato.jpg' },
+  ]},
+  { key:'attractions', label:'Attractions', pill:'🎭 See', grad:'linear-gradient(135deg,#065f46,#10b981)', places:[
+    { name:'Cecil Charlton Park', area:'Central Mandeville',       rating:3.9, desc:'Historic town-centre park with monuments and benches.', photo:'/places/cecil-charlton-park.jpg' },
+    { name:'Marshalls Pen',       area:'Mandeville',               rating:3.8, desc:'Heritage great-house and birdwatching estate.',         photo:'/places/marshalls-pen.jpg' },
+    { name:'New Green Roundabout',area:'New Green Rd, Manchester',  rating:4.4, desc:'Gateway landmark into Mandeville and the highway.',      photo:'/places/new-green.jpg' },
+  ]},
+  { key:'shopping', label:'Shopping', pill:'🛍️ Shop', grad:'linear-gradient(135deg,#1e3a8a,#3b82f6)', places:[
+    { name:'Sovereign Centre',        area:'Caledonia Rd, Mandeville', rating:4.4, desc:'Modern mall with groceries, food court and shops.',   photo:'/places/sovereign-centre.jpg' },
+    { name:'Manchester Shopping Centre', area:'Caledonia Rd, Mandeville', rating:4.1, desc:'Wide range of stores, ATMs and local eateries.',   photo:'/places/manchester-shopping.jpg' },
+    { name:'Progressive Foods',       area:'Caledonia Rd, Mandeville', rating:4.5, desc:'Well-stocked supermarket with underground parking.',  photo:'/places/progressive-foods.jpg' },
+    { name:'Barham\u2019s Plaza',     area:'Manchester Rd, Mandeville', rating:3.7, desc:'Long-standing plaza with a variety of shops.',        photo:'/places/barhams-plaza.jpg' },
+  ]},
+  { key:'nightlife', label:'Nightlife', pill:'🌙 Vibe', grad:'linear-gradient(135deg,#831843,#db2777)', places:[
+    { name:'Tito\u2019s Bar & Lounge', area:'Manchester Rd, Mandeville', rating:5.0, desc:'Modern, sophisticated bar — a Mandeville favourite.',  photo:'/places/titos-bar.jpg' },
+    { name:'Parisville Night Club',   area:'Manchester Rd, Mandeville', rating:4.3, desc:'Karaoke nights and weekend party vibes.',             photo:'/places/parisville.jpg' },
+    { name:'Cloud 9 Night Club',      area:'Mandeville',                rating:3.8, desc:'Chill lounge and club with great music.',              photo:'/places/cloud9.jpg' },
+  ]},
+  { key:'hospitals', label:'Hospitals', pill:'🏥 Care', grad:'linear-gradient(135deg,#4338ca,#818cf8)', places:[
+    { name:'Mandeville Regional Hospital', area:'Hargreaves Ave, Mandeville', rating:2.7, desc:'Main regional hospital — open 24 hours.',        photo:'/places/mandeville-regional.jpg' },
+    { name:'Hargreaves Memorial Hospital', area:'Hargreaves Ave, Mandeville', rating:3.2, desc:'Private hospital in central Mandeville.',        photo:'/places/hargreaves.jpg' },
+    { name:'Manchester Health Department', area:'Ward Ave, Mandeville',       rating:5.0, desc:'Public health services and clinics.',            photo:'/places/manchester-health.jpg' },
+  ]},
+];
+
+function ExploreCard({ cat, go }) {
+  const [i, setI] = useState(0);
+  const [failed, setFailed] = useState({});
+  const list = cat.places;
+  useEffect(() => {
+    const t = setInterval(() => setI(p => (p + 1) % list.length), 3200 + Math.random() * 800);
+    return () => clearInterval(t);
+  }, [list.length]);
+  const p = list[i];
+  const showPhoto = p.photo && !failed[i];
+  return (
+    <div style={{ flexShrink:0, width:280, background:'#fff', border:'1px solid #ececf2', borderRadius:16, overflow:'hidden', boxShadow:'0 2px 10px rgba(0,0,0,0.06)' }}>
+      {/* PHOTO */}
+      <div onClick={() => go('customer-login')} style={{ position:'relative', height:150, cursor:'pointer', background:cat.grad }}>
+        {showPhoto && (
+          <img src={p.photo} alt={p.name} onError={() => setFailed(f => ({ ...f, [i]:true }))}
+            style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover' }}/>
+        )}
+        {!showPhoto && (
+          <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:60, opacity:0.5 }}>{cat.pill.split(' ')[0]}</div>
+        )}
+        {/* category pill (like "Ports") */}
+        <div style={{ position:'absolute', top:12, left:12, background:'#f97316', color:'#fff', fontSize:11, fontWeight:700, padding:'4px 12px', borderRadius:8 }}>{cat.label}</div>
+        {/* location pin badge */}
+        <div style={{ position:'absolute', top:12, right:12, width:28, height:28, borderRadius:8, background:'rgba(255,255,255,0.92)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14 }}>📍</div>
+        {/* slideshow dots */}
+        <div style={{ position:'absolute', bottom:10, right:12, display:'flex', gap:4 }}>
+          {list.map((_, d) => (
+            <button key={d} onClick={(e)=>{ e.stopPropagation(); setI(d); }}
+              style={{ width:d===i?16:5, height:5, borderRadius:3, border:'none', background:d===i?'#fff':'rgba(255,255,255,0.5)', cursor:'pointer', padding:0 }}/>
+          ))}
+        </div>
+      </div>
+      {/* BODY */}
+      <div style={{ padding:'12px 14px 14px' }}>
+        <div style={{ fontSize:11, color:'#6b7280', marginBottom:3 }}>📍 {p.area}</div>
+        <div style={{ fontSize:15, fontWeight:800, color:'#1a1a2e', marginBottom:5, lineHeight:1.2 }}>{p.name}</div>
+        <div style={{ fontSize:11.5, color:'#555770', lineHeight:1.5, marginBottom:12, minHeight:34 }}>
+          <span style={{ color:'#f59e0b', fontWeight:700 }}>★ {p.rating.toFixed(1)}</span> · {p.desc}
+        </div>
+        <div style={{ borderTop:'1px solid #f0f0f4', paddingTop:10, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <button onClick={() => go('customer-login')} style={{ background:'none', border:'none', color:'#f97316', fontSize:12, fontWeight:700, cursor:'pointer', padding:0 }}>View details →</button>
+          <button onClick={() => go('customer-login')} style={{ background:'#f97316', color:'#fff', border:'none', borderRadius:10, padding:'8px 14px', fontSize:12, fontWeight:700, cursor:'pointer' }}>Book a Ride</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Splash({ go }) {
   const [slide, setSlide] = useState(0);
   const slides = [
@@ -879,22 +965,12 @@ function Splash({ go }) {
       <div style={{ padding:'28px 0' }}>
         <div style={{ padding:'0 16px', marginBottom:14 }}>
           <p style={{ fontSize:11, color:'#6b21a8', fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', margin:'0 0 4px' }}>Mandeville</p>
-          <h2 style={{ fontSize:20, fontWeight:800, color:'#1a1a2e', margin:0 }}>Explore Mandeville</h2>
+          <h2 style={{ fontSize:20, fontWeight:800, color:'#1a1a2e', margin:'0 0 4px' }}>Explore Mandeville</h2>
+          <p style={{ fontSize:12, color:'#777', margin:0 }}>Real local spots — tap any card to book a ride there</p>
         </div>
-        <div style={{ display:'flex', gap:12, overflowX:'auto', padding:'4px 16px 8px' }}>
-          {[['🏨','Hotels','Comfortable stays'],
-            ['🍽️','Restaurants','Your favourite food spots'],
-            ['🎭','Attractions','Local landmarks and parks'],
-            ['🛍️','Shopping','Plazas and supermarkets'],
-            ['🌙','Nightlife','Safe rides to clubs'],
-            ['🏥','Hospitals','Medical appointment rides']
-          ].map(([icon,title,desc],i) => (
-            <div key={i} style={{ flexShrink:0, width:140, background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:14, padding:'14px 12px', textAlign:'center' }}>
-              <div style={{ fontSize:28, marginBottom:6 }}>{icon}</div>
-              <div style={{ fontSize:12, fontWeight:700, color:'#1a1a2e', marginBottom:4 }}>{title}</div>
-              <div style={{ fontSize:10, color:'#555', lineHeight:1.4, marginBottom:10 }}>{desc}</div>
-              <button onClick={() => go('customer-login')} style={{ width:'100%', padding:'7px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:700, cursor:'pointer' }}>Book a Ride</button>
-            </div>
+        <div style={{ display:'flex', gap:14, overflowX:'auto', padding:'6px 16px 10px', scrollbarWidth:'none' }}>
+          {EXPLORE_CATEGORIES.map(cat => (
+            <ExploreCard key={cat.key} cat={cat} go={go}/>
           ))}
         </div>
       </div>
