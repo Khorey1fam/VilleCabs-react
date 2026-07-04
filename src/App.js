@@ -698,6 +698,45 @@ function Footer({ go }) {
 }
 
 // ── SPLASH ────────────────────────────────────────────────────────────────────
+// ── Reusable feature card (illustration area + bullet title + description, with hover) ──
+function FeatureCard({ icon, title, desc, tint = '#fff3ec', accent = '#f97316', dark = false }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        flex:'1 1 220px', minWidth:200, maxWidth:280,
+        background: dark ? 'rgba(255,255,255,0.06)' : '#fff',
+        border: dark ? '1px solid rgba(255,255,255,0.12)' : '1px solid #eef0f4',
+        borderRadius:16, padding:14,
+        boxShadow: hover ? '0 14px 32px rgba(107,33,168,0.16)' : '0 2px 10px rgba(0,0,0,0.05)',
+        transform: hover ? 'translateY(-6px)' : 'translateY(0)',
+        transition:'transform 0.22s ease, box-shadow 0.22s ease',
+        cursor:'default',
+      }}>
+      {/* illustration area */}
+      <div style={{
+        height:96, borderRadius:12, background:tint, marginBottom:14,
+        display:'flex', alignItems:'center', justifyContent:'center',
+        fontSize:40, position:'relative', overflow:'hidden',
+        transition:'transform 0.22s ease', transform: hover ? 'scale(1.03)' : 'scale(1)',
+      }}>
+        {/* soft decorative bars, like the reference */}
+        <div style={{ position:'absolute', top:16, left:16, right:40, height:8, borderRadius:6, background:'rgba(249,115,22,0.18)' }}/>
+        <div style={{ position:'absolute', top:30, left:16, right:64, height:8, borderRadius:6, background:'rgba(249,115,22,0.12)' }}/>
+        <span style={{ position:'relative', zIndex:1 }}>{icon}</span>
+      </div>
+      {/* title with bullet */}
+      <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:6 }}>
+        <span style={{ width:7, height:7, borderRadius:'50%', background:accent, flexShrink:0 }}/>
+        <span style={{ fontSize:15, fontWeight:800, color: dark ? '#fff' : '#1a1a2e' }}>{title}</span>
+      </div>
+      <div style={{ fontSize:12.5, color: dark ? 'rgba(255,255,255,0.7)' : '#6b6b80', lineHeight:1.55 }}>{desc}</div>
+    </div>
+  );
+}
+
 // ── Explore Mandeville: category cards, each cycling real Google-Maps places ──
 // Drop photos in /public/places/ to replace the gradient fallback (filename in `photo`).
 const EXPLORE_CATEGORIES = [
@@ -922,41 +961,33 @@ function Splash({ go }) {
       </div>
 
       {/* HOW IT WORKS */}
-      <div style={{ padding:'28px 16px', background:'#f9f5ff' }}>
+      <div style={{ padding:'32px 16px', background:'#faf8fd' }}>
         <p style={{ fontSize:11, color:'#6b21a8', fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', textAlign:'center', margin:'0 0 6px' }}>Simple Steps</p>
-        <h2 style={{ fontSize:20, fontWeight:800, color:'#1a1a2e', textAlign:'center', margin:'0 0 16px' }}>How It Works</h2>
-        {[['1','📍','Pin Your Location','Set your pickup and destination on the map'],
-          ['2','🚗','Choose Your Ride','Select VilleRide, VilleXL, or VilleMoto'],
-          ['3','📲','Track Your Driver','Watch your driver arrive in real time'],
-          ['4','💵','Pay and Arrive','Pay cash directly to your driver']
-        ].map(([n,icon,title,desc],i) => (
-          <div key={i} style={{ display:'flex', gap:12, background:'#fff', borderRadius:14, padding:'13px 15px', marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.05)', alignItems:'flex-start' }}>
-            <div style={{ width:30, height:30, borderRadius:'50%', background:'#6b21a8', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:13, fontWeight:800, flexShrink:0 }}>{n}</div>
-            <div>
-              <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>{icon} {title}</div>
-              <div style={{ fontSize:12, color:'#555770', marginTop:2 }}>{desc}</div>
-            </div>
-          </div>
-        ))}
+        <h2 style={{ fontSize:22, fontWeight:800, color:'#1a1a2e', textAlign:'center', margin:'0 0 20px' }}>How It Works</h2>
+        <div style={{ maxWidth:1000, margin:'0 auto', display:'flex', gap:14, flexWrap:'wrap', justifyContent:'center' }}>
+          {[['📍','Pin Your Location','Set your pickup and destination on the map.'],
+            ['🚗','Choose Your Ride','Select VilleRide, VilleXL, or VilleMoto.'],
+            ['📲','Track Your Driver','Watch your driver arrive in real time.'],
+            ['💵','Pay and Arrive','Pay cash directly to your driver.']
+          ].map(([icon,title,desc],i) => (
+            <FeatureCard key={i} icon={icon} title={title} desc={desc}/>
+          ))}
+        </div>
       </div>
 
       {/* WHY VILLECABS */}
-      <div style={{ padding:'28px 16px' }}>
+      <div style={{ padding:'32px 16px' }}>
         <p style={{ fontSize:11, color:'#6b21a8', fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', textAlign:'center', margin:'0 0 6px' }}>Our Promise</p>
-        <h2 style={{ fontSize:20, fontWeight:800, color:'#1a1a2e', textAlign:'center', margin:'0 0 16px' }}>Why VilleCabs?</h2>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
-          {[['🏝️','Built for Mandeville','Made by locals for locals'],
-            ['👤','Trusted Drivers','Verified before they drive'],
-            ['💰','Clear Fares','No hidden charges'],
-            ['🛡️','Safety First','SOS, GPS, share trip'],
-            ['📱','Easy Booking','Book in under 2 minutes'],
-            ['🤝','Local Support','Here when you need us']
+        <h2 style={{ fontSize:22, fontWeight:800, color:'#1a1a2e', textAlign:'center', margin:'0 0 20px' }}>Why VilleCabs?</h2>
+        <div style={{ maxWidth:1000, margin:'0 auto', display:'flex', gap:14, flexWrap:'wrap', justifyContent:'center' }}>
+          {[['🏝️','Built for Mandeville','Made by locals, for locals.'],
+            ['👤','Trusted Drivers','Every driver is verified before they drive.'],
+            ['💰','Clear Fares','Upfront pricing with no hidden charges.'],
+            ['🛡️','Safety First','SOS button, GPS tracking, and share-trip.'],
+            ['📱','Easy Booking','Book your ride in under two minutes.'],
+            ['🤝','Local Support','Real people here when you need us.']
           ].map(([icon,title,desc],i) => (
-            <div key={i} style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:14, padding:'14px 12px', textAlign:'center' }}>
-              <div style={{ fontSize:26, marginBottom:6 }}>{icon}</div>
-              <div style={{ fontSize:12, fontWeight:700, color:'#1a1a2e', marginBottom:3 }}>{title}</div>
-              <div style={{ fontSize:10, color:'#555770', lineHeight:1.4 }}>{desc}</div>
-            </div>
+            <FeatureCard key={i} icon={icon} title={title} desc={desc} tint="#f3edfb" accent="#6b21a8"/>
           ))}
         </div>
       </div>
@@ -976,35 +1007,34 @@ function Splash({ go }) {
       </div>
 
       {/* SAFETY */}
-      <div style={{ padding:'28px 16px', background:'#1a1a2e' }}>
-        <p style={{ fontSize:11, color:'#d8b4fe', fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', textAlign:'center', margin:'0 0 6px' }}>Trust</p>
-        <h2 style={{ fontSize:20, fontWeight:800, color:'#fff', textAlign:'center', margin:'0 0 16px' }}>Your Safety Comes First</h2>
-        {[['✅','Verified Drivers','Every driver is approved before receiving ride requests.'],
-          ['📍','GPS Tracked','All rides are monitored live for your safety.'],
-          ['🆘','SOS Emergency','Hold SOS 5 seconds for immediate emergency support.'],
-          ['📲','Share Your Trip','Send live ride details to someone you trust.']
-        ].map(([icon,title,desc],i) => (
-          <div key={i} style={{ display:'flex', gap:12, background:'rgba(255,255,255,0.06)', border:'1px solid rgba(167,139,250,0.2)', borderRadius:14, padding:'13px 15px', marginBottom:10 }}>
-            <div style={{ fontSize:22, flexShrink:0 }}>{icon}</div>
-            <div>
-              <div style={{ fontSize:13, fontWeight:700, color:'#d8b4fe', marginBottom:3 }}>{title}</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.65)', lineHeight:1.5 }}>{desc}</div>
-            </div>
-          </div>
-        ))}
+      <div style={{ padding:'32px 16px', background:'linear-gradient(180deg,#ffffff,#fff6ef)' }}>
+        <p style={{ fontSize:11, color:'#f97316', fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', textAlign:'center', margin:'0 0 6px' }}>Your Safety First</p>
+        <h2 style={{ fontSize:22, fontWeight:800, color:'#1a2a44', textAlign:'center', margin:'0 0 4px' }}>Safety &amp; Reliability</h2>
+        <div style={{ width:60, height:3, background:'#f97316', borderRadius:2, margin:'8px auto 12px' }}/>
+        <p style={{ fontSize:13.5, color:'#5b6478', textAlign:'center', margin:'0 0 22px', lineHeight:1.6 }}>Built for peace of mind — before, during, and after every trip.</p>
+        <div style={{ maxWidth:1000, margin:'0 auto', display:'flex', gap:14, flexWrap:'wrap', justifyContent:'center' }}>
+          {[['✅','Driver Screening','Identity, license & vehicle checks before going online.'],
+            ['📍','Live Tracking','Follow your ride with real-time ETA updates.'],
+            ['💬','Always-On Support','In-app chat and 24/7 human assistance.'],
+            ['🛡️','Coverage & Policies','Clear insurance and fair cancellations.']
+          ].map(([icon,title,desc],i) => (
+            <FeatureCard key={i} icon={icon} title={title} desc={desc} tint="#fff1e8" accent="#f97316"/>
+          ))}
+        </div>
       </div>
 
       {/* FOR DRIVERS */}
-      <div style={{ padding:'28px 16px', background:'#6b21a8' }}>
+      <div style={{ padding:'32px 16px', background:'#6b21a8' }}>
         <p style={{ fontSize:11, color:'rgba(255,255,255,0.7)', fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', textAlign:'center', margin:'0 0 6px' }}>Earn</p>
-        <h2 style={{ fontSize:20, fontWeight:800, color:'#fff', textAlign:'center', margin:'0 0 8px' }}>Drive With VilleCabs</h2>
-        <p style={{ fontSize:13, color:'rgba(255,255,255,0.8)', textAlign:'center', margin:'0 0 18px', lineHeight:1.6 }}>Use your vehicle, set your own schedule, and keep 85% of every fare.</p>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:18 }}>
-          {[['⏰','Flexible Hours'],['💰','Keep 85%'],['🚗','Your Vehicle'],['🚀','Join Early']].map(([icon,label],i) => (
-            <div key={i} style={{ background:'rgba(255,255,255,0.12)', borderRadius:12, padding:'11px', textAlign:'center' }}>
-              <div style={{ fontSize:20, marginBottom:3 }}>{icon}</div>
-              <div style={{ fontSize:11, fontWeight:600, color:'rgba(255,255,255,0.9)' }}>{label}</div>
-            </div>
+        <h2 style={{ fontSize:22, fontWeight:800, color:'#fff', textAlign:'center', margin:'0 0 8px' }}>Drive With VilleCabs</h2>
+        <p style={{ fontSize:13, color:'rgba(255,255,255,0.8)', textAlign:'center', margin:'0 0 20px', lineHeight:1.6 }}>Use your vehicle, set your own schedule, and keep 85% of every fare.</p>
+        <div style={{ maxWidth:1000, margin:'0 auto 20px', display:'flex', gap:14, flexWrap:'wrap', justifyContent:'center' }}>
+          {[['⏰','Flexible Hours','Drive whenever it suits you — full or part time.'],
+            ['💰','Keep 85%','Take home the large majority of every fare.'],
+            ['🚗','Your Vehicle','Use the car you already own to start earning.'],
+            ['🚀','Join Early','Be one of Mandeville\u2019s first VilleCabs drivers.']
+          ].map(([icon,title,desc],i) => (
+            <FeatureCard key={i} icon={icon} title={title} desc={desc} dark accent="#f59e0b" tint="rgba(255,255,255,0.10)"/>
           ))}
         </div>
         <button onClick={() => go('driver-signup')} style={{ display:'block', width:'100%', maxWidth:300, margin:'0 auto', padding:'13px', background:'#fff', color:'#6b21a8', border:'none', borderRadius:22, fontSize:14, fontWeight:700, cursor:'pointer' }}>
