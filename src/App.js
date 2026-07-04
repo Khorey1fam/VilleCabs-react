@@ -2620,8 +2620,11 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
                     style={{ background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', margin:'14px auto 0', padding:0, position:'relative', zIndex:1 }}>
                     <div style={{ width:190, height:190, borderRadius:'50%', background:'#ffffff', boxShadow:'0 8px 40px rgba(107,33,168,0.18), 0 0 0 6px rgba(107,33,168,0.15)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', position:'relative', overflow:'hidden' }}>
                       <div style={{ position:'absolute', inset:0, background:'radial-gradient(circle at 50% 60%, rgba(107,33,168,0.12) 0%, transparent 70%)' }}/>
-                      <div style={{ fontSize:76, lineHeight:1, position:'relative', zIndex:1 }}>🚕</div>
-                      <div style={{ fontSize:13, fontWeight:800, color:'#2a1a4a', marginTop:6, letterSpacing:0.3, position:'relative', zIndex:1 }}>Book a Ride</div>
+                      <img src="/villecabs-logo.png" alt="VilleCabs"
+                        onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='block'; }}
+                        style={{ width:118, height:118, objectFit:'contain', position:'relative', zIndex:1, marginTop:6 }}/>
+                      <div style={{ fontSize:72, lineHeight:1, position:'relative', zIndex:1, display:'none' }}>🚕</div>
+                      <div style={{ fontSize:14, fontWeight:800, color:'#2a1a4a', marginTop:2, marginBottom:4, letterSpacing:0.3, position:'relative', zIndex:1 }}>Book a Ride</div>
                     </div>
                   </button>
                   <div style={{ fontSize:14, color:'#8a83a0', marginTop:12, position:'relative', zIndex:1 }}>Where are you going today?</div>
@@ -3340,7 +3343,7 @@ function PinPickup({ go, setPickupData, user }) {
       </div>
 
       {/* ── SEARCH BAR ── */}
-      <div style={{ background:'#111827', padding:'10px 16px 14px', flexShrink:0 }}>
+      <div style={{ background:'#ffffff', padding:'10px 16px 14px', flexShrink:0, borderBottom:'1px solid #ece3f5' }}>
         <AddressAutocompleteInput
           value={address}
           onChange={setAddress}
@@ -3356,11 +3359,11 @@ function PinPickup({ go, setPickupData, user }) {
       </div>
 
       {/* ── INSTRUCTION BANNER ── */}
-      <div style={{ margin:'14px 14px 0', background:'#0D0D0D', borderRadius:14, padding:'12px 16px', display:'flex', gap:12, alignItems:'center', border:'1px solid rgba(212,175,55,0.3)', flexShrink:0 }}>
+      <div style={{ margin:'14px 14px 0', background:'#ffffff', borderRadius:14, padding:'12px 16px', display:'flex', gap:12, alignItems:'center', border:'1px solid #ece3f5', boxShadow:'0 2px 10px rgba(107,33,168,0.06)', flexShrink:0 }}>
         <span style={{ fontSize:22 }}>📍</span>
         <div>
           <div style={{ fontSize:13, fontWeight:700, color:'#D4AF37', marginBottom:2 }}>Tap the map or search above</div>
-          <div style={{ fontSize:11, color:'rgba(255,255,255,0.7)', lineHeight:1.5 }}>Place your pickup pin exactly where the driver should meet you.</div>
+          <div style={{ fontSize:11, color:'#5b5470', lineHeight:1.5 }}>Place your pickup pin exactly where the driver should meet you.</div>
         </div>
       </div>
 
@@ -3368,78 +3371,78 @@ function PinPickup({ go, setPickupData, user }) {
       <div style={{ flex:1, overflowY:'auto', padding:'14px 14px 100px' }}>
 
         {/* Additional Details */}
-        <div style={{ background:'#0D0D0D', borderRadius:14, padding:'14px 16px', marginBottom:12, border:'1px solid rgba(255,255,255,0.08)' }}>
+        <div style={{ background:'#ffffff', borderRadius:14, padding:'14px 16px', marginBottom:12, border:'1px solid #ece3f5', boxShadow:'0 2px 10px rgba(107,33,168,0.05)' }}>
           <div style={{ fontSize:11, fontWeight:700, color:'#D4AF37', textTransform:'uppercase', letterSpacing:0.8, marginBottom:8 }}>Additional Details (Optional)</div>
           <input
             value={note} onChange={e => setNote(e.target.value)}
             placeholder="Gate colour, landmark, apartment number..."
-            style={{ width:'100%', padding:'11px 13px', background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:10, fontSize:13, color:'#ffffff', boxSizing:'border-box', outline:'none' }}
+            style={{ width:'100%', padding:'11px 13px', background:'#f6f2fb', border:'1px solid #e0d3f5', borderRadius:10, fontSize:13, color:'#2a1a4a', boxSizing:'border-box', outline:'none' }}
           />
         </div>
 
         {/* Passenger Selector */}
-        <div style={{ background:'#0D0D0D', borderRadius:14, padding:'14px 16px', marginBottom:12, border:'1px solid rgba(255,255,255,0.08)' }}>
+        <div style={{ background:'#ffffff', borderRadius:14, padding:'14px 16px', marginBottom:12, border:'1px solid #ece3f5', boxShadow:'0 2px 10px rgba(107,33,168,0.05)' }}>
           <div style={{ fontSize:11, fontWeight:700, color:'#D4AF37', textTransform:'uppercase', letterSpacing:0.8, marginBottom:2 }}>Number of Passengers</div>
-          <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginBottom:12 }}>Including yourself · Driver will be notified</div>
+          <div style={{ fontSize:11, color:'#8a83a0', marginBottom:12 }}>Including yourself · Driver will be notified</div>
           <div style={{ display:'flex', alignItems:'center', gap:16 }}>
             <button onClick={() => setPassengers(p => Math.max(1,p-1))}
-              style={{ width:38, height:38, borderRadius:'50%', border:'1.5px solid rgba(255,255,255,0.2)', background:'rgba(255,255,255,0.06)', color:passengers<=1?'rgba(255,255,255,0.2)':'#ffffff', fontSize:20, cursor:passengers<=1?'default':'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>−</button>
-            <span style={{ fontSize:22, fontWeight:800, color:'#ffffff', minWidth:30, textAlign:'center' }}>{passengers}</span>
+              style={{ width:38, height:38, borderRadius:'50%', border:'1.5px solid #d8b4fe', background:'#f6f2fb', color:passengers<=1?'#c9c2d8':'#6b21a8', fontSize:20, cursor:passengers<=1?'default':'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>−</button>
+            <span style={{ fontSize:22, fontWeight:800, color:'#2a1a4a', minWidth:30, textAlign:'center' }}>{passengers}</span>
             <button onClick={() => setPassengers(p => Math.min(6,p+1))}
               style={{ width:38, height:38, borderRadius:'50%', border:'1.5px solid #D4AF37', background:'rgba(212,175,55,0.15)', color:'#D4AF37', fontSize:20, cursor:passengers>=6?'default':'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>+</button>
-            <span style={{ fontSize:12, color:'rgba(255,255,255,0.5)' }}>{passengers > 1 ? `${passengers} passengers` : '1 passenger'}</span>
+            <span style={{ fontSize:12, color:'#6b6b80' }}>{passengers > 1 ? `${passengers} passengers` : '1 passenger'}</span>
           </div>
         </div>
 
         {/* Help Card 1 */}
-        <div style={{ background:'#0D0D0D', borderRadius:14, padding:'16px', marginBottom:10, border:'1px solid rgba(106,27,185,0.3)', borderLeft:'3px solid #6A1BB9' }}>
+        <div style={{ background:'#ffffff', borderRadius:14, padding:'16px', marginBottom:10, border:'1px solid #e0d3f5', borderLeft:'3px solid #6b21a8', boxShadow:'0 2px 10px rgba(107,33,168,0.05)' }}>
           <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
             <span style={{ fontSize:20, flexShrink:0 }}>📌</span>
             <div>
               <div style={{ fontSize:13, fontWeight:700, color:'#D4AF37', marginBottom:6 }}>Pin Your Exact Location</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', lineHeight:1.6 }}>Place your pickup pin as close as possible to where you are standing. This helps your driver find you quickly and ensures your fare is calculated accurately.</div>
+              <div style={{ fontSize:12, color:'#5b5470', lineHeight:1.6 }}>Place your pickup pin as close as possible to where you are standing. This helps your driver find you quickly and ensures your fare is calculated accurately.</div>
             </div>
           </div>
         </div>
 
         {/* Help Card 2 */}
-        <div style={{ background:'#0D0D0D', borderRadius:14, padding:'16px', marginBottom:10, border:'1px solid rgba(106,27,185,0.3)', borderLeft:'3px solid #6A1BB9' }}>
+        <div style={{ background:'#ffffff', borderRadius:14, padding:'16px', marginBottom:10, border:'1px solid #e0d3f5', borderLeft:'3px solid #6b21a8', boxShadow:'0 2px 10px rgba(107,33,168,0.05)' }}>
           <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
             <span style={{ fontSize:20, flexShrink:0 }}>🌿</span>
             <div>
               <div style={{ fontSize:13, fontWeight:700, color:'#D4AF37', marginBottom:6 }}>In a Rural Area?</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', lineHeight:1.6 }}>If you're on an unnamed road or in a district not on the map, use the Additional Details field to describe your location. Example: "Blue gate, top of Caledonia Road, Hatfield district."</div>
+              <div style={{ fontSize:12, color:'#5b5470', lineHeight:1.6 }}>If you're on an unnamed road or in a district not on the map, use the Additional Details field to describe your location. Example: "Blue gate, top of Caledonia Road, Hatfield district."</div>
             </div>
           </div>
         </div>
 
         {/* Help Card 3 */}
-        <div style={{ background:'#0D0D0D', borderRadius:14, padding:'16px', marginBottom:10, border:'1px solid rgba(106,27,185,0.3)', borderLeft:'3px solid #6A1BB9' }}>
+        <div style={{ background:'#ffffff', borderRadius:14, padding:'16px', marginBottom:10, border:'1px solid #e0d3f5', borderLeft:'3px solid #6b21a8', boxShadow:'0 2px 10px rgba(107,33,168,0.05)' }}>
           <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
             <span style={{ fontSize:20, flexShrink:0 }}>💡</span>
             <div>
               <div style={{ fontSize:13, fontWeight:700, color:'#D4AF37', marginBottom:6 }}>Quick Tip</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', lineHeight:1.6 }}>Make sure your phone location is on so your driver can find you faster.</div>
+              <div style={{ fontSize:12, color:'#5b5470', lineHeight:1.6 }}>Make sure your phone location is on so your driver can find you faster.</div>
             </div>
           </div>
         </div>
 
         {/* Help Card 4 */}
-        <div style={{ background:'#0D0D0D', borderRadius:14, padding:'16px', marginBottom:10, border:'1px solid rgba(106,27,185,0.3)', borderLeft:'3px solid #6A1BB9' }}>
+        <div style={{ background:'#ffffff', borderRadius:14, padding:'16px', marginBottom:10, border:'1px solid #e0d3f5', borderLeft:'3px solid #6b21a8', boxShadow:'0 2px 10px rgba(107,33,168,0.05)' }}>
           <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
             <span style={{ fontSize:20, flexShrink:0 }}>💬</span>
             <div>
               <div style={{ fontSize:13, fontWeight:700, color:'#D4AF37', marginBottom:6 }}>Chat With Your Driver</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', lineHeight:1.6 }}>Once a driver accepts your ride, you can chat directly with them if they need help finding your exact location.</div>
+              <div style={{ fontSize:12, color:'#5b5470', lineHeight:1.6 }}>Once a driver accepts your ride, you can chat directly with them if they need help finding your exact location.</div>
             </div>
           </div>
         </div>
       </div>
 
       {/* ── STICKY CONFIRM BUTTON ── */}
-      <div style={{ position:'fixed', bottom:0, left:0, right:0, padding:'12px 16px 20px', background:'linear-gradient(to top, #111827 60%, transparent)', zIndex:20 }}>
+      <div style={{ position:'fixed', bottom:0, left:0, right:0, padding:'12px 16px 20px', background:'linear-gradient(to top, #ffffff 65%, rgba(255,255,255,0.85) 85%, transparent)', zIndex:20 }}>
         <button onClick={handleConfirm} disabled={!address}
-          style={{ width:'100%', maxWidth:500, display:'block', margin:'0 auto', padding:'16px', background:address?'linear-gradient(135deg,#6A1BB9,#4c1d95)':'#2a2a2a', color:address?'#ffffff':'rgba(255,255,255,0.3)', border:'none', borderRadius:14, fontSize:15, fontWeight:700, cursor:address?'pointer':'default', boxShadow:address?'0 4px 20px rgba(106,27,185,0.5)':'none', letterSpacing:0.3 }}>
+          style={{ width:'100%', maxWidth:500, display:'block', margin:'0 auto', padding:'16px', background:address?'linear-gradient(135deg,#6b21a8,#4c1d95)':'#e5e0ee', color:address?'#ffffff':'#a9a3ba', border:'none', borderRadius:14, fontSize:15, fontWeight:700, cursor:address?'pointer':'default', boxShadow:address?'0 4px 20px rgba(106,27,185,0.5)':'none', letterSpacing:0.3 }}>
           {address ? 'Confirm Pickup →' : 'Search or tap map to set pickup'}
         </button>
       </div>
@@ -3531,13 +3534,13 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
         </div>
         <span style={{ color:'#111827', fontSize:14, fontWeight:700, letterSpacing:0.3 }}>Pin Drop-off Location</span>
         <div style={{ display:'flex', gap:6 }}>
-          <button onClick={() => go('business')} style={{ padding:'4px 10px', background:'rgba(106,27,185,0.3)', border:'1px solid #6A1BB9', borderRadius:20, color:'#ffffff', fontSize:10, fontWeight:600, cursor:'pointer' }}>Business</button>
+          <button onClick={() => go('business')} style={{ padding:'4px 10px', background:'rgba(106,27,185,0.3)', border:'1px solid #6A1BB9', borderRadius:20, color:'#2a1a4a', fontSize:10, fontWeight:600, cursor:'pointer' }}>Business</button>
           <button onClick={() => go('featured')} style={{ padding:'4px 10px', background:'rgba(212,175,55,0.2)', border:'1px solid #D4AF37', borderRadius:20, color:'#D4AF37', fontSize:10, fontWeight:600, cursor:'pointer' }}>Featured</button>
         </div>
       </div>
 
       {/* ── SEARCH BAR ── */}
-      <div style={{ background:'#111827', padding:'10px 16px 14px', flexShrink:0 }}>
+      <div style={{ background:'#ffffff', padding:'10px 16px 14px', flexShrink:0, borderBottom:'1px solid #ece3f5' }}>
         <AddressAutocompleteInput
           value={address}
           onChange={setAddress}
@@ -3553,29 +3556,29 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
       </div>
 
       {/* ── INSTRUCTION BANNER ── */}
-      <div style={{ margin:'14px 14px 0', background:'#0D0D0D', borderRadius:14, padding:'12px 16px', display:'flex', gap:12, alignItems:'center', border:'1px solid rgba(212,175,55,0.3)', flexShrink:0 }}>
+      <div style={{ margin:'14px 14px 0', background:'#ffffff', borderRadius:14, padding:'12px 16px', display:'flex', gap:12, alignItems:'center', border:'1px solid #ece3f5', boxShadow:'0 2px 10px rgba(107,33,168,0.06)', flexShrink:0 }}>
         <span style={{ fontSize:22 }}>🏁</span>
         <div>
           <div style={{ fontSize:13, fontWeight:700, color:'#D4AF37', marginBottom:2 }}>Choose Your Destination</div>
-          <div style={{ fontSize:11, color:'rgba(255,255,255,0.7)', lineHeight:1.5 }}>Search, tap the map, or pin the exact drop-off location.</div>
+          <div style={{ fontSize:11, color:'#5b5470', lineHeight:1.5 }}>Search, tap the map, or pin the exact drop-off location.</div>
         </div>
       </div>
 
       {/* ── FROM / TO PANEL ── */}
       {pickupData?.address && (
-        <div style={{ margin:'10px 14px 0', background:'#0D0D0D', borderRadius:14, padding:'12px 16px', border:'1px solid rgba(255,255,255,0.08)', flexShrink:0 }}>
+        <div style={{ margin:'10px 14px 0', background:'#ffffff', borderRadius:14, padding:'12px 16px', border:'1px solid #ece3f5', flexShrink:0 }}>
           <div style={{ display:'flex', gap:10, marginBottom:8, alignItems:'flex-start' }}>
             <div style={{ width:8, height:8, borderRadius:'50%', background:'#1a9e5a', flexShrink:0, marginTop:4 }}/>
             <div>
-              <div style={{ fontSize:9, color:'rgba(255,255,255,0.4)', marginBottom:1, textTransform:'uppercase', letterSpacing:0.8 }}>FROM</div>
-              <div style={{ fontSize:12, fontWeight:600, color:'#ffffff' }}>{(pickupData.address||'').split('—')[0].trim()}</div>
+              <div style={{ fontSize:9, color:'#8a83a0', marginBottom:1, textTransform:'uppercase', letterSpacing:0.8 }}>FROM</div>
+              <div style={{ fontSize:12, fontWeight:600, color:'#2a1a4a' }}>{(pickupData.address||'').split('—')[0].trim()}</div>
             </div>
           </div>
           {address && (
             <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
               <div style={{ width:8, height:8, borderRadius:'50%', background:'#D4AF37', flexShrink:0, marginTop:4 }}/>
               <div>
-                <div style={{ fontSize:9, color:'rgba(255,255,255,0.4)', marginBottom:1, textTransform:'uppercase', letterSpacing:0.8 }}>TO</div>
+                <div style={{ fontSize:9, color:'#8a83a0', marginBottom:1, textTransform:'uppercase', letterSpacing:0.8 }}>TO</div>
                 <div style={{ fontSize:12, fontWeight:600, color:'#D4AF37' }}>{address.split(',')[0]}</div>
               </div>
             </div>
@@ -3587,53 +3590,53 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
       <div style={{ flex:1, overflowY:'auto', padding:'14px 14px 100px' }}>
 
         {/* Drop-off Details */}
-        <div style={{ background:'#0D0D0D', borderRadius:14, padding:'14px 16px', marginBottom:12, border:'1px solid rgba(255,255,255,0.08)' }}>
+        <div style={{ background:'#ffffff', borderRadius:14, padding:'14px 16px', marginBottom:12, border:'1px solid #ece3f5', boxShadow:'0 2px 10px rgba(107,33,168,0.05)' }}>
           <div style={{ fontSize:11, fontWeight:700, color:'#D4AF37', textTransform:'uppercase', letterSpacing:0.8, marginBottom:8 }}>Drop-off Details (Optional)</div>
           <input
             value={note} onChange={e => setNote(e.target.value)}
             placeholder="Building name, gate, landmark, or special instructions..."
-            style={{ width:'100%', padding:'11px 13px', background:'rgba(255,255,255,0.07)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:10, fontSize:13, color:'#ffffff', boxSizing:'border-box', outline:'none' }}
+            style={{ width:'100%', padding:'11px 13px', background:'#f6f2fb', border:'1px solid #e0d3f5', borderRadius:10, fontSize:13, color:'#2a1a4a', boxSizing:'border-box', outline:'none' }}
           />
         </div>
 
         {/* Help Card 1 */}
-        <div style={{ background:'#0D0D0D', borderRadius:14, padding:'16px', marginBottom:10, border:'1px solid rgba(106,27,185,0.3)', borderLeft:'3px solid #6A1BB9' }}>
+        <div style={{ background:'#ffffff', borderRadius:14, padding:'16px', marginBottom:10, border:'1px solid #e0d3f5', borderLeft:'3px solid #6b21a8', boxShadow:'0 2px 10px rgba(107,33,168,0.05)' }}>
           <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
             <span style={{ fontSize:20, flexShrink:0 }}>🛡️</span>
             <div>
               <div style={{ fontSize:13, fontWeight:700, color:'#D4AF37', marginBottom:6 }}>Safety & Accuracy</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', lineHeight:1.6 }}>Pin your drop-off as precisely as possible. Use the Details field to add landmarks such as "Blue gate, top of hill" or "near the plaza entrance."</div>
+              <div style={{ fontSize:12, color:'#5b5470', lineHeight:1.6 }}>Pin your drop-off as precisely as possible. Use the Details field to add landmarks such as "Blue gate, top of hill" or "near the plaza entrance."</div>
             </div>
           </div>
         </div>
 
         {/* Help Card 2 */}
-        <div style={{ background:'#0D0D0D', borderRadius:14, padding:'16px', marginBottom:10, border:'1px solid rgba(106,27,185,0.3)', borderLeft:'3px solid #6A1BB9' }}>
+        <div style={{ background:'#ffffff', borderRadius:14, padding:'16px', marginBottom:10, border:'1px solid #e0d3f5', borderLeft:'3px solid #6b21a8', boxShadow:'0 2px 10px rgba(107,33,168,0.05)' }}>
           <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
             <span style={{ fontSize:20, flexShrink:0 }}>✅</span>
             <div>
               <div style={{ fontSize:13, fontWeight:700, color:'#D4AF37', marginBottom:6 }}>Confirm the Right Place</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', lineHeight:1.6 }}>Check the address carefully before continuing. This helps calculate your fare correctly and reduces confusion for your driver.</div>
+              <div style={{ fontSize:12, color:'#5b5470', lineHeight:1.6 }}>Check the address carefully before continuing. This helps calculate your fare correctly and reduces confusion for your driver.</div>
             </div>
           </div>
         </div>
 
         {/* Help Card 3 */}
-        <div style={{ background:'#0D0D0D', borderRadius:14, padding:'16px', marginBottom:10, border:'1px solid rgba(106,27,185,0.3)', borderLeft:'3px solid #6A1BB9' }}>
+        <div style={{ background:'#ffffff', borderRadius:14, padding:'16px', marginBottom:10, border:'1px solid #e0d3f5', borderLeft:'3px solid #6b21a8', boxShadow:'0 2px 10px rgba(107,33,168,0.05)' }}>
           <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
             <span style={{ fontSize:20, flexShrink:0 }}>🗺️</span>
             <div>
               <div style={{ fontSize:13, fontWeight:700, color:'#D4AF37', marginBottom:6 }}>After Pickup</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', lineHeight:1.6 }}>Once your ride starts, your driver will follow the route to your selected drop-off location.</div>
+              <div style={{ fontSize:12, color:'#5b5470', lineHeight:1.6 }}>Once your ride starts, your driver will follow the route to your selected drop-off location.</div>
             </div>
           </div>
         </div>
       </div>
 
       {/* ── STICKY CONFIRM BUTTON ── */}
-      <div style={{ position:'fixed', bottom:0, left:0, right:0, padding:'12px 16px 20px', background:'linear-gradient(to top, #111827 60%, transparent)', zIndex:20 }}>
+      <div style={{ position:'fixed', bottom:0, left:0, right:0, padding:'12px 16px 20px', background:'linear-gradient(to top, #ffffff 65%, rgba(255,255,255,0.85) 85%, transparent)', zIndex:20 }}>
         <button onClick={handleConfirm} disabled={!address}
-          style={{ width:'100%', maxWidth:500, display:'block', margin:'0 auto', padding:'16px', background:address?'linear-gradient(135deg,#6A1BB9,#4c1d95)':'#2a2a2a', color:address?'#ffffff':'rgba(255,255,255,0.3)', border:'none', borderRadius:14, fontSize:15, fontWeight:700, cursor:address?'pointer':'default', boxShadow:address?'0 4px 20px rgba(106,27,185,0.5)':'none', letterSpacing:0.3 }}>
+          style={{ width:'100%', maxWidth:500, display:'block', margin:'0 auto', padding:'16px', background:address?'linear-gradient(135deg,#6b21a8,#4c1d95)':'#e5e0ee', color:address?'#ffffff':'#a9a3ba', border:'none', borderRadius:14, fontSize:15, fontWeight:700, cursor:address?'pointer':'default', boxShadow:address?'0 4px 20px rgba(106,27,185,0.5)':'none', letterSpacing:0.3 }}>
           {address ? 'Confirm Drop-off →' : 'Search or tap map to set drop-off'}
         </button>
       </div>
