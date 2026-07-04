@@ -1064,16 +1064,19 @@ function Splash({ go }) {
       </div>
 
       {/* FOOTER */}
-      <div style={{ background:'#000', padding:'32px 20px', textAlign:'center' }}>
+      <div style={{ background:'linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(250,245,252,0.94) 55%, rgba(248,240,248,0.92) 100%)', borderTop:'1px solid #efe6f4', padding:'32px 20px', textAlign:'center' }}>
         <img src="/logo.png" alt="VilleCabs" style={{ height:36, objectFit:'contain', marginBottom:12 }}/>
-        <p style={{ fontSize:12, color:'#6b7280', margin:'0 0 14px' }}>Your city. Your ride. Your way.</p>
+        <p style={{ fontSize:12, color:'#8a83a0', margin:'0 0 14px' }}>Your city. Your ride. Your way.</p>
         <div style={{ display:'flex', gap:14, justifyContent:'center', flexWrap:'wrap', marginBottom:16 }}>
           {[['About',() => go('about-us')],['Contact',() => go('contact-us')],['Help',() => go('help')],['Driver Signup',() => go('driver-signup')],['Partner',() => go('partner-with-us')]].map(([l,a],i) => (
-            <span key={i} onClick={a} style={{ fontSize:12, color:'#6b7280', cursor:'pointer' }}>{l}</span>
+            <span key={i} onClick={a}
+              style={{ fontSize:12, color:'#5b5470', cursor:'pointer' }}
+              onMouseEnter={e => e.target.style.color='#6b21a8'}
+              onMouseLeave={e => e.target.style.color='#5b5470'}>{l}</span>
           ))}
         </div>
-        <p style={{ fontSize:11, color:'rgba(255,255,255,0.3)', margin:0 }}>admin@villecabs.com · +1876-515-8113</p>
-        <p style={{ fontSize:10, color:'rgba(255,255,255,0.2)', margin:'6px 0 0' }}>2026 VilleCabs · Mandeville, Manchester, Jamaica</p>
+        <p style={{ fontSize:11, color:'#8a83a0', margin:0 }}>admin@villecabs.com · +1876-515-8113</p>
+        <p style={{ fontSize:10, color:'#a9a3ba', margin:'6px 0 0' }}>© 2026 VilleCabs · Mandeville, Manchester, Jamaica</p>
       </div>
 
       {/* Driver login pill */}
