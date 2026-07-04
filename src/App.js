@@ -833,33 +833,33 @@ function Splash({ go }) {
       </div>
 
       {/* HERO — two panels */}
-      <div style={{ background:cur.bg, transition:'background 0.6s ease', padding:'32px 16px 36px' }}>
+      <div style={{ background:'linear-gradient(160deg, #ffffff 0%, #f6f2fb 45%, #efe8f7 100%)', padding:'32px 16px 36px' }}>
         <div style={{ maxWidth:1080, margin:'0 auto', display:'flex', gap:24, flexWrap:'wrap', alignItems:'stretch' }}>
 
           {/* LEFT PANEL — text slideshow + CTAs */}
           <div style={{ flex:'1 1 320px', minWidth:280, textAlign:'left', display:'flex', flexDirection:'column', justifyContent:'center' }}>
-            <div style={{ display:'inline-flex', alignItems:'center', gap:6, alignSelf:'flex-start', background:'rgba(255,255,255,0.15)', borderRadius:20, padding:'5px 12px', marginBottom:16, fontSize:11, fontWeight:600, color:'#fff' }}>
+            <div style={{ display:'inline-flex', alignItems:'center', gap:6, alignSelf:'flex-start', background:'#f0e9fa', border:'1px solid #e0d3f5', borderRadius:20, padding:'5px 12px', marginBottom:16, fontSize:11, fontWeight:600, color:'#6b21a8' }}>
               <span style={{ color:'#f59e0b' }}>●</span> Trusted by riders across Manchester
             </div>
             <div style={{ fontSize:44, marginBottom:8 }}>{cur.emoji}</div>
-            <h1 style={{ fontSize:32, fontWeight:800, color:'#fff', margin:'0 0 12px', lineHeight:1.15 }}>{cur.title}</h1>
-            <p style={{ fontSize:15, color:'rgba(255,255,255,0.82)', margin:'0 0 24px', lineHeight:1.6, maxWidth:440 }}>{cur.sub}</p>
+            <h1 style={{ fontSize:32, fontWeight:800, color:'#2a1a4a', margin:'0 0 12px', lineHeight:1.15 }}>{cur.title}</h1>
+            <p style={{ fontSize:15, color:'#5b5470', margin:'0 0 24px', lineHeight:1.6, maxWidth:440 }}>{cur.sub}</p>
             <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:22 }}>
-              <button onClick={() => go('customer-login')} style={{ padding:'13px 24px', background:'#fff', color:'#6b21a8', border:'none', borderRadius:24, fontSize:14, fontWeight:700, cursor:'pointer' }}>Book a Ride →</button>
-              <button onClick={() => go('driver-signup')} style={{ padding:'13px 24px', background:'transparent', color:'#fff', border:'2px solid rgba(255,255,255,0.5)', borderRadius:24, fontSize:14, fontWeight:600, cursor:'pointer' }}>Drive With Us</button>
+              <button onClick={() => go('customer-login')} style={{ padding:'13px 24px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:24, fontSize:14, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 14px rgba(107,33,168,0.25)' }}>Book a Ride →</button>
+              <button onClick={() => go('driver-signup')} style={{ padding:'13px 24px', background:'#fff', color:'#6b21a8', border:'2px solid #d8b4fe', borderRadius:24, fontSize:14, fontWeight:600, cursor:'pointer' }}>Drive With Us</button>
             </div>
             {/* live stats */}
             <div style={{ display:'flex', gap:22, marginBottom:20 }}>
               {[['10,000+','Rides done'],['24/7','Support'],['4.9★','Rating']].map(([n,l],i)=>(
                 <div key={i}>
-                  <div style={{ fontSize:20, fontWeight:800, color:'#fff' }}>{n}</div>
-                  <div style={{ fontSize:11, color:'rgba(255,255,255,0.7)' }}>{l}</div>
+                  <div style={{ fontSize:20, fontWeight:800, color:'#2a1a4a' }}>{n}</div>
+                  <div style={{ fontSize:11, color:'#8a83a0' }}>{l}</div>
                 </div>
               ))}
             </div>
             <div style={{ display:'flex', gap:6 }}>
               {[0,1,2,3].map(i => (
-                <button key={i} onClick={() => setSlide(i)} style={{ width:i===slide?22:6, height:6, borderRadius:3, border:'none', background:i===slide?'#fff':'rgba(255,255,255,0.35)', cursor:'pointer', padding:0 }}/>
+                <button key={i} onClick={() => setSlide(i)} style={{ width:i===slide?22:6, height:6, borderRadius:3, border:'none', background:i===slide?'#6b21a8':'#d8cbe8', cursor:'pointer', padding:0 }}/>
               ))}
             </div>
           </div>
@@ -868,7 +868,7 @@ function Splash({ go }) {
           <div style={{ flex:'1 1 340px', minWidth:280 }}>
             <div
               onClick={() => go('customer-login')}
-              style={{ position:'relative', borderRadius:20, overflow:'hidden', height:360, cursor:'pointer', boxShadow:'0 12px 40px rgba(0,0,0,0.28)', background: (places[pslide].photo && !imgFailed[pslide]) ? places[pslide].grad : places[pslide].gradSoft, border:'1px solid rgba(255,255,255,0.15)' }}
+              style={{ position:'relative', borderRadius:20, overflow:'hidden', height:360, cursor:'pointer', boxShadow:'0 12px 40px rgba(107,33,168,0.20)', background: places[pslide].grad, border:'1px solid rgba(0,0,0,0.05)' }}
               title="Sign in to book a ride here">
 
               {/* Real photo layer (shows when the image file exists) */}
@@ -913,7 +913,7 @@ function Splash({ go }) {
                 ))}
               </div>
             </div>
-            <div style={{ textAlign:'center', marginTop:10, fontSize:12, color:'rgba(255,255,255,0.7)' }}>
+            <div style={{ textAlign:'center', marginTop:10, fontSize:12, color:'#8a83a0' }}>
               Discover Mandeville — sign in to ride anywhere
             </div>
           </div>
