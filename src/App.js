@@ -2103,7 +2103,7 @@ function DashDriverSlider({ go }) {
 }
 
 // ── DASH PARTNERS SLIDER ───────────────────────────────────────────────────────
-function DashPartnersSlider() {
+function DashPartnersSlider({ go }) {
   // Large "ad slot" cards — reserved space for future featured partners / flyers.
   const slots = [
     { icon:'🍔', cat:'Restaurants' },
@@ -2122,18 +2122,19 @@ function DashPartnersSlider() {
       <div style={{ display:'flex', gap:16, overflowX:'auto', padding:'4px 16px 12px', scrollbarWidth:'none' }}>
         {slots.map((p, i) => (
           <div key={i} style={{
-            flexShrink:0, width:300, height:360,
+            flexShrink:0, width:300, height:380,
             background:'linear-gradient(160deg,#ffffff 0%,#faf5fd 100%)',
             border:'2px dashed #d8b4fe', borderRadius:20,
             display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
             textAlign:'center', padding:'24px 20px', boxShadow:'0 4px 18px rgba(107,33,168,0.08)',
           }}>
-            <div style={{ fontSize:72, marginBottom:16, opacity:0.9 }}>{p.icon}</div>
+            <div style={{ fontSize:66, marginBottom:14, opacity:0.9 }}>{p.icon}</div>
             <div style={{ fontSize:20, fontWeight:800, color:'#2a1a4a', marginBottom:8, lineHeight:1.25 }}>Featured Partner</div>
-            <div style={{ display:'inline-block', fontSize:12, background:'#f5f0ff', color:'#6b21a8', border:'1px solid #e9d5ff', padding:'6px 16px', borderRadius:20, fontWeight:700, marginBottom:16 }}>Coming Soon</div>
-            <div style={{ fontSize:13, color:'#8a83a0', lineHeight:1.6, maxWidth:230 }}>
+            <div style={{ display:'inline-block', fontSize:12, background:'#f5f0ff', color:'#6b21a8', border:'1px solid #e9d5ff', padding:'6px 16px', borderRadius:20, fontWeight:700, marginBottom:14 }}>Coming Soon</div>
+            <div style={{ fontSize:13, color:'#8a83a0', lineHeight:1.6, maxWidth:230, marginBottom:16 }}>
               This space is reserved for a featured {p.cat.toLowerCase()} partner. Advertise your business with VilleCabs.
             </div>
+            <button onClick={() => go('partner-with-us')} style={{ padding:'11px 22px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:22, fontSize:13, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 14px rgba(107,33,168,0.25)' }}>Advertise Here →</button>
           </div>
         ))}
       </div>
@@ -2646,7 +2647,7 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
             <DashDriverSlider go={go}/>
 
             {/* ── FEATURED PARTNERS ── */}
-            <DashPartnersSlider/>
+            <DashPartnersSlider go={go}/>
 
             {/* ── SCHEDULE A TRIP ── */}
             <DashSchedule go={go} activeRide={activeRide}/>
@@ -5362,7 +5363,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   };
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', height:'100vh', background:'#f5f6fa', overflow:'hidden' }}>
+    <div style={{ display:'flex', flexDirection:'column', height:'100vh', background:'linear-gradient(160deg, #ffffff 0%, #f6f2fb 45%, #efe8f7 100%)', overflow:'hidden' }}>
 
       {/* ── TOP HEADER ── */}
       <div style={{ background:'#ffffff', padding:'8px 14px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', boxShadow:'0 1px 4px rgba(0,0,0,0.06)', flexShrink:0 }}>
@@ -5591,6 +5592,21 @@ function DriverDash({ go, user, setUser, setBookingId }) {
                   <span style={{ fontSize:20 }}>{icon}</span>
                   <span style={{ fontSize:13, fontWeight:600, color:'#1a1a2e' }}>{label}</span>
                 </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ── DRIVER TIPS — feature cards with hover ── */}
+          <div style={{ padding:'6px 14px 20px' }}>
+            <div style={{ fontSize:12, fontWeight:700, color:'#8a83a0', marginBottom:12, textTransform:'uppercase', letterSpacing:0.8 }}>Tips to earn more</div>
+            <div style={{ display:'flex', gap:12, flexWrap:'wrap', justifyContent:'center' }}>
+              {[
+                ['⚡','Drive Peak Hours','Weekday 5–7pm and weekends see the most ride requests.'],
+                ['⭐','Keep Your Rating High','Be punctual and friendly — top-rated drivers get more trips.'],
+                ['📍','Stay Near Town','Position yourself around Mandeville centre for faster matches.'],
+                ['🟢','Stay Online','You only get requests while online with the app open.'],
+              ].map(([icon,title,desc],i) => (
+                <FeatureCard key={i} icon={icon} title={title} desc={desc} tint="#f3edfb" accent="#6b21a8"/>
               ))}
             </div>
           </div>
@@ -7836,7 +7852,7 @@ function PartnerWithUs({ go, user }) {
   const submit = async () => {
     if (!form.bizName||!form.email||!form.phone) { setError('Please fill in all required fields.'); return; }
     setSaving(true); setError('');
-    try { await addDoc(collection(db,'partnerRequests'), {...form, status:'new', createdAt:serverTimestamp()}); setSent(true); }
+    try { await addDoc(collection(db,'partnerRequests'), {...form, type:'partner_or_advertiser', status:'new', createdAt:serverTimestamp()}); setSent(true); }
     catch(e) { setError('Failed to submit. Please try again.'); }
     setSaving(false);
   };
@@ -7847,8 +7863,8 @@ function PartnerWithUs({ go, user }) {
         <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:8 }}>Partner With VilleCabs</span>
       </div>
       <div style={{ background:'linear-gradient(135deg,#6b21a8,#4c1d95)', padding:'28px 20px', textAlign:'center' }}>
-        <h1 style={{ fontSize:20, fontWeight:800, color:'#fff', margin:'0 0 8px' }}>Partner With VilleCabs</h1>
-        <p style={{ fontSize:13, color:'rgba(255,255,255,0.8)', margin:0 }}>Grow your business. We will drive the customers.</p>
+        <h1 style={{ fontSize:20, fontWeight:800, color:'#fff', margin:'0 0 8px' }}>Advertise &amp; Partner With VilleCabs</h1>
+        <p style={{ fontSize:13, color:'rgba(255,255,255,0.85)', margin:0 }}>Feature your business in the app. We will drive the customers to your door.</p>
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, padding:'16px' }}>
         {['Hotels','Restaurants','Guest Houses','Attractions','Businesses','Clubs','Supermarkets','Events'].map((c,i) => (
@@ -7859,7 +7875,9 @@ function PartnerWithUs({ go, user }) {
         {sent ? (
           <div style={{ textAlign:'center', padding:24 }}>
             <div style={{ fontSize:40, marginBottom:12 }}>🎉</div>
-            <div style={{ fontSize:16, fontWeight:700, color:'#1a1a2e' }}>Request Received!</div>
+            <div style={{ fontSize:16, fontWeight:700, color:'#1a1a2e', marginBottom:6 }}>Request Received!</div>
+            <div style={{ fontSize:13, color:'#6b7280', lineHeight:1.6, maxWidth:320, margin:'0 auto 16px' }}>Thanks for your interest in advertising with VilleCabs. Our team will review your request and reach out to you soon.</div>
+            <button onClick={() => go('splash')} style={{ padding:'11px 24px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:22, fontSize:13, fontWeight:700, cursor:'pointer' }}>Back to Home</button>
           </div>
         ) : (
           <div>
