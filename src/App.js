@@ -2326,10 +2326,10 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
           <img src="/logo.png" alt="VilleCabs" onClick={() => setTab('book')} style={{ height:26, width:'auto', objectFit:'contain', cursor:'pointer' }}/>
         </div>
         <div style={{ display:'flex', gap:5, marginLeft:'auto', alignItems:'center' }}>
-          <button onClick={() => go('business')} style={{ padding:'3px 8px', background:'rgba(255,255,255,0.08)', border:'1px solid rgba(255,255,255,0.15)', borderRadius:12, color:'rgba(255,255,255,0.8)', fontSize:10, fontWeight:600, cursor:'pointer' }}>Business</button>
-          <button onClick={() => go('featured')} style={{ padding:'3px 8px', background:'rgba(255,255,255,0.08)', border:'1px solid rgba(255,255,255,0.15)', borderRadius:12, color:'rgba(255,255,255,0.8)', fontSize:10, fontWeight:600, cursor:'pointer' }}>Featured</button>
+          <button onClick={() => go('business')} style={{ padding:'3px 8px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, color:'#6b21a8', fontSize:10, fontWeight:600, cursor:'pointer' }}>Business</button>
+          <button onClick={() => go('featured')} style={{ padding:'3px 8px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, color:'#6b21a8', fontSize:10, fontWeight:600, cursor:'pointer' }}>Featured</button>
           {activeRide && <div onClick={() => { if (activeRide?.id) setBookingId(activeRide.id); go('live-ride'); }} style={{ background:GREEN, borderRadius:14, padding:'3px 8px', fontSize:10, color:WHITE, cursor:'pointer', fontWeight:600 }}>🚕 Live</div>}
-          <span style={{ fontSize:11, fontWeight:600, color:'rgba(255,255,255,0.85)', maxWidth:70, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{user?.name?.split(' ')[0]||''}</span>
+          <span style={{ fontSize:11, fontWeight:600, color:'#2a1a4a', maxWidth:70, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{user?.name?.split(' ')[0]||''}</span>
         </div>
       </div>
 
@@ -2475,45 +2475,41 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
           )}
 
           {/* ── REDESIGNED HOME DASHBOARD ── */}
-          <div style={{ flex:1, overflowY:'auto', background:'#f5f6fa' }}>
+          <div style={{ flex:1, overflowY:'auto', background:'linear-gradient(160deg, #ffffff 0%, #f6f2fb 45%, #efe8f7 100%)' }}>
 
             {/* Greeting + Book a Ride */}
-            <div style={{ background:'#ffffff', padding:'28px 20px 24px', textAlign:'center', position:'relative', overflow:'hidden' }}>
-              <div style={{ position:'absolute', top:-40, left:'50%', transform:'translateX(-50%)', width:400, height:300, background:'radial-gradient(circle, rgba(232,180,0,0.07) 0%, transparent 70%)', pointerEvents:'none' }}/>
-              <div style={{ fontSize:26, fontWeight:800, color:'#1a1a2e', marginBottom:4, lineHeight:1.2 }}>
+            <div style={{ background:'transparent', padding:'28px 20px 24px', textAlign:'center', position:'relative', overflow:'hidden' }}>
+              <div style={{ position:'absolute', top:-40, left:'50%', transform:'translateX(-50%)', width:400, height:300, background:'radial-gradient(circle, rgba(107,33,168,0.08) 0%, transparent 70%)', pointerEvents:'none' }}/>
+              <div style={{ fontSize:26, fontWeight:800, color:'#2a1a4a', marginBottom:4, lineHeight:1.2 }}>
                 Good day, {user?.name?.split(' ')[0]||'Rider'} 👋
               </div>
 
               <button onClick={() => { if (activeRide) { vcToast('You already have an active ride in progress. Complete or cancel it before booking a new one.', 'warn'); return; } go('pin-pickup'); }}
                 style={{ background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', margin:'14px auto 0', padding:0 }}>
-                <div style={{ width:190, height:190, borderRadius:'50%', background:'#ffffff', boxShadow:'0 8px 40px rgba(0,0,0,0.15), 0 0 0 6px rgba(232,180,0,0.2)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', position:'relative', overflow:'hidden' }}>
-                  <div style={{ position:'absolute', inset:0, background:'radial-gradient(circle at 50% 60%, rgba(232,180,0,0.12) 0%, transparent 70%)' }}/>
+                <div style={{ width:190, height:190, borderRadius:'50%', background:'#ffffff', boxShadow:'0 8px 40px rgba(107,33,168,0.18), 0 0 0 6px rgba(107,33,168,0.15)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', position:'relative', overflow:'hidden' }}>
+                  <div style={{ position:'absolute', inset:0, background:'radial-gradient(circle at 50% 60%, rgba(107,33,168,0.12) 0%, transparent 70%)' }}/>
                   <div style={{ fontSize:76, lineHeight:1, position:'relative', zIndex:1 }}>🚕</div>
-                  <div style={{ fontSize:13, fontWeight:800, color:'#1a1a2e', marginTop:6, letterSpacing:0.3, position:'relative', zIndex:1 }}>Book a Ride</div>
+                  <div style={{ fontSize:13, fontWeight:800, color:'#2a1a4a', marginTop:6, letterSpacing:0.3, position:'relative', zIndex:1 }}>Book a Ride</div>
                 </div>
               </button>
-              <div style={{ fontSize:14, color:'#888aaa', marginTop:12 }}>Where are you going today?</div>
+              <div style={{ fontSize:14, color:'#8a83a0', marginTop:12 }}>Where are you going today?</div>
             </div>
 
             {/* ── HERO BANNER SLIDESHOW ── */}
             <DashHeroSlider go={go}/>
 
-            {/* ── WHY VILLECABS — horizontal scroll ── */}
+            {/* ── WHY VILLECABS — feature cards with hover ── */}
             <div style={{ padding:'20px 16px 0' }}>
-              <div style={{ fontSize:12, fontWeight:700, color:'#999bbb', marginBottom:12, textTransform:'uppercase', letterSpacing:0.8 }}>Why VilleCabs</div>
-              <div style={{ display:'flex', gap:10, overflowX:'auto', paddingBottom:8, scrollbarWidth:'none' }}>
+              <div style={{ fontSize:12, fontWeight:700, color:'#8a83a0', marginBottom:12, textTransform:'uppercase', letterSpacing:0.8 }}>Why VilleCabs</div>
+              <div style={{ display:'flex', gap:12, flexWrap:'wrap', justifyContent:'center' }}>
                 {[
-                  ['⚡','Fast','Rides in minutes, not hours'],
-                  ['🛡️','Safe','Vetted drivers + SOS button'],
-                  ['💰','Affordable','Clear estimated fares'],
-                  ['📍','Local','Built for Mandeville & Manchester'],
-                  ['📱','Easy','Simple booking from your phone'],
+                  ['⚡','Fast','Rides in minutes, not hours.'],
+                  ['🛡️','Safe','Vetted drivers and an SOS button.'],
+                  ['💰','Affordable','Clear estimated fares upfront.'],
+                  ['📍','Local','Built for Mandeville & Manchester.'],
+                  ['📱','Easy','Simple booking from your phone.'],
                 ].map(([icon, title, desc], i) => (
-                  <div key={i} style={{ flexShrink:0, width:130, background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:14, padding:'14px 12px', textAlign:'center', boxShadow:'0 2px 8px rgba(0,0,0,0.05)' }}>
-                    <div style={{ fontSize:26, marginBottom:6 }}>{icon}</div>
-                    <div style={{ fontSize:12, fontWeight:700, color:'#1a1a2e', marginBottom:4 }}>{title}</div>
-                    <div style={{ fontSize:10, color:'#666888', lineHeight:1.4 }}>{desc}</div>
-                  </div>
+                  <FeatureCard key={i} icon={icon} title={title} desc={desc} tint="#f3edfb" accent="#6b21a8"/>
                 ))}
               </div>
             </div>
@@ -2521,22 +2517,16 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
             {/* ── SAFETY TIPS SLIDESHOW ── */}
             <DashSafetySlider/>
 
-            {/* ── HOW IT WORKS ── */}
+            {/* ── HOW IT WORKS — feature cards with hover ── */}
             <div style={{ padding:'20px 16px 0' }}>
-              <div style={{ fontSize:12, fontWeight:700, color:'#999bbb', marginBottom:12, textTransform:'uppercase', letterSpacing:0.8 }}>How it works</div>
-              <div style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:16, padding:'16px', boxShadow:'0 2px 8px rgba(0,0,0,0.05)' }}>
+              <div style={{ fontSize:12, fontWeight:700, color:'#8a83a0', marginBottom:12, textTransform:'uppercase', letterSpacing:0.8 }}>How it works</div>
+              <div style={{ display:'flex', gap:12, flexWrap:'wrap', justifyContent:'center' }}>
                 {[
-                  ['1','📍','Pin your location','Drop your pickup & drop-off on the map'],
-                  ['2','🚗','Choose your ride','Pick VilleRide, XL or Moto'],
-                  ['3','✅','Ride & arrive','Track live and pay cash on arrival'],
-                ].map(([step, icon, title, desc], i) => (
-                  <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:12, marginBottom: i < 2 ? 16 : 0 }}>
-                    <div style={{ width:28, height:28, borderRadius:'50%', background:YELLOW, display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:700, color:DARK, flexShrink:0, marginTop:2 }}>{step}</div>
-                    <div>
-                      <div style={{ fontSize:14, fontWeight:600, color:'#1a1a2e' }}>{icon} {title}</div>
-                      <div style={{ fontSize:12, color:'#666888', marginTop:2 }}>{desc}</div>
-                    </div>
-                  </div>
+                  ['📍','Pin Your Location','Drop your pickup & drop-off on the map.'],
+                  ['🚗','Choose Your Ride','Pick VilleRide, VilleXL, or VilleMoto.'],
+                  ['✅','Ride & Arrive','Track live and pay cash on arrival.'],
+                ].map(([icon, title, desc], i) => (
+                  <FeatureCard key={i} icon={icon} title={title} desc={desc}/>
                 ))}
               </div>
             </div>
