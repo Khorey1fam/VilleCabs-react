@@ -2925,12 +2925,14 @@ function CustomerProfile({ go, user, setUser }) {
   const [error,   setError]   = useState('');
   const [rideCount, setRideCount] = useState(0);
   const [totalSpent, setTotalSpent] = useState(0);
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const set = (k,v) => setForm(p => ({ ...p, [k]:v }));
 
   useEffect(() => {
     if (!user?.uid) return;
     getDoc(doc(db,'customers',user.uid)).then(snap => {
-      if (snap.exists()) { const d=snap.data(); setForm({ name:d.name||'', phone:d.phone||'' }); }
+      if (snap.exists()) { const d=snap.data(); setForm({ name:d.name||'', phone:d.phone||'' }); setPhotoUrl(d.profilePhotoUrl||''); }
     });
     getDocs(query(collection(db,'bookings'), where('customerId','==',user.uid))).then(snap => {
       const completed = snap.docs.map(d=>d.data()).filter(b=>b.status==='completed');
@@ -2938,6 +2940,24 @@ function CustomerProfile({ go, user, setUser }) {
       setTotalSpent(completed.reduce((s,b)=>s+(b.fare||0),0));
     }).catch(()=>{});
   }, [user]);
+
+  const handlePhotoUpload = async (file) => {
+    if (!file || !user?.uid) return;
+    if (!file.type.startsWith('image/')) { vcToast('Please choose an image file.', 'warn'); return; }
+    if (file.size > 5*1024*1024) { vcToast('Image is too large. Please choose one under 5MB.', 'warn'); return; }
+    setUploadingPhoto(true);
+    try {
+      const r = storageRef(storage, `customerPhotos/${user.uid}/profile_${Date.now()}`);
+      const snap = await uploadBytes(r, file, { contentType: file.type });
+      const url = await getDownloadURL(snap.ref);
+      await updateDoc(doc(db,'customers',user.uid), { profilePhotoUrl: url });
+      setPhotoUrl(url);
+      vcToast('Profile photo updated!', 'success');
+    } catch(e) {
+      vcToast('Could not upload photo. Please try again.', 'error');
+    }
+    setUploadingPhoto(false);
+  };
 
   const handleSave = async () => {
     setError(''); setMsg(''); setLoading(true);
@@ -2961,7 +2981,15 @@ function CustomerProfile({ go, user, setUser }) {
         <span style={s.topTitle}>My Profile</span>
       </div>
       <div style={{ background:'linear-gradient(135deg, #0f1a35 0%, #1a2744 100%)', padding:'24px 20px 28px', textAlign:'center' }}>
-        <div style={{ width:72, height:72, borderRadius:'50%', background:'rgba(232,180,0,0.2)', border:'2px solid rgba(232,180,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:30, margin:'0 auto 12px' }}>👤</div>
+        <input type="file" id="cust-profile-photo" accept="image/*" style={{ display:'none' }} onChange={e => handlePhotoUpload(e.target.files?.[0])}/>
+        <div onClick={() => !uploadingPhoto && document.getElementById('cust-profile-photo').click()} style={{ position:'relative', width:80, height:80, margin:'0 auto 12px', cursor:'pointer' }}>
+          <div style={{ width:80, height:80, borderRadius:'50%', background:'rgba(232,180,0,0.2)', border:'2px solid rgba(232,180,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:30, overflow:'hidden' }}>
+            {photoUrl ? <img src={photoUrl} alt="Profile" style={{ width:'100%', height:'100%', objectFit:'cover' }}/> : '👤'}
+          </div>
+          <div style={{ position:'absolute', bottom:0, right:0, width:26, height:26, borderRadius:'50%', background:'#6b21a8', border:'2px solid #0f1a35', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12 }}>
+            {uploadingPhoto ? '⏳' : '📷'}
+          </div>
+        </div>
         <div style={{ fontSize:20, fontWeight:700, color:'#ffffff', marginBottom:2 }}>{user?.name}</div>
         <div style={{ fontSize:12, color:'#6b7280', marginBottom:10 }}>{user?.email}</div>
         <div style={{ display:'inline-flex', alignItems:'center', gap:5, background:'rgba(26,158,90,0.2)', border:'1px solid rgba(26,158,90,0.4)', borderRadius:20, padding:'4px 12px' }}>
@@ -4327,6 +4355,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   const [rated,        setRated]        = useState(false);
   const [review,       setReview]       = useState('');
   const [reviewTags,   setReviewTags]   = useState([]);
+  const [lightbox,     setLightbox]     = useState(null); // {url, label} for enlarged photo
   const [driverInfo,   setDriverInfo]   = useState(null);
   const [directions,   setDirections]   = useState(null);
   const [sosSent,    setSosSent]    = useState(false);
@@ -4755,6 +4784,15 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   // ── Live tracking screen ──
   return (
     <div style={{ ...s.content }}>
+      {/* Photo lightbox — tap driver photo or vehicle photo to enlarge */}
+      {lightbox && (
+        <div onClick={() => setLightbox(null)}
+          style={{ position:'fixed', inset:0, zIndex:1000, background:'rgba(0,0,0,0.88)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:20 }}>
+          <img src={lightbox.url} alt={lightbox.label} style={{ maxWidth:'100%', maxHeight:'78vh', borderRadius:14, objectFit:'contain', boxShadow:'0 10px 40px rgba(0,0,0,0.5)' }}/>
+          {lightbox.label && <div style={{ color:'#fff', fontSize:15, fontWeight:600, marginTop:16 }}>{lightbox.label}</div>}
+          <button onClick={() => setLightbox(null)} style={{ marginTop:18, padding:'10px 26px', background:'rgba(255,255,255,0.15)', border:'1px solid rgba(255,255,255,0.3)', borderRadius:22, color:'#fff', fontSize:14, fontWeight:600, cursor:'pointer' }}>Close ✕</button>
+        </div>
+      )}
       <div style={{ position:'relative' }}>
         <VilleMap height={typeof window!=='undefined'?Math.max(560,window.innerHeight*0.80):640} center={driverCoords||pickupCoords} zoom={15} expandable={true} directions={directions}>
           <Marker position={pickupCoords} title="Pickup"
@@ -4786,11 +4824,17 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
             <div style={{ background:'rgba(15,20,40,0.65)', border:'0.5px solid rgba(255,255,255,0.12)', borderRadius:14, padding:14, marginBottom:12 }}>
               <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.5, marginBottom:10, fontWeight:500 }}>🛡️ Driver & Vehicle Info</div>
               <div style={{ display:'flex', alignItems:'center', gap:12, marginBottom:12 }}>
-                <div style={{ width:46, height:46, borderRadius:'50%', background:'rgba(232,180,0,0.15)', border:'1.5px solid rgba(232,180,0,0.3)', overflow:'hidden', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:22 }}>
-                  {driverInfo?.photoURL
-                    ? <img src={driverInfo.photoURL} alt="Driver" style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
-                    : '👤'}
-                </div>
+                {(() => {
+                  const driverPhoto = driverInfo?.profilePhotoUrl || driverInfo?.photoURL || booking.profilePhotoUrl;
+                  return (
+                    <div onClick={() => driverPhoto && setLightbox({ url:driverPhoto, label: booking.driverName||'Driver' })}
+                      style={{ width:46, height:46, borderRadius:'50%', background:'rgba(232,180,0,0.15)', border:'1.5px solid rgba(232,180,0,0.3)', overflow:'hidden', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:22, cursor: driverPhoto?'pointer':'default' }}>
+                      {driverPhoto
+                        ? <img src={driverPhoto} alt="Driver" style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
+                        : '👤'}
+                    </div>
+                  );
+                })()}
                 <div style={{ flex:1 }}>
                   <div style={{ fontSize:15, fontWeight:500, color:WHITE }}>{booking.driverName||'--'}</div>
                   <div style={{ fontSize:12, color:'#6b7280', marginTop:2 }}>
@@ -4809,11 +4853,22 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
                 </div>
               </div>
               {/* Vehicle photo (Feature: show driver's vehicle to customer) */}
-              {booking.vehiclePhotoUrl && (
-                <div style={{ marginBottom:8, borderRadius:12, overflow:'hidden', border:'1px solid rgba(255,255,255,0.1)' }}>
-                  <img src={booking.vehiclePhotoUrl} alt="Your driver's vehicle" style={{ width:'100%', height:130, objectFit:'cover', display:'block' }}/>
-                </div>
-              )}
+              {(() => {
+                const vPhoto = booking.vehiclePhotoUrl || driverInfo?.vehiclePhotoUrl;
+                const vLabel = `${booking.vehicleColor||driverInfo?.vehicleColor||''} ${booking.vehicleMake||driverInfo?.vehicleMake||''} ${booking.vehicleModel||driverInfo?.vehicleModel||''}`.trim() || 'Vehicle';
+                return vPhoto ? (
+                  <div onClick={() => setLightbox({ url:vPhoto, label:vLabel })}
+                    style={{ position:'relative', marginBottom:8, borderRadius:12, overflow:'hidden', border:'1px solid rgba(255,255,255,0.1)', cursor:'pointer' }}>
+                    <img src={vPhoto} alt="Your driver's vehicle" style={{ width:'100%', height:150, objectFit:'cover', display:'block' }}/>
+                    <div style={{ position:'absolute', bottom:8, right:8, background:'rgba(0,0,0,0.6)', color:'#fff', fontSize:10, fontWeight:600, padding:'3px 9px', borderRadius:12 }}>🔍 Tap to enlarge</div>
+                  </div>
+                ) : (
+                  <div style={{ marginBottom:8, borderRadius:12, border:'1px dashed rgba(255,255,255,0.15)', background:'rgba(255,255,255,0.03)', height:96, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:4 }}>
+                    <div style={{ fontSize:26, opacity:0.5 }}>🚗</div>
+                    <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>Vehicle photo not available</div>
+                  </div>
+                );
+              })()}
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
                 <div style={{ background:'rgba(255,255,255,0.04)', borderRadius:10, padding:'10px 12px' }}>
                   <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', marginBottom:3 }}>Make & Model</div>
@@ -6299,7 +6354,26 @@ function DriverProfile({ go, user }) {
   const [form,    setForm]    = useState({});
   const [saving,  setSaving]  = useState(false);
   const [msg,     setMsg]     = useState('');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const set = (k,v) => setForm(p => ({...p,[k]:v}));
+
+  const handlePhotoUpload = async (file) => {
+    if (!file || !user?.uid) return;
+    if (!file.type.startsWith('image/')) { vcToast('Please choose an image file.', 'warn'); return; }
+    if (file.size > 5*1024*1024) { vcToast('Image is too large. Please choose one under 5MB.', 'warn'); return; }
+    setUploadingPhoto(true);
+    try {
+      const r = storageRef(storage, `driverPhotos/${user.uid}/profile_${Date.now()}`);
+      const snap = await uploadBytes(r, file, { contentType: file.type });
+      const url = await getDownloadURL(snap.ref);
+      await updateDoc(doc(db,'drivers',user.uid), { profilePhotoUrl: url });
+      setProfile(prev => ({ ...prev, profilePhotoUrl: url }));
+      vcToast('Profile photo updated!', 'success');
+    } catch(e) {
+      vcToast('Could not upload photo. Please try again.', 'error');
+    }
+    setUploadingPhoto(false);
+  };
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -6355,8 +6429,14 @@ function DriverProfile({ go, user }) {
 
       {/* Hero card */}
       <div style={{ background:'linear-gradient(135deg,#6b21a8,#4c1d95)', padding:'28px 20px 24px', textAlign:'center' }}>
-        <div style={{ width:72, height:72, borderRadius:'50%', background:'rgba(255,255,255,0.15)', border:'3px solid rgba(255,255,255,0.4)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:32, margin:'0 auto 12px' }}>
-          👤
+        <input type="file" id="driver-profile-photo" accept="image/*" style={{ display:'none' }} onChange={e => handlePhotoUpload(e.target.files?.[0])}/>
+        <div onClick={() => !uploadingPhoto && document.getElementById('driver-profile-photo').click()} style={{ position:'relative', width:72, height:72, margin:'0 auto 12px', cursor:'pointer' }}>
+          <div style={{ width:72, height:72, borderRadius:'50%', background:'rgba(255,255,255,0.15)', border:'3px solid rgba(255,255,255,0.4)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:32, overflow:'hidden' }}>
+            {profile?.profilePhotoUrl ? <img src={profile.profilePhotoUrl} alt="Profile" style={{ width:'100%', height:'100%', objectFit:'cover' }}/> : '👤'}
+          </div>
+          <div style={{ position:'absolute', bottom:0, right:0, width:24, height:24, borderRadius:'50%', background:'#6b21a8', border:'2px solid #fff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11 }}>
+            {uploadingPhoto ? '⏳' : '📷'}
+          </div>
         </div>
         <div style={{ fontSize:20, fontWeight:800, color:'#fff', marginBottom:4 }}>{profile?.name||user?.name||'Driver'}</div>
         <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginBottom:14 }}>{profile?.email||user?.email||''}</div>
