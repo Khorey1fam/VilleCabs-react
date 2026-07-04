@@ -2143,8 +2143,9 @@ function DashPartnersSlider({ go }) {
 }
 
 // ── Schedule-a-trip section (dashboard) ──
-function DashSchedule({ go, activeRide }) {
+function DashSchedule({ go, activeRide, ridesPaused }) {
   const bookNow = () => {
+    if (ridesPaused) { vcToast('Ride booking is temporarily paused. Please check back shortly.', 'warn'); return; }
     if (activeRide) { vcToast('You already have an active ride in progress. Complete or cancel it before booking a new one.', 'warn'); return; }
     go('pin-pickup');
   };
@@ -2173,7 +2174,7 @@ function DashSchedule({ go, activeRide }) {
         ))}
       </div>
       <div style={{ display:'flex', gap:12, flexWrap:'wrap', justifyContent:'center' }}>
-        <button onClick={() => { if (activeRide) { vcToast('You already have an active ride in progress. Complete or cancel it before booking a new one.', 'warn'); return; } go('pin-pickup'); }} style={{ padding:'13px 26px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:24, fontSize:14, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 14px rgba(107,33,168,0.25)' }}>Schedule a Trip →</button>
+        <button onClick={bookNow} style={{ padding:'13px 26px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:24, fontSize:14, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 14px rgba(107,33,168,0.25)' }}>Schedule a Trip →</button>
         <button onClick={bookNow} style={{ padding:'13px 26px', background:'#fff', color:'#6b21a8', border:'2px solid #d8b4fe', borderRadius:24, fontSize:14, fontWeight:700, cursor:'pointer' }}>Book Now</button>
       </div>
     </div>
@@ -2248,8 +2249,24 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
   const [loadingH,   setLoadingH]   = useState(true);
   const [activeRide, setActiveRide] = useState(null);
   const [rideNotif, setRideNotif] = useState(null);
+  const [ridesPaused, setRidesPaused] = useState(false);
   const prevStatusRef = useRef(null);
   const twoMinNotifiedRef = useRef(false); // Feature: Push Notifications
+
+  // Respect the admin's global ride-request switch (settings/operations)
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db,'settings','operations'), snap => {
+      setRidesPaused(snap.exists() && snap.data().acceptingRides === false);
+    }, () => {});
+    return () => unsub();
+  }, []);
+
+  // Shared booking guard — used by every "Book a Ride" entry point
+  const tryBook = () => {
+    if (ridesPaused) { vcToast('Ride booking is temporarily paused. Please check back shortly.', 'warn'); return; }
+    if (activeRide) { vcToast('You already have an active ride in progress. Complete or cancel it before booking a new one.', 'warn'); return; }
+    go('pin-pickup');
+  };
   const handleLogout = async () => {
     try {
       setMenuOpen(false);
@@ -2578,6 +2595,17 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
           {/* ── REDESIGNED HOME DASHBOARD ── */}
           <div style={{ flex:1, overflowY:'auto', background:'linear-gradient(160deg, #ffffff 0%, #f6f2fb 45%, #efe8f7 100%)' }}>
 
+            {/* Paused banner (admin turned off ride requests) */}
+            {ridesPaused && (
+              <div style={{ margin:'12px 16px 0', background:'#fff0f0', border:'1px solid #fca5a5', borderRadius:12, padding:'12px 16px', display:'flex', alignItems:'center', gap:10 }}>
+                <span style={{ fontSize:20 }}>⏸️</span>
+                <div>
+                  <div style={{ fontSize:13, fontWeight:700, color:'#dc2626' }}>Booking temporarily paused</div>
+                  <div style={{ fontSize:12, color:'#b91c1c' }}>New ride requests are on hold right now. Please check back shortly.</div>
+                </div>
+              </div>
+            )}
+
             {/* ── TWO-PANEL HERO (left: Book a Ride · right: Discover Mandeville) ── */}
             <div style={{ padding:'24px 16px 20px' }}>
               <div style={{ maxWidth:1000, margin:'0 auto', display:'flex', gap:20, flexWrap:'wrap', alignItems:'stretch' }}>
@@ -2588,7 +2616,7 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
                   <div style={{ fontSize:26, fontWeight:800, color:'#2a1a4a', marginBottom:4, lineHeight:1.2, position:'relative', zIndex:1 }}>
                     Good day, {user?.name?.split(' ')[0]||'Rider'} 👋
                   </div>
-                  <button onClick={() => { if (activeRide) { vcToast('You already have an active ride in progress. Complete or cancel it before booking a new one.', 'warn'); return; } go('pin-pickup'); }}
+                  <button onClick={tryBook}
                     style={{ background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', margin:'14px auto 0', padding:0, position:'relative', zIndex:1 }}>
                     <div style={{ width:190, height:190, borderRadius:'50%', background:'#ffffff', boxShadow:'0 8px 40px rgba(107,33,168,0.18), 0 0 0 6px rgba(107,33,168,0.15)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', position:'relative', overflow:'hidden' }}>
                       <div style={{ position:'absolute', inset:0, background:'radial-gradient(circle at 50% 60%, rgba(107,33,168,0.12) 0%, transparent 70%)' }}/>
@@ -2601,7 +2629,7 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
 
                 {/* RIGHT — Discover Mandeville slideshow */}
                 <div style={{ flex:'1 1 320px', minWidth:260 }}>
-                  <PlacesShowcase onTap={() => { if (activeRide) { vcToast('You already have an active ride in progress. Complete or cancel it before booking a new one.', 'warn'); return; } go('pin-pickup'); }}/>
+                  <PlacesShowcase onTap={tryBook}/>
                 </div>
 
               </div>
@@ -2650,7 +2678,7 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
             <DashPartnersSlider go={go}/>
 
             {/* ── SCHEDULE A TRIP ── */}
-            <DashSchedule go={go} activeRide={activeRide}/>
+            <DashSchedule go={go} activeRide={activeRide} ridesPaused={ridesPaused}/>
 
             {/* ── FAQ ── */}
             <DashFAQ go={go}/>

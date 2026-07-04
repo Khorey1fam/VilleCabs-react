@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
-import { getFirestore, collection, query, where, onSnapshot, updateDoc, doc, orderBy, addDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, collection, query, where, onSnapshot, updateDoc, doc, orderBy, addDoc, deleteDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey:            process.env.REACT_APP_FIREBASE_API_KEY,
@@ -702,6 +702,189 @@ function RevenueTab() {
 }
 
 // ── OVERVIEW TAB ──────────────────────────────────────────────────────────────
+// ── ANALYTICS TAB ─────────────────────────────────────────────────────────────
+function AnalyticsTab() {
+  const [rides, setRides] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db,'bookings'), snap => {
+      setRides(snap.docs.map(d => ({ id:d.id, ...d.data() }))); setLoading(false);
+    }, () => setLoading(false));
+    return () => unsub();
+  }, []);
+
+  if (loading) return <div style={{ color:'#8a83a0', fontSize:13 }}>Loading analytics…</div>;
+
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const ts = (r, f='createdAt') => r[f]?.seconds ? new Date(r[f].seconds*1000) : null;
+  const areaOf = (addr) => (addr || '').split(',')[0].trim() || 'Unknown';
+
+  // Busiest hour today (by ride creation)
+  const todays = rides.filter(r => { const d = ts(r); return d && d >= todayStart; });
+  const hourBuckets = {};
+  todays.forEach(r => { const d = ts(r); if (d) { const h = d.getHours(); hourBuckets[h] = (hourBuckets[h]||0)+1; } });
+  let busiestHour = null, busiestCount = 0;
+  Object.entries(hourBuckets).forEach(([h,c]) => { if (c > busiestCount) { busiestCount = c; busiestHour = +h; } });
+  const fmtHour = (h) => h==null ? '—' : `${((h+11)%12)+1}${h<12?'am':'pm'}`;
+
+  // Most requested pickup / dropoff (all rides)
+  const tally = (getter) => {
+    const m = {};
+    rides.forEach(r => { const k = getter(r); if (k && k!=='Unknown') m[k]=(m[k]||0)+1; });
+    let best=null, n=0; Object.entries(m).forEach(([k,c])=>{ if(c>n){n=c;best=k;} });
+    return { name:best||'—', count:n };
+  };
+  const topPickup  = tally(r => areaOf(r.pickup?.address));
+  const topDropoff = tally(r => areaOf(r.dropoff?.address));
+
+  // Highest revenue area (by pickup area, completed rides)
+  const revByArea = {};
+  rides.filter(r => r.status==='completed').forEach(r => {
+    const a = areaOf(r.pickup?.address);
+    if (a && a!=='Unknown') revByArea[a] = (revByArea[a]||0) + (r.fare||0);
+  });
+  let topRevArea=null, topRev=0; Object.entries(revByArea).forEach(([a,v])=>{ if(v>topRev){topRev=v;topRevArea=a;} });
+
+  // Driver acceptance rate = accepted / (accepted + unfulfilled/expired)
+  const accepted = rides.filter(r => r.driverId && ['active','completed','arrived','enroute'].includes(r.status)).length;
+  const searched = rides.filter(r => r.status==='searching' || r.status==='cancelled' || r.status==='no_driver').length;
+  const acceptDenom = accepted + searched;
+  const acceptRate = acceptDenom > 0 ? Math.round((accepted/acceptDenom)*100) : null;
+
+  // Average pickup time = acceptedAt → startedAt (minutes) across rides that have both
+  const pickupTimes = rides.map(r => {
+    const a = r.acceptedAt?.seconds, s = r.startedAt?.seconds || r.arrivedAt?.seconds;
+    return (a && s && s>a) ? (s-a)/60 : null;
+  }).filter(v => v!=null && v < 120);
+  const avgPickup = pickupTimes.length ? Math.round(pickupTimes.reduce((x,y)=>x+y,0)/pickupTimes.length) : null;
+
+  const cards = [
+    { icon:'⏰', label:'Busiest hour today', value: busiestHour!=null ? fmtHour(busiestHour) : 'No rides yet', sub: busiestHour!=null ? `${busiestCount} ride${busiestCount!==1?'s':''} booked` : 'today', color:'#6b21a8' },
+    { icon:'📍', label:'Most requested pickup', value: topPickup.name, sub: topPickup.count ? `${topPickup.count} rides` : '—', color:'#2a1a4a' },
+    { icon:'🎯', label:'Most requested drop-off', value: topDropoff.name, sub: topDropoff.count ? `${topDropoff.count} rides` : '—', color:'#2a1a4a' },
+    { icon:'💰', label:'Highest revenue area', value: topRevArea || '—', sub: topRev ? `J$${topRev.toLocaleString()}` : '—', color:'#b45309' },
+    { icon:'✅', label:'Driver acceptance rate', value: acceptRate!=null ? `${acceptRate}%` : '—', sub: acceptDenom ? `${accepted} of ${acceptDenom} requests` : 'no data yet', color: acceptRate!=null && acceptRate>=70 ? GREEN : '#b45309' },
+    { icon:'⚡', label:'Average pickup time', value: avgPickup!=null ? `${avgPickup} min` : '—', sub: pickupTimes.length ? `across ${pickupTimes.length} rides` : 'no data yet', color:'#6b21a8' },
+  ];
+
+  return (
+    <div>
+      <div style={{ fontSize:13, color:'#8a83a0', marginBottom:16 }}>Live operational insights across Mandeville & Manchester.</div>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(210px,1fr))', gap:14 }}>
+        {cards.map((c,i) => (
+          <div key={i} style={s.card}>
+            <div style={{ fontSize:26, marginBottom:8 }}>{c.icon}</div>
+            <div style={{ fontSize:11, color:'#8a83a0', textTransform:'uppercase', letterSpacing:0.6, marginBottom:6 }}>{c.label}</div>
+            <div style={{ fontSize:22, fontWeight:800, color:c.color, lineHeight:1.2, marginBottom:3 }}>{c.value}</div>
+            <div style={{ fontSize:12, color:'#9199ad' }}>{c.sub}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop:16, fontSize:11, color:'#aaa', lineHeight:1.6 }}>
+        Areas are grouped by the first part of each address. Acceptance rate and pickup time improve in accuracy as more rides are completed.
+      </div>
+    </div>
+  );
+}
+
+// ── ANALYTICS: RIDE REQUEST TOGGLE (accepting vs paused) ──────────────────────
+function RideRequestToggle() {
+  const [accepting, setAccepting] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db,'settings','operations'), snap => {
+      setAccepting(snap.exists() ? snap.data().acceptingRides !== false : true);
+      setLoaded(true);
+    }, () => setLoaded(true));
+    return () => unsub();
+  }, []);
+  const toggle = async () => {
+    const next = !accepting;
+    setAccepting(next); // optimistic
+    try { await setDoc(doc(db,'settings','operations'), { acceptingRides: next, updatedAt: serverTimestamp() }, { merge:true }); }
+    catch(e) { setAccepting(!next); }
+  };
+  return (
+    <div style={{ ...s.card, display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:14, borderLeft:`4px solid ${accepting?GREEN:'#dc2626'}` }}>
+      <div>
+        <div style={{ fontSize:15, fontWeight:800, color:'#2a1a4a', marginBottom:3 }}>
+          {accepting ? '🟢 Accepting Ride Requests' : '🔴 Ride Requests Paused'}
+        </div>
+        <div style={{ fontSize:12, color:'#8a83a0' }}>
+          {accepting ? 'Customers can book rides normally.' : 'New bookings are paused platform-wide.'}
+        </div>
+      </div>
+      <div onClick={loaded ? toggle : undefined}
+        style={{ width:64, height:34, borderRadius:20, background:accepting?GREEN:'#dc2626', position:'relative', cursor:loaded?'pointer':'default', transition:'background 0.25s', flexShrink:0, opacity:loaded?1:0.5 }}>
+        <div style={{ position:'absolute', top:4, left:accepting?34:4, width:26, height:26, borderRadius:'50%', background:'#fff', transition:'left 0.25s', boxShadow:'0 1px 4px rgba(0,0,0,0.3)' }}/>
+      </div>
+    </div>
+  );
+}
+
+// ── LIVE ACTIVITY FEED (overview) ─────────────────────────────────────────────
+function LiveActivityFeed() {
+  const [events, setEvents] = useState([]);
+  useEffect(() => {
+    const items = [];
+    const push = (list) => {
+      const merged = [...items, ...list].sort((a,b)=>b.t-a.t).slice(0, 12);
+      setEvents(merged);
+    };
+    const unsubRides = onSnapshot(collection(db,'bookings'), snap => {
+      const evts = [];
+      snap.docs.forEach(d => {
+        const r = d.data();
+        const who = r.customerName || 'A rider';
+        if (r.completedAt?.seconds) evts.push({ t:r.completedAt.seconds, icon:'✅', text:`Ride completed for ${who}`, color:GREEN });
+        else if (r.acceptedAt?.seconds) evts.push({ t:r.acceptedAt.seconds, icon:'🚗', text:`${r.driverName||'A driver'} accepted ${who}'s ride`, color:'#6b21a8' });
+        else if (r.createdAt?.seconds) evts.push({ t:r.createdAt.seconds, icon:'🚕', text:`${who} booked a ride`, color:'#2a1a4a' });
+      });
+      items.length = 0; items.push(...evts); push([]);
+    }, ()=>{});
+    const unsubDrivers = onSnapshot(collection(db,'drivers'), snap => {
+      const evts = [];
+      snap.docs.forEach(d => {
+        const dr = d.data();
+        if (dr.createdAt?.seconds) evts.push({ t:dr.createdAt.seconds, icon:'🧑‍✈️', text:`New driver sign-up: ${dr.name||'Driver'}`, color:'#b45309', tag:'driver' });
+      });
+      // merge driver events with current ride events
+      setEvents(prev => {
+        const rideEvents = prev.filter(e => e.tag !== 'driver');
+        return [...rideEvents, ...evts].sort((a,b)=>b.t-a.t).slice(0, 12);
+      });
+    }, ()=>{});
+    return () => { unsubRides(); unsubDrivers(); };
+  }, []);
+
+  const ago = (t) => {
+    const s = Math.max(0, Math.floor(Date.now()/1000 - t));
+    if (s < 60) return 'just now';
+    if (s < 3600) return `${Math.floor(s/60)}m ago`;
+    if (s < 86400) return `${Math.floor(s/3600)}h ago`;
+    return `${Math.floor(s/86400)}d ago`;
+  };
+
+  return (
+    <div style={{ ...s.card, marginTop:8 }}>
+      <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
+        <span style={{ width:8, height:8, borderRadius:'50%', background:GREEN, display:'inline-block', boxShadow:'0 0 0 3px rgba(26,158,90,0.2)' }}/>
+        <span style={{ fontSize:14, fontWeight:700, color:'#2a1a4a' }}>Live Activity</span>
+      </div>
+      {events.length === 0 ? (
+        <div style={{ fontSize:13, color:'#9199ad', textAlign:'center', padding:16 }}>Activity will appear here as rides and sign-ups happen.</div>
+      ) : events.map((e,i) => (
+        <div key={i} style={{ display:'flex', alignItems:'center', gap:11, padding:'9px 0', borderBottom: i<events.length-1?'1px solid #f0f0f4':'none' }}>
+          <div style={{ width:30, height:30, borderRadius:'50%', background:'#f6f2fb', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, flexShrink:0 }}>{e.icon}</div>
+          <div style={{ flex:1, fontSize:13, color:'#2a1a4a' }}>{e.text}</div>
+          <div style={{ fontSize:11, color:'#9199ad', flexShrink:0 }}>{ago(e.t)}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function OverviewTab({ setTab }) {
   const [stats, setStats] = useState({ pending:0, approved:0, total_rides:0, revenue:0, active_rides:0, customers:0 });
 
@@ -746,11 +929,19 @@ function OverviewTab({ setTab }) {
           <div onClick={() => setTab('drivers')} style={{ background:'#fffbeb', border:'1px solid #fde047', borderRadius:10, padding:'12px 16px', fontSize:13, color:'#b45309', cursor:'pointer' }}>
             👤 Review pending drivers ({stats.pending})
           </div>
-          <div onClick={() => setTab('rides')} style={{ background:'rgba(26,158,90,0.1)', border:'0.5px solid rgba(26,158,90,0.25)', borderRadius:10, padding:'12px 16px', fontSize:13, color:'#9fe1cb', cursor:'pointer' }}>
+          <div onClick={() => setTab('rides')} style={{ background:'rgba(26,158,90,0.1)', border:'0.5px solid rgba(26,158,90,0.25)', borderRadius:10, padding:'12px 16px', fontSize:13, color:'#1a9e5a', cursor:'pointer' }}>
             🚕 View active rides ({stats.active_rides})
           </div>
         </div>
       </div>
+
+      {/* Global ride-request switch */}
+      <div style={{ marginTop:14 }}>
+        <RideRequestToggle/>
+      </div>
+
+      {/* Live activity feed */}
+      <LiveActivityFeed/>
     </div>
   );
 }
@@ -1117,6 +1308,7 @@ export default function AdminPanel() {
 
   const tabs = [
     { id:'overview',  label:'Overview',    icon:'📊' },
+    { id:'analytics', label:'Analytics',   icon:'📉' },
     { id:'drivers',   label:'Drivers',     icon:'🚗' },
     { id:'rides',     label:'Rides',       icon:'🚕' },
     { id:'livemap',   label:'Live Map',    icon:'🗺️' },
@@ -1158,9 +1350,10 @@ export default function AdminPanel() {
       {/* ── CONTENT ── */}
       <div style={s.main}>
         <div style={{ fontSize:18, fontWeight:800, marginBottom:16, color:'#1a1a2e' }}>
-          {tab==='overview'?'📊 Dashboard Overview':tab==='drivers'?'🚗 Driver Management':tab==='rides'?'🚕 Ride Management':tab==='livemap'?'🗺️ Live Operations Map':tab==='scheduled'?'🗓️ Scheduled Rides':tab==='customers'?'👥 Customers':tab==='revenue'?'💰 Revenue':tab==='performance'?'📈 Driver Performance':tab==='partners'?'🤝 Partner Requests':tab==='contacts'?'📬 Messages':tab==='alerts'?'🆘 Safety Alerts':tab==='unfulfilled'?'📍 No Driver Available':tab==='broadcast'?'📢 Broadcast to Drivers':'🎟️ Promo Codes'}
+          {tab==='overview'?'📊 Dashboard Overview':tab==='analytics'?'📉 Analytics':tab==='drivers'?'🚗 Driver Management':tab==='rides'?'🚕 Ride Management':tab==='livemap'?'🗺️ Live Operations Map':tab==='scheduled'?'🗓️ Scheduled Rides':tab==='customers'?'👥 Customers':tab==='revenue'?'💰 Revenue':tab==='performance'?'📈 Driver Performance':tab==='partners'?'🤝 Partner Requests':tab==='contacts'?'📬 Messages':tab==='alerts'?'🆘 Safety Alerts':tab==='unfulfilled'?'📍 No Driver Available':tab==='broadcast'?'📢 Broadcast to Drivers':'🎟️ Promo Codes'}
         </div>
         {tab === 'overview'  && <OverviewTab setTab={setTab}/>}
+        {tab === 'analytics' && <AnalyticsTab/>}
         {tab === 'drivers'   && <DriversTab/>}
         {tab === 'rides'     && <RidesTab/>}
         {tab === 'livemap'   && <LiveMapTab/>}
