@@ -797,12 +797,12 @@ function Splash({ go }) {
   // Photos load from /public/places/. Drop a matching image in that folder to show it;
   // if a file is missing, the styled gradient card shows automatically (onError fallback).
   const places = [
-    { name:'The Garden Hotel',      kind:'Hotel',      tag:'🏨', rating:4.5, area:'Hotel St, Mandeville',      grad:'linear-gradient(135deg,#6b21a8,#9333ea)', photo:'/places/garden-hotel.jpg' },
-    { name:'Voilà by Lilee',        kind:'Restaurant', tag:'🍽️', rating:4.3, area:'Caledonia Rd, Mandeville',   grad:'linear-gradient(135deg,#b45309,#f59e0b)', photo:'/places/voila-by-lilee.jpg' },
-    { name:'Golf View Hotel',       kind:'Hotel',      tag:'🏨', rating:3.6, area:'Caledonia Rd, Mandeville',   grad:'linear-gradient(135deg,#1e3a8a,#3b82f6)', photo:'/places/golf-view-hotel.jpg' },
-    { name:'The Ultimate Dining',   kind:'Restaurant', tag:'🍽️', rating:4.2, area:'Ward Ave, Mandeville',       grad:'linear-gradient(135deg,#065f46,#10b981)', photo:'/places/ultimate-dining.jpg' },
-    { name:'Villa Nova',            kind:'Fine Dining',tag:'🥂', rating:4.0, area:'Villa Rd, Mandeville',        grad:'linear-gradient(135deg,#831843,#db2777)', photo:'/places/villa-nova.jpg' },
-    { name:'Toast Restaurant & Gelato', kind:'Restaurant', tag:'🍨', rating:3.6, area:'Ward Ave, Mandeville',   grad:'linear-gradient(135deg,#4338ca,#818cf8)', photo:'/places/toast-gelato.jpg' },
+    { name:'The Garden Hotel',      kind:'Hotel',      tag:'🏨', rating:4.5, area:'Hotel St, Mandeville',      grad:'linear-gradient(135deg,#6b21a8,#9333ea)', gradSoft:'linear-gradient(135deg,rgba(147,51,234,0.45),rgba(107,33,168,0.30))', photo:'/places/garden-hotel.jpg' },
+    { name:'Voilà by Lilee',        kind:'Restaurant', tag:'🍽️', rating:4.3, area:'Caledonia Rd, Mandeville',   grad:'linear-gradient(135deg,#b45309,#f59e0b)', gradSoft:'linear-gradient(135deg,rgba(245,158,11,0.42),rgba(180,83,9,0.30))', photo:'/places/voila-by-lilee.jpg' },
+    { name:'Golf View Hotel',       kind:'Hotel',      tag:'🏨', rating:3.6, area:'Caledonia Rd, Mandeville',   grad:'linear-gradient(135deg,#1e3a8a,#3b82f6)', gradSoft:'linear-gradient(135deg,rgba(59,130,246,0.42),rgba(30,58,138,0.30))', photo:'/places/golf-view-hotel.jpg' },
+    { name:'The Ultimate Dining',   kind:'Restaurant', tag:'🍽️', rating:4.2, area:'Ward Ave, Mandeville',       grad:'linear-gradient(135deg,#065f46,#10b981)', gradSoft:'linear-gradient(135deg,rgba(16,185,129,0.42),rgba(6,95,70,0.30))', photo:'/places/ultimate-dining.jpg' },
+    { name:'Villa Nova',            kind:'Fine Dining',tag:'🥂', rating:4.0, area:'Villa Rd, Mandeville',        grad:'linear-gradient(135deg,#831843,#db2777)', gradSoft:'linear-gradient(135deg,rgba(219,39,119,0.42),rgba(131,24,67,0.30))', photo:'/places/villa-nova.jpg' },
+    { name:'Toast Restaurant & Gelato', kind:'Restaurant', tag:'🍨', rating:3.6, area:'Ward Ave, Mandeville',   grad:'linear-gradient(135deg,#4338ca,#818cf8)', gradSoft:'linear-gradient(135deg,rgba(129,140,248,0.42),rgba(67,56,202,0.30))', photo:'/places/toast-gelato.jpg' },
   ];
   const [pslide, setPslide] = useState(0);
   const [imgFailed, setImgFailed] = useState({}); // index -> true if photo file missing
@@ -868,7 +868,7 @@ function Splash({ go }) {
           <div style={{ flex:'1 1 340px', minWidth:280 }}>
             <div
               onClick={() => go('customer-login')}
-              style={{ position:'relative', borderRadius:20, overflow:'hidden', height:360, cursor:'pointer', boxShadow:'0 12px 40px rgba(0,0,0,0.28)', background: places[pslide].grad }}
+              style={{ position:'relative', borderRadius:20, overflow:'hidden', height:360, cursor:'pointer', boxShadow:'0 12px 40px rgba(0,0,0,0.28)', background: (places[pslide].photo && !imgFailed[pslide]) ? places[pslide].grad : places[pslide].gradSoft, border:'1px solid rgba(255,255,255,0.15)' }}
               title="Sign in to book a ride here">
 
               {/* Real photo layer (shows when the image file exists) */}
