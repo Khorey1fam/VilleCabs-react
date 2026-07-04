@@ -4297,6 +4297,8 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   const [booking,      setBooking]      = useState(null);
   const [rating,       setRating]       = useState(0);
   const [rated,        setRated]        = useState(false);
+  const [review,       setReview]       = useState('');
+  const [reviewTags,   setReviewTags]   = useState([]);
   const [driverInfo,   setDriverInfo]   = useState(null);
   const [directions,   setDirections]   = useState(null);
   const [sosSent,    setSosSent]    = useState(false);
@@ -4491,7 +4493,11 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   const submitRating = async () => {
     if (!rating || !bookingId) return;
     try {
-      await updateDoc(doc(db,'bookings',bookingId), { customerRating:rating });
+      await updateDoc(doc(db,'bookings',bookingId), {
+        customerRating: rating,
+        customerReview: review.trim() || null,
+        reviewTags: reviewTags.length ? reviewTags : null,
+      });
       if (booking?.driverId) {
         const driverRef  = doc(db,'drivers',booking.driverId);
         const driverSnap = await getDoc(driverRef);
@@ -4501,6 +4507,19 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
           const prevCount = (d.ratingCount||0) + 1;
           await updateDoc(driverRef, { ratingTotal:prevTotal, ratingCount:prevCount, rating:Math.round((prevTotal/prevCount)*10)/10 });
         }
+        // Store the individual review so drivers & admin can read feedback over time
+        try {
+          await addDoc(collection(db,'reviews'), {
+            driverId:     booking.driverId,
+            driverName:   booking.driverName || 'Driver',
+            customerName: booking.customerName || user?.name || 'Rider',
+            bookingId,
+            rating,
+            review:       review.trim() || null,
+            tags:         reviewTags.length ? reviewTags : null,
+            createdAt:    serverTimestamp(),
+          });
+        } catch(e) { console.warn('Review log skipped:', e); }
       }
       setRated(true);
     } catch(err) { console.error(err); setRated(true); }
@@ -4654,20 +4673,49 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
             </div>
           </div>
 
-          {/* Rating */}
+          {/* Rating & Review */}
           {!rated ? (
             <div style={{ width:'100%', maxWidth:400, background:'rgba(15,20,40,0.7)', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:16, marginBottom:14, textAlign:'center' }}>
-              <p style={{ fontSize:14, color:WHITE, fontWeight:500, marginBottom:4 }}>How was your ride?</p>
-              <p style={{ fontSize:12, color:'rgba(255,255,255,0.4)', marginBottom:14 }}>Rate your driver</p>
+              <p style={{ fontSize:15, color:WHITE, fontWeight:600, marginBottom:2 }}>How was your ride?</p>
+              <p style={{ fontSize:12, color:'rgba(255,255,255,0.4)', marginBottom:14 }}>Rate your driver{booking?.driverName?` · ${booking.driverName}`:''}</p>
               <div style={{ display:'flex', gap:10, justifyContent:'center', marginBottom:14 }}>
                 {[1,2,3,4,5].map(star => (
-                  <div key={star} onClick={() => { setRating(star); submitRating(star); }} style={{ fontSize:36, cursor:'pointer', opacity:star<=rating?1:0.25, transition:'opacity 0.2s' }}>⭐</div>
+                  <div key={star} onClick={() => setRating(star)} style={{ fontSize:38, cursor:'pointer', opacity:star<=rating?1:0.25, transform:star<=rating?'scale(1.1)':'scale(1)', transition:'all 0.15s' }}>⭐</div>
                 ))}
               </div>
-              {rating > 0 && <button style={s.btnY} onClick={submitRating}>Submit Rating</button>}
+
+              {rating > 0 && (
+                <>
+                  {/* quick tags — positive for 4-5★, improvement for 1-3★ */}
+                  <div style={{ display:'flex', flexWrap:'wrap', gap:7, justifyContent:'center', marginBottom:14 }}>
+                    {(rating >= 4
+                      ? ['Great driving','Friendly','On time','Clean car','Felt safe']
+                      : ['Late','Unsafe driving','Rude','Dirty car','Wrong route']
+                    ).map(tag => {
+                      const on = reviewTags.includes(tag);
+                      return (
+                        <button key={tag} onClick={() => setReviewTags(t => on ? t.filter(x=>x!==tag) : [...t, tag])}
+                          style={{ fontSize:11, fontWeight:600, padding:'6px 12px', borderRadius:20, cursor:'pointer',
+                            background: on ? (rating>=4?'rgba(26,158,90,0.25)':'rgba(226,75,74,0.22)') : 'rgba(255,255,255,0.06)',
+                            border: `1px solid ${on ? (rating>=4?'#1a9e5a':'#e24b4a') : 'rgba(255,255,255,0.15)'}`,
+                            color: on ? (rating>=4?'#4ade80':'#f09595') : 'rgba(255,255,255,0.6)' }}>
+                          {tag}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* optional written review */}
+                  <textarea value={review} onChange={e=>setReview(e.target.value)} rows={3}
+                    placeholder="Add a review (optional)…" maxLength={300}
+                    style={{ width:'100%', padding:'10px 12px', background:'rgba(255,255,255,0.06)', border:'0.5px solid rgba(255,255,255,0.15)', borderRadius:10, color:WHITE, fontSize:13, boxSizing:'border-box', outline:'none', resize:'vertical', marginBottom:12, fontFamily:'inherit' }}/>
+
+                  <button style={{ ...s.btnY, width:'100%' }} onClick={submitRating}>Submit Rating</button>
+                </>
+              )}
             </div>
           ) : (
-            <div style={{ ...s.successBox, width:'100%', maxWidth:400, textAlign:'center', marginBottom:14 }}>⭐ Thanks for rating your driver!</div>
+            <div style={{ ...s.successBox, width:'100%', maxWidth:400, textAlign:'center', marginBottom:14 }}>⭐ Thanks for your feedback!</div>
           )}
 
           <button style={{ ...s.btnY, width:'100%', maxWidth:400 }} onClick={() => go('customer-dash')}>Back to Dashboard</button>
@@ -5152,6 +5200,52 @@ function DriverHelp({ go, user }) {
 }
 
 // ── DRIVER DASHBOARD ──────────────────────────────────────────────────────────
+// ── Driver's recent reviews (reads the reviews collection) ──
+function DriverReviews({ user }) {
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (!user?.uid) return;
+    const unsub = onSnapshot(query(collection(db,'reviews'), where('driverId','==',user.uid)),
+      snap => { setReviews(snap.docs.map(d=>({id:d.id,...d.data()}))); setLoading(false); },
+      () => setLoading(false));
+    return () => unsub();
+  }, [user]);
+
+  const withText = [...reviews]
+    .filter(r => r.review || (r.tags && r.tags.length))
+    .sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0))
+    .slice(0, 5);
+
+  if (loading || reviews.length === 0) return null;
+
+  return (
+    <div style={{ padding:'6px 14px 20px' }}>
+      <div style={{ fontSize:12, fontWeight:700, color:'#8a83a0', marginBottom:12, textTransform:'uppercase', letterSpacing:0.8 }}>What riders are saying</div>
+      {withText.length === 0 ? (
+        <div style={{ background:'#fff', border:'1px solid #eef0f4', borderRadius:14, padding:16, fontSize:13, color:'#8a83a0', textAlign:'center' }}>
+          You have {reviews.length} rating{reviews.length!==1?'s':''} but no written reviews yet.
+        </div>
+      ) : withText.map(r => (
+        <div key={r.id} style={{ background:'#fff', border:'1px solid #eef0f4', borderRadius:14, padding:'13px 15px', marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.04)' }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
+            <span style={{ fontSize:13, fontWeight:700, color:'#2a1a4a' }}>{r.customerName || 'Rider'}</span>
+            <span style={{ fontSize:13, color:'#f59e0b', fontWeight:700 }}>{'★'.repeat(r.rating)}<span style={{ color:'#e5e0ee' }}>{'★'.repeat(5-r.rating)}</span></span>
+          </div>
+          {r.tags && r.tags.length > 0 && (
+            <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginBottom: r.review?8:0 }}>
+              {r.tags.map((t,i) => (
+                <span key={i} style={{ fontSize:10, fontWeight:600, padding:'3px 9px', borderRadius:12, background:'#f3edfb', color:'#6b21a8', border:'1px solid #e9d5ff' }}>{t}</span>
+              ))}
+            </div>
+          )}
+          {r.review && <div style={{ fontSize:13, color:'#5b5470', lineHeight:1.55 }}>"{r.review}"</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function DriverDash({ go, user, setUser, setBookingId }) {
   const [rides,        setRides]        = useState([]);
   const [driverTab,    setDriverTab]    = useState('home');
@@ -5610,6 +5704,9 @@ function DriverDash({ go, user, setUser, setBookingId }) {
               ))}
             </div>
           </div>
+
+          {/* ── RECENT REVIEWS ── */}
+          <DriverReviews user={user}/>
         </div>
       )}
 
