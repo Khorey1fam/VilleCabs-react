@@ -23,23 +23,23 @@ const WHITE  = '#ffffff';
 const RED    = '#e24b4a';
 
 const s = {
-  page:     { minHeight:'100vh', background:'#0f1015', color:WHITE, fontFamily:"'Segoe UI', sans-serif" },
-  topbar:   { background:DARK, padding:'14px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'0.5px solid rgba(255,255,255,0.1)' },
-  logo:     { display:'flex', alignItems:'center', gap:10, fontSize:18, fontWeight:600, color:WHITE },
-  logobadge:{ background:YELLOW, borderRadius:8, padding:'4px 10px', fontSize:12, color:DARK, fontWeight:700 },
-  sidebar:  { width:200, background:DARK, minHeight:'100vh', padding:'20px 0', flexShrink:0, borderRight:'0.5px solid rgba(255,255,255,0.08)' },
-  navitem:  { padding:'12px 20px', fontSize:14, cursor:'pointer', color:'rgba(255,255,255,0.6)', display:'flex', alignItems:'center', gap:10, borderLeft:'3px solid transparent' },
-  navactive:{ padding:'12px 20px', fontSize:14, cursor:'pointer', color:WHITE, fontWeight:500, display:'flex', alignItems:'center', gap:10, borderLeft:`3px solid ${YELLOW}`, background:'rgba(232,180,0,0.08)' },
-  main:     { flex:1, padding:'24px', overflowY:'auto' },
-  card:     { background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, padding:'16px 20px', marginBottom:14 },
-  statgrid: { display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:24 },
-  stat:     { background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, padding:'16px 20px' },
-  badge:    { display:'inline-block', padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:500 },
-  btnApprove:{ background:GREEN, color:WHITE, border:'none', borderRadius:8, padding:'8px 16px', fontSize:13, fontWeight:500, cursor:'pointer', marginRight:8 },
-  btnReject: { background:'rgba(226,75,74,0.15)', color:'#f09595', border:'0.5px solid rgba(226,75,74,0.4)', borderRadius:8, padding:'8px 16px', fontSize:13, cursor:'pointer' },
-  btnSuspend:{ background:'rgba(255,255,255,0.06)', color:'rgba(255,255,255,0.5)', border:'0.5px solid rgba(255,255,255,0.15)', borderRadius:8, padding:'8px 16px', fontSize:13, cursor:'pointer' },
-  inp:      { width:'100%', padding:'12px 14px', background:'rgba(255,255,255,0.06)', border:'0.5px solid rgba(255,255,255,0.15)', borderRadius:10, color:WHITE, fontSize:14, boxSizing:'border-box', outline:'none', marginBottom:12 },
-  errBox:   { background:'rgba(226,75,74,0.15)', border:'0.5px solid rgba(226,75,74,0.4)', borderRadius:10, padding:'10px 14px', marginBottom:12, fontSize:13, color:'#f09595' },
+  page:     { minHeight:'100vh', background:'#f5f6fa', color:'#1a1a2e', fontFamily:"'Segoe UI', sans-serif" },
+  topbar:   { background:'#ffffff', padding:'10px 16px', display:'flex', alignItems:'center', gap:10, position:'sticky', top:0, zIndex:50, borderBottom:'1px solid #e5e7eb', boxShadow:'0 1px 4px rgba(0,0,0,0.06)' },
+  logo:     { display:'flex', alignItems:'center', gap:8, fontSize:15, fontWeight:700, color:'#6b21a8' },
+  logobadge:{ background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:8, padding:'3px 9px', fontSize:11, color:'#6b21a8', fontWeight:700 },
+  tabstrip: { display:'flex', gap:6, padding:'10px 14px', background:'#fff', borderBottom:'1px solid #e5e7eb', overflowX:'auto', scrollbarWidth:'none', position:'sticky', top:49, zIndex:40 },
+  tab:      { flexShrink:0, padding:'7px 14px', borderRadius:20, border:'none', background:'#f3f4f6', color:'#555', fontSize:12, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:6 },
+  tabActive:{ flexShrink:0, padding:'7px 14px', borderRadius:20, border:'none', background:'#6b21a8', color:'#fff', fontSize:12, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:6 },
+  main:     { padding:'16px 14px 48px', maxWidth:1000, margin:'0 auto' },
+  card:     { background:'#ffffff', border:'1px solid #e5e7eb', borderRadius:14, padding:'16px 18px', marginBottom:14, boxShadow:'0 1px 6px rgba(0,0,0,0.05)' },
+  statgrid: { display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:12, marginBottom:20 },
+  stat:     { background:'#ffffff', border:'1px solid #e5e7eb', borderRadius:14, padding:'14px 16px', boxShadow:'0 1px 6px rgba(0,0,0,0.05)' },
+  badge:    { display:'inline-block', padding:'3px 10px', borderRadius:20, fontSize:11, fontWeight:600 },
+  btnApprove:{ background:GREEN, color:'#fff', border:'none', borderRadius:8, padding:'8px 16px', fontSize:13, fontWeight:600, cursor:'pointer', marginRight:8 },
+  btnReject: { background:'#fff0f0', color:'#dc2626', border:'1px solid #fca5a5', borderRadius:8, padding:'8px 16px', fontSize:13, fontWeight:600, cursor:'pointer' },
+  btnSuspend:{ background:'#f3f4f6', color:'#6b7280', border:'1px solid #e5e7eb', borderRadius:8, padding:'8px 16px', fontSize:13, cursor:'pointer' },
+  inp:      { width:'100%', padding:'12px 14px', background:'#ffffff', border:'1px solid #d0d3e0', borderRadius:10, color:'#1a1a2e', fontSize:14, boxSizing:'border-box', outline:'none', marginBottom:12 },
+  errBox:   { background:'#fff0f0', border:'1px solid #fca5a5', borderRadius:10, padding:'10px 14px', marginBottom:12, fontSize:13, color:'#dc2626' },
 };
 
 // ── ADMIN LOGIN ───────────────────────────────────────────────────────────────
@@ -64,21 +64,21 @@ function AdminLogin({ onLogin }) {
   };
 
   return (
-    <div style={{ minHeight:'100vh', background:'#0f1015', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'Segoe UI', sans-serif" }}>
-      <div style={{ width:380, background:DARK, border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:20, padding:32 }}>
+    <div style={{ minHeight:'100vh', background:'#f5f6fa', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'Segoe UI', sans-serif" }}>
+      <div style={{ width:380, background:'#ffffff', border:'1px solid #e5e7eb', borderRadius:20, padding:32 }}>
         <div style={{ textAlign:'center', marginBottom:28 }}>
           <div style={{ fontSize:40, marginBottom:10 }}>🚕</div>
-          <div style={{ fontSize:22, fontWeight:700, color:WHITE, letterSpacing:2 }}>VilleCabs</div>
-          <div style={{ fontSize:13, color:'rgba(255,255,255,0.4)', marginTop:4 }}>Admin Panel</div>
+          <div style={{ fontSize:22, fontWeight:700, color:'#1a1a2e', letterSpacing:2 }}>VilleCabs</div>
+          <div style={{ fontSize:13, color:'#9199ad', marginTop:4 }}>Admin Panel</div>
         </div>
         {error && <div style={s.errBox}>⚠️ {error}</div>}
-        <label style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginBottom:4, display:'block' }}>Admin Email</label>
+        <label style={{ fontSize:11, color:'#6b7280', marginBottom:4, display:'block' }}>Admin Email</label>
         <input style={s.inp} type="email" placeholder="admin@villecabs.com" value={email} onChange={e => setEmail(e.target.value)}/>
-        <label style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginBottom:4, display:'block' }}>Password</label>
+        <label style={{ fontSize:11, color:'#6b7280', marginBottom:4, display:'block' }}>Password</label>
         <input style={s.inp} type="password" placeholder="Admin password" value={password} onChange={e => setPassword(e.target.value)}
           onKeyDown={e => e.key==='Enter' && handleLogin()}/>
         <button onClick={handleLogin} disabled={loading}
-          style={{ width:'100%', padding:'14px', background:YELLOW, color:DARK, border:'none', borderRadius:12, fontSize:15, fontWeight:700, cursor:'pointer', marginTop:4, opacity:loading?0.7:1 }}>
+          style={{ width:'100%', padding:'14px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:12, fontSize:15, fontWeight:700, cursor:'pointer', marginTop:4, opacity:loading?0.7:1 }}>
           {loading ? 'Signing in...' : 'Sign In'}
         </button>
       </div>
@@ -87,12 +87,12 @@ function AdminLogin({ onLogin }) {
 }
 
 // ── STAT CARD ─────────────────────────────────────────────────────────────────
-function StatCard({ label, value, color = WHITE, sub }) {
+function StatCard({ label, value, color = '#1a1a2e', sub }) {
   return (
     <div style={s.stat}>
-      <div style={{ fontSize:11, color:'rgba(255,255,255,0.45)', marginBottom:6 }}>{label}</div>
-      <div style={{ fontSize:26, fontWeight:500, color }}>{value}</div>
-      {sub && <div style={{ fontSize:11, color:'rgba(255,255,255,0.35)', marginTop:4 }}>{sub}</div>}
+      <div style={{ fontSize:11, color:'#6b7280', marginBottom:6 }}>{label}</div>
+      <div style={{ fontSize:26, fontWeight:700, color }}>{value}</div>
+      {sub && <div style={{ fontSize:11, color:'#9199ad', marginTop:4 }}>{sub}</div>}
     </div>
   );
 }
@@ -134,8 +134,8 @@ function DriversTab() {
     const map = {
       pending:   { bg:'rgba(232,180,0,0.15)',  color:'#e8b400',  text:'Pending'   },
       approved:  { bg:'rgba(26,158,90,0.15)',  color:'#1a9e5a',  text:'Approved'  },
-      rejected:  { bg:'rgba(226,75,74,0.15)', color:'#f09595',  text:'Rejected'  },
-      suspended: { bg:'rgba(255,255,255,0.08)',color:'rgba(255,255,255,0.4)', text:'Suspended' },
+      rejected:  { bg:'rgba(226,75,74,0.15)', color:'#dc2626',  text:'Rejected'  },
+      suspended: { bg:'#f3f4f6',color:'#6b7280', text:'Suspended' },
     };
     const m = map[status] || map.pending;
     return <span style={{ ...s.badge, background:m.bg, color:m.color }}>{m.text}</span>;
@@ -148,15 +148,15 @@ function DriversTab() {
       {/* Confirm reject modal */}
       {confirm && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:100, display:'flex', alignItems:'center', justifyContent:'center' }}>
-          <div style={{ background:DARK, borderRadius:16, padding:24, width:360, border:'0.5px solid rgba(255,255,255,0.15)' }}>
+          <div style={{ background:'#ffffff', borderRadius:16, padding:24, width:360, border:'1px solid #e5e7eb' }}>
             <div style={{ fontSize:16, fontWeight:500, marginBottom:8 }}>Reject driver application?</div>
-            <div style={{ fontSize:13, color:'rgba(255,255,255,0.5)', marginBottom:16 }}>Optionally enter a reason — this will be stored on their profile.</div>
+            <div style={{ fontSize:13, color:'#6b7280', marginBottom:16 }}>Optionally enter a reason — this will be stored on their profile.</div>
             <input style={s.inp} placeholder="Reason (optional)" id="reject-reason"/>
             <div style={{ display:'flex', gap:8, marginTop:4 }}>
               <button onClick={() => reject(confirm, document.getElementById('reject-reason')?.value||'')}
-                style={{ flex:1, background:RED, color:WHITE, border:'none', borderRadius:8, padding:10, cursor:'pointer', fontWeight:500 }}>Confirm Reject</button>
+                style={{ flex:1, background:RED, color:'#1a1a2e', border:'none', borderRadius:8, padding:10, cursor:'pointer', fontWeight:500 }}>Confirm Reject</button>
               <button onClick={() => setConfirm(null)}
-                style={{ flex:1, background:'rgba(255,255,255,0.06)', color:'rgba(255,255,255,0.6)', border:'0.5px solid rgba(255,255,255,0.15)', borderRadius:8, padding:10, cursor:'pointer' }}>Cancel</button>
+                style={{ flex:1, background:'#f3f4f6', color:'#4b5563', border:'1px solid #e5e7eb', borderRadius:8, padding:10, cursor:'pointer' }}>Cancel</button>
             </div>
           </div>
         </div>
@@ -165,18 +165,18 @@ function DriversTab() {
       <div style={{ display:'flex', gap:8, marginBottom:20, flexWrap:'wrap' }}>
         {filters.map(f => (
           <button key={f} onClick={() => setFilter(f)}
-            style={{ padding:'7px 16px', borderRadius:20, fontSize:13, border:'0.5px solid rgba(255,255,255,0.15)', background:filter===f?YELLOW:'rgba(255,255,255,0.05)', color:filter===f?DARK:'rgba(255,255,255,0.6)', cursor:'pointer', textTransform:'capitalize', fontWeight:filter===f?600:400 }}>
+            style={{ padding:'7px 16px', borderRadius:20, fontSize:13, border:'1px solid #e5e7eb', background:filter===f?'#6b21a8':'#f3f4f6', color:filter===f?'#fff':'#555', cursor:'pointer', textTransform:'capitalize', fontWeight:filter===f?600:400 }}>
             {f === 'all' ? 'All drivers' : f}
           </button>
         ))}
       </div>
 
       {loading ? (
-        <div style={{ textAlign:'center', padding:40, color:'rgba(255,255,255,0.4)' }}>Loading drivers...</div>
+        <div style={{ textAlign:'center', padding:40, color:'#9199ad' }}>Loading drivers...</div>
       ) : drivers.length === 0 ? (
         <div style={{ textAlign:'center', padding:40 }}>
           <div style={{ fontSize:36, marginBottom:12 }}>👤</div>
-          <div style={{ color:'rgba(255,255,255,0.4)', fontSize:14 }}>No {filter} applications</div>
+          <div style={{ color:'#9199ad', fontSize:14 }}>No {filter} applications</div>
         </div>
       ) : drivers.map(driver => (
         <div key={driver.id} style={s.card}>
@@ -184,8 +184,8 @@ function DriversTab() {
             <div style={{ display:'flex', alignItems:'center', gap:12 }}>
               <div style={{ width:44, height:44, borderRadius:'50%', background:'rgba(232,180,0,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>👤</div>
               <div>
-                <div style={{ fontSize:15, fontWeight:500, color:WHITE }}>{driver.name}</div>
-                <div style={{ fontSize:12, color:'rgba(255,255,255,0.45)' }}>{driver.email} · {driver.phone}</div>
+                <div style={{ fontSize:15, fontWeight:500, color:'#1a1a2e' }}>{driver.name}</div>
+                <div style={{ fontSize:12, color:'#6b7280' }}>{driver.email} · {driver.phone}</div>
               </div>
             </div>
             {statusBadge(driver.status)}
@@ -193,15 +193,15 @@ function DriversTab() {
 
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:12 }}>
             {[['TRN', driver.trn],['Date of Birth', driver.dob],['Vehicle', `${driver.vehicleMake||''} ${driver.vehicleModel||''}`],['Plate', driver.licensePlate],['Applied', driver.createdAt?.toDate?.()?.toLocaleDateString('en-JM')||'--'],['Rating', driver.rating ? `★ ${driver.rating}` : 'New']].map(([k,v]) => (
-              <div key={k} style={{ background:'rgba(255,255,255,0.04)', borderRadius:8, padding:'8px 10px' }}>
-                <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)', marginBottom:2 }}>{k}</div>
-                <div style={{ fontSize:12, color:WHITE }}>{v||'--'}</div>
+              <div key={k} style={{ background:'#f9fafb', borderRadius:8, padding:'8px 10px' }}>
+                <div style={{ fontSize:10, color:'#9199ad', marginBottom:2 }}>{k}</div>
+                <div style={{ fontSize:12, color:'#1a1a2e' }}>{v||'--'}</div>
               </div>
             ))}
           </div>
 
           <div style={{ marginBottom:12 }}>
-            <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginBottom:8, textTransform:'uppercase', letterSpacing:0.5 }}>Documents</div>
+            <div style={{ fontSize:11, color:'#9199ad', marginBottom:8, textTransform:'uppercase', letterSpacing:0.5 }}>Documents</div>
             <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
               {[['license',"Driver's License"],['fitness','Fitness Certificate'],['registration','Registration']].map(([docType,docLabel]) => {
                 const url = driver.docs?.[docType];
@@ -214,7 +214,7 @@ function DriversTab() {
                         📄 View {docLabel}
                       </a>
                     ) : (
-                      <span style={{ ...s.badge, background:'rgba(226,75,74,0.12)', color:'#f09595', fontSize:11, padding:'5px 10px' }}>
+                      <span style={{ ...s.badge, background:'rgba(226,75,74,0.12)', color:'#dc2626', fontSize:11, padding:'5px 10px' }}>
                         ⚠️ {docLabel} not uploaded
                       </span>
                     )}
@@ -265,8 +265,8 @@ function RidesTab() {
     const map = {
       searching: { bg:'rgba(232,180,0,0.15)',  color:'#e8b400',  text:'Searching' },
       active:    { bg:'rgba(26,158,90,0.15)',  color:'#1a9e5a',  text:'Active'    },
-      completed: { bg:'rgba(255,255,255,0.08)',color:'rgba(255,255,255,0.5)', text:'Completed' },
-      cancelled: { bg:'rgba(226,75,74,0.12)', color:'#f09595',  text:'Cancelled' },
+      completed: { bg:'#f3f4f6',color:'#6b7280', text:'Completed' },
+      cancelled: { bg:'rgba(226,75,74,0.12)', color:'#dc2626',  text:'Cancelled' },
     };
     const m = map[status] || map.searching;
     return <span style={{ ...s.badge, background:m.bg, color:m.color }}>{m.text}</span>;
@@ -295,39 +295,39 @@ function RidesTab() {
     <div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:20 }}>
         <StatCard label="Total rides"   value={rides.length} sub="in current filter"/>
-        <StatCard label="Total revenue" value={`J$${total.toLocaleString()}`} color={YELLOW} sub="all rides"/>
+        <StatCard label="Total revenue" value={`J$${total.toLocaleString()}`} color="#b45309" sub="all rides"/>
         <StatCard label="Active now"    value={rides.filter(r=>r.status==='active').length} color={GREEN} sub="in progress"/>
       </div>
 
       <div style={{ display:'flex', gap:8, marginBottom:20, flexWrap:'wrap' }}>
         {filters.map(f => (
           <button key={f} onClick={() => setFilter(f)}
-            style={{ padding:'7px 16px', borderRadius:20, fontSize:13, border:'0.5px solid rgba(255,255,255,0.15)', background:filter===f?YELLOW:'rgba(255,255,255,0.05)', color:filter===f?DARK:'rgba(255,255,255,0.6)', cursor:'pointer', textTransform:'capitalize', fontWeight:filter===f?600:400 }}>
+            style={{ padding:'7px 16px', borderRadius:20, fontSize:13, border:'1px solid #e5e7eb', background:filter===f?'#6b21a8':'#f3f4f6', color:filter===f?'#fff':'#555', cursor:'pointer', textTransform:'capitalize', fontWeight:filter===f?600:400 }}>
             {f === 'all' ? 'All rides' : f}
           </button>
         ))}
       </div>
 
       {loading ? (
-        <div style={{ textAlign:'center', padding:40, color:'rgba(255,255,255,0.4)' }}>Loading rides...</div>
+        <div style={{ textAlign:'center', padding:40, color:'#9199ad' }}>Loading rides...</div>
       ) : sorted.length === 0 ? (
         <div style={{ textAlign:'center', padding:40 }}>
           <div style={{ fontSize:36, marginBottom:12 }}>🚕</div>
-          <div style={{ color:'rgba(255,255,255,0.4)', fontSize:14 }}>No {filter} rides yet</div>
+          <div style={{ color:'#9199ad', fontSize:14 }}>No {filter} rides yet</div>
         </div>
       ) : sorted.map((r,i) => (
-        <div key={r.id} style={{ background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, padding:'16px 18px', marginBottom:12 }}>
+        <div key={r.id} style={{ background:'#ffffff', border:'1px solid #e5e7eb', borderRadius:12, padding:'16px 18px', marginBottom:12 }}>
 
           {/* Top row: customer + status + changer */}
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
             <div>
-              <div style={{ fontSize:15, fontWeight:500, color:WHITE }}>{r.customerName||'--'}</div>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:2 }}>#{r.id?.slice(-6).toUpperCase()}</div>
+              <div style={{ fontSize:15, fontWeight:500, color:'#1a1a2e' }}>{r.customerName||'--'}</div>
+              <div style={{ fontSize:11, color:'#9199ad', marginTop:2 }}>#{r.id?.slice(-6).toUpperCase()}</div>
             </div>
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
               {statusBadge(r.status)}
               <select value={r.status} onChange={e => changeStatus(r.id, e.target.value)}
-                style={{ background:'rgba(255,255,255,0.08)', border:'0.5px solid rgba(255,255,255,0.2)', borderRadius:8, color:WHITE, fontSize:12, padding:'4px 8px', cursor:'pointer', outline:'none' }}>
+                style={{ background:'#f3f4f6', border:'1px solid #d0d3e0', borderRadius:8, color:'#1a1a2e', fontSize:12, padding:'4px 8px', cursor:'pointer', outline:'none' }}>
                 <option value="searching">Searching</option>
                 <option value="active">Active</option>
                 <option value="completed">Completed</option>
@@ -338,41 +338,41 @@ function RidesTab() {
 
           {/* Date/time row */}
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:12 }}>
-            <div style={{ background:'rgba(255,255,255,0.04)', borderRadius:8, padding:'8px 10px' }}>
-              <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)', marginBottom:2 }}>Booked</div>
-              <div style={{ fontSize:11, color:WHITE }}>{fmtDateTime(r.createdAt)}</div>
+            <div style={{ background:'#f9fafb', borderRadius:8, padding:'8px 10px' }}>
+              <div style={{ fontSize:10, color:'#9199ad', marginBottom:2 }}>Booked</div>
+              <div style={{ fontSize:11, color:'#1a1a2e' }}>{fmtDateTime(r.createdAt)}</div>
             </div>
-            <div style={{ background:'rgba(255,255,255,0.04)', borderRadius:8, padding:'8px 10px' }}>
-              <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)', marginBottom:2 }}>Accepted</div>
-              <div style={{ fontSize:11, color:WHITE }}>{fmtDateTime(r.acceptedAt)}</div>
+            <div style={{ background:'#f9fafb', borderRadius:8, padding:'8px 10px' }}>
+              <div style={{ fontSize:10, color:'#9199ad', marginBottom:2 }}>Accepted</div>
+              <div style={{ fontSize:11, color:'#1a1a2e' }}>{fmtDateTime(r.acceptedAt)}</div>
             </div>
-            <div style={{ background:'rgba(255,255,255,0.04)', borderRadius:8, padding:'8px 10px' }}>
-              <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)', marginBottom:2 }}>Completed</div>
-              <div style={{ fontSize:11, color:WHITE }}>{fmtDateTime(r.completedAt)}</div>
+            <div style={{ background:'#f9fafb', borderRadius:8, padding:'8px 10px' }}>
+              <div style={{ fontSize:10, color:'#9199ad', marginBottom:2 }}>Completed</div>
+              <div style={{ fontSize:11, color:'#1a1a2e' }}>{fmtDateTime(r.completedAt)}</div>
             </div>
           </div>
 
           {/* Route + driver + fare */}
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 80px', gap:8, alignItems:'center' }}>
             <div>
-              <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)', marginBottom:4 }}>Route</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)' }}><span style={{ color:GREEN }}>●</span> {r.pickup?.address?.split(',')[0]||'--'}</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)', marginTop:2 }}><span style={{ color:YELLOW }}>●</span> {r.dropoff?.address?.split(',')[0]||'--'}</div>
+              <div style={{ fontSize:10, color:'#9199ad', marginBottom:4 }}>Route</div>
+              <div style={{ fontSize:12, color:'#6b7280' }}><span style={{ color:GREEN }}>●</span> {r.pickup?.address?.split(',')[0]||'--'}</div>
+              <div style={{ fontSize:12, color:'#6b7280', marginTop:2 }}><span style={{ color:'#6b21a8' }}>●</span> {r.dropoff?.address?.split(',')[0]||'--'}</div>
             </div>
             <div>
-              <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)', marginBottom:4 }}>Driver</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)' }}>{r.driverName||'Unassigned'}</div>
-              {r.licensePlate && <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:2 }}>{r.licensePlate}</div>}
+              <div style={{ fontSize:10, color:'#9199ad', marginBottom:4 }}>Driver</div>
+              <div style={{ fontSize:12, color:'#6b7280' }}>{r.driverName||'Unassigned'}</div>
+              {r.licensePlate && <div style={{ fontSize:11, color:'#9199ad', marginTop:2 }}>{r.licensePlate}</div>}
             </div>
             <div>
-              <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)', marginBottom:4 }}>Vehicle</div>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.7)' }}>{r.vehicleType||'--'}</div>
-              {r.distanceKm && <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:2 }}>{r.distanceKm} km</div>}
+              <div style={{ fontSize:10, color:'#9199ad', marginBottom:4 }}>Vehicle</div>
+              <div style={{ fontSize:12, color:'#6b7280' }}>{r.vehicleType||'--'}</div>
+              {r.distanceKm && <div style={{ fontSize:11, color:'#9199ad', marginTop:2 }}>{r.distanceKm} km</div>}
             </div>
             <div style={{ textAlign:'right' }}>
-              <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)', marginBottom:4 }}>Fare</div>
+              <div style={{ fontSize:10, color:'#9199ad', marginBottom:4 }}>Fare</div>
               <div style={{ fontSize:16, fontWeight:600, color:GREEN }}>J${r.fare?.toLocaleString()||'--'}</div>
-              <div style={{ fontSize:10, color:'rgba(255,255,255,0.35)', marginTop:2 }}>{r.paymentMethod||'cash'}</div>
+              <div style={{ fontSize:10, color:'#9199ad', marginTop:2 }}>{r.paymentMethod||'cash'}</div>
             </div>
           </div>
         </div>
@@ -440,9 +440,9 @@ function PromoCodesTab() {
   return (
     <div>
       {/* Create form */}
-      <div style={{ background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:20, marginBottom:24 }}>
-        <div style={{ fontSize:15, fontWeight:500, color:WHITE, marginBottom:16 }}>➕ Create Promo Code</div>
-        {error   && <div style={{ background:'rgba(226,75,74,0.15)', border:'0.5px solid rgba(226,75,74,0.4)', borderRadius:8, padding:'10px 14px', marginBottom:12, fontSize:13, color:'#f09595' }}>⚠️ {error}</div>}
+      <div style={{ background:'#ffffff', border:'1px solid #e5e7eb', borderRadius:14, padding:20, marginBottom:24 }}>
+        <div style={{ fontSize:15, fontWeight:500, color:'#1a1a2e', marginBottom:16 }}>➕ Create Promo Code</div>
+        {error   && <div style={{ background:'rgba(226,75,74,0.15)', border:'0.5px solid rgba(226,75,74,0.4)', borderRadius:8, padding:'10px 14px', marginBottom:12, fontSize:13, color:'#dc2626' }}>⚠️ {error}</div>}
         {success && <div style={{ background:'rgba(26,158,90,0.15)', border:'0.5px solid rgba(26,158,90,0.4)', borderRadius:8, padding:'10px 14px', marginBottom:12, fontSize:13, color:'#9fe1cb' }}>✅ {success}</div>}
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:12 }}>
           <div>
@@ -463,52 +463,52 @@ function PromoCodesTab() {
           </div>
         </div>
         <button onClick={handleCreate} disabled={saving}
-          style={{ padding:'11px 24px', background:YELLOW, color:DARK, border:'none', borderRadius:10, fontSize:14, fontWeight:700, cursor:'pointer', opacity:saving?0.7:1 }}>
+          style={{ padding:'11px 24px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:10, fontSize:14, fontWeight:700, cursor:'pointer', opacity:saving?0.7:1 }}>
           {saving ? 'Creating...' : 'Create Promo Code'}
         </button>
       </div>
 
       {/* Promo list */}
-      <div style={{ fontSize:13, fontWeight:500, color:'rgba(255,255,255,0.5)', marginBottom:12, textTransform:'uppercase', letterSpacing:0.5 }}>
+      <div style={{ fontSize:13, fontWeight:500, color:'#6b7280', marginBottom:12, textTransform:'uppercase', letterSpacing:0.5 }}>
         {promos.length} promo code{promos.length !== 1 ? 's' : ''}
       </div>
       {loading ? (
-        <div style={{ textAlign:'center', padding:40, color:'rgba(255,255,255,0.4)' }}>Loading...</div>
+        <div style={{ textAlign:'center', padding:40, color:'#9199ad' }}>Loading...</div>
       ) : promos.length === 0 ? (
         <div style={{ textAlign:'center', padding:40 }}>
           <div style={{ fontSize:36, marginBottom:12 }}>🎟️</div>
-          <div style={{ color:'rgba(255,255,255,0.4)' }}>No promo codes yet</div>
+          <div style={{ color:'#9199ad' }}>No promo codes yet</div>
         </div>
       ) : promos.map(p => {
         const expired = isExpired(p.expiry);
         const status  = !p.active ? 'disabled' : expired ? 'expired' : 'active';
-        const statusColor = status==='active' ? GREEN : status==='expired' ? '#f09595' : 'rgba(255,255,255,0.3)';
+        const statusColor = status==='active' ? GREEN : status==='expired' ? '#dc2626' : '#9199ad';
         return (
-          <div key={p.id} style={{ background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, padding:'16px 18px', marginBottom:10 }}>
+          <div key={p.id} style={{ background:'#ffffff', border:'1px solid #e5e7eb', borderRadius:12, padding:'16px 18px', marginBottom:10 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
               <div>
                 <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:4 }}>
-                  <span style={{ fontSize:18, fontWeight:700, color:YELLOW, letterSpacing:2 }}>{p.code}</span>
+                  <span style={{ fontSize:18, fontWeight:700, color:'#6b21a8', letterSpacing:2 }}>{p.code}</span>
                   <span style={{ background:`${statusColor}22`, color:statusColor, borderRadius:20, padding:'2px 10px', fontSize:11, fontWeight:500, textTransform:'uppercase' }}>{status}</span>
                 </div>
-                <div style={{ fontSize:13, color:'rgba(255,255,255,0.5)' }}>{p.description}</div>
+                <div style={{ fontSize:13, color:'#6b7280' }}>{p.description}</div>
               </div>
               <div style={{ textAlign:'right' }}>
                 <div style={{ fontSize:22, fontWeight:700, color:GREEN }}>{p.discount}% off</div>
-                <div style={{ fontSize:11, color:'rgba(255,255,255,0.35)', marginTop:2 }}>Used {p.usageCount||0} time{p.usageCount!==1?'s':''}</div>
+                <div style={{ fontSize:11, color:'#9199ad', marginTop:2 }}>Used {p.usageCount||0} time{p.usageCount!==1?'s':''}</div>
               </div>
             </div>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'0.5px solid rgba(255,255,255,0.06)', paddingTop:10 }}>
-              <div style={{ fontSize:12, color:'rgba(255,255,255,0.4)' }}>
-                Expires: <span style={{ color: expired ? '#f09595' : 'rgba(255,255,255,0.6)' }}>{p.expiry || '--'}</span>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'1px solid #f0f0f0', paddingTop:10 }}>
+              <div style={{ fontSize:12, color:'#9199ad' }}>
+                Expires: <span style={{ color: expired ? '#dc2626' : '#4b5563' }}>{p.expiry || '--'}</span>
               </div>
               <div style={{ display:'flex', gap:8 }}>
                 <button onClick={() => toggleActive(p.id, p.active)}
-                  style={{ padding:'5px 12px', borderRadius:8, fontSize:12, cursor:'pointer', border:'0.5px solid rgba(255,255,255,0.15)', background:'rgba(255,255,255,0.05)', color:WHITE }}>
+                  style={{ padding:'5px 12px', borderRadius:8, fontSize:12, cursor:'pointer', border:'1px solid #e5e7eb', background:'#f3f4f6', color:'#1a1a2e' }}>
                   {p.active ? 'Disable' : 'Enable'}
                 </button>
                 <button onClick={() => handleDelete(p.id, p.code)}
-                  style={{ padding:'5px 12px', borderRadius:8, fontSize:12, cursor:'pointer', border:'0.5px solid rgba(226,75,74,0.3)', background:'rgba(226,75,74,0.1)', color:'#f09595' }}>
+                  style={{ padding:'5px 12px', borderRadius:8, fontSize:12, cursor:'pointer', border:'0.5px solid rgba(226,75,74,0.3)', background:'rgba(226,75,74,0.1)', color:'#dc2626' }}>
                   Delete
                 </button>
               </div>
@@ -530,8 +530,8 @@ function AdminGlobalStyles() {
       button:active:not(:disabled) { transform:translateY(0) scale(0.98); }
       button { transition:all 0.15s ease; }
       a:hover { opacity:0.8; transition:opacity 0.15s; }
-      input:focus, textarea:focus, select:focus { border-color:rgba(232,180,0,0.6)!important; box-shadow:0 0 0 2px rgba(232,180,0,0.15); transition:all 0.2s; }
-      ::-webkit-scrollbar { width:4px; } ::-webkit-scrollbar-thumb { background:rgba(232,180,0,0.3); border-radius:4px; }
+      input:focus, textarea:focus, select:focus { border-color:#6b21a8!important; box-shadow:0 0 0 2px rgba(107,33,168,0.15); transition:all 0.2s; }
+      ::-webkit-scrollbar { width:4px; height:4px; } ::-webkit-scrollbar-thumb { background:rgba(107,33,168,0.3); border-radius:4px; }
     `;
     document.head.appendChild(style);
     return () => { if (style.parentNode) style.parentNode.removeChild(style); };
@@ -567,23 +567,23 @@ function CustomersTab() {
         <StatCard label="Active" value={customers.filter(c=>c.status!=='suspended').length} color={GREEN} sub="accounts"/>
         <StatCard label="Suspended" value={customers.filter(c=>c.status==='suspended').length} color="#f09595" sub="accounts"/>
       </div>
-      <input style={{ width:'100%', padding:'10px 14px', background:'rgba(255,255,255,0.08)', border:'0.5px solid rgba(255,255,255,0.15)', borderRadius:10, color:'#fff', fontSize:13, outline:'none', marginBottom:16, boxSizing:'border-box' }}
+      <input style={{ width:'100%', padding:'10px 14px', background:'#f3f4f6', border:'1px solid #e5e7eb', borderRadius:10, color:'#fff', fontSize:13, outline:'none', marginBottom:16, boxSizing:'border-box' }}
         placeholder="Search by name, email or phone..." value={search} onChange={e => setSearch(e.target.value)}/>
-      {loading ? <div style={{ textAlign:'center', padding:40, color:'rgba(255,255,255,0.4)' }}>Loading...</div>
+      {loading ? <div style={{ textAlign:'center', padding:40, color:'#9199ad' }}>Loading...</div>
       : filtered.map(c => (
-        <div key={c.id} style={{ background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, padding:'14px 18px', marginBottom:10, display:'flex', alignItems:'center', gap:14 }}>
+        <div key={c.id} style={{ background:'#ffffff', border:'1px solid #e5e7eb', borderRadius:12, padding:'14px 18px', marginBottom:10, display:'flex', alignItems:'center', gap:14 }}>
           <div style={{ width:42, height:42, borderRadius:'50%', background:'rgba(232,180,0,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>👤</div>
           <div style={{ flex:1 }}>
-            <div style={{ fontSize:14, fontWeight:500, color:WHITE }}>{c.name||'--'}</div>
-            <div style={{ fontSize:12, color:'rgba(255,255,255,0.45)', marginTop:2 }}>{c.email}</div>
-            <div style={{ fontSize:11, color:'rgba(255,255,255,0.35)', marginTop:2 }}>{c.phone||'No phone'} · Ref: {c.referralCode||'--'}</div>
+            <div style={{ fontSize:14, fontWeight:500, color:'#1a1a2e' }}>{c.name||'--'}</div>
+            <div style={{ fontSize:12, color:'#6b7280', marginTop:2 }}>{c.email}</div>
+            <div style={{ fontSize:11, color:'#9199ad', marginTop:2 }}>{c.phone||'No phone'} · Ref: {c.referralCode||'--'}</div>
           </div>
           <div style={{ textAlign:'right' }}>
-            <div style={{ fontSize:11, color:c.status==='suspended'?'#f09595':GREEN, marginBottom:6, fontWeight:500 }}>
+            <div style={{ fontSize:11, color:c.status==='suspended'?'#dc2626':GREEN, marginBottom:6, fontWeight:500 }}>
               {c.status==='suspended'?'⛔ Suspended':'✓ Active'}
             </div>
             <button onClick={() => suspendCustomer(c.id, c.status)}
-              style={{ padding:'5px 12px', borderRadius:8, fontSize:11, cursor:'pointer', border:'0.5px solid rgba(255,255,255,0.15)', background:'rgba(255,255,255,0.05)', color:WHITE }}>
+              style={{ padding:'5px 12px', borderRadius:8, fontSize:11, cursor:'pointer', border:'1px solid #e5e7eb', background:'#f3f4f6', color:'#1a1a2e' }}>
               {c.status==='suspended'?'Unsuspend':'Suspend'}
             </button>
           </div>
@@ -610,21 +610,21 @@ function ContactsTab() {
     <div>
       <StatCard label="Total messages" value={contacts.length} sub="contact submissions"/>
       <div style={{ marginTop:16 }}>
-        {loading ? <div style={{ textAlign:'center', padding:40, color:'rgba(255,255,255,0.4)' }}>Loading...</div>
-        : contacts.length === 0 ? <div style={{ textAlign:'center', padding:40, color:'rgba(255,255,255,0.4)' }}>No messages yet</div>
+        {loading ? <div style={{ textAlign:'center', padding:40, color:'#9199ad' }}>Loading...</div>
+        : contacts.length === 0 ? <div style={{ textAlign:'center', padding:40, color:'#9199ad' }}>No messages yet</div>
         : contacts.map(c => (
-          <div key={c.id} style={{ background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:12, padding:'16px 18px', marginBottom:12 }}>
+          <div key={c.id} style={{ background:'#ffffff', border:'1px solid #e5e7eb', borderRadius:12, padding:'16px 18px', marginBottom:12 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
               <div>
-                <div style={{ fontSize:14, fontWeight:500, color:WHITE }}>{c.name}</div>
-                <div style={{ fontSize:12, color:'rgba(255,255,255,0.45)', marginTop:2 }}>{c.email} · {c.role==='driver'?'Driver':'Customer'}</div>
+                <div style={{ fontSize:14, fontWeight:500, color:'#1a1a2e' }}>{c.name}</div>
+                <div style={{ fontSize:12, color:'#6b7280', marginTop:2 }}>{c.email} · {c.role==='driver'?'Driver':'Customer'}</div>
               </div>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.35)' }}>{fmtDate(c.createdAt)}</div>
+              <div style={{ fontSize:11, color:'#9199ad' }}>{fmtDate(c.createdAt)}</div>
             </div>
-            <div style={{ fontSize:13, fontWeight:500, color:YELLOW, marginBottom:6 }}>{c.subject}</div>
-            <div style={{ fontSize:13, color:'rgba(255,255,255,0.7)', lineHeight:1.6, background:'rgba(255,255,255,0.04)', borderRadius:8, padding:10 }}>{c.message}</div>
+            <div style={{ fontSize:13, fontWeight:600, color:'#6b21a8', marginBottom:6 }}>{c.subject}</div>
+            <div style={{ fontSize:13, color:'#6b7280', lineHeight:1.6, background:'#f9fafb', borderRadius:8, padding:10 }}>{c.message}</div>
             <a href={`mailto:${c.email}?subject=Re: ${c.subject}`}
-              style={{ display:'inline-block', marginTop:10, padding:'6px 14px', background:'rgba(232,180,0,0.1)', border:'0.5px solid rgba(232,180,0,0.3)', borderRadius:8, color:YELLOW, fontSize:12, textDecoration:'none' }}>
+              style={{ display:'inline-block', marginTop:10, padding:'6px 14px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:8, color:'#6b21a8', fontSize:12, textDecoration:'none' }}>
               📧 Reply via email
             </a>
           </div>
@@ -664,25 +664,25 @@ function RevenueTab() {
       <div style={{ display:'flex', gap:8, marginBottom:20, flexWrap:'wrap' }}>
         {[['today','Today'],['week','7 Days'],['month','30 Days']].map(([k,l])=>(
           <button key={k} onClick={()=>setPeriod(k)}
-            style={{ padding:'7px 16px', borderRadius:20, fontSize:13, border:'0.5px solid rgba(255,255,255,0.15)', background:period===k?YELLOW:'rgba(255,255,255,0.05)', color:period===k?DARK:'rgba(255,255,255,0.6)', cursor:'pointer', fontWeight:period===k?600:400 }}>
+            style={{ padding:'7px 16px', borderRadius:20, fontSize:13, border:'1px solid #e5e7eb', background:period===k?'#6b21a8':'#f3f4f6', color:period===k?'#fff':'#555', cursor:'pointer', fontWeight:period===k?600:400 }}>
             {l}
           </button>
         ))}
       </div>
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12, marginBottom:20 }}>
-        <StatCard label="Total revenue" value={`J$${totalRev.toLocaleString()}`} color={YELLOW} sub={`${periodRides.length} rides`}/>
+        <StatCard label="Total revenue" value={`J$${totalRev.toLocaleString()}`} color="#b45309" sub={`${periodRides.length} rides`}/>
         <StatCard label="VilleCabs (15%)" value={`J$${villeCut.toLocaleString()}`} color={GREEN} sub="platform fee"/>
         <StatCard label="Driver payouts" value={`J$${driverCut.toLocaleString()}`} sub="85% to drivers"/>
       </div>
-      <div style={{ background:'#1a1f2e', border:'0.5px solid rgba(255,255,255,0.08)', borderRadius:14, padding:20, marginBottom:20 }}>
-        <div style={{ fontSize:14, fontWeight:500, color:WHITE, marginBottom:16 }}>Last 7 Days Revenue</div>
+      <div style={{ background:'#ffffff', border:'1px solid #e5e7eb', borderRadius:14, padding:20, marginBottom:20 }}>
+        <div style={{ fontSize:14, fontWeight:500, color:'#1a1a2e', marginBottom:16 }}>Last 7 Days Revenue</div>
         <div style={{ display:'flex', alignItems:'flex-end', gap:8, height:120 }}>
           {last7.map((d,i)=>(
             <div key={i} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
-              <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)' }}>J${(d.total/1000).toFixed(0)}k</div>
-              <div style={{ width:'100%', background:YELLOW, borderRadius:'4px 4px 0 0', height:`${Math.max((d.total/maxVal)*90,d.total>0?6:2)}px`, minHeight:2 }}/>
-              <div style={{ fontSize:9, color:'rgba(255,255,255,0.4)', textAlign:'center' }}>{d.label}</div>
-              <div style={{ fontSize:9, color:'rgba(255,255,255,0.3)' }}>{d.count}</div>
+              <div style={{ fontSize:10, color:'#9199ad' }}>J${(d.total/1000).toFixed(0)}k</div>
+              <div style={{ width:'100%', background:'#6b21a8', borderRadius:'4px 4px 0 0', height:`${Math.max((d.total/maxVal)*90,d.total>0?6:2)}px`, minHeight:2 }}/>
+              <div style={{ fontSize:9, color:'#9199ad', textAlign:'center' }}>{d.label}</div>
+              <div style={{ fontSize:9, color:'#9199ad' }}>{d.count}</div>
             </div>
           ))}
         </div>
@@ -728,10 +728,10 @@ function OverviewTab({ setTab }) {
     <div>
       <div style={{ fontSize:16, fontWeight:500, marginBottom:16 }}>Overview — Manchester, Jamaica</div>
       <div style={s.statgrid}>
-        <StatCard label="Pending applications" value={stats.pending}    color={YELLOW} sub="awaiting review"/>
+        <StatCard label="Pending applications" value={stats.pending}    color="#b45309" sub="awaiting review"/>
         <StatCard label="Active drivers"        value={stats.approved}  color={GREEN}  sub="approved"/>
         <StatCard label="Total rides"           value={stats.total_rides}              sub="all time"/>
-        <StatCard label="Total revenue"         value={`J$${stats.revenue.toLocaleString()}`} color={YELLOW} sub="platform earnings × 15%"/>
+        <StatCard label="Total revenue"         value={`J$${stats.revenue.toLocaleString()}`} color="#b45309" sub="platform earnings × 15%"/>
       </div>
       <div style={s.statgrid}>
         <StatCard label="Active rides now" value={stats.active_rides} color={GREEN} sub="in progress"/>
@@ -743,7 +743,7 @@ function OverviewTab({ setTab }) {
       <div style={{ ...s.card, marginTop:8 }}>
         <div style={{ fontSize:14, fontWeight:500, marginBottom:12 }}>Quick actions</div>
         <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
-          <div onClick={() => setTab('drivers')} style={{ background:'rgba(232,180,0,0.1)', border:'0.5px solid rgba(232,180,0,0.25)', borderRadius:10, padding:'12px 16px', fontSize:13, color:YELLOW, cursor:'pointer' }}>
+          <div onClick={() => setTab('drivers')} style={{ background:'#fffbeb', border:'1px solid #fde047', borderRadius:10, padding:'12px 16px', fontSize:13, color:'#b45309', cursor:'pointer' }}>
             👤 Review pending drivers ({stats.pending})
           </div>
           <div onClick={() => setTab('rides')} style={{ background:'rgba(26,158,90,0.1)', border:'0.5px solid rgba(26,158,90,0.25)', borderRadius:10, padding:'12px 16px', fontSize:13, color:'#9fe1cb', cursor:'pointer' }}>
@@ -775,42 +775,42 @@ function LiveMapTab() {
     <div>
       <div style={s.statgrid}>
         <StatCard label="Online drivers" value={onlineDrivers.length} color={GREEN} sub="signed in now"/>
-        <StatCard label="Active rides"   value={rides.length} color={YELLOW} sub="in progress"/>
+        <StatCard label="Active rides"   value={rides.length} color="#6b21a8" sub="in progress"/>
         <StatCard label="Live locations" value={locatedDrivers.length + rides.filter(r=>r.driverLocation?.lat).length} sub="broadcasting GPS"/>
         <StatCard label="Idle online"    value={onlineDrivers.length - locatedDrivers.length} sub="no live GPS"/>
       </div>
 
       <div style={s.card}>
-        <div style={{ fontSize:14, fontWeight:500, marginBottom:14, color:WHITE }}>🚗 Active Rides</div>
-        {rides.length === 0 && <div style={{ color:'rgba(255,255,255,0.4)', fontSize:13 }}>No rides in progress right now.</div>}
+        <div style={{ fontSize:14, fontWeight:500, marginBottom:14, color:'#1a1a2e' }}>🚗 Active Rides</div>
+        {rides.length === 0 && <div style={{ color:'#9199ad', fontSize:13 }}>No rides in progress right now.</div>}
         {rides.map(r => (
-          <div key={r.id} style={{ padding:'12px 0', borderBottom:'0.5px solid rgba(255,255,255,0.06)' }}>
+          <div key={r.id} style={{ padding:'12px 0', borderBottom:'1px solid #f0f0f0' }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
-              <span style={{ fontSize:14, fontWeight:500, color:WHITE }}>{r.driverName||'Driver'} → {r.customerName||'Rider'}</span>
+              <span style={{ fontSize:14, fontWeight:500, color:'#1a1a2e' }}>{r.driverName||'Driver'} → {r.customerName||'Rider'}</span>
               <span style={{ ...s.badge, background:'rgba(26,158,90,0.15)', color:GREEN }}>{r.status}</span>
             </div>
-            <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)' }}>{(r.pickup?.address||'—').split(',')[0]} → {(r.dropoff?.address||'—').split(',')[0]} · J${(r.fare||0).toLocaleString()}</div>
-            <div style={{ fontSize:11, color:r.driverLocation?.lat?GREEN:'rgba(255,255,255,0.35)', marginTop:3 }}>{r.driverLocation?.lat ? '📍 Live GPS active' : '⏳ Awaiting driver GPS'}</div>
+            <div style={{ fontSize:12, color:'#6b7280' }}>{(r.pickup?.address||'—').split(',')[0]} → {(r.dropoff?.address||'—').split(',')[0]} · J${(r.fare||0).toLocaleString()}</div>
+            <div style={{ fontSize:11, color:r.driverLocation?.lat?GREEN:'#9199ad', marginTop:3 }}>{r.driverLocation?.lat ? '📍 Live GPS active' : '⏳ Awaiting driver GPS'}</div>
           </div>
         ))}
       </div>
 
       <div style={s.card}>
-        <div style={{ fontSize:14, fontWeight:500, marginBottom:14, color:WHITE }}>🟢 Available Drivers (online)</div>
-        {onlineDrivers.length === 0 && <div style={{ color:'rgba(255,255,255,0.4)', fontSize:13 }}>No drivers online right now.</div>}
+        <div style={{ fontSize:14, fontWeight:500, marginBottom:14, color:'#1a1a2e' }}>🟢 Available Drivers (online)</div>
+        {onlineDrivers.length === 0 && <div style={{ color:'#9199ad', fontSize:13 }}>No drivers online right now.</div>}
         {onlineDrivers.map(d => (
-          <div key={d.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 0', borderBottom:'0.5px solid rgba(255,255,255,0.06)' }}>
+          <div key={d.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'10px 0', borderBottom:'1px solid #f0f0f0' }}>
             <div>
-              <div style={{ fontSize:14, color:WHITE }}>{d.name||'Driver'}</div>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)' }}>{d.vehicleMake||''} {d.vehicleModel||''} · {d.licensePlate||'—'}</div>
+              <div style={{ fontSize:14, color:'#1a1a2e' }}>{d.name||'Driver'}</div>
+              <div style={{ fontSize:11, color:'#9199ad' }}>{d.vehicleMake||''} {d.vehicleModel||''} · {d.licensePlate||'—'}</div>
             </div>
-            <span style={{ ...s.badge, background: isFresh(d.currentLocation)?'rgba(26,158,90,0.15)':'rgba(232,180,0,0.15)', color: isFresh(d.currentLocation)?GREEN:YELLOW }}>
+            <span style={{ ...s.badge, background: isFresh(d.currentLocation)?'rgba(26,158,90,0.15)':'#fffbeb', color: isFresh(d.currentLocation)?GREEN:'#b45309' }}>
               {isFresh(d.currentLocation) ? '📍 Live GPS' : 'No GPS'}
             </span>
           </div>
         ))}
         {onlineDrivers.length > locatedDrivers.length && (
-          <div style={{ marginTop:12, fontSize:11, color:'rgba(255,255,255,0.4)', background:'rgba(232,180,0,0.06)', border:'0.5px solid rgba(232,180,0,0.2)', borderRadius:8, padding:'8px 10px' }}>
+          <div style={{ marginTop:12, fontSize:11, color:'#9199ad', background:'rgba(232,180,0,0.06)', border:'0.5px solid rgba(232,180,0,0.2)', borderRadius:8, padding:'8px 10px' }}>
             ℹ️ Drivers only broadcast GPS while the app is open. Idle drivers with the app closed won't show a live location.
           </div>
         )}
@@ -850,18 +850,18 @@ function ScheduledTab() {
   };
 
   const Card = ({ r }) => (
-    <div style={{ ...s.card, borderLeft:`3px solid ${isPast(r.scheduledFor)?RED:isSoon(r.scheduledFor)?YELLOW:'#4c8bf5'}` }}>
+    <div style={{ ...s.card, borderLeft:`3px solid ${isPast(r.scheduledFor)?RED:isSoon(r.scheduledFor)?'#f59e0b':'#4c8bf5'}` }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
-        <span style={{ fontSize:14, fontWeight:500, color:WHITE }}>🗓️ {fmt(r.scheduledFor)}</span>
+        <span style={{ fontSize:14, fontWeight:500, color:'#1a1a2e' }}>🗓️ {fmt(r.scheduledFor)}</span>
         <span style={{ fontSize:15, fontWeight:600, color:GREEN }}>J${(r.fare||0).toLocaleString()}</span>
       </div>
-      {isPast(r.scheduledFor) && <div style={{ fontSize:11, color:'#f09595', marginBottom:4 }}>⚠️ Pickup time has passed</div>}
-      {isSoon(r.scheduledFor) && <div style={{ fontSize:11, color:YELLOW, marginBottom:4 }}>⏰ Within 2 hours</div>}
-      <div style={{ fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:3 }}>👤 {r.customerName||'Customer'} · {r.vehicleType||'VilleRide'}</div>
-      <div style={{ fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:10 }}>{(r.pickup?.address||'—').split(',')[0]} → {(r.dropoff?.address||'—').split(',')[0]}</div>
+      {isPast(r.scheduledFor) && <div style={{ fontSize:11, color:'#dc2626', marginBottom:4 }}>⚠️ Pickup time has passed</div>}
+      {isSoon(r.scheduledFor) && <div style={{ fontSize:11, color:'#b45309', marginBottom:4 }}>⏰ Within 2 hours</div>}
+      <div style={{ fontSize:12, color:'#4b5563', marginBottom:3 }}>👤 {r.customerName||'Customer'} · {r.vehicleType||'VilleRide'}</div>
+      <div style={{ fontSize:12, color:'#4b5563', marginBottom:10 }}>{(r.pickup?.address||'—').split(',')[0]} → {(r.dropoff?.address||'—').split(',')[0]}</div>
       <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
         <select value={r.driverId||''} onChange={e=>reassign(r.id, e.target.value)}
-          style={{ flex:1, minWidth:150, padding:'8px 10px', borderRadius:8, border:'0.5px solid rgba(255,255,255,0.2)', background:'#1a1f2e', color:WHITE, fontSize:12 }}>
+          style={{ flex:1, minWidth:150, padding:'8px 10px', borderRadius:8, border:'1px solid #d0d3e0', background:'#ffffff', color:'#1a1a2e', fontSize:12 }}>
           <option value="">— Unassigned (any driver can claim) —</option>
           {approved.map(d => <option key={d.id} value={d.id}>{d.name||'Driver'}{d.isOnline?' 🟢':''}</option>)}
         </select>
@@ -873,13 +873,13 @@ function ScheduledTab() {
   return (
     <div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:12, marginBottom:20 }}>
-        <StatCard label="Needs a driver" value={unassigned.length} color={YELLOW} sub="unassigned"/>
+        <StatCard label="Needs a driver" value={unassigned.length} color="#b45309" sub="unassigned"/>
         <StatCard label="Assigned"       value={assigned.length}   color={GREEN}  sub="driver claimed"/>
       </div>
       {scheduled.length === 0 && (
-        <div style={s.card}><div style={{ color:'rgba(255,255,255,0.4)', fontSize:13, textAlign:'center', padding:20 }}>🗓️ No scheduled rides. Future bookings customers schedule will appear here.</div></div>
+        <div style={s.card}><div style={{ color:'#9199ad', fontSize:13, textAlign:'center', padding:20 }}>🗓️ No scheduled rides. Future bookings customers schedule will appear here.</div></div>
       )}
-      {unassigned.length > 0 && <div style={{ fontSize:13, fontWeight:500, color:YELLOW, marginBottom:10 }}>⚠️ Needs a Driver ({unassigned.length})</div>}
+      {unassigned.length > 0 && <div style={{ fontSize:13, fontWeight:600, color:'#b45309', marginBottom:10 }}>⚠️ Needs a Driver ({unassigned.length})</div>}
       {unassigned.map(r => <Card key={r.id} r={r}/>)}
       {assigned.length > 0 && <div style={{ fontSize:13, fontWeight:500, color:'#4c8bf5', margin:'16px 0 10px' }}>✅ Assigned ({assigned.length})</div>}
       {assigned.map(r => <Card key={r.id} r={r}/>)}
@@ -897,29 +897,29 @@ function PartnersTab() {
   }, []);
   const setStatus = async (id, status) => { await updateDoc(doc(db,'partnerRequests',id), { status }); };
   const badge = (st) => {
-    const map = { new:{bg:'rgba(232,180,0,0.15)',color:YELLOW}, approved:{bg:'rgba(26,158,90,0.15)',color:GREEN}, featured:{bg:'rgba(107,33,168,0.2)',color:'#c9a3f5'}, rejected:{bg:'rgba(226,75,74,0.12)',color:'#f09595'} };
+    const map = { new:{bg:'#fffbeb',color:'#b45309'}, approved:{bg:'rgba(26,158,90,0.15)',color:GREEN}, featured:{bg:'rgba(107,33,168,0.2)',color:'#c9a3f5'}, rejected:{bg:'rgba(226,75,74,0.12)',color:'#dc2626'} };
     const m = map[(st||'new').toLowerCase()] || map.new;
     return <span style={{ ...s.badge, background:m.bg, color:m.color }}>{st||'new'}</span>;
   };
-  if (loading) return <div style={{ color:'rgba(255,255,255,0.4)', fontSize:13 }}>Loading...</div>;
+  if (loading) return <div style={{ color:'#9199ad', fontSize:13 }}>Loading...</div>;
   return (
     <div>
       <div style={s.statgrid}>
         <StatCard label="Total" value={partners.length}/>
-        <StatCard label="New requests" value={partners.filter(p=>(p.status||'new')==='new').length} color={YELLOW}/>
+        <StatCard label="New requests" value={partners.filter(p=>(p.status||'new')==='new').length} color="#b45309"/>
         <StatCard label="Approved" value={partners.filter(p=>['approved','featured'].includes((p.status||'').toLowerCase())).length} color={GREEN}/>
         <StatCard label="Featured" value={partners.filter(p=>(p.status||'').toLowerCase()==='featured').length} color="#c9a3f5"/>
       </div>
-      {partners.length===0 && <div style={s.card}><div style={{ color:'rgba(255,255,255,0.4)', fontSize:13, textAlign:'center', padding:20 }}>No partner requests yet.</div></div>}
+      {partners.length===0 && <div style={s.card}><div style={{ color:'#9199ad', fontSize:13, textAlign:'center', padding:20 }}>No partner requests yet.</div></div>}
       {partners.map(p => (
         <div key={p.id} style={s.card}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
-            <span style={{ fontSize:15, fontWeight:500, color:WHITE }}>{p.businessName||p.name||'Business'}</span>
+            <span style={{ fontSize:15, fontWeight:500, color:'#1a1a2e' }}>{p.businessName||p.name||'Business'}</span>
             {badge(p.status)}
           </div>
-          <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', marginBottom:3 }}>{p.businessType||'Business'} · {p.address||'Manchester, Jamaica'}</div>
-          {p.email && <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', marginBottom:3 }}>📧 {p.email}{p.phone?` · ☎ ${p.phone}`:''}</div>}
-          {p.message && <div style={{ fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:10, lineHeight:1.5 }}>{p.message}</div>}
+          <div style={{ fontSize:12, color:'#6b7280', marginBottom:3 }}>{p.businessType||'Business'} · {p.address||'Manchester, Jamaica'}</div>
+          {p.email && <div style={{ fontSize:12, color:'#6b7280', marginBottom:3 }}>📧 {p.email}{p.phone?` · ☎ ${p.phone}`:''}</div>}
+          {p.message && <div style={{ fontSize:12, color:'#4b5563', marginBottom:10, lineHeight:1.5 }}>{p.message}</div>}
           <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:8 }}>
             <button onClick={()=>setStatus(p.id,'approved')} style={s.btnApprove}>Approve</button>
             <button onClick={()=>setStatus(p.id,'featured')} style={{ ...s.btnApprove, background:'#6b21a8' }}>⭐ Feature</button>
@@ -941,7 +941,7 @@ function AlertsTab() {
   }, []);
   const setStatus = async (id, status) => { await updateDoc(doc(db,'sos_alerts',id), { status }); };
   const sorted = [...alerts].sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
-  if (loading) return <div style={{ color:'rgba(255,255,255,0.4)', fontSize:13 }}>Loading...</div>;
+  if (loading) return <div style={{ color:'#9199ad', fontSize:13 }}>Loading...</div>;
   return (
     <div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:20 }}>
@@ -949,18 +949,18 @@ function AlertsTab() {
         <StatCard label="New" value={alerts.filter(a=>(a.status||'new')==='new').length} color={RED}/>
         <StatCard label="Resolved" value={alerts.filter(a=>a.status==='resolved').length} color={GREEN}/>
       </div>
-      {sorted.length===0 && <div style={s.card}><div style={{ color:'rgba(255,255,255,0.4)', fontSize:13, textAlign:'center', padding:20 }}>✅ No safety alerts.</div></div>}
+      {sorted.length===0 && <div style={s.card}><div style={{ color:'#9199ad', fontSize:13, textAlign:'center', padding:20 }}>✅ No safety alerts.</div></div>}
       {sorted.map(a => (
         <div key={a.id} style={{ ...s.card, borderLeft:`3px solid ${a.status==='resolved'?GREEN:RED}` }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
             <span style={{ fontSize:14, fontWeight:600, color:RED }}>🆘 SOS Alert</span>
-            <span style={{ ...s.badge, background: a.status==='resolved'?'rgba(26,158,90,0.15)':'rgba(226,75,74,0.15)', color: a.status==='resolved'?GREEN:'#f09595' }}>{a.status||'new'}</span>
+            <span style={{ ...s.badge, background: a.status==='resolved'?'rgba(26,158,90,0.15)':'rgba(226,75,74,0.15)', color: a.status==='resolved'?GREEN:'#dc2626' }}>{a.status||'new'}</span>
           </div>
-          <div style={{ fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:3 }}>👤 {a.customerName||'—'} · 🚗 {a.driverName||'—'}</div>
-          {a.location && <div style={{ fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:3 }}>📍 {a.location}</div>}
-          <div style={{ fontSize:11, color:'rgba(255,255,255,0.35)', marginBottom:10 }}>{a.createdAt?.seconds ? new Date(a.createdAt.seconds*1000).toLocaleString() : '—'}</div>
+          <div style={{ fontSize:12, color:'#4b5563', marginBottom:3 }}>👤 {a.customerName||'—'} · 🚗 {a.driverName||'—'}</div>
+          {a.location && <div style={{ fontSize:12, color:'#4b5563', marginBottom:3 }}>📍 {a.location}</div>}
+          <div style={{ fontSize:11, color:'#9199ad', marginBottom:10 }}>{a.createdAt?.seconds ? new Date(a.createdAt.seconds*1000).toLocaleString() : '—'}</div>
           <div style={{ display:'flex', gap:8 }}>
-            {a.status!=='responding' && <button onClick={()=>setStatus(a.id,'responding')} style={{ ...s.btnApprove, background:YELLOW, color:DARK }}>Responding</button>}
+            {a.status!=='responding' && <button onClick={()=>setStatus(a.id,'responding')} style={{ ...s.btnApprove, background:'#f59e0b', color:'#fff' }}>Responding</button>}
             {a.status!=='resolved' && <button onClick={()=>setStatus(a.id,'resolved')} style={s.btnApprove}>✅ Resolved</button>}
           </div>
         </div>
@@ -980,18 +980,18 @@ function UnfulfilledTab() {
   const sorted = [...reqs].sort((a,b)=>(b.created_at?.seconds||0)-(a.created_at?.seconds||0));
   const todayStart = new Date(); todayStart.setHours(0,0,0,0);
   const todayCount = reqs.filter(r=>new Date((r.created_at?.seconds||0)*1000)>=todayStart).length;
-  if (loading) return <div style={{ color:'rgba(255,255,255,0.4)', fontSize:13 }}>Loading...</div>;
+  if (loading) return <div style={{ color:'#9199ad', fontSize:13 }}>Loading...</div>;
   return (
     <div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:12, marginBottom:20 }}>
-        <StatCard label="Total unmatched" value={reqs.length} color={YELLOW} sub="no driver available"/>
+        <StatCard label="Total unmatched" value={reqs.length} color="#b45309" sub="no driver available"/>
         <StatCard label="Today" value={todayCount} sub="requests today"/>
       </div>
-      {sorted.length===0 && <div style={s.card}><div style={{ color:'rgba(255,255,255,0.4)', fontSize:13, textAlign:'center', padding:20 }}>No unmatched requests logged.</div></div>}
+      {sorted.length===0 && <div style={s.card}><div style={{ color:'#9199ad', fontSize:13, textAlign:'center', padding:20 }}>No unmatched requests logged.</div></div>}
       {sorted.map(r => (
         <div key={r.id} style={s.card}>
-          <div style={{ fontSize:13, color:WHITE, marginBottom:4 }}>{(r.pickup_address||r.pickup?.address||'—').split(',')[0]} → {(r.dropoff_address||r.dropoff?.address||'—').split(',')[0]}</div>
-          <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)' }}>👤 {r.customer_name||r.customerName||'Customer'} · {r.created_at?.seconds ? new Date(r.created_at.seconds*1000).toLocaleString() : '—'}</div>
+          <div style={{ fontSize:13, color:'#1a1a2e', marginBottom:4 }}>{(r.pickup_address||r.pickup?.address||'—').split(',')[0]} → {(r.dropoff_address||r.dropoff?.address||'—').split(',')[0]}</div>
+          <div style={{ fontSize:12, color:'#6b7280' }}>👤 {r.customer_name||r.customerName||'Customer'} · {r.created_at?.seconds ? new Date(r.created_at.seconds*1000).toLocaleString() : '—'}</div>
         </div>
       ))}
     </div>
@@ -1011,13 +1011,13 @@ function PerformanceTab() {
   return (
     <div>
       <div style={s.card}>
-        <div style={{ fontSize:14, fontWeight:500, marginBottom:14, color:WHITE }}>📈 Driver Performance</div>
+        <div style={{ fontSize:14, fontWeight:500, marginBottom:14, color:'#1a1a2e' }}>📈 Driver Performance</div>
         <div style={{ overflowX:'auto' }}>
           <table style={{ width:'100%', borderCollapse:'collapse', fontSize:13, minWidth:640 }}>
             <thead>
               <tr>
                 {['Driver','Rating','Rides','Cancelled','Cancel %','Earned (85%)','Status'].map(h => (
-                  <th key={h} style={{ textAlign:'left', padding:'8px 10px', fontSize:11, color:'rgba(255,255,255,0.4)', borderBottom:'0.5px solid rgba(255,255,255,0.1)', whiteSpace:'nowrap' }}>{h}</th>
+                  <th key={h} style={{ textAlign:'left', padding:'8px 10px', fontSize:11, color:'#9199ad', borderBottom:'1px solid #e5e7eb', whiteSpace:'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -1030,21 +1030,21 @@ function PerformanceTab() {
                 const earned = Math.round(done.reduce((s,r)=>s+(r.fare||0),0)*0.85);
                 return (
                   <tr key={d.id}>
-                    <td style={{ padding:'8px 10px', color:WHITE, fontWeight:500, whiteSpace:'nowrap' }}>{d.name||'—'}</td>
-                    <td style={{ padding:'8px 10px', color:'rgba(255,255,255,0.7)', whiteSpace:'nowrap' }}>⭐ {(d.rating||5).toFixed(1)}</td>
-                    <td style={{ padding:'8px 10px', color:'rgba(255,255,255,0.7)' }}>{done.length}</td>
-                    <td style={{ padding:'8px 10px', color: canc.length>0?'#f09595':'rgba(255,255,255,0.7)' }}>{canc.length}</td>
-                    <td style={{ padding:'8px 10px', color: pct>=20?'#f09595':pct>=10?YELLOW:GREEN, fontWeight:500 }}>{pct}%</td>
+                    <td style={{ padding:'8px 10px', color:'#1a1a2e', fontWeight:500, whiteSpace:'nowrap' }}>{d.name||'—'}</td>
+                    <td style={{ padding:'8px 10px', color:'#6b7280', whiteSpace:'nowrap' }}>⭐ {(d.rating||5).toFixed(1)}</td>
+                    <td style={{ padding:'8px 10px', color:'#6b7280' }}>{done.length}</td>
+                    <td style={{ padding:'8px 10px', color: canc.length>0?'#dc2626':'#374151' }}>{canc.length}</td>
+                    <td style={{ padding:'8px 10px', color: pct>=20?'#dc2626':pct>=10?'#b45309':GREEN, fontWeight:500 }}>{pct}%</td>
                     <td style={{ padding:'8px 10px', color:GREEN, whiteSpace:'nowrap' }}>J${earned.toLocaleString()}</td>
                     <td style={{ padding:'8px 10px' }}>
-                      <span style={{ ...s.badge, background: d.isOnline?'rgba(26,158,90,0.15)':'rgba(255,255,255,0.08)', color: d.isOnline?GREEN:'rgba(255,255,255,0.4)' }}>{d.isOnline?'Online':(d.status||'—')}</span>
+                      <span style={{ ...s.badge, background: d.isOnline?'#f0fff4':'#f3f4f6', color: d.isOnline?GREEN:'#9199ad' }}>{d.isOnline?'Online':(d.status||'—')}</span>
                     </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
-          {approved.length===0 && <div style={{ color:'rgba(255,255,255,0.4)', fontSize:13, textAlign:'center', padding:20 }}>No approved drivers yet.</div>}
+          {approved.length===0 && <div style={{ color:'#9199ad', fontSize:13, textAlign:'center', padding:20 }}>No approved drivers yet.</div>}
         </div>
       </div>
     </div>
@@ -1071,23 +1071,23 @@ function BroadcastTab() {
   return (
     <div>
       <div style={s.card}>
-        <div style={{ fontSize:14, fontWeight:500, marginBottom:6, color:WHITE }}>📢 Broadcast to Drivers</div>
-        <div style={{ fontSize:12, color:'rgba(255,255,255,0.5)', marginBottom:14 }}>Type one message, then tap each driver to open WhatsApp with it pre-filled. {targets.length} approved driver{targets.length!==1?'s':''} with valid numbers.</div>
+        <div style={{ fontSize:14, fontWeight:500, marginBottom:6, color:'#1a1a2e' }}>📢 Broadcast to Drivers</div>
+        <div style={{ fontSize:12, color:'#6b7280', marginBottom:14 }}>Type one message, then tap each driver to open WhatsApp with it pre-filled. {targets.length} approved driver{targets.length!==1?'s':''} with valid numbers.</div>
         <textarea value={msg} onChange={e=>setMsg(e.target.value)} rows={4} placeholder="e.g. Heavy rain expected this evening — surge pricing is ON. Drive safe!"
-          style={{ width:'100%', padding:12, borderRadius:8, border:'0.5px solid rgba(255,255,255,0.2)', background:'#0f1015', color:WHITE, fontSize:14, fontFamily:'inherit', resize:'vertical', boxSizing:'border-box', marginBottom:12 }}/>
-        <button onClick={()=>{ navigator.clipboard?.writeText(msg).catch(()=>{}); }} disabled={!msg.trim()} style={{ ...s.btnApprove, background:'rgba(255,255,255,0.1)', color:WHITE, opacity: msg.trim()?1:0.5 }}>📋 Copy Message</button>
+          style={{ width:'100%', padding:12, borderRadius:8, border:'1px solid #d0d3e0', background:'#f5f6fa', color:'#1a1a2e', fontSize:14, fontFamily:'inherit', resize:'vertical', boxSizing:'border-box', marginBottom:12 }}/>
+        <button onClick={()=>{ navigator.clipboard?.writeText(msg).catch(()=>{}); }} disabled={!msg.trim()} style={{ ...s.btnApprove, background:'#f3f4f6', color:'#1a1a2e', opacity: msg.trim()?1:0.5 }}>📋 Copy Message</button>
       </div>
       {targets.map(d => (
         <div key={d.id} style={{ ...s.card, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
           <div>
-            <div style={{ fontSize:14, color:WHITE }}>{d.name||'Driver'} {d.isOnline && <span style={{ fontSize:11, color:GREEN }}>● online</span>}</div>
-            <div style={{ fontSize:12, color:'rgba(255,255,255,0.4)' }}>+{d.wa}</div>
+            <div style={{ fontSize:14, color:'#1a1a2e' }}>{d.name||'Driver'} {d.isOnline && <span style={{ fontSize:11, color:GREEN }}>● online</span>}</div>
+            <div style={{ fontSize:12, color:'#9199ad' }}>+{d.wa}</div>
           </div>
           <a href={`https://wa.me/${d.wa}?text=${encodeURIComponent(msg||'')}`} target="_blank" rel="noreferrer"
-            style={{ padding:'8px 14px', background: msg.trim()?'#25D366':'rgba(255,255,255,0.1)', color: msg.trim()?'#fff':'rgba(255,255,255,0.4)', borderRadius:8, fontSize:12, fontWeight:600, textDecoration:'none', pointerEvents: msg.trim()?'auto':'none' }}>💬 WhatsApp</a>
+            style={{ padding:'8px 14px', background: msg.trim()?'#25D366':'#e5e7eb', color: msg.trim()?'#fff':'#9199ad', borderRadius:8, fontSize:12, fontWeight:600, textDecoration:'none', pointerEvents: msg.trim()?'auto':'none' }}>💬 WhatsApp</a>
         </div>
       ))}
-      {targets.length===0 && <div style={s.card}><div style={{ color:'rgba(255,255,255,0.4)', fontSize:13, textAlign:'center', padding:20 }}>No approved drivers with phone numbers yet.</div></div>}
+      {targets.length===0 && <div style={s.card}><div style={{ color:'#9199ad', fontSize:13, textAlign:'center', padding:20 }}>No approved drivers with phone numbers yet.</div></div>}
     </div>
   );
 }
@@ -1108,8 +1108,8 @@ export default function AdminPanel() {
   const handleLogout = async () => { await signOut(auth); setAdminUser(null); };
 
   if (loading) return (
-    <div style={{ minHeight:'100vh', background:'#0f1015', display:'flex', alignItems:'center', justifyContent:'center', color:WHITE, fontFamily:"'Segoe UI', sans-serif" }}>
-      <div style={{ textAlign:'center' }}><div style={{ fontSize:40, marginBottom:12 }}>🚕</div><div style={{ color:'rgba(255,255,255,0.4)' }}>Loading...</div></div>
+    <div style={{ minHeight:'100vh', background:'#f5f6fa', display:'flex', alignItems:'center', justifyContent:'center', color:'#1a1a2e', fontFamily:"'Segoe UI', sans-serif" }}>
+      <div style={{ textAlign:'center' }}><div style={{ fontSize:40, marginBottom:12 }}>🚕</div><div style={{ color:'#9199ad' }}>Loading...</div></div>
     </div>
   );
 
@@ -1135,50 +1135,45 @@ export default function AdminPanel() {
   return (
     <div style={s.page}>
       <AdminGlobalStyles/>
+
+      {/* ── TOP BAR ── */}
       <div style={s.topbar}>
-        <div style={s.logo}>
-          <span>🚕</span> VilleCabs
-          <span style={s.logobadge}>ADMIN</span>
-        </div>
-        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-          <span style={{ fontSize:13, color:'rgba(255,255,255,0.5)' }}>{adminUser.email}</span>
-          <button onClick={handleLogout} style={{ background:'none', border:'0.5px solid rgba(255,255,255,0.2)', borderRadius:8, color:'rgba(255,255,255,0.5)', fontSize:12, padding:'6px 14px', cursor:'pointer' }}>Logout</button>
+        <img src="/logo.png" style={{ height:28, objectFit:'contain' }} alt="VilleCabs"/>
+        <span style={{ fontSize:15, fontWeight:700, color:'#6b21a8', marginLeft:2 }}>Admin Dashboard</span>
+        <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:10 }}>
+          <span style={{ fontSize:12, color:'#888', display:'none' }} className="admin-email">{adminUser.email}</span>
+          <button onClick={handleLogout} style={{ padding:'6px 12px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:10, color:'#6b21a8', fontSize:11, fontWeight:600, cursor:'pointer' }}>Logout</button>
         </div>
       </div>
 
-      <div style={{ display:'flex' }}>
-        <div style={s.sidebar}>
-          <div style={{ padding:'12px 20px', fontSize:11, color:'rgba(255,255,255,0.3)', textTransform:'uppercase', letterSpacing:1, marginBottom:4 }}>Menu</div>
-          {tabs.map(t => (
-            <div key={t.id} onClick={() => setTab(t.id)} style={tab===t.id ? s.navactive : s.navitem}>
-              <span>{t.icon}</span> {t.label}
-            </div>
-          ))}
-          <div style={{ margin:'20px 20px 0', height:'0.5px', background:'rgba(255,255,255,0.08)' }}/>
-          <div style={{ padding:'16px 20px', fontSize:12, color:'rgba(255,255,255,0.3)', lineHeight:1.6 }}>
-            VilleCabs Admin<br/>Manchester, Jamaica
-          </div>
-        </div>
+      {/* ── SCROLLING TAB STRIP ── */}
+      <div style={s.tabstrip}>
+        {tabs.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={tab===t.id ? s.tabActive : s.tab}>
+            <span>{t.icon}</span> {t.label}
+          </button>
+        ))}
+      </div>
 
-        <div style={s.main}>
-          <div style={{ fontSize:20, fontWeight:500, marginBottom:20, color:WHITE, textTransform:'capitalize' }}>
-            {tab==='overview'?'📊 Dashboard Overview':tab==='drivers'?'🚗 Driver Management':tab==='rides'?'🚕 Ride Management':tab==='livemap'?'🗺️ Live Operations Map':tab==='scheduled'?'🗓️ Scheduled Rides':tab==='customers'?'👥 Customers':tab==='revenue'?'💰 Revenue':tab==='performance'?'📈 Driver Performance':tab==='partners'?'🤝 Partner Requests':tab==='contacts'?'📬 Messages':tab==='alerts'?'🆘 Safety Alerts':tab==='unfulfilled'?'📍 No Driver Available':tab==='broadcast'?'📢 Broadcast to Drivers':'🎟️ Promo Codes'}
-          </div>
-          {tab === 'overview'  && <OverviewTab setTab={setTab}/>}
-          {tab === 'drivers'   && <DriversTab/>}
-          {tab === 'rides'     && <RidesTab/>}
-          {tab === 'livemap'   && <LiveMapTab/>}
-          {tab === 'scheduled' && <ScheduledTab/>}
-          {tab === 'customers' && <CustomersTab/>}
-          {tab === 'revenue'   && <RevenueTab/>}
-          {tab === 'performance' && <PerformanceTab/>}
-          {tab === 'partners'  && <PartnersTab/>}
-          {tab === 'contacts'  && <ContactsTab/>}
-          {tab === 'alerts'    && <AlertsTab/>}
-          {tab === 'unfulfilled' && <UnfulfilledTab/>}
-          {tab === 'broadcast' && <BroadcastTab/>}
-          {tab === 'promos'    && <PromoCodesTab/>}
+      {/* ── CONTENT ── */}
+      <div style={s.main}>
+        <div style={{ fontSize:18, fontWeight:800, marginBottom:16, color:'#1a1a2e' }}>
+          {tab==='overview'?'📊 Dashboard Overview':tab==='drivers'?'🚗 Driver Management':tab==='rides'?'🚕 Ride Management':tab==='livemap'?'🗺️ Live Operations Map':tab==='scheduled'?'🗓️ Scheduled Rides':tab==='customers'?'👥 Customers':tab==='revenue'?'💰 Revenue':tab==='performance'?'📈 Driver Performance':tab==='partners'?'🤝 Partner Requests':tab==='contacts'?'📬 Messages':tab==='alerts'?'🆘 Safety Alerts':tab==='unfulfilled'?'📍 No Driver Available':tab==='broadcast'?'📢 Broadcast to Drivers':'🎟️ Promo Codes'}
         </div>
+        {tab === 'overview'  && <OverviewTab setTab={setTab}/>}
+        {tab === 'drivers'   && <DriversTab/>}
+        {tab === 'rides'     && <RidesTab/>}
+        {tab === 'livemap'   && <LiveMapTab/>}
+        {tab === 'scheduled' && <ScheduledTab/>}
+        {tab === 'customers' && <CustomersTab/>}
+        {tab === 'revenue'   && <RevenueTab/>}
+        {tab === 'performance' && <PerformanceTab/>}
+        {tab === 'partners'  && <PartnersTab/>}
+        {tab === 'contacts'  && <ContactsTab/>}
+        {tab === 'alerts'    && <AlertsTab/>}
+        {tab === 'unfulfilled' && <UnfulfilledTab/>}
+        {tab === 'broadcast' && <BroadcastTab/>}
+        {tab === 'promos'    && <PromoCodesTab/>}
       </div>
     </div>
   );
