@@ -2141,6 +2141,105 @@ function DashPartnersSlider() {
   );
 }
 
+// ── Schedule-a-trip section (dashboard) ──
+function DashSchedule({ go, activeRide }) {
+  const bookNow = () => {
+    if (activeRide) { vcToast('You already have an active ride in progress. Complete or cancel it before booking a new one.', 'warn'); return; }
+    go('pin-pickup');
+  };
+  return (
+    <div style={{ padding:'28px 16px 8px', textAlign:'center' }}>
+      <div style={{ display:'inline-flex', alignItems:'center', gap:6, background:'#f0e9fa', border:'1px solid #e0d3f5', borderRadius:20, padding:'5px 14px', marginBottom:14, fontSize:11, fontWeight:700, color:'#6b21a8', letterSpacing:0.5 }}>
+        <span style={{ color:'#f59e0b' }}>●</span> READY TO GO?
+      </div>
+      <h2 style={{ fontSize:24, fontWeight:800, color:'#2a1a4a', margin:'0 0 10px', lineHeight:1.2 }}>Plan Your Next Ride Today</h2>
+      <p style={{ fontSize:14, color:'#5b5470', margin:'0 auto 22px', lineHeight:1.6, maxWidth:520 }}>
+        Airport pickups, city trips, and out-of-town journeys — book ahead with transparent pricing and trusted local drivers.
+      </p>
+      <div style={{ display:'flex', gap:12, flexWrap:'wrap', justifyContent:'center', maxWidth:760, margin:'0 auto 22px' }}>
+        {[
+          ['No surge pricing','Always transparent'],
+          ['Free cancellation','Before a driver accepts'],
+          ['Vetted drivers','Background checked'],
+        ].map(([t,d],i) => (
+          <div key={i} style={{ flex:'1 1 200px', minWidth:180, background:'#faf5fd', border:'1px solid #ecdffb', borderRadius:14, padding:'14px 16px', display:'flex', alignItems:'flex-start', gap:10, textAlign:'left' }}>
+            <div style={{ width:26, height:26, borderRadius:8, background:'#fff', border:'1px solid #e9d5ff', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, color:'#6b21a8', fontWeight:800, fontSize:14 }}>✓</div>
+            <div>
+              <div style={{ fontSize:14, fontWeight:800, color:'#2a1a4a' }}>{t}</div>
+              <div style={{ fontSize:12, color:'#8a83a0', marginTop:1 }}>{d}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display:'flex', gap:12, flexWrap:'wrap', justifyContent:'center' }}>
+        <button onClick={() => { if (activeRide) { vcToast('You already have an active ride in progress. Complete or cancel it before booking a new one.', 'warn'); return; } go('pin-pickup'); }} style={{ padding:'13px 26px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:24, fontSize:14, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 14px rgba(107,33,168,0.25)' }}>Schedule a Trip →</button>
+        <button onClick={bookNow} style={{ padding:'13px 26px', background:'#fff', color:'#6b21a8', border:'2px solid #d8b4fe', borderRadius:24, fontSize:14, fontWeight:700, cursor:'pointer' }}>Book Now</button>
+      </div>
+    </div>
+  );
+}
+
+// ── FAQ section (dashboard) ──
+function DashFAQ({ go }) {
+  const [open, setOpen] = useState(0);
+  const faqs = [
+    ['How do I schedule a ride?','Open the app → choose pickup & drop-off → pick date/time → select your vehicle → confirm. You\u2019ll see the fare before booking.'],
+    ['What\u2019s the cancellation policy?','You can cancel free of charge any time before a driver accepts your ride. Once a driver is on the way, a small cancellation fee may apply.'],
+    ['How do I pay for my ride?','Payment is cash directly to your driver on arrival. Just confirm the fare shown in the app before you book.'],
+    ['Are the drivers verified?','Yes. Every VilleCabs driver is background-checked and approved before they can accept rides.'],
+    ['Which areas do you cover?','VilleCabs operates across Mandeville and the wider Manchester parish, with out-of-town trips available on request.'],
+  ];
+  return (
+    <div style={{ padding:'28px 16px 8px', background:'linear-gradient(180deg,#ffffff,#faf6fd)' }}>
+      <div style={{ textAlign:'center', marginBottom:20 }}>
+        <div style={{ display:'inline-flex', alignItems:'center', gap:6, background:'#f0e9fa', border:'1px solid #e0d3f5', borderRadius:20, padding:'5px 14px', marginBottom:12, fontSize:11, fontWeight:700, color:'#6b21a8', letterSpacing:0.5 }}>
+          <span style={{ color:'#f59e0b' }}>●</span> GOT QUESTIONS?
+        </div>
+        <h2 style={{ fontSize:24, fontWeight:800, color:'#2a1a4a', margin:'0 0 4px' }}>Frequently Asked Questions</h2>
+        <div style={{ width:60, height:3, background:'#6b21a8', borderRadius:2, margin:'8px auto 12px' }}/>
+        <p style={{ fontSize:13.5, color:'#5b5470', margin:0, lineHeight:1.6 }}>Everything you need to know about booking, cancellations, and more.</p>
+      </div>
+
+      <div style={{ maxWidth:1000, margin:'0 auto', display:'flex', gap:16, flexWrap:'wrap', alignItems:'flex-start' }}>
+        {/* Quick answers card */}
+        <div style={{ flex:'1 1 260px', minWidth:240, background:'#fff', border:'1px solid #eee4f5', borderRadius:16, padding:18, boxShadow:'0 2px 12px rgba(107,33,168,0.06)' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+            <div style={{ width:40, height:40, borderRadius:'50%', background:'#f5f0ff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>❓</div>
+            <div>
+              <div style={{ fontSize:15, fontWeight:800, color:'#2a1a4a' }}>Quick answers</div>
+              <div style={{ fontSize:11, color:'#8a83a0' }}>Average response time: 2 min</div>
+            </div>
+          </div>
+          <div style={{ fontSize:13, color:'#5b5470', lineHeight:1.6, marginBottom:14 }}>
+            Most questions are answered instantly. For complex issues, our support team is here to help.
+          </div>
+          <button onClick={() => go('contact-us')} style={{ width:'100%', padding:'11px', background:'#fff', color:'#6b21a8', border:'2px solid #d8b4fe', borderRadius:12, fontSize:13, fontWeight:700, cursor:'pointer' }}>Contact Support →</button>
+        </div>
+
+        {/* Accordion */}
+        <div style={{ flex:'2 1 420px', minWidth:280 }}>
+          {faqs.map(([q,a],i) => {
+            const isOpen = open === i;
+            return (
+              <div key={i} onClick={() => setOpen(isOpen ? -1 : i)}
+                style={{ background:'#fff', border:`1px solid ${isOpen?'#d8b4fe':'#eee4f5'}`, borderRadius:14, padding:'14px 16px', marginBottom:10, cursor:'pointer', boxShadow: isOpen?'0 4px 16px rgba(107,33,168,0.10)':'0 1px 6px rgba(0,0,0,0.04)', transition:'all 0.2s' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                  <div style={{ width:22, height:22, borderRadius:'50%', background: isOpen?'#6b21a8':'#f0e9fa', color: isOpen?'#fff':'#6b21a8', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:800, flexShrink:0 }}>{i+1}</div>
+                  <div style={{ flex:1, fontSize:14, fontWeight:700, color: isOpen?'#6b21a8':'#2a1a4a' }}>{q}</div>
+                  <div style={{ width:26, height:26, borderRadius:'50%', background: isOpen?'#6b21a8':'#f6f0fb', color: isOpen?'#fff':'#a98fd0', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, flexShrink:0 }}>{isOpen?'▲':'▼'}</div>
+                </div>
+                {isOpen && (
+                  <div style={{ marginTop:12, paddingLeft:14, borderLeft:'3px solid #e9d5ff', fontSize:13.5, color:'#5b5470', lineHeight:1.65 }}>{a}</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupData, setDropoffData }) {
   const [tab,        setTab]        = useState('book');
   const [menuOpen,   setMenuOpen]   = useState(false);
@@ -2548,6 +2647,12 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
 
             {/* ── FEATURED PARTNERS ── */}
             <DashPartnersSlider/>
+
+            {/* ── SCHEDULE A TRIP ── */}
+            <DashSchedule go={go} activeRide={activeRide}/>
+
+            {/* ── FAQ ── */}
+            <DashFAQ go={go}/>
 
           </div>
 
