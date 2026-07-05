@@ -5395,14 +5395,29 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   const locWatchRef  = useRef(null); // Feature: broadcast idle-online driver location for admin Live Map
   const driverProfileRef = useRef(null); // cached driver profile for instant ride acceptance
   const [acceptingId, setAcceptingId] = useState(null); // which ride is currently being accepted (button feedback)
+  const [notifPerm, setNotifPerm] = useState(typeof Notification !== 'undefined' ? Notification.permission : 'unsupported');
+
+  const enableNotifications = async () => {
+    if (typeof Notification === 'undefined') { vcToast('This browser doesn\u2019t support notifications.', 'warn'); return; }
+    if (Notification.permission === 'denied') {
+      vcToast('Notifications are blocked in your browser settings. Tap the 🔒 lock icon in the address bar → Notifications → Allow, then reload.', 'warn');
+      return;
+    }
+    try {
+      const perm = await Notification.requestPermission();
+      setNotifPerm(perm);
+      if (perm === 'granted') { registerDriverPushToken(user?.uid); vcToast('Notifications enabled — you\u2019ll be alerted to new rides.', 'success'); }
+    } catch(e) {}
+  };
 
   // ── Ask for notification permission + register push token (so drivers are alerted to new rides) ──
   useEffect(() => {
     if (!user?.uid) return;
     try {
       if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-        Notification.requestPermission().then(() => registerDriverPushToken(user.uid)).catch(()=>{});
+        Notification.requestPermission().then((perm) => { setNotifPerm(perm); registerDriverPushToken(user.uid); }).catch(()=>{});
       } else {
+        if (typeof Notification !== 'undefined') setNotifPerm(Notification.permission);
         registerDriverPushToken(user.uid);
       }
     } catch(e) {}
@@ -5711,6 +5726,24 @@ function DriverDash({ go, user, setUser, setBookingId }) {
 
       {driverTab === 'home' && (
         <div style={{ flex:1, overflowY:'auto', paddingBottom:80 }}>
+
+          {/* Notification nudge — shown until the driver enables notifications */}
+          {(notifPerm === 'default' || notifPerm === 'denied') && (
+            <div style={{ margin:'12px 14px 0', background:'#fff7ed', border:'1px solid #fdba74', borderRadius:14, padding:'12px 14px', display:'flex', alignItems:'center', gap:12 }}>
+              <span style={{ fontSize:24, flexShrink:0 }}>🔔</span>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:13, fontWeight:800, color:'#9a3412' }}>Turn on ride alerts</div>
+                <div style={{ fontSize:11.5, color:'#b45309', lineHeight:1.5 }}>
+                  {notifPerm === 'denied'
+                    ? 'Notifications are blocked. Re-enable them so you never miss a ride request.'
+                    : 'Get notified the moment a new ride comes in — even when the app is in another tab.'}
+                </div>
+              </div>
+              <button onClick={enableNotifications} style={{ flexShrink:0, padding:'9px 14px', background:'#ea580c', color:'#fff', border:'none', borderRadius:20, fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
+                {notifPerm === 'denied' ? 'How to fix' : 'Enable'}
+              </button>
+            </div>
+          )}
 
           {/* Stats cards */}
           <div style={{ padding:'14px 14px 0' }}>
