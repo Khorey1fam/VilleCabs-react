@@ -5385,7 +5385,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
     return stop;
   }, [isOnline, activeRideId, user?.uid]);
 
-  // ── Load driver online status + earnings on mount ─────────────────────────
+  // ── Load driver online status + earnings (live) ───────────────────────────
   useEffect(() => {
     if (!user?.uid) return;
     getDoc(doc(db, 'drivers', user.uid)).then(snap => {
@@ -5395,19 +5395,25 @@ function DriverDash({ go, user, setUser, setBookingId }) {
         driverProfileRef.current = d; // cache for instant ride acceptance (no extra read)
       }
     }).catch(e => console.error('Driver load error:', e));
-    getDocs(query(collection(db,'bookings'), where('driverId','==',user.uid), where('status','==','completed')))
-      .then(snap => {
+
+    // Live listener so earnings update the moment a ride is completed
+    const unsub = onSnapshot(
+      query(collection(db,'bookings'), where('driverId','==',user.uid), where('status','==','completed')),
+      snap => {
+        // Bucket by when the ride was completed (that's when the driver earned it)
+        const when = r => ((r.completedAt?.seconds || r.createdAt?.seconds || 0) * 1000);
         const history = snap.docs.map(d => ({ id:d.id, ...d.data() }))
-          .sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+          .sort((a,b) => when(b) - when(a));
         const now        = new Date();
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         const weekStart  = new Date(todayStart.getTime() - 6*86400000);
-        const todayRides = history.filter(r => new Date((r.createdAt?.seconds||0)*1000) >= todayStart);
-        const weekRides  = history.filter(r => new Date((r.createdAt?.seconds||0)*1000) >= weekStart);
+        const todayRides = history.filter(r => when(r) >= todayStart.getTime());
+        const weekRides  = history.filter(r => when(r) >= weekStart.getTime());
+        const earned = list => list.reduce((s,r) => s + Math.round((r.fare||0)*0.85), 0);
         setEarnings({
-          today:      todayRides.reduce((s,r) => s + Math.round((r.fare||0)*0.85), 0),
-          week:       weekRides.reduce((s,r)  => s + Math.round((r.fare||0)*0.85), 0),
-          total:      history.reduce((s,r)    => s + Math.round((r.fare||0)*0.85), 0),
+          today:      earned(todayRides),
+          week:       earned(weekRides),
+          total:      earned(history),
           todayRides: todayRides.length,
           weekRides:  weekRides.length,
           totalRides: history.length,
@@ -5415,7 +5421,10 @@ function DriverDash({ go, user, setUser, setBookingId }) {
         });
         setRides(history);
         setLoading(false);
-      }).catch(() => setLoading(false));
+      },
+      err => { console.error('Earnings listener error:', err); setLoading(false); }
+    );
+    return () => unsub();
   }, [user]);
 
   // ── Check if driver has an active ride (real-time) ──────────────────────
@@ -6141,7 +6150,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
       vcToast('Couldn\u2019t complete the ride \u2014 please check your connection and try again.', 'error');
       return;
     }
-    try { await updateDoc(doc(db,'drivers',user.uid), { isOnline:false, currentLocation:null, currentRideId:null }); } catch(e) {}
+    try { await updateDoc(doc(db,'drivers',user.uid), { currentLocation:null, currentRideId:null }); } catch(e) {}
     // Send receipt email to customer (non-critical — never blocks completion)
     try {
       if (booking?.customerId) {
