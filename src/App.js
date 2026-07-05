@@ -244,6 +244,18 @@ const registerCustomerPushToken = async (uid) => {
   } catch(e) { console.warn('Customer push token skipped:', e.message); }
 };
 
+// Register a driver's push token so a Cloud Function can push new-ride alerts
+const registerDriverPushToken = async (uid) => {
+  try {
+    if (!messaging || !uid) return;
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    const vapid = process.env.REACT_APP_FIREBASE_VAPID_KEY;
+    if (!vapid) return;
+    const token = await getToken(messaging, { vapidKey: vapid });
+    if (token) await updateDoc(doc(db,'drivers',uid), { fcmToken: token });
+  } catch(e) { console.warn('Driver push token skipped:', e.message); }
+};
+
 // ── Format a scheduled ride time (Feature: Scheduled Rides) ──────────────────
 const fmtScheduled = (val) => {
   try {
@@ -5384,6 +5396,18 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   const driverProfileRef = useRef(null); // cached driver profile for instant ride acceptance
   const [acceptingId, setAcceptingId] = useState(null); // which ride is currently being accepted (button feedback)
 
+  // ── Ask for notification permission + register push token (so drivers are alerted to new rides) ──
+  useEffect(() => {
+    if (!user?.uid) return;
+    try {
+      if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+        Notification.requestPermission().then(() => registerDriverPushToken(user.uid)).catch(()=>{});
+      } else {
+        registerDriverPushToken(user.uid);
+      }
+    } catch(e) {}
+  }, [user?.uid]);
+
   // ── Broadcast live location while online (so admin Live Map can show available drivers) ──
   // Only runs on the home dashboard when the driver is online and NOT on an active ride
   // (the active-ride screen already tracks a finer-grained location during trips).
@@ -5499,6 +5523,20 @@ function DriverDash({ go, user, setUser, setBookingId }) {
             g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
             osc.start(); osc.stop(ctx.currentTime + 0.6);
             setTimeout(() => ctx.close(), 1000);
+          }
+        } catch(e) {}
+        // Vibrate on mobile
+        try { if (navigator.vibrate) navigator.vibrate([200,100,200]); } catch(e) {}
+        // Browser notification so the driver is alerted even on another tab / idle screen
+        try {
+          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            const newest = open[0];
+            const from = newest?.pickup?.address?.split(',')[0] || 'a rider';
+            new Notification('🚕 New ride request!', {
+              body: `${newest?.customerName || 'A rider'} needs a ride from ${from}${newest?.fare ? ` · J$${newest.fare}` : ''}`,
+              icon: '/logo.png',
+              tag: 'new-ride', // collapse duplicates
+            });
           }
         } catch(e) {}
       }
@@ -6750,16 +6788,35 @@ function DriverSettings({ go, user, setUser }) {
 // ── Chat button with live unread-message badge (used on live-ride screens) ──
 function ChatButton({ bookingId, user, onClick, labelColor = '#6b21a8' }) {
   const [unread, setUnread] = useState(0);
+  const prevUnreadRef = useRef(0);
+  const seededRef = useRef(false);
   useEffect(() => {
     if (!bookingId || !user?.uid) return;
     const colRef = collection(db,'bookings',bookingId,'messages');
     const unsub = onSnapshot(colRef, snap => {
-      const count = snap.docs.reduce((n, d) => {
+      let count = 0;
+      let newest = null;
+      snap.docs.forEach(d => {
         const m = d.data();
         const fromOther = m.senderId && m.senderId !== user.uid;
         const seen = Array.isArray(m.readBy) && m.readBy.includes(user.uid);
-        return n + (fromOther && !seen ? 1 : 0);
-      }, 0);
+        if (fromOther && !seen) { count++; newest = m; }
+      });
+      // Alert on a genuinely new incoming message (skip the initial load)
+      if (seededRef.current && count > prevUnreadRef.current && newest) {
+        try {
+          if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+            new Notification('💬 New message', {
+              body: `${newest.senderName || 'Your ride'}: ${newest.text || ''}`.slice(0, 120),
+              icon: '/logo.png',
+              tag: 'chat-'+bookingId,
+            });
+          }
+          if (navigator.vibrate) navigator.vibrate(150);
+        } catch(e) {}
+      }
+      prevUnreadRef.current = count;
+      seededRef.current = true;
       setUnread(count);
     }, () => {});
     return () => unsub();
