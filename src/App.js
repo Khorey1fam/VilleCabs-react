@@ -4545,25 +4545,53 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
     return () => clearInterval(t);
   }, [booking?.acceptedAt?.seconds, booking?.status]);
 
-  const shareRide = () => {
+  const shareRide = async () => {
     const driverName = booking?.driverName || 'A VilleCabs driver';
     const pickup     = booking?.pickup?.address?.split(',')[0] || 'Pickup location';
     const dropoff    = booking?.dropoff?.address?.split(',')[0] || 'Drop-off location';
-    const plate      = booking?.licensePlate || '';
-    const text       = `I'm on my way! 🚕\n\nTracking my VilleCabs ride:\n📍 From: ${pickup}\n🏁 To: ${dropoff}\n🚗 Driver: ${driverName}${plate ? ' · ' + plate : ''}\n\nBook your own ride at villecabs.com`;
+    const trackUrl   = `https://villecabs.com/track/${bookingId}`;
+
+    // Make sure the public tracking doc exists before sharing the link
+    try { await syncTrackingDoc(); } catch(e) {}
+
+    const text = `Follow my VilleCabs ride live! 🚕\n\n📍 From: ${pickup}\n🏁 To: ${dropoff}\n🚗 Driver: ${driverName}\n\nLive tracking:`;
     if (navigator.share) {
-      navigator.share({ title: 'My VilleCabs Ride', text, url: 'https://villecabs.com' })
-        .catch(() => {});
+      navigator.share({ title: 'Track my VilleCabs ride', text, url: trackUrl }).catch(() => {});
     } else {
-      navigator.clipboard?.writeText(text).then(() => {
-        setShareCopied(true);
-        setTimeout(() => setShareCopied(false), 3000);
-      }).catch(() => {
-        setShareCopied(true);
-        setTimeout(() => setShareCopied(false), 3000);
-      });
+      navigator.clipboard?.writeText(`${text}\n${trackUrl}`).then(() => {
+        setShareCopied(true); setTimeout(() => setShareCopied(false), 3000);
+      }).catch(() => { setShareCopied(true); setTimeout(() => setShareCopied(false), 3000); });
     }
   };
+
+  // Write/refresh the world-readable tracking doc (safe subset only — no phone numbers)
+  const syncTrackingDoc = async () => {
+    if (!bookingId || !booking) return;
+    try {
+      await setDoc(doc(db,'tracking',bookingId), {
+        status:         booking.status || 'searching',
+        riderName:      (user?.name || booking.customerName || '').split(' ')[0] || null,
+        driverName:     booking.driverName || null,
+        driverPhoto:    driverInfo?.profilePhotoUrl || booking.profilePhotoUrl || null,
+        vehicleMake:    booking.vehicleMake || null,
+        vehicleModel:   booking.vehicleModel || null,
+        vehicleColor:   booking.vehicleColor || null,
+        licensePlate:   booking.licensePlate || null,
+        driverLocation: booking.driverLocation || null,
+        pickup:         booking.pickup ? { lat:booking.pickup.lat, lng:booking.pickup.lng } : null,
+        dropoff:        booking.dropoff ? { lat:booking.dropoff.lat, lng:booking.dropoff.lng } : null,
+        pickupAddress:  booking.pickup?.address || null,
+        dropoffAddress: booking.dropoff?.address || null,
+        updatedAt:      serverTimestamp(),
+      }, { merge:true });
+    } catch(e) { console.warn('tracking sync skipped:', e.message); }
+  };
+
+  // Keep the public tracking doc in sync as the ride progresses
+  useEffect(() => {
+    if (!bookingId || !booking) return;
+    syncTrackingDoc();
+  }, [bookingId, booking?.status, booking?.driverLocation?.lat, booking?.driverLocation?.lng, booking?.driverName]);
 
   const cancelRide = async () => {
     if (!bookingId) return;
@@ -9104,6 +9132,114 @@ function PartnerLocations({ go, user, setPickupData }) {
           <div style={{ fontSize:13, fontWeight:700, color:'#6b21a8', marginBottom:4 }}>Own a business in Manchester?</div>
           <div style={{ fontSize:12, color:'#555', marginBottom:10 }}>Become a preferred pickup location and give your customers safe rides home.</div>
           <button onClick={() => go('partner-with-us')} style={{ padding:'9px 18px', background:'#fff', border:'1px solid #d8b4fe', borderRadius:10, color:'#6b21a8', fontSize:12, fontWeight:700, cursor:'pointer' }}>Partner With Us →</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── PUBLIC LIVE TRACKING (shared link — no login required) ──────────────────
+// Reads a world-readable tracking/{id} doc that the rider's app keeps updated.
+export function LiveTrackShare({ trackId }) {
+  const [t, setT] = useState(null);
+  const [notFound, setNotFound] = useState(false);
+  useEffect(() => {
+    if (!trackId) { setNotFound(true); return; }
+    const unsub = onSnapshot(doc(db,'tracking',trackId), snap => {
+      if (!snap.exists()) { setNotFound(true); return; }
+      setT(snap.data()); setNotFound(false);
+    }, () => setNotFound(true));
+    return () => unsub();
+  }, [trackId]);
+
+  const wrap = { minHeight:'100vh', background:'linear-gradient(160deg,#ffffff,#f6f2fb 45%,#efe8f7)', display:'flex', flexDirection:'column' };
+
+  if (notFound) {
+    return (
+      <div style={{ ...wrap, alignItems:'center', justifyContent:'center', textAlign:'center', padding:24 }}>
+        <div style={{ fontSize:48, marginBottom:12 }}>🚕</div>
+        <div style={{ fontSize:18, fontWeight:800, color:'#2a1a4a', marginBottom:6 }}>Ride not found</div>
+        <div style={{ fontSize:14, color:'#8a83a0', maxWidth:320, lineHeight:1.5 }}>This tracking link has expired or the ride has ended.</div>
+        <a href="https://villecabs.com" style={{ marginTop:20, padding:'11px 24px', background:'#6b21a8', color:'#fff', borderRadius:22, fontSize:14, fontWeight:700, textDecoration:'none' }}>Visit VilleCabs</a>
+      </div>
+    );
+  }
+  if (!t) {
+    return <div style={{ ...wrap, alignItems:'center', justifyContent:'center' }}><div style={{ fontSize:14, color:'#8a83a0' }}>Loading live tracking…</div></div>;
+  }
+
+  const ended = ['completed','cancelled'].includes(t.status);
+  const driverCoords = t.driverLocation ? { lat:t.driverLocation.lat, lng:t.driverLocation.lng } : null;
+  const pickup  = t.pickup  ? { lat:t.pickup.lat,  lng:t.pickup.lng }  : null;
+  const dropoff = t.dropoff ? { lat:t.dropoff.lat, lng:t.dropoff.lng } : null;
+  const center = driverCoords || pickup || MANCHESTER_CENTER;
+
+  const statusLabel = ended
+    ? (t.status === 'completed' ? 'Ride completed ✅' : 'Ride cancelled')
+    : (t.status === 'arrived' ? 'Driver has arrived 📍'
+      : t.driverName ? 'On the way 🚗' : 'Finding a driver…');
+
+  const markers = [];
+  if (pickup)  markers.push({ position:pickup,  title:'Pickup' });
+  if (dropoff) markers.push({ position:dropoff, title:'Drop-off' });
+  if (driverCoords) markers.push({ position:driverCoords, title:'Driver' });
+
+  return (
+    <div style={wrap}>
+      {/* Header */}
+      <div style={{ background:'#fff', borderBottom:'1px solid #ece3f5', padding:'12px 16px', display:'flex', alignItems:'center', gap:10 }}>
+        <img src="/logo.png" alt="VilleCabs" style={{ height:30, objectFit:'contain' }}/>
+        <div style={{ fontSize:15, fontWeight:800, color:'#2a1a4a' }}>VilleCabs — Live Ride</div>
+      </div>
+
+      {/* Status banner */}
+      <div style={{ background: ended ? '#f3edfb' : '#6b21a8', color: ended ? '#6b21a8' : '#fff', padding:'12px 16px', textAlign:'center', fontSize:15, fontWeight:700 }}>
+        {t.riderName ? `${t.riderName} — ` : ''}{statusLabel}
+      </div>
+
+      {/* Map */}
+      {!ended && (
+        <div style={{ position:'relative' }}>
+          <VilleMap height={typeof window!=='undefined'?Math.max(420,window.innerHeight*0.55):460}
+            center={center} zoom={14} markers={markers} expandable={true}/>
+        </div>
+      )}
+
+      {/* Details */}
+      <div style={{ padding:16, maxWidth:520, margin:'0 auto', width:'100%', boxSizing:'border-box' }}>
+        {t.driverName && (
+          <div style={{ background:'#fff', border:'1px solid #ece3f5', borderRadius:14, padding:14, marginBottom:12, boxShadow:'0 2px 10px rgba(107,33,168,0.06)' }}>
+            <div style={{ fontSize:11, color:'#8a83a0', textTransform:'uppercase', letterSpacing:0.6, marginBottom:8 }}>The driver</div>
+            <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+              <div style={{ width:44, height:44, borderRadius:'50%', overflow:'hidden', background:'#f3edfb', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>
+                {t.driverPhoto ? <img src={t.driverPhoto} alt="Driver" style={{ width:'100%', height:'100%', objectFit:'cover' }}/> : '👤'}
+              </div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:15, fontWeight:700, color:'#2a1a4a' }}>{t.driverName}</div>
+                <div style={{ fontSize:12, color:'#8a83a0' }}>{[t.vehicleColor, t.vehicleMake, t.vehicleModel].filter(Boolean).join(' ') || 'Vehicle'}</div>
+              </div>
+              {t.licensePlate && (
+                <div style={{ background:'#f6f2fb', borderRadius:8, padding:'6px 12px', fontSize:14, fontWeight:800, color:'#6b21a8', letterSpacing:1 }}>{t.licensePlate}</div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div style={{ background:'#fff', border:'1px solid #ece3f5', borderRadius:14, padding:14, marginBottom:12 }}>
+          <div style={{ display:'flex', gap:10, marginBottom:10 }}>
+            <div style={{ width:9, height:9, borderRadius:'50%', background:'#1a9e5a', flexShrink:0, marginTop:3 }}/>
+            <div><div style={{ fontSize:10, color:'#8a83a0' }}>PICKUP</div><div style={{ fontSize:13, fontWeight:600, color:'#2a1a4a' }}>{t.pickupAddress || '—'}</div></div>
+          </div>
+          <div style={{ display:'flex', gap:10 }}>
+            <div style={{ width:9, height:9, borderRadius:'50%', background:'#6b21a8', flexShrink:0, marginTop:3 }}/>
+            <div><div style={{ fontSize:10, color:'#8a83a0' }}>DROP-OFF</div><div style={{ fontSize:13, fontWeight:600, color:'#2a1a4a' }}>{t.dropoffAddress || '—'}</div></div>
+          </div>
+        </div>
+
+        <div style={{ textAlign:'center', fontSize:12, color:'#8a83a0', lineHeight:1.6 }}>
+          {ended ? 'This ride has ended. Thanks for following along.' : 'This map updates live as the driver moves.'}
+          <br/>
+          <a href="https://villecabs.com" style={{ color:'#6b21a8', fontWeight:700, textDecoration:'none' }}>Book your own ride with VilleCabs →</a>
         </div>
       </div>
     </div>
