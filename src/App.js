@@ -4254,7 +4254,7 @@ function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, 
   const vehicle = booking?.vehicleType || pickupData?.vehicleType || 'VilleRide';
 
   return (
-    <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
+    <div style={{ background:'linear-gradient(160deg, #ffffff 0%, #f6f2fb 45%, #efe8f7 100%)', minHeight:'100vh' }}>
       <TopBar title="Confirm Booking" onBack={() => go('vehicle-select')} go={go} user={user}/>
 
       <div style={{ padding:16, maxWidth:520, margin:'0 auto' }}>
@@ -4413,6 +4413,10 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
         cancelReason:  reasonText,
         cancelledAt: serverTimestamp(),
       });
+      // If a driver had already accepted, free them so they can take new rides
+      if (booking?.driverId) {
+        try { await updateDoc(doc(db,'drivers',booking.driverId), { currentRideId:null }); } catch(e) {}
+      }
       setCancelDone(true);
     } catch(err) { console.error('Cancel error:', err); }
     setCancelling(false);
@@ -5533,6 +5537,8 @@ function DriverDash({ go, user, setUser, setBookingId }) {
         status:       'active',
         acceptedAt:   serverTimestamp(),
       });
+      // Mark this driver as busy so the customer-side availability check is accurate
+      try { await updateDoc(doc(db,'drivers',user.uid), { currentRideId: rideId }); } catch(e) {}
     } catch(e) {
       console.error('acceptRide error:', e);
       // Roll back to the dashboard so the driver can try again
@@ -6135,7 +6141,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
       vcToast('Couldn\u2019t complete the ride \u2014 please check your connection and try again.', 'error');
       return;
     }
-    try { await updateDoc(doc(db,'drivers',user.uid), { isOnline:false, currentLocation:null }); } catch(e) {}
+    try { await updateDoc(doc(db,'drivers',user.uid), { isOnline:false, currentLocation:null, currentRideId:null }); } catch(e) {}
     // Send receipt email to customer (non-critical — never blocks completion)
     try {
       if (booking?.customerId) {
