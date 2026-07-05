@@ -4418,22 +4418,12 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
         cancelReason:  reasonText,
         cancelledAt: serverTimestamp(),
       });
-      // If a driver had already accepted, free them so they can take new rides
-      if (booking?.driverId) {
-        try { await updateDoc(doc(db,'drivers',booking.driverId), { currentRideId:null }); } catch(e) {}
-      }
       setCancelling(false);
       setCancelDone(true);
     } catch(err) {
       console.error('Cancel error:', err);
       setCancelling(false);
-      // Don't fake success — the ride is still live if this failed
-      vcToast(
-        (err?.code === 'permission-denied')
-          ? 'Could not cancel — this ride is already with your driver. Please contact them or support.'
-          : 'Could not cancel the ride. Please check your connection and try again.',
-        'error'
-      );
+      vcToast('Could not cancel the ride. Please check your connection and try again.', 'error');
     }
   };
 
@@ -6003,6 +5993,26 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     });
     return () => unsub();
   }, [user]);
+
+  // Watch the specific ride for cancellation by the customer
+  useEffect(() => {
+    if (!bookingId) return;
+    const unsub = onSnapshot(doc(db,'bookings',bookingId), snap => {
+      if (!snap.exists()) return;
+      const b = snap.data();
+      if (b.status === 'cancelled' && b.cancelledBy === 'customer') {
+        // Free ourselves (we own our own driver doc, so this write is allowed)
+        if (user?.uid) {
+          updateDoc(doc(db,'drivers',user.uid), { currentRideId:null }).catch(()=>{});
+        }
+        if (watchRef.current !== null) { try { navigator.geolocation.clearWatch(watchRef.current); } catch(e){} }
+        vcToast('The rider cancelled this trip. You\u2019re free to accept new rides.', 'warn');
+        setBookingId(null);
+        go('driver-dash');
+      }
+    }, () => {});
+    return () => unsub();
+  }, [bookingId, user]);
 
   // Fetch route: driver → pickup (before arrived), pickup → dropoff (after arrived)
   useEffect(() => {
