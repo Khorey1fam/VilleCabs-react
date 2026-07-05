@@ -4454,8 +4454,21 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   const [sosCount,   setSosCount]   = useState(5);
   const [cancelling, setCancelling] = useState(false);
   const [cancelDone, setCancelDone] = useState(false);
+  const [graceSecs,  setGraceSecs]  = useState(15); // free-cancel window after a driver accepts
   const [shareCopied,  setShareCopied]  = useState(false);
   const sosRef = useRef(null);
+
+  // Count down the 15s free-cancel window once a driver has accepted
+  useEffect(() => {
+    if (!booking?.acceptedAt?.seconds || booking?.status !== 'active') return;
+    const tick = () => {
+      const elapsed = Math.floor(Date.now()/1000 - booking.acceptedAt.seconds);
+      setGraceSecs(Math.max(0, 15 - elapsed));
+    };
+    tick();
+    const t = setInterval(tick, 500);
+    return () => clearInterval(t);
+  }, [booking?.acceptedAt?.seconds, booking?.status]);
 
   const shareRide = () => {
     const driverName = booking?.driverName || 'A VilleCabs driver';
@@ -4492,12 +4505,44 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
         cancelReason:  reasonText,
         cancelledAt: serverTimestamp(),
       });
+      if (booking?.driverId) { try { await updateDoc(doc(db,'drivers',booking.driverId), { currentRideId:null }); } catch(e) {} }
       setCancelling(false);
       setCancelDone(true);
     } catch(err) {
       console.error('Cancel error:', err);
       setCancelling(false);
       vcToast('Could not cancel the ride. Please check your connection and try again.', 'error');
+    }
+  };
+
+  // Free cancel within the 15s grace window after a driver accepts.
+  // A cancellation fee applies only if the rider paid by card (cash rides = no fee).
+  const cancelWithinGrace = async () => {
+    if (!bookingId || cancelling) return;
+    const isCard = (booking?.paymentMethod || 'cash').toLowerCase() === 'card';
+    const ok = await vcConfirm(
+      isCard
+        ? 'Cancel this ride? A small cancellation fee will apply because you paid by card.'
+        : 'Cancel this ride? No fee will be charged.',
+      { confirmText: isCard ? 'Cancel (fee applies)' : 'Cancel ride', danger:true }
+    );
+    if (!ok) return;
+    setCancelling(true);
+    try {
+      await updateDoc(doc(db,'bookings',bookingId), {
+        status:          'cancelled',
+        cancelledBy:     'customer',
+        cancelReason:    'Cancelled within grace window',
+        cancellationFee: isCard,
+        cancelledAt:     serverTimestamp(),
+      });
+      if (booking?.driverId) { try { await updateDoc(doc(db,'drivers',booking.driverId), { currentRideId:null }); } catch(e) {} }
+      setCancelling(false);
+      setCancelDone(true);
+    } catch(err) {
+      console.error('Grace cancel error:', err);
+      setCancelling(false);
+      vcToast('Could not cancel the ride. Please try again.', 'error');
     }
   };
 
@@ -4978,6 +5023,25 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
                 )}
               </div>
             </div>
+
+            {/* 15-second free-cancel window after a driver accepts */}
+            {booking?.status === 'active' && graceSecs > 0 && (
+              <div style={{ background:'#fff7ed', border:'1px solid #fdba74', borderRadius:12, padding:'12px 14px', marginBottom:12 }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, marginBottom:10 }}>
+                  <div style={{ fontSize:12.5, color:'#9a3412', lineHeight:1.5 }}>
+                    Changed your mind? You can cancel now.
+                    {(booking?.paymentMethod||'cash').toLowerCase()==='card'
+                      ? ' A small fee applies for card payments.'
+                      : ' No fee for cash rides.'}
+                  </div>
+                  <div style={{ flexShrink:0, width:38, height:38, borderRadius:'50%', border:'2px solid #ea580c', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:800, color:'#ea580c' }}>{graceSecs}</div>
+                </div>
+                <button onClick={cancelWithinGrace} disabled={cancelling}
+                  style={{ width:'100%', padding:'11px', background:'#ea580c', color:'#fff', border:'none', borderRadius:10, fontSize:13.5, fontWeight:700, cursor:cancelling?'default':'pointer' }}>
+                  {cancelling ? 'Cancelling…' : '✕ Cancel ride'}
+                </button>
+              </div>
+            )}
 
             {/* Fare + status */}
             <div style={{ display:'flex', gap:10, marginBottom:12 }}>
