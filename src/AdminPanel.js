@@ -105,11 +105,15 @@ function DriversTab() {
   const [confirm, setConfirm]   = useState(null);
 
   useEffect(() => {
-    const q = filter === 'all'
+    const q = (filter === 'all' || filter === 'reuploads')
       ? query(collection(db,'drivers'))
       : query(collection(db,'drivers'), where('status','==',filter));
     const unsub = onSnapshot(q, snap => {
-      const list = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+      let list = snap.docs.map(d => ({ id:d.id, ...d.data() }));
+      // "Re-uploads" = any driver with a document/photo currently pending review
+      if (filter === 'reuploads') {
+        list = list.filter(d => Object.values(d.documents || {}).some(x => x && x.status === 'pending'));
+      }
       list.sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
       setDrivers(list);
       setLoading(false);
@@ -130,6 +134,16 @@ function DriversTab() {
     await updateDoc(doc(db,'drivers',id), { status:'suspended', suspendedAt:serverTimestamp() });
   };
 
+  // Review an individual re-uploaded document/photo (from the driver's documents screen)
+  const reviewDoc = async (driverId, key, decision) => {
+    try {
+      await updateDoc(doc(db,'drivers',driverId), {
+        ['documents.'+key+'.status']: decision, // 'approved' | 'rejected'
+        ['documents.'+key+'.reviewedAt']: serverTimestamp(),
+      });
+    } catch(e) { console.error('Doc review failed:', e); }
+  };
+
   const statusBadge = (status) => {
     const map = {
       pending:   { bg:'rgba(232,180,0,0.15)',  color:'#e8b400',  text:'Pending'   },
@@ -141,7 +155,7 @@ function DriversTab() {
     return <span style={{ ...s.badge, background:m.bg, color:m.color }}>{m.text}</span>;
   };
 
-  const filters = ['pending','approved','rejected','all'];
+  const filters = ['pending','reuploads','approved','rejected','all'];
 
   return (
     <div>
@@ -166,7 +180,7 @@ function DriversTab() {
         {filters.map(f => (
           <button key={f} onClick={() => setFilter(f)}
             style={{ padding:'7px 16px', borderRadius:20, fontSize:13, border:'1px solid #e5e7eb', background:filter===f?'#6b21a8':'#f3f4f6', color:filter===f?'#fff':'#555', cursor:'pointer', textTransform:'capitalize', fontWeight:filter===f?600:400 }}>
-            {f === 'all' ? 'All drivers' : f}
+            {f === 'all' ? 'All drivers' : f === 'reuploads' ? '⏳ Re-uploads' : f}
           </button>
         ))}
       </div>
@@ -208,6 +222,31 @@ function DriversTab() {
               </div>
             ))}
           </div>
+
+          {/* Pending re-uploaded documents/photos awaiting review */}
+          {(() => {
+            const labels = { licence:'Driver Licence', license:'Driver Licence', fitness:'Vehicle Fitness', registration:'Vehicle Registration', insurance:'Insurance', vehiclePhoto:'Vehicle Photo', profilePhoto:'Profile Photo' };
+            const pendingDocs = Object.entries(driver.documents || {}).filter(([, d]) => d && d.status === 'pending');
+            if (pendingDocs.length === 0) return null;
+            return (
+              <div style={{ marginBottom:12, background:'#fff7ed', border:'1px solid #fdba74', borderRadius:12, padding:'12px 14px' }}>
+                <div style={{ fontSize:11, color:'#9a3412', marginBottom:10, textTransform:'uppercase', letterSpacing:0.5, fontWeight:700 }}>⏳ Awaiting Review ({pendingDocs.length})</div>
+                {pendingDocs.map(([key, d]) => (
+                  <div key={key} style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap', padding:'8px 0', borderTop:'1px solid #fde3c4' }}>
+                    <span style={{ fontSize:13, fontWeight:600, color:'#1a1a2e', flex:1, minWidth:120 }}>{labels[key] || key}</span>
+                    {d.url && (
+                      <a href={d.url} target="_blank" rel="noopener noreferrer"
+                        style={{ ...s.badge, background:'#eef2ff', color:'#4338ca', fontSize:11, textDecoration:'none', padding:'5px 10px' }}>🔍 View</a>
+                    )}
+                    <button onClick={() => reviewDoc(driver.id, key, 'approved')}
+                      style={{ padding:'6px 12px', background:'#1a9e5a', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:700, cursor:'pointer' }}>✓ Approve</button>
+                    <button onClick={() => reviewDoc(driver.id, key, 'rejected')}
+                      style={{ padding:'6px 12px', background:'#fee2e2', color:'#dc2626', border:'1px solid #fca5a5', borderRadius:8, fontSize:11, fontWeight:700, cursor:'pointer' }}>✗ Reject</button>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
           {/* Profile & Vehicle photos */}
           <div style={{ marginBottom:12 }}>
