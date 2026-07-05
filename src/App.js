@@ -4286,6 +4286,32 @@ function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, 
     }
   };
 
+  // "Change Ride" / back — cancel the pending booking so it isn't left live for drivers
+  const handleChangeRide = async () => {
+    if (loading) return;
+    try {
+      if (bookingId) {
+        // Only cancel if it hasn't reached a terminal state
+        const snap = await getDoc(doc(db,'bookings',bookingId));
+        const cur = snap.exists() ? snap.data() : null;
+        if (cur && !['completed','cancelled'].includes(cur.status)) {
+          await updateDoc(doc(db,'bookings',bookingId), {
+            status: 'cancelled',
+            cancelledBy: 'customer',
+            cancelReason: 'Changed ride before starting',
+            cancelledAt: serverTimestamp(),
+          });
+          // If a driver had already grabbed it, free them
+          if (cur.driverId) {
+            try { await updateDoc(doc(db,'drivers',cur.driverId), { currentRideId:null }); } catch(e) {}
+          }
+        }
+      }
+      setBookingId(null);
+    } catch(e) { console.error('Change-ride cancel failed:', e); }
+    go('vehicle-select');
+  };
+
   // Get fare from booking (Firestore) or pickupData (passed from VehicleSelect)
   const fare    = booking?.fare || pickupData?.fare || 0;
   const dist    = booking?.distanceKm || pickupData?.distanceKm || 0;
@@ -4295,7 +4321,7 @@ function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, 
 
   return (
     <div style={{ background:'linear-gradient(160deg, #ffffff 0%, #f6f2fb 45%, #efe8f7 100%)', minHeight:'100vh' }}>
-      <TopBar title="Confirm Booking" onBack={() => go('vehicle-select')} go={go} user={user}/>
+      <TopBar title="Confirm Booking" onBack={handleChangeRide} go={go} user={user}/>
 
       <div style={{ padding:16, maxWidth:520, margin:'0 auto' }}>
 
@@ -4366,7 +4392,7 @@ function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, 
             <>🚕 Confirm — Pay J${fare.toLocaleString()} Cash</>
           )}
         </button>
-        <button onClick={() => go('vehicle-select')} disabled={loading}
+        <button onClick={handleChangeRide} disabled={loading}
           style={{ width:'100%', padding:'13px', background:'#fff', color:'#888', border:'1px solid #e5e7eb', borderRadius:14, fontSize:14, cursor:'pointer' }}>
           ← Change Ride
         </button>
