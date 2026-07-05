@@ -2370,6 +2370,11 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
         setRideNotif(null);
         if (prevStatusRef.current !== null) prevStatusRef.current = null;
       }
+      // Extra safety: if the most recent ride is cancelled or has no active status, never keep it as active
+      const latest = rides[0];
+      if (latest && ['cancelled','completed','no_driver','declined'].includes(latest.status)) {
+        setActiveRide(prev => (prev && prev.id === latest.id) ? null : prev);
+      }
     });
     return () => unsub();
   }, [user]);
@@ -4417,9 +4422,19 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
       if (booking?.driverId) {
         try { await updateDoc(doc(db,'drivers',booking.driverId), { currentRideId:null }); } catch(e) {}
       }
+      setCancelling(false);
       setCancelDone(true);
-    } catch(err) { console.error('Cancel error:', err); }
-    setCancelling(false);
+    } catch(err) {
+      console.error('Cancel error:', err);
+      setCancelling(false);
+      // Don't fake success — the ride is still live if this failed
+      vcToast(
+        (err?.code === 'permission-denied')
+          ? 'Could not cancel — this ride is already with your driver. Please contact them or support.'
+          : 'Could not cancel the ride. Please check your connection and try again.',
+        'error'
+      );
+    }
   };
 
   // Block browser back button when searching
@@ -4862,10 +4877,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
                     <div style={{ width:38, height:38, borderRadius:'50%', background:GREEN, display:'flex', alignItems:'center', justifyContent:'center', fontSize:17 }}>📞</div>
                     <span style={{ fontSize:9, color:'#8a83a0' }}>Call</span>
                   </div>
-                  <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, cursor:'pointer' }} onClick={() => go('chat')}>
-                    <div style={{ width:38, height:38, borderRadius:'50%', background:'#f5f0ff', border:'1px solid #d8b4fe', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17 }}>💬</div>
-                    <span style={{ fontSize:9, color:'#6b21a8' }}>Chat</span>
-                  </div>
+                  <ChatButton bookingId={booking?.id||bookingId} user={user} onClick={() => go('chat')} labelColor="#6b21a8"/>
                 </div>
               </div>
               {/* Vehicle photo (Feature: show driver's vehicle to customer) */}
@@ -6300,10 +6312,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
                     <div style={{ width:40, height:40, borderRadius:'50%', background:GREEN, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>📞</div>
                     <span style={{ fontSize:9, color:'rgba(255,255,255,0.45)' }}>Call</span>
                   </div>
-                  <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, cursor:'pointer' }} onClick={() => { setBookingId(booking?.id||bookingId); go('chat'); }}>
-                    <div style={{ width:40, height:40, borderRadius:'50%', background:'rgba(232,180,0,0.2)', border:'1.5px solid #e8b400', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>💬</div>
-                    <span style={{ fontSize:9, color:YELLOW }}>Chat</span>
-                  </div>
+                  <ChatButton bookingId={booking?.id||bookingId} user={user} onClick={() => { setBookingId(booking?.id||bookingId); go('chat'); }} labelColor="#6b21a8"/>
                   {booking?.customerPhone && (
                     <a href={`tel:${booking.customerPhone}`} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, textDecoration:'none' }}>
                       <div style={{ width:40, height:40, borderRadius:'50%', background:'rgba(26,158,90,0.2)', border:'1.5px solid #1a9e5a', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>📞</div>
@@ -6704,6 +6713,39 @@ function DriverSettings({ go, user, setUser }) {
 // The key insight: both driver and customer need the SAME bookingId
 // Driver gets it from their active booking query
 // Customer gets it from the bookingId prop set when they booked
+// ── Chat button with live unread-message badge (used on live-ride screens) ──
+function ChatButton({ bookingId, user, onClick, labelColor = '#6b21a8' }) {
+  const [unread, setUnread] = useState(0);
+  useEffect(() => {
+    if (!bookingId || !user?.uid) return;
+    const colRef = collection(db,'bookings',bookingId,'messages');
+    const unsub = onSnapshot(colRef, snap => {
+      const count = snap.docs.reduce((n, d) => {
+        const m = d.data();
+        const fromOther = m.senderId && m.senderId !== user.uid;
+        const seen = Array.isArray(m.readBy) && m.readBy.includes(user.uid);
+        return n + (fromOther && !seen ? 1 : 0);
+      }, 0);
+      setUnread(count);
+    }, () => {});
+    return () => unsub();
+  }, [bookingId, user]);
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, cursor:'pointer' }} onClick={onClick}>
+      <div style={{ position:'relative' }}>
+        <div style={{ width:38, height:38, borderRadius:'50%', background:'#f5f0ff', border:'1px solid #d8b4fe', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17 }}>💬</div>
+        {unread > 0 && (
+          <div style={{ position:'absolute', top:-5, right:-5, minWidth:18, height:18, padding:'0 5px', borderRadius:9, background:'#dc2626', color:'#fff', fontSize:10, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center', border:'2px solid #fff', boxShadow:'0 1px 4px rgba(0,0,0,0.25)' }}>
+            {unread > 9 ? '9+' : unread}
+          </div>
+        )}
+      </div>
+      <span style={{ fontSize:9, color:labelColor }}>Chat</span>
+    </div>
+  );
+}
+
 function ChatScreen({ go, user, bookingId }) {
   const [messages, setMessages] = useState([]);
   const [text,     setText]     = useState('');
@@ -6756,6 +6798,17 @@ function ChatScreen({ go, user, bookingId }) {
       msgs.sort((a,b) => (a.createdAt?.seconds||0) - (b.createdAt?.seconds||0));
       setMessages(msgs);
       setError('');
+      // Mark the other party's unread messages as read (clears the unread badge)
+      if (user?.uid) {
+        snap.docs.forEach(d => {
+          const m = d.data();
+          const fromOther = m.senderId && m.senderId !== user.uid;
+          const seen = Array.isArray(m.readBy) && m.readBy.includes(user.uid);
+          if (fromOther && !seen) {
+            updateDoc(d.ref, { readBy: arrayUnion(user.uid) }).catch(()=>{});
+          }
+        });
+      }
     }, err => {
       setError('Could not load messages. Please refresh and try again.');
     });
