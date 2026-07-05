@@ -182,7 +182,16 @@ function DriversTab() {
         <div key={driver.id} style={s.card}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
             <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-              <div style={{ width:44, height:44, borderRadius:'50%', background:'rgba(232,180,0,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0 }}>👤</div>
+              {(() => {
+                const pic = driver.profilePhotoUrl || driver.docs?.profilePhoto || driver.documents?.profilePhoto?.url;
+                const has = pic && pic !== 'pending_upload';
+                return (
+                  <div onClick={() => has && window.open(pic, '_blank')}
+                    style={{ width:44, height:44, borderRadius:'50%', background:'rgba(107,33,168,0.12)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, flexShrink:0, overflow:'hidden', cursor: has?'pointer':'default' }}>
+                    {has ? <img src={pic} alt={driver.name} style={{ width:'100%', height:'100%', objectFit:'cover' }}/> : '👤'}
+                  </div>
+                );
+              })()}
               <div>
                 <div style={{ fontSize:15, fontWeight:500, color:'#1a1a2e' }}>{driver.name}</div>
                 <div style={{ fontSize:12, color:'#6b7280' }}>{driver.email} · {driver.phone}</div>
@@ -198,6 +207,33 @@ function DriversTab() {
                 <div style={{ fontSize:12, color:'#1a1a2e' }}>{v||'--'}</div>
               </div>
             ))}
+          </div>
+
+          {/* Profile & Vehicle photos */}
+          <div style={{ marginBottom:12 }}>
+            <div style={{ fontSize:11, color:'#9199ad', marginBottom:8, textTransform:'uppercase', letterSpacing:0.5 }}>Photos</div>
+            <div style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
+              {[['Profile Photo', driver.profilePhotoUrl || driver.docs?.profilePhoto || driver.documents?.profilePhoto?.url],
+                ['Vehicle Photo', driver.vehiclePhotoUrl || driver.docs?.vehiclePhoto || driver.documents?.vehiclePhoto?.url]].map(([label, url]) => {
+                const has = url && url !== 'pending_upload';
+                return (
+                  <div key={label} style={{ textAlign:'center' }}>
+                    <div style={{ fontSize:10, color:'#9199ad', marginBottom:5 }}>{label}</div>
+                    {has ? (
+                      <div onClick={() => window.open(url, '_blank')}
+                        style={{ width:96, height:72, borderRadius:10, overflow:'hidden', border:'1px solid #ece3f5', cursor:'pointer', position:'relative' }}>
+                        <img src={url} alt={label} style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
+                        <div style={{ position:'absolute', bottom:3, right:3, background:'rgba(0,0,0,0.6)', color:'#fff', fontSize:8, fontWeight:600, padding:'1px 5px', borderRadius:8 }}>🔍 View</div>
+                      </div>
+                    ) : (
+                      <div style={{ width:96, height:72, borderRadius:10, border:'1px dashed #fca5a5', background:'#fff5f5', display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, color:'#dc2626', textAlign:'center', padding:4 }}>
+                        Not uploaded
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           <div style={{ marginBottom:12 }}>

@@ -8615,13 +8615,30 @@ function DriverDocuments({ go, user }) {
   const docTypes=[{key:'licence',label:"Driver Licence",icon:'🪪'},{key:'fitness',label:'Vehicle Fitness',icon:'📋'},{key:'registration',label:'Vehicle Registration',icon:'📄'},{key:'insurance',label:'Insurance',icon:'🛡️'},{key:'vehiclePhoto',label:'Vehicle Photo',icon:'🚗'}];
   const handleUpload = async (key, file) => {
     if (!file||!user?.uid) return;
+    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+      setMsg('Please choose an image or PDF.'); setTimeout(()=>setMsg(''),3000); return;
+    }
+    if (file.size > 8*1024*1024) { setMsg('File too large (max 8MB).'); setTimeout(()=>setMsg(''),3000); return; }
     setSaving(key);
     try {
-      const docData={status:'pending',name:file.name,uploadedAt:new Date().toISOString()};
-      await updateDoc(doc(db,'drivers',user.uid), {['documents.'+key]:docData});
+      // Actually upload the file to Storage and get a real URL
+      const r = storageRef(storage, `driver-docs/${user.uid}/${key}_${Date.now()}`);
+      const snap = await uploadBytes(r, file, { contentType: file.type });
+      const url = await getDownloadURL(snap.ref);
+
+      const docData = { status:'pending', name:file.name, url, uploadedAt:new Date().toISOString() };
+      const updates = { ['documents.'+key]: docData, ['docs.'+key]: url };
+      // Also mirror photos to the top-level fields the admin card & live-ride screen read
+      if (key === 'vehiclePhoto') updates.vehiclePhotoUrl = url;
+      if (key === 'profilePhoto') updates.profilePhotoUrl = url;
+
+      await updateDoc(doc(db,'drivers',user.uid), updates);
       setDocs(prev=>({...prev,[key]:docData}));
       setMsg('Uploaded — pending review'); setTimeout(()=>setMsg(''),3000);
-    } catch(e) {}
+    } catch(e) {
+      console.error('Doc upload failed:', e);
+      setMsg('Upload failed — please try again.'); setTimeout(()=>setMsg(''),3000);
+    }
     setSaving('');
   };
   return (
