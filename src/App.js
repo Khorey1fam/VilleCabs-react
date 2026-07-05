@@ -426,6 +426,22 @@ function VilleMap({ height = 620, center = MANCHESTER_CENTER, zoom = 14, onClick
     }
   }, [isLoaded]);
 
+  // Keep a handle on the map instance so we can imperatively pan/zoom
+  const mapRef = useRef(null);
+  const onMapLoad = (map) => { mapRef.current = map; };
+  // Smoothly re-center and re-zoom whenever the target center or zoom changes
+  useEffect(() => {
+    if (!mapRef.current || !center) return;
+    // If we have a route, frame both endpoints instead of a fixed zoom
+    if (directions?.routes?.[0]?.bounds) {
+      try { mapRef.current.fitBounds(directions.routes[0].bounds, 60); return; } catch(e) {}
+    }
+    try {
+      mapRef.current.panTo(center);
+      if (typeof zoom === 'number') mapRef.current.setZoom(expanded ? zoom + 1 : zoom);
+    } catch(e) {}
+  }, [center?.lat, center?.lng, zoom, expanded, directions]);
+
   // Use window height for mobile-aware sizing (allow the map to fill most of the screen)
   const mobileHeight = Math.min(height, window.innerHeight * 0.82);
 
@@ -447,6 +463,7 @@ function VilleMap({ height = 620, center = MANCHESTER_CENTER, zoom = 14, onClick
       mapContainerStyle={{ width:'100%', height: expanded ? '100%' : mobileHeight }}
       center={center}
       zoom={expanded ? zoom + 1 : zoom}
+      onLoad={onMapLoad}
       onClick={handleMapClick}
       options={{ styles:MAP_STYLE, disableDefaultUI:true, zoomControl:true, gestureHandling:'greedy' }}
     >
@@ -3307,6 +3324,7 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
 function PinPickup({ go, setPickupData, user }) {
   const [mapsReady, setMapsReady] = useState(!!window.google?.maps?.places);
   const [pinPos,      setPinPos]      = useState(MANCHESTER_CENTER);
+  const [mapZoom,     setMapZoom]     = useState(14);
   const [address,     setAddress]     = useState('');
   const [note,        setNote]        = useState('');
   const [loading,     setLoading]     = useState(false);
@@ -3322,6 +3340,7 @@ function PinPickup({ go, setPickupData, user }) {
     const lat = e.latLng.lat();
     const lng = e.latLng.lng();
     setPinPos({ lat, lng });
+    setMapZoom(16); // zoom in close on the chosen spot
     setLoading(true);
     const addr = await geocodeLatLng(lat, lng);
     setAddress(addr);
@@ -3330,6 +3349,7 @@ function PinPickup({ go, setPickupData, user }) {
 
   const handlePlaceSelect = (place) => {
     const pos = { lat: place.lat, lng: place.lng };
+    setMapZoom(16); // zoom in close on the selected place
     setPinPos(pos);
     setAddress(place.formattedAddress || place.name);
   };
@@ -3368,7 +3388,7 @@ function PinPickup({ go, setPickupData, user }) {
 
       {/* ── MAP ── */}
       <div style={{ flexShrink:0 }}>
-        <VilleMap height={typeof window!=='undefined'?Math.round(window.innerHeight*0.60):560} center={pinPos||MANCHESTER_CENTER} zoom={14}
+        <VilleMap height={typeof window!=='undefined'?Math.round(window.innerHeight*0.60):560} center={pinPos||MANCHESTER_CENTER} zoom={mapZoom}
           onClick={handleMapClick} markers={[{ position:pinPos, title:'Pickup' }]} expandable={true}/>
       </div>
 
@@ -3470,6 +3490,7 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
   // Start map centered on pickup location if available, else Mandeville
   const startPos = pickupData?.coords || MANCHESTER_CENTER;
   const [pinPos,   setPinPos]   = useState(MANCHESTER_CENTER);
+  const [mapZoom,  setMapZoom]  = useState(14);
   const [address,  setAddress]  = useState('');
   const [note,         setNote]         = useState('');
   const [fareEstimate, setFareEstimate] = useState(null);
@@ -3483,6 +3504,7 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
   const handlePlaceSelect = (place) => {
     const pos = { lat: place.lat, lng: place.lng };
     setPinPos(pos);
+    setMapZoom(16); // zoom in close on the selected drop-off
     setAddress(place.formattedAddress || place.name);
     // Calculate fare estimate
     if (pickupData?.coords) {
@@ -3503,6 +3525,7 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
     const lat = e.latLng.lat();
     const lng = e.latLng.lng();
     setPinPos({ lat, lng });
+    setMapZoom(16); // zoom in close on the chosen drop-off
     try {
       const addr = await geocodeLatLng(lat, lng);
       setAddress(addr);
@@ -3565,7 +3588,7 @@ function PinDropoff({ go, pickupData, setDropoffData, user }) {
 
       {/* ── MAP ── */}
       <div style={{ flexShrink:0 }}>
-        <VilleMap height={typeof window!=='undefined'?Math.round(window.innerHeight*0.60):560} center={mapCenter} zoom={14}
+        <VilleMap height={typeof window!=='undefined'?Math.round(window.innerHeight*0.60):560} center={mapCenter} zoom={mapZoom}
           onClick={handleMapClick} markers={markers} expandable={true}/>
       </div>
 
@@ -3772,8 +3795,8 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
   }, [pickupData, dropoffData]);
 
   const markers = [];
-  if (pickupData?.coords && !directions)  markers.push({ position:pickupData.coords,  title:'Pickup' });
-  if (dropoffData?.coords && !directions) markers.push({ position:dropoffData.coords, title:'Drop-off' });
+  if (pickupData?.coords)  markers.push({ position:pickupData.coords,  title:'Pickup' });
+  if (dropoffData?.coords) markers.push({ position:dropoffData.coords, title:'Drop-off' });
 
   const applyPromo = async () => {
     if (!promoCode.trim()) return;
@@ -3836,11 +3859,11 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
         where('status',   '==', 'approved'),
         where('isOnline', '==', true),
       ));
-      const available = snap.docs.filter(d => {
-        const data = d.data();
-        return !data.currentRideId && data.isOnline === true;
-      });
-      return available.length > 0;
+      // A driver counts as available if they're approved and online.
+      // (We don't exclude on currentRideId — a stale value from an
+      //  interrupted ride would wrongly hide an available driver. The
+      //  driver app itself stops showing new requests while on a ride.)
+      return snap.docs.length > 0;
     } catch(e) {
       console.warn('Driver check failed:', e);
       return true; // fail open - allow booking if check fails
@@ -5487,7 +5510,8 @@ function DriverDash({ go, user, setUser, setBookingId }) {
 
   const goOnline = async () => {
     setIsOnline(true);
-    try { await updateDoc(doc(db,'drivers',user.uid), { isOnline:true, lastOnline:serverTimestamp() }); } catch(e) {}
+    // Clear any stale ride reference so an interrupted old ride doesn't mark us busy
+    try { await updateDoc(doc(db,'drivers',user.uid), { isOnline:true, currentRideId:null, lastOnline:serverTimestamp() }); } catch(e) {}
   };
   const goOffline = async () => {
     setIsOnline(false);
