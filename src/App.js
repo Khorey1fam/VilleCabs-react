@@ -480,7 +480,7 @@ function VilleMap({ height = 620, center = MANCHESTER_CENTER, zoom = 14, onClick
       options={{ styles:MAP_STYLE, disableDefaultUI:true, zoomControl:true, gestureHandling:'greedy' }}
     >
       {markers.map((m, i) => (
-        <Marker key={i} position={m.position} label={m.label} title={m.title}/>
+        <Marker key={i} position={m.position} label={m.label} title={m.title} icon={m.icon}/>
       ))}
       {directions && (
         <>
@@ -6351,14 +6351,14 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
         watchRef.current = navigator.geolocation.watchPosition(
           async (pos) => {
             const { latitude: lat, longitude: lng } = pos.coords;
+            // Always write the location straight to the booking so the customer's
+            // live map (and shared tracking link) update reliably.
             try {
-              await updateDriverLocationFn({ lat, lng, bookingId: booking.id });
-            } catch(err) {
-              try {
-                await updateDoc(doc(db,'bookings',booking.id), { driverLocation:{ lat, lng, updatedAt:serverTimestamp() } });
-                await updateDoc(doc(db,'drivers',user.uid), { currentLocation:{ lat, lng, updatedAt:serverTimestamp() } });
-              } catch(e) { console.error(e); }
-            }
+              await updateDoc(doc(db,'bookings',booking.id), { driverLocation:{ lat, lng, updatedAt: Date.now() } });
+              await updateDoc(doc(db,'drivers',user.uid), { currentLocation:{ lat, lng, updatedAt: Date.now() } });
+            } catch(e) { console.error('Location write failed:', e); }
+            // Also notify the cloud function (for ETA/analytics), but don't depend on it.
+            try { await updateDriverLocationFn({ lat, lng, bookingId: booking.id }); } catch(err) {}
           },
           (err) => setLocationStatus(err.code===1?'denied':'idle'),
           { enableHighAccuracy:false, maximumAge:10000, timeout:15000 }
@@ -9179,10 +9179,15 @@ export function LiveTrackShare({ trackId }) {
     : (t.status === 'arrived' ? 'Driver has arrived 📍'
       : t.driverName ? 'On the way 🚗' : 'Finding a driver…');
 
+  const svgPin = (color) => 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30"><circle cx="15" cy="15" r="11" fill="${color}" stroke="white" stroke-width="3"/></svg>`);
+  const svgCar = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="#6b21a8" stroke="white" stroke-width="3"/><text x="20" y="27" font-size="18" text-anchor="middle">🚗</text></svg>`);
+
   const markers = [];
-  if (pickup)  markers.push({ position:pickup,  title:'Pickup' });
-  if (dropoff) markers.push({ position:dropoff, title:'Drop-off' });
-  if (driverCoords) markers.push({ position:driverCoords, title:'Driver' });
+  if (pickup)  markers.push({ position:pickup,  title:'Pickup',   icon:{ url:svgPin('#1a9e5a'), scaledSize:{ width:30, height:30 } } });
+  if (dropoff) markers.push({ position:dropoff, title:'Drop-off', icon:{ url:svgPin('#6b21a8'), scaledSize:{ width:30, height:30 } } });
+  if (driverCoords) markers.push({ position:driverCoords, title:'Driver', icon:{ url:svgCar, scaledSize:{ width:40, height:40 } } });
 
   return (
     <div style={wrap}>
@@ -9201,7 +9206,18 @@ export function LiveTrackShare({ trackId }) {
       {!ended && (
         <div style={{ position:'relative' }}>
           <VilleMap height={typeof window!=='undefined'?Math.max(420,window.innerHeight*0.55):460}
-            center={center} zoom={14} markers={markers} expandable={true}/>
+            center={center} zoom={15} markers={markers} expandable={true}/>
+          {/* Legend */}
+          <div style={{ position:'absolute', bottom:12, left:12, background:'rgba(255,255,255,0.95)', borderRadius:10, padding:'8px 12px', boxShadow:'0 2px 10px rgba(0,0,0,0.15)', fontSize:11, display:'flex', flexDirection:'column', gap:5 }}>
+            {driverCoords && <div style={{ display:'flex', alignItems:'center', gap:6 }}><span>🚗</span><span style={{ color:'#2a1a4a', fontWeight:600 }}>Driver</span></div>}
+            <div style={{ display:'flex', alignItems:'center', gap:6 }}><span style={{ width:10, height:10, borderRadius:'50%', background:'#1a9e5a', display:'inline-block' }}/><span style={{ color:'#2a1a4a' }}>Pickup</span></div>
+            <div style={{ display:'flex', alignItems:'center', gap:6 }}><span style={{ width:10, height:10, borderRadius:'50%', background:'#6b21a8', display:'inline-block' }}/><span style={{ color:'#2a1a4a' }}>Drop-off</span></div>
+          </div>
+          {!driverCoords && (
+            <div style={{ position:'absolute', top:12, left:'50%', transform:'translateX(-50%)', background:'rgba(107,33,168,0.92)', color:'#fff', fontSize:12, fontWeight:600, padding:'6px 14px', borderRadius:20 }}>
+              Waiting for driver location…
+            </div>
+          )}
         </div>
       )}
 
