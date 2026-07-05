@@ -3759,7 +3759,8 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
   const surcharge = getSurcharge();
   const SURCHARGE_MULT = surcharge ? 1 + surcharge.pct / 100 : 1.0;
 
-  const baseFare = (km) => {
+  // Local fare for the first 10km (unchanged short-distance system)
+  const localFare = (km) => {
     if (km < 0.1) return 500; // minimum
     for (const [lo, hi, fare] of FARE_BANDS) {
       if (km >= lo && km < hi) return fare;
@@ -3769,17 +3770,62 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
     return Math.round(OVER_1KM_BASE + extra100m * OVER_1KM_PER_100M);
   };
 
+  // ── Long-distance pricing ───────────────────────────────────────────────────
+  // ≤10km: local fare. 10–30km: +J$180/km. >30km: +J$220/km beyond 30 + J$1,500 out-of-town surcharge.
+  const LONGDIST_MID_PER_KM = 180;   // per km for 10–30km
+  const LONGDIST_FAR_PER_KM = 220;   // per km beyond 30km
+  const OUT_OF_TOWN_SURCHARGE = 1500;
+
+  // Detailed long-distance breakdown (before vehicle multiplier / surcharges)
+  const distanceBreakdown = (km) => {
+    const first10 = localFare(Math.min(km, 10));
+    if (km <= 10) {
+      return { first10, midCharge:0, farCharge:0, outOfTown:0, base: first10, isLong:false, isFar:false };
+    }
+    if (km <= 30) {
+      const midCharge = Math.round((km - 10) * LONGDIST_MID_PER_KM);
+      return { first10, midCharge, farCharge:0, outOfTown:0, base: first10 + midCharge, isLong:true, isFar:false };
+    }
+    // Over 30km
+    const midCharge = 20 * LONGDIST_MID_PER_KM;               // full 10–30km band
+    const farCharge = Math.round((km - 30) * LONGDIST_FAR_PER_KM);
+    const base = first10 + midCharge + farCharge + OUT_OF_TOWN_SURCHARGE;
+    return { first10, midCharge, farCharge, outOfTown: OUT_OF_TOWN_SURCHARGE, base, isLong:true, isFar:true };
+  };
+
+  const baseFare = (km) => distanceBreakdown(km).base;
+
   const calcPrice = (v) => {
-    const base = baseFare(dist);
-    return Math.round(base * v.multiplier * SURCHARGE_MULT * SURGE_MULT); // SURGE_MULT: Feature: Surge Pricing
+    const bd = distanceBreakdown(dist);
+    // Vehicle multiplier + peak/night/holiday + surge apply to the distance-based fare.
+    // The flat out-of-town surcharge is added at the end (not multiplied).
+    const distancePortion = bd.base - bd.outOfTown;
+    const adjusted = distancePortion * v.multiplier * SURCHARGE_MULT * SURGE_MULT;
+    return Math.round(adjusted + bd.outOfTown);
   };
 
   const fareBreakdown = (v) => {
-    const base  = baseFare(dist);
-    const after = Math.round(base * v.multiplier);
-    const surchargeAmt = Math.round(after * (surcharge ? surcharge.pct/100 : 0));
-    const total = after + surchargeAmt;
-    return { baseFare: after, surchargeAmt, total, surchargeLabel: surcharge?.label || null };
+    const bd = distanceBreakdown(dist);
+    const distancePortion = bd.base - bd.outOfTown;
+    const afterVehicle   = Math.round(distancePortion * v.multiplier);
+    const surchargeAmt   = Math.round(afterVehicle * (surcharge ? surcharge.pct/100 : 0));
+    const surgeAmt       = SURGE_MULT > 1 ? Math.round((afterVehicle + surchargeAmt) * (SURGE_MULT - 1)) : 0;
+    const total = afterVehicle + surchargeAmt + surgeAmt + bd.outOfTown;
+    return {
+      // First-10km / local base (after vehicle multiplier applied to the whole distance portion isn't split, so show components pre-multiplier)
+      localBase:     Math.round(bd.first10 * v.multiplier),
+      midCharge:     Math.round(bd.midCharge * v.multiplier),
+      farCharge:     Math.round(bd.farCharge * v.multiplier),
+      outOfTown:     bd.outOfTown, // flat, not multiplied
+      surchargeAmt,
+      surgeAmt,
+      total,
+      surchargeLabel: surcharge?.label || null,
+      isLong: bd.isLong,
+      isFar:  bd.isFar,
+      // kept for backward-compat with any existing UI references
+      baseFare: afterVehicle,
+    };
   };
   // Haversine formula for straight-line distance fallback
   const haversine = (p1, p2) => {
@@ -4056,19 +4102,48 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
         {(() => { const bd = fareBreakdown(v); return (
           <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:12, padding:14, margin:'10px 0' }}>
             <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'#6b7280', marginBottom:6 }}>
-              <span>Base Fare ({dist} km)</span>
-              <span style={{ color:'#1a1a2e', fontWeight:500 }}>J${bd.baseFare.toLocaleString()}</span>
+              <span>Base Fare{bd.isLong ? ' (first 10 km)' : ` (${dist} km)`}</span>
+              <span style={{ color:'#1a1a2e', fontWeight:500 }}>J${bd.localBase.toLocaleString()}</span>
             </div>
+            {bd.midCharge > 0 && (
+              <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'#6b7280', marginBottom:6 }}>
+                <span>Distance Charge (10–{Math.min(dist,30)} km)</span>
+                <span style={{ color:'#1a1a2e', fontWeight:500 }}>+J${bd.midCharge.toLocaleString()}</span>
+              </div>
+            )}
+            {bd.farCharge > 0 && (
+              <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'#6b7280', marginBottom:6 }}>
+                <span>Long-Distance Charge (30+ km)</span>
+                <span style={{ color:'#1a1a2e', fontWeight:500 }}>+J${bd.farCharge.toLocaleString()}</span>
+              </div>
+            )}
+            {bd.outOfTown > 0 && (
+              <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:6 }}>
+                <span style={{ color:'#b45309' }}>Out-of-Town Surcharge</span>
+                <span style={{ color:'#b45309', fontWeight:600 }}>+J${bd.outOfTown.toLocaleString()}</span>
+              </div>
+            )}
             {bd.surchargeAmt > 0 && (
               <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:6 }}>
                 <span style={{ color:'#f09595' }}>{bd.surchargeLabel}</span>
                 <span style={{ color:'#f09595', fontWeight:500 }}>+J${bd.surchargeAmt.toLocaleString()}</span>
               </div>
             )}
+            {bd.surgeAmt > 0 && (
+              <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:6 }}>
+                <span style={{ color:'#f09595' }}>Surge Pricing ({SURGE_MULT}x)</span>
+                <span style={{ color:'#f09595', fontWeight:500 }}>+J${bd.surgeAmt.toLocaleString()}</span>
+              </div>
+            )}
             <div style={{ display:'flex', justifyContent:'space-between', fontSize:15, fontWeight:700, color:'#6b21a8', borderTop:'1px solid #e0d3f5', paddingTop:8, marginTop:4 }}>
-              <span>Estimated Fare</span>
+              <span>Final Estimated Fare</span>
               <span>J${bd.total.toLocaleString()}</span>
             </div>
+            {bd.isFar && (
+              <div style={{ fontSize:11, color:'#8a83a0', lineHeight:1.5, marginTop:10, paddingTop:8, borderTop:'1px dashed #e0d3f5' }}>
+                Long-distance fare applied. Final fare may vary based on route, traffic, waiting time, tolls, or additional stops.
+              </div>
+            )}
           </div>
         ); })()}
         {/* Referral Code */}
