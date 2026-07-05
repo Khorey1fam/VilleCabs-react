@@ -113,6 +113,26 @@ const LIBRARIES       = ['places'];
 //  Any component can call vcToast('msg') or await vcConfirm('question')
 //  without prop-drilling — they dispatch window events the host listens to.
 // ═══════════════════════════════════════════════════════════════════════════
+// Short "message received" ping (two-tone chime via Web Audio — no asset needed)
+const playMessagePing = () => {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    const ctx = new AC();
+    const now = ctx.currentTime;
+    [ [880, 0], [1175, 0.12] ].forEach(([freq, offset]) => {
+      const osc = ctx.createOscillator(); const g = ctx.createGain();
+      osc.connect(g); g.connect(ctx.destination);
+      osc.type = 'sine'; osc.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, now + offset);
+      g.gain.exponentialRampToValueAtTime(0.25, now + offset + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.18);
+      osc.start(now + offset); osc.stop(now + offset + 0.2);
+    });
+    setTimeout(() => { try { ctx.close(); } catch(e){} }, 600);
+  } catch(e) {}
+};
+
 const vcToast = (message, type = 'info') => {
   try { window.dispatchEvent(new CustomEvent('vc-toast', { detail: { message, type } })); } catch(e) {}
 };
@@ -7043,6 +7063,7 @@ function ChatButton({ bookingId, user, onClick, labelColor = '#6b21a8' }) {
       });
       // Alert on a genuinely new incoming message (skip the initial load)
       if (seededRef.current && count > prevUnreadRef.current && newest) {
+        playMessagePing();
         try {
           if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
             new Notification('💬 New message', {
@@ -7083,6 +7104,7 @@ function ChatScreen({ go, user, bookingId }) {
   const [error,    setError]    = useState('');
   const [activeBookingId, setActiveBookingId] = useState(bookingId);
   const bottomRef = useRef(null);
+  const prevIncomingRef = useRef(null);
 
   // If driver, find their active booking automatically
   useEffect(() => {
@@ -7128,6 +7150,12 @@ function ChatScreen({ go, user, bookingId }) {
       msgs.sort((a,b) => (a.createdAt?.seconds||0) - (b.createdAt?.seconds||0));
       setMessages(msgs);
       setError('');
+      // Ping if a new message arrived from the other person (skip the first load)
+      const incoming = msgs.filter(m => m.senderId && m.senderId !== user?.uid).length;
+      if (prevIncomingRef.current !== null && incoming > prevIncomingRef.current) {
+        playMessagePing();
+      }
+      prevIncomingRef.current = incoming;
       // Mark the other party's unread messages as read (clears the unread badge)
       if (user?.uid) {
         snap.docs.forEach(d => {
@@ -9143,6 +9171,7 @@ function PartnerLocations({ go, user, setPickupData }) {
 export function LiveTrackShare({ trackId }) {
   const [t, setT] = useState(null);
   const [notFound, setNotFound] = useState(false);
+  const [directions, setDirections] = useState(null);
   useEffect(() => {
     if (!trackId) { setNotFound(true); return; }
     const unsub = onSnapshot(doc(db,'tracking',trackId), snap => {
@@ -9153,6 +9182,30 @@ export function LiveTrackShare({ trackId }) {
   }, [trackId]);
 
   const wrap = { minHeight:'100vh', background:'linear-gradient(160deg,#ffffff,#f6f2fb 45%,#efe8f7)', display:'flex', flexDirection:'column' };
+
+  const ended = t ? ['completed','cancelled'].includes(t.status) : false;
+  const enroute = t ? ['enroute'].includes(t.status) : false; // customer picked up, heading to dropoff
+  const driverCoords = t?.driverLocation ? { lat:t.driverLocation.lat, lng:t.driverLocation.lng } : null;
+  const pickup  = t?.pickup  ? { lat:t.pickup.lat,  lng:t.pickup.lng }  : null;
+  const dropoff = t?.dropoff ? { lat:t.dropoff.lat, lng:t.dropoff.lng } : null;
+
+  // Compute the purple route line. Before pickup: driver → pickup.
+  // After pickup (enroute): pickup → drop-off. (Hook must run before any return.)
+  useEffect(() => {
+    if (!t || ended || !window.google?.maps?.DirectionsService) { setDirections(null); return; }
+    const origin      = enroute ? pickup : (driverCoords || pickup);
+    const destination = enroute ? dropoff : (driverCoords ? pickup : dropoff);
+    if (!origin?.lat || !destination?.lat) { setDirections(null); return; }
+    const svc = new window.google.maps.DirectionsService();
+    svc.route({
+      origin:      { lat: origin.lat, lng: origin.lng },
+      destination: { lat: destination.lat, lng: destination.lng },
+      travelMode:  window.google.maps.TravelMode.DRIVING,
+    }, (result, status) => {
+      if (status === 'OK') setDirections(result);
+      else setDirections(null);
+    });
+  }, [t, ended, enroute, driverCoords?.lat, driverCoords?.lng, pickup?.lat, dropoff?.lat]);
 
   if (notFound) {
     return (
@@ -9168,26 +9221,29 @@ export function LiveTrackShare({ trackId }) {
     return <div style={{ ...wrap, alignItems:'center', justifyContent:'center' }}><div style={{ fontSize:14, color:'#8a83a0' }}>Loading live tracking…</div></div>;
   }
 
-  const ended = ['completed','cancelled'].includes(t.status);
-  const driverCoords = t.driverLocation ? { lat:t.driverLocation.lat, lng:t.driverLocation.lng } : null;
-  const pickup  = t.pickup  ? { lat:t.pickup.lat,  lng:t.pickup.lng }  : null;
-  const dropoff = t.dropoff ? { lat:t.dropoff.lat, lng:t.dropoff.lng } : null;
   const center = driverCoords || pickup || MANCHESTER_CENTER;
 
   const statusLabel = ended
     ? (t.status === 'completed' ? 'Ride completed ✅' : 'Ride cancelled')
     : (t.status === 'arrived' ? 'Driver has arrived 📍'
+      : enroute ? 'Heading to drop-off 🏁'
       : t.driverName ? 'On the way 🚗' : 'Finding a driver…');
 
   const svgPin = (color) => 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
     `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30"><circle cx="15" cy="15" r="11" fill="${color}" stroke="white" stroke-width="3"/></svg>`);
   const svgCar = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="#6b21a8" stroke="white" stroke-width="3"/><text x="20" y="27" font-size="18" text-anchor="middle">🚗</text></svg>`);
+    `<svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 44 44"><circle cx="22" cy="22" r="17" fill="#6b21a8" stroke="white" stroke-width="3"/><text x="22" y="29" font-size="19" text-anchor="middle">🚗</text></svg>`);
+  const svgPerson = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="15" fill="#1a9e5a" stroke="white" stroke-width="3"/><text x="20" y="27" font-size="17" text-anchor="middle">🧍</text></svg>`);
+
+  // Where the customer is: at pickup until picked up, then riding with the driver
+  const customerCoords = enroute ? driverCoords : pickup;
 
   const markers = [];
-  if (pickup)  markers.push({ position:pickup,  title:'Pickup',   icon:{ url:svgPin('#1a9e5a'), scaledSize:{ width:30, height:30 } } });
+  if (pickup && enroute) markers.push({ position:pickup, title:'Pickup', icon:{ url:svgPin('#1a9e5a'), scaledSize:{ width:26, height:26 } } });
   if (dropoff) markers.push({ position:dropoff, title:'Drop-off', icon:{ url:svgPin('#6b21a8'), scaledSize:{ width:30, height:30 } } });
-  if (driverCoords) markers.push({ position:driverCoords, title:'Driver', icon:{ url:svgCar, scaledSize:{ width:40, height:40 } } });
+  if (customerCoords) markers.push({ position:customerCoords, title:'Customer', icon:{ url:svgPerson, scaledSize:{ width:40, height:40 } } });
+  if (driverCoords) markers.push({ position:driverCoords, title:'Driver', icon:{ url:svgCar, scaledSize:{ width:44, height:44 } } });
 
   return (
     <div style={wrap}>
@@ -9206,11 +9262,11 @@ export function LiveTrackShare({ trackId }) {
       {!ended && (
         <div style={{ position:'relative' }}>
           <VilleMap height={typeof window!=='undefined'?Math.max(420,window.innerHeight*0.55):460}
-            center={center} zoom={15} markers={markers} expandable={true}/>
+            center={center} zoom={15} markers={markers} directions={directions} expandable={true}/>
           {/* Legend */}
           <div style={{ position:'absolute', bottom:12, left:12, background:'rgba(255,255,255,0.95)', borderRadius:10, padding:'8px 12px', boxShadow:'0 2px 10px rgba(0,0,0,0.15)', fontSize:11, display:'flex', flexDirection:'column', gap:5 }}>
             {driverCoords && <div style={{ display:'flex', alignItems:'center', gap:6 }}><span>🚗</span><span style={{ color:'#2a1a4a', fontWeight:600 }}>Driver</span></div>}
-            <div style={{ display:'flex', alignItems:'center', gap:6 }}><span style={{ width:10, height:10, borderRadius:'50%', background:'#1a9e5a', display:'inline-block' }}/><span style={{ color:'#2a1a4a' }}>Pickup</span></div>
+            {customerCoords && <div style={{ display:'flex', alignItems:'center', gap:6 }}><span>🧍</span><span style={{ color:'#2a1a4a', fontWeight:600 }}>Rider</span></div>}
             <div style={{ display:'flex', alignItems:'center', gap:6 }}><span style={{ width:10, height:10, borderRadius:'50%', background:'#6b21a8', display:'inline-block' }}/><span style={{ color:'#2a1a4a' }}>Drop-off</span></div>
           </div>
           {!driverCoords && (
