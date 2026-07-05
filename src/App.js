@@ -4262,13 +4262,25 @@ function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, 
   const [booking,  setBooking]  = useState(null);
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState('');
+  const navigatedRef = useRef(false);
 
-  // Load booking details
+  // Watch the booking live — if a driver accepts while the customer is still on
+  // this page, pull them straight into the live ride.
   useEffect(() => {
     if (!bookingId) return;
-    getDoc(doc(db,'bookings',bookingId)).then(snap => {
-      if (snap.exists()) setBooking({ id:snap.id, ...snap.data() });
-    }).catch(e => console.error(e));
+    const unsub = onSnapshot(doc(db,'bookings',bookingId), snap => {
+      if (!snap.exists()) return;
+      const b = { id:snap.id, ...snap.data() };
+      setBooking(b);
+      if (navigatedRef.current) return;
+      // A driver has accepted → go to the live tracking screen automatically
+      if (b.driverId && ['active','arrived','enroute'].includes(b.status)) {
+        navigatedRef.current = true;
+        try { vcToast('A driver accepted your ride! 🚗', 'success'); } catch(e) {}
+        go('live-ride');
+      }
+    }, e => console.error(e));
+    return () => unsub();
   }, [bookingId]);
 
   const handleConfirm = async () => {
@@ -4279,6 +4291,7 @@ function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, 
         // Update booking status to searching if needed
         await updateDoc(doc(db,'bookings',bookingId), { status:'searching', confirmedAt: serverTimestamp() });
       }
+      navigatedRef.current = true;
       go('live-ride');
     } catch(e) {
       setError('Failed to confirm. Please try again.');
