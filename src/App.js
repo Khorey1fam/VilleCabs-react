@@ -9,7 +9,7 @@ import {
 import {
   getFirestore, doc, setDoc, getDoc, addDoc, collection,
   onSnapshot, updateDoc, query, where, orderBy, serverTimestamp, getDocs,
-  arrayUnion, increment, arrayRemove
+  arrayUnion, increment, arrayRemove, runTransaction
 } from 'firebase/firestore';
 import { GoogleMap, useJsApiLoader, Marker, DirectionsRenderer } from '@react-google-maps/api';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -6006,43 +6006,56 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   const acceptRide = async (rideId) => {
     if (!rideId || acceptingId) return;
     setAcceptingId(rideId);
-    // Optimistic: use the ride we already have from the live listener + cached driver profile,
-    // so the driver sees the active screen instantly instead of waiting on network reads.
-    const localRide = pendingRides.find(r => r.id === rideId);
     const dData = driverProfileRef.current || {};
 
-    // Navigate right away for a snappy feel; the write happens in the background.
-    setActiveRideId(rideId);
-    setBookingId(rideId);
-    setPendingRides([]);
-    go('driver-active');
-
     try {
-      // Single write. We guard against double-accept by only writing if it's still searching,
-      // but we don't block the UI on a pre-read — the DriverActive screen's own live listener
-      // will correct course if another driver won the race.
-      await updateDoc(doc(db,'bookings',rideId), {
-        driverId:     user.uid,
-        driverName:   user.name || dData.name || 'Driver',
-        vehicleMake:  dData.vehicleMake  || '',
-        vehicleModel: dData.vehicleModel || '',
-        vehicleColor: dData.vehicleColor || '',
-        licensePlate: dData.licensePlate || '',
-        profilePhotoUrl: dData.profilePhotoUrl || '',
-        vehiclePhotoUrl: dData.vehiclePhotoUrl || '',
-        rating:       dData.rating || 5.0,
-        status:       'active',
-        acceptedAt:   serverTimestamp(),
+      // ATOMIC CLAIM: read the booking inside a transaction and only take it if
+      // it's still 'searching'. If another driver won the race, this throws
+      // 'TAKEN' and we tell this driver to pick another ride. This is what makes
+      // an influx of simultaneous accepts safe — exactly one driver can win.
+      await runTransaction(db, async (tx) => {
+        const ref  = doc(db,'bookings',rideId);
+        const snap = await tx.get(ref);
+        if (!snap.exists()) throw new Error('GONE');
+        const data = snap.data();
+        // Already claimed by someone (or cancelled/expired) → lose the race.
+        if (data.status !== 'searching' || (data.driverId && data.driverId !== user.uid)) {
+          throw new Error('TAKEN');
+        }
+        tx.update(ref, {
+          driverId:     user.uid,
+          driverName:   user.name || dData.name || 'Driver',
+          vehicleMake:  dData.vehicleMake  || '',
+          vehicleModel: dData.vehicleModel || '',
+          vehicleColor: dData.vehicleColor || '',
+          licensePlate: dData.licensePlate || '',
+          profilePhotoUrl: dData.profilePhotoUrl || '',
+          vehiclePhotoUrl: dData.vehiclePhotoUrl || '',
+          rating:       dData.rating || 5.0,
+          status:       'active',
+          acceptedAt:   serverTimestamp(),
+        });
       });
-      // Mark this driver as busy so the customer-side availability check is accurate
+
+      // Won the ride — now navigate to the active screen.
+      setActiveRideId(rideId);
+      setBookingId(rideId);
+      setPendingRides([]);
+      go('driver-active');
+      // Mark this driver busy (best-effort; the customer availability check uses it)
       try { await updateDoc(doc(db,'drivers',user.uid), { currentRideId: rideId }); } catch(e) {}
     } catch(e) {
-      console.error('acceptRide error:', e);
-      // Roll back to the dashboard so the driver can try again
-      setActiveRideId(null);
-      setBookingId(null);
-      go('driver-dash');
-      vcToast('Could not accept that ride — it may have been taken. Please try another.', 'error');
+      if (e.message === 'TAKEN') {
+        vcToast('That ride was just taken by another driver. Try another one.', 'warn');
+        // Remove it from this driver's list so they don't tap it again
+        setPendingRides(prev => prev.filter(r => r.id !== rideId));
+      } else if (e.message === 'GONE') {
+        vcToast('That ride is no longer available.', 'warn');
+        setPendingRides(prev => prev.filter(r => r.id !== rideId));
+      } else {
+        console.error('acceptRide error:', e);
+        vcToast('Could not accept that ride. Please try again.', 'error');
+      }
     } finally {
       setAcceptingId(null);
     }
@@ -9780,13 +9793,25 @@ function DriverScheduledRides({ user, go, setBookingId }) {
     try {
       const dSnap = await getDoc(doc(db,'drivers',user.uid));
       const d = dSnap.exists() ? dSnap.data() : {};
-      await updateDoc(doc(db,'bookings',r.id), {
-        driverId: user.uid, driverName: d.name || user.name || 'Driver',
-        vehicleMake: d.vehicleMake||'', vehicleModel: d.vehicleModel||'', vehicleColor: d.vehicleColor||'', licensePlate: d.licensePlate||'',
-        profilePhotoUrl: d.profilePhotoUrl||'', vehiclePhotoUrl: d.vehiclePhotoUrl||'',
-        acceptedAt: serverTimestamp(),
+      await runTransaction(db, async (tx) => {
+        const ref  = doc(db,'bookings',r.id);
+        const snap = await tx.get(ref);
+        if (!snap.exists()) throw new Error('GONE');
+        const data = snap.data();
+        // Only claim if no other driver already has this scheduled ride.
+        if (data.driverId && data.driverId !== user.uid) throw new Error('TAKEN');
+        tx.update(ref, {
+          driverId: user.uid, driverName: d.name || user.name || 'Driver',
+          vehicleMake: d.vehicleMake||'', vehicleModel: d.vehicleModel||'', vehicleColor: d.vehicleColor||'', licensePlate: d.licensePlate||'',
+          profilePhotoUrl: d.profilePhotoUrl||'', vehiclePhotoUrl: d.vehiclePhotoUrl||'',
+          acceptedAt: serverTimestamp(),
+        });
       });
-    } catch(e) { console.error(e); }
+    } catch(e) {
+      if (e.message === 'TAKEN') vcToast('Another driver already took that scheduled ride.', 'warn');
+      else if (e.message === 'GONE') vcToast('That scheduled ride is no longer available.', 'warn');
+      else console.error(e);
+    }
     setBusy('');
   };
   const startRide = async (r) => {
