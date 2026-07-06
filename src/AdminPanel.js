@@ -1435,6 +1435,10 @@ export default function AdminPanel() {
   const [loading,   setLoading]   = useState(true);
   const [tab,       setTab]       = useState('overview');
 
+  // Must match the isAdmin() email list in firestore.rules
+  const ADMIN_EMAILS = ['daviskeneile@gmail.com', 'admin@villecabs.com'];
+  const isAdminEmail = (u) => u && ADMIN_EMAILS.includes((u.email || '').toLowerCase());
+
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       setAdminUser(u);
@@ -1452,6 +1456,18 @@ export default function AdminPanel() {
   );
 
   if (!adminUser) return <AdminLogin onLogin={setAdminUser}/>;
+
+  // Signed in but NOT an admin — deny access (data is also protected by Firestore rules)
+  if (!isAdminEmail(adminUser)) return (
+    <div style={{ minHeight:'100vh', background:'#f5f6fa', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'Segoe UI', sans-serif", padding:24 }}>
+      <div style={{ textAlign:'center', maxWidth:340 }}>
+        <div style={{ fontSize:48, marginBottom:12 }}>🔒</div>
+        <div style={{ fontSize:20, fontWeight:800, color:'#1a1a2e', marginBottom:8 }}>Access Denied</div>
+        <div style={{ fontSize:14, color:'#6b7280', lineHeight:1.6, marginBottom:20 }}>This account doesn't have admin access. If you're a driver or customer, please use the main app.</div>
+        <button onClick={handleLogout} style={{ padding:'11px 24px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:22, fontSize:14, fontWeight:700, cursor:'pointer' }}>Sign Out</button>
+      </div>
+    </div>
+  );
 
   const tabs = [
     { id:'overview',  label:'Overview',    icon:'📊' },
