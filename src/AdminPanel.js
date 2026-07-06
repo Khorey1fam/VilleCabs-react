@@ -1157,7 +1157,7 @@ function ScheduledTab() {
 function PartnersTab() {
   const [partners, setPartners] = useState([]);
   const [loading,  setLoading]  = useState(true);
-  const TOTAL_SLOTS = 6; // secret internal slot names (admin-only)
+  const TOTAL_SLOTS = 10; // secret internal slot names (admin-only)
   useEffect(() => {
     const unsub = onSnapshot(collection(db,'partnerRequests'), snap => { setPartners(snap.docs.map(d=>({id:d.id,...d.data()}))); setLoading(false); }, ()=>setLoading(false));
     return () => unsub();

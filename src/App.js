@@ -7680,9 +7680,9 @@ function FeaturedPanel({ p, go, setPickupData, setDropoffData }) {
   };
 
   return (
-    <div style={{ background:'#fff', border:'1px solid #ece3f5', borderRadius:20, overflow:'hidden', boxShadow:'0 6px 24px rgba(107,33,168,0.10)', marginBottom:20 }}>
+    <div style={{ background:'#fff', border:'1px solid #ece3f5', borderRadius:20, overflow:'hidden', boxShadow:'0 6px 24px rgba(107,33,168,0.10)', display:'flex', flexDirection:'column' }}>
       {/* Big slideshow */}
-      <div style={{ position:'relative', width:'100%', height:260, background:'#f3edfb' }}>
+      <div style={{ position:'relative', width:'100%', height:300, background:'#f3edfb' }}>
         {imgs.length > 0 ? (
           imgs.map((url, i) => (
             <img key={i} src={url} alt={p.bizName}
@@ -7701,7 +7701,7 @@ function FeaturedPanel({ p, go, setPickupData, setDropoffData }) {
         )}
       </div>
       {/* Info */}
-      <div style={{ padding:'18px 20px 20px' }}>
+      <div style={{ padding:'18px 20px 20px', flex:1, display:'flex', flexDirection:'column' }}>
         <div style={{ fontSize:12, color:'#6b21a8', fontWeight:700, textTransform:'uppercase', letterSpacing:0.5, marginBottom:5 }}>{p.bizType || 'Featured Partner'}</div>
         <div style={{ fontSize:24, fontWeight:800, color:'#2a1a4a', marginBottom:8, lineHeight:1.15 }}>{p.bizName || 'Featured Partner'}</div>
         {p.address && <div style={{ fontSize:13.5, color:'#5b5470', lineHeight:1.5, display:'flex', gap:7, marginBottom:6 }}><span>📍</span><span>{p.address}</span></div>}
@@ -7709,6 +7709,7 @@ function FeaturedPanel({ p, go, setPickupData, setDropoffData }) {
         {p.description && <div style={{ fontSize:13.5, color:'#5b5470', lineHeight:1.6, marginTop:8, marginBottom:6 }}>{p.description}</div>}
         {p.website && <div style={{ fontSize:12.5, color:'#6b21a8', fontWeight:600, marginTop:8 }}>🔗 {p.website}</div>}
 
+        <div style={{ flex:1 }}/>
         <button onClick={bookRide}
           style={{ width:'100%', marginTop:16, padding:'15px', background:'linear-gradient(135deg,#6b21a8,#4c1d95)', color:'#fff', border:'none', borderRadius:14, fontSize:15, fontWeight:800, cursor:'pointer', boxShadow:'0 6px 18px rgba(107,33,168,0.3)', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
           🚕 Book a Ride Here
@@ -7737,30 +7738,34 @@ function FeaturedPage({ go, user, setPickupData, setDropoffData }) {
   return (
     <div style={{ ...s.content, background:'linear-gradient(160deg,#ffffff,#f6f2fb 45%,#efe8f7)' }}>
       <TopBar title="Featured" go={go} user={user}/>
-      <div style={{ padding:20, maxWidth:520, margin:'0 auto' }}>
-        <h2 style={{ fontSize:24, fontWeight:800, color:'#2a1a4a', margin:'0 0 6px' }}>Featured Partners</h2>
-        <p style={{ fontSize:13.5, color:'#5b5470', marginBottom:20, lineHeight:1.5 }}>Great local businesses in Mandeville &amp; Manchester. Tap to book a ride straight there.</p>
+      <div style={{ padding:20, maxWidth:900, margin:'0 auto' }}>
+        <h2 style={{ fontSize:26, fontWeight:800, color:'#2a1a4a', margin:'0 0 6px' }}>Featured Partners</h2>
+        <p style={{ fontSize:14, color:'#5b5470', marginBottom:22, lineHeight:1.5 }}>Great local businesses in Mandeville &amp; Manchester. Tap to book a ride straight there.</p>
 
         {loading && <div style={{ textAlign:'center', color:'#8a83a0', fontSize:13, padding:30 }}>Loading featured partners…</div>}
 
-        {!loading && partners.map(p => (
-          <FeaturedPanel key={p.id} p={p} go={go} setPickupData={setPickupData} setDropoffData={setDropoffData}/>
-        ))}
+        {!loading && (
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(2, minmax(0, 1fr))', gap:14 }}>
+            {partners.map(p => (
+              <FeaturedPanel key={p.id} p={p} go={go} setPickupData={setPickupData} setDropoffData={setDropoffData}/>
+            ))}
 
-        {/* "Advertise here" panels fill the remaining empty slots */}
-        {!loading && Array.from({ length: Math.max(0, 6 - partners.length) }).map((_, i) => (
-          <div key={'ad-'+i} style={{ background:'linear-gradient(160deg,#ffffff,#faf5fd)', border:'2px dashed #d8b4fe', borderRadius:20, padding:'40px 24px', textAlign:'center', marginBottom:20 }}>
-            <div style={{ fontSize:52, marginBottom:12, opacity:0.85 }}>📣</div>
-            <div style={{ fontSize:20, fontWeight:800, color:'#2a1a4a', marginBottom:8 }}>Advertise Here</div>
-            <div style={{ fontSize:13.5, color:'#8a83a0', lineHeight:1.6, maxWidth:300, margin:'0 auto 18px' }}>
-              This premium featured slot is open. Put your business in front of every VilleCabs rider.
-            </div>
-            <button onClick={() => go('partner-with-us')}
-              style={{ padding:'13px 28px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:24, fontSize:14, fontWeight:700, cursor:'pointer', boxShadow:'0 6px 18px rgba(107,33,168,0.28)' }}>
-              Advertise With VilleCabs →
-            </button>
+            {/* "Advertise here" panels fill the remaining empty slots (10 total) */}
+            {Array.from({ length: Math.max(0, 10 - partners.length) }).map((_, i) => (
+              <div key={'ad-'+i} style={{ background:'linear-gradient(160deg,#ffffff,#faf5fd)', border:'2px dashed #d8b4fe', borderRadius:20, padding:'48px 24px', textAlign:'center', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:420 }}>
+                <div style={{ fontSize:60, marginBottom:14, opacity:0.85 }}>📣</div>
+                <div style={{ fontSize:22, fontWeight:800, color:'#2a1a4a', marginBottom:10 }}>Advertise Here</div>
+                <div style={{ fontSize:14, color:'#8a83a0', lineHeight:1.6, maxWidth:280, margin:'0 auto 20px' }}>
+                  This premium featured slot is open. Put your business in front of every VilleCabs rider.
+                </div>
+                <button onClick={() => go('partner-with-us')}
+                  style={{ padding:'14px 30px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:24, fontSize:14, fontWeight:700, cursor:'pointer', boxShadow:'0 6px 18px rgba(107,33,168,0.28)' }}>
+                  Advertise With VilleCabs →
+                </button>
+              </div>
+            ))}
           </div>
-        ))}
+        )}
       </div>
     </div>
   );
