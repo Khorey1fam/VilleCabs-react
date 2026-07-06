@@ -1157,15 +1157,34 @@ function ScheduledTab() {
 function PartnersTab() {
   const [partners, setPartners] = useState([]);
   const [loading,  setLoading]  = useState(true);
+  const TOTAL_SLOTS = 6; // secret internal slot names (admin-only)
   useEffect(() => {
     const unsub = onSnapshot(collection(db,'partnerRequests'), snap => { setPartners(snap.docs.map(d=>({id:d.id,...d.data()}))); setLoading(false); }, ()=>setLoading(false));
     return () => unsub();
   }, []);
   const setStatus = async (id, status) => { await updateDoc(doc(db,'partnerRequests',id), { status }); };
+  // Approve a partner INTO a specific slot (slot names are internal/admin-only)
+  const approveToSlot = async (id, slot) => {
+    await updateDoc(doc(db,'partnerRequests',id), { status:'approved', slot, approvedAt: serverTimestamp() });
+  };
+  const clearSlot = async (id) => {
+    await updateDoc(doc(db,'partnerRequests',id), { slot: null });
+  };
+  const requestChanges = async (id) => {
+    const note = window.prompt('What changes should the advertiser make? (this is saved on the request)');
+    if (note === null) return;
+    await updateDoc(doc(db,'partnerRequests',id), { status:'changes_requested', changesNote: note || '', slot: null });
+  };
+  // Which slots are already taken (by another approved partner)
+  const takenSlots = {};
+  partners.forEach(p => { if (p.slot && ['approved','featured'].includes((p.status||'').toLowerCase())) takenSlots[p.slot] = p.id; });
+
   const badge = (st) => {
-    const map = { new:{bg:'#fffbeb',color:'#b45309'}, approved:{bg:'rgba(26,158,90,0.15)',color:GREEN}, featured:{bg:'rgba(107,33,168,0.2)',color:'#c9a3f5'}, rejected:{bg:'rgba(226,75,74,0.12)',color:'#dc2626'} };
-    const m = map[(st||'new').toLowerCase()] || map.new;
-    return <span style={{ ...s.badge, background:m.bg, color:m.color }}>{st||'new'}</span>;
+    const map = { new:{bg:'#fffbeb',color:'#b45309'}, approved:{bg:'rgba(26,158,90,0.15)',color:GREEN}, featured:{bg:'rgba(107,33,168,0.2)',color:'#c9a3f5'}, changes_requested:{bg:'#eff6ff',color:'#2563eb'}, rejected:{bg:'rgba(226,75,74,0.12)',color:'#dc2626'} };
+    const label = { changes_requested:'changes requested' };
+    const key = (st||'new').toLowerCase();
+    const m = map[key] || map.new;
+    return <span style={{ ...s.badge, background:m.bg, color:m.color }}>{label[key] || st || 'new'}</span>;
   };
   if (loading) return <div style={{ color:'#9199ad', fontSize:13 }}>Loading...</div>;
   return (
@@ -1174,7 +1193,7 @@ function PartnersTab() {
         <StatCard label="Total" value={partners.length}/>
         <StatCard label="New requests" value={partners.filter(p=>(p.status||'new')==='new').length} color="#b45309"/>
         <StatCard label="Approved" value={partners.filter(p=>['approved','featured'].includes((p.status||'').toLowerCase())).length} color={GREEN}/>
-        <StatCard label="Featured" value={partners.filter(p=>(p.status||'').toLowerCase()==='featured').length} color="#c9a3f5"/>
+        <StatCard label="Slots filled" value={`${Object.keys(takenSlots).length}/${TOTAL_SLOTS}`} color="#c9a3f5"/>
       </div>
       {partners.length===0 && <div style={s.card}><div style={{ color:'#9199ad', fontSize:13, textAlign:'center', padding:20 }}>No partner requests yet.</div></div>}
       {partners.map(p => (
@@ -1206,10 +1225,43 @@ function PartnersTab() {
               ))}
             </div>
           )}
+          {p.changesNote && (p.status==='changes_requested') && (
+            <div style={{ fontSize:11.5, color:'#2563eb', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:8, padding:'6px 10px', marginBottom:10 }}>
+              ✏️ Changes requested: {p.changesNote}
+            </div>
+          )}
+
+          {/* Slot assignment (internal names — only admins see these) */}
+          <div style={{ background:'#faf7fd', border:'1px solid #ece3f5', borderRadius:10, padding:'10px 12px', marginBottom:10 }}>
+            <div style={{ fontSize:11, color:'#8a83a0', fontWeight:700, textTransform:'uppercase', letterSpacing:0.5, marginBottom:8 }}>
+              Featured Slot {p.slot ? `— currently in Slot ${p.slot}` : '(not placed)'}
+            </div>
+            <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+              {Array.from({length:TOTAL_SLOTS},(_, n) => n+1).map(slotNum => {
+                const takenByOther = takenSlots[slotNum] && takenSlots[slotNum] !== p.id;
+                const mine = p.slot === slotNum;
+                return (
+                  <button key={slotNum} disabled={takenByOther}
+                    onClick={() => approveToSlot(p.id, slotNum)}
+                    title={takenByOther ? 'Taken by another partner' : `Place in Slot ${slotNum}`}
+                    style={{ padding:'6px 12px', borderRadius:8, fontSize:12, fontWeight:700, cursor:takenByOther?'not-allowed':'pointer',
+                      border:`1px solid ${mine?'#6b21a8':takenByOther?'#e5e7eb':'#d8b4fe'}`,
+                      background: mine?'#6b21a8':takenByOther?'#f3f4f6':'#fff',
+                      color: mine?'#fff':takenByOther?'#c9c2d8':'#6b21a8', opacity:takenByOther?0.6:1 }}>
+                    Slot {slotNum}{mine?' ✓':''}
+                  </button>
+                );
+              })}
+            </div>
+            {p.slot && (
+              <button onClick={() => clearSlot(p.id)} style={{ marginTop:8, padding:'5px 10px', background:'#fff', border:'1px solid #e5e7eb', borderRadius:8, fontSize:11, color:'#6b7280', cursor:'pointer' }}>Remove from slot</button>
+            )}
+          </div>
+
           <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:8 }}>
-            <button onClick={()=>setStatus(p.id,'approved')} style={s.btnApprove}>Approve</button>
-            <button onClick={()=>setStatus(p.id,'featured')} style={{ ...s.btnApprove, background:'#6b21a8' }}>⭐ Feature</button>
-            <button onClick={()=>setStatus(p.id,'rejected')} style={s.btnReject}>Reject</button>
+            <button onClick={()=>setStatus(p.id,'approved')} style={s.btnApprove}>✓ Approve</button>
+            <button onClick={()=>requestChanges(p.id)} style={{ ...s.btnApprove, background:'#2563eb' }}>✏️ Request Changes</button>
+            <button onClick={()=>setStatus(p.id,'rejected')} style={s.btnReject}>✗ Reject</button>
           </div>
         </div>
       ))}

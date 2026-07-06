@@ -3663,13 +3663,14 @@ function PinPickup({ go, setPickupData, user }) {
 }
 
 
-function PinDropoff({ go, pickupData, setDropoffData, user }) {
+function PinDropoff({ go, pickupData, dropoffData, setDropoffData, user }) {
   const [mapsReady, setMapsReady] = useState(!!window.google?.maps?.places);
   // Start map centered on pickup location if available, else Mandeville
   const startPos = pickupData?.coords || MANCHESTER_CENTER;
-  const [pinPos,   setPinPos]   = useState(MANCHESTER_CENTER);
-  const [mapZoom,  setMapZoom]  = useState(14);
-  const [address,  setAddress]  = useState('');
+  // Pre-fill from a previously-chosen dropoff (e.g. tapping "Book Ride" on a Featured partner)
+  const [pinPos,   setPinPos]   = useState(dropoffData?.coords || MANCHESTER_CENTER);
+  const [mapZoom,  setMapZoom]  = useState(dropoffData?.coords ? 16 : 14);
+  const [address,  setAddress]  = useState(dropoffData?.address || '');
   const [note,         setNote]         = useState('');
   const [fareEstimate, setFareEstimate] = useState(null);
 
@@ -7659,37 +7660,107 @@ function BusinessPage({ go, user }) {
 }
 
 // ── FEATURED PAGE ──────────────────────────────────────────────────────────────
-function FeaturedPage({ go, user }) {
-  const partners = [
-    { icon:'🍔', name:'Juici Patties',   cat:'Restaurant'  },
-    { icon:'📚', name:'Bargain Books',   cat:'Bookstore'   },
-    { icon:'🏨', name:'Golf View Hotel', cat:'Hotel'       },
-    { icon:'🍽️', name:'Restaurants',    cat:'Food'        },
-    { icon:'🎉', name:'Clubs & Lounges', cat:'Nightlife'   },
-    { icon:'🛒', name:'Supermarkets',   cat:'Grocery'     },
-  ];
+// One big featured panel: large image slideshow + info + Book Ride CTA
+function FeaturedPanel({ p, go, setPickupData, setDropoffData }) {
+  const imgs = (Array.isArray(p.uploads) ? p.uploads : []).filter(u => u && !u.match(/\.pdf($|\?)/i));
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    if (imgs.length <= 1) return;
+    const t = setInterval(() => setIdx(i => (i + 1) % imgs.length), 3500);
+    return () => clearInterval(t);
+  }, [imgs.length]);
+
+  const bookRide = () => {
+    // Pre-fill the drop-off with this partner's location, then start at pickup
+    if (typeof setDropoffData === 'function') {
+      const coords = (p.lat && p.lng) ? { lat:p.lat, lng:p.lng } : null;
+      setDropoffData({ address: p.address || p.bizName || '', coords });
+    }
+    go('pin-pickup');
+  };
+
   return (
-    <div style={{ ...s.content, background:'#f5f6fa' }}>
+    <div style={{ background:'#fff', border:'1px solid #ece3f5', borderRadius:20, overflow:'hidden', boxShadow:'0 6px 24px rgba(107,33,168,0.10)', marginBottom:20 }}>
+      {/* Big slideshow */}
+      <div style={{ position:'relative', width:'100%', height:260, background:'#f3edfb' }}>
+        {imgs.length > 0 ? (
+          imgs.map((url, i) => (
+            <img key={i} src={url} alt={p.bizName}
+              style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', opacity: i===idx?1:0, transition:'opacity 0.6s ease' }}/>
+          ))
+        ) : (
+          <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:72 }}>🏪</div>
+        )}
+        <div style={{ position:'absolute', top:12, left:12, background:'rgba(107,33,168,0.92)', color:'#fff', fontSize:11, fontWeight:800, padding:'5px 12px', borderRadius:20, letterSpacing:0.5 }}>⭐ FEATURED</div>
+        {imgs.length > 1 && (
+          <div style={{ position:'absolute', bottom:12, left:0, right:0, display:'flex', justifyContent:'center', gap:6 }}>
+            {imgs.map((_,i) => (
+              <div key={i} style={{ width:8, height:8, borderRadius:'50%', background: i===idx?'#fff':'rgba(255,255,255,0.5)', boxShadow:'0 1px 3px rgba(0,0,0,0.4)' }}/>
+            ))}
+          </div>
+        )}
+      </div>
+      {/* Info */}
+      <div style={{ padding:'18px 20px 20px' }}>
+        <div style={{ fontSize:12, color:'#6b21a8', fontWeight:700, textTransform:'uppercase', letterSpacing:0.5, marginBottom:5 }}>{p.bizType || 'Featured Partner'}</div>
+        <div style={{ fontSize:24, fontWeight:800, color:'#2a1a4a', marginBottom:8, lineHeight:1.15 }}>{p.bizName || 'Featured Partner'}</div>
+        {p.address && <div style={{ fontSize:13.5, color:'#5b5470', lineHeight:1.5, display:'flex', gap:7, marginBottom:6 }}><span>📍</span><span>{p.address}</span></div>}
+        {p.hours && <div style={{ fontSize:12.5, color:'#8a83a0', marginBottom:6, display:'flex', gap:7 }}><span>🕒</span><span>{p.hours}</span></div>}
+        {p.description && <div style={{ fontSize:13.5, color:'#5b5470', lineHeight:1.6, marginTop:8, marginBottom:6 }}>{p.description}</div>}
+        {p.website && <div style={{ fontSize:12.5, color:'#6b21a8', fontWeight:600, marginTop:8 }}>🔗 {p.website}</div>}
+
+        <button onClick={bookRide}
+          style={{ width:'100%', marginTop:16, padding:'15px', background:'linear-gradient(135deg,#6b21a8,#4c1d95)', color:'#fff', border:'none', borderRadius:14, fontSize:15, fontWeight:800, cursor:'pointer', boxShadow:'0 6px 18px rgba(107,33,168,0.3)', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+          🚕 Book a Ride Here
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function FeaturedPage({ go, user, setPickupData, setDropoffData }) {
+  const [partners, setPartners] = useState([]);
+  const [loading,  setLoading]  = useState(true);
+
+  useEffect(() => {
+    const q = query(collection(db,'partnerRequests'), where('status','==','approved'));
+    const unsub = onSnapshot(q, snap => {
+      const live = snap.docs.map(d => ({ id:d.id, ...d.data() }))
+        .filter(p => p.slot)
+        .sort((a,b) => (a.slot||0) - (b.slot||0));
+      setPartners(live);
+      setLoading(false);
+    }, () => setLoading(false));
+    return () => unsub();
+  }, []);
+
+  return (
+    <div style={{ ...s.content, background:'linear-gradient(160deg,#ffffff,#f6f2fb 45%,#efe8f7)' }}>
       <TopBar title="Featured" go={go} user={user}/>
-      <div style={{ padding:20 }}>
-        <p style={{ fontSize:13, color:'#666888', marginBottom:16 }}>Local businesses connected with VilleCabs in Mandeville & Manchester.</p>
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12, marginBottom:16 }}>
-          {partners.map((p, i) => (
-            <div key={i} style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:14, padding:'16px 14px', textAlign:'center', boxShadow:'0 2px 8px rgba(0,0,0,0.05)' }}>
-              <div style={{ fontSize:32, marginBottom:8 }}>{p.icon}</div>
-              <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:3 }}>{p.name}</div>
-              <div style={{ fontSize:10, color:'#888aaa', marginBottom:8 }}>{p.cat}</div>
-              <div style={{ fontSize:9, background:'rgba(232,180,0,0.15)', color:'#b38600', padding:'2px 8px', borderRadius:10, fontWeight:600, display:'inline-block' }}>Coming Soon</div>
+      <div style={{ padding:20, maxWidth:520, margin:'0 auto' }}>
+        <h2 style={{ fontSize:24, fontWeight:800, color:'#2a1a4a', margin:'0 0 6px' }}>Featured Partners</h2>
+        <p style={{ fontSize:13.5, color:'#5b5470', marginBottom:20, lineHeight:1.5 }}>Great local businesses in Mandeville &amp; Manchester. Tap to book a ride straight there.</p>
+
+        {loading && <div style={{ textAlign:'center', color:'#8a83a0', fontSize:13, padding:30 }}>Loading featured partners…</div>}
+
+        {!loading && partners.map(p => (
+          <FeaturedPanel key={p.id} p={p} go={go} setPickupData={setPickupData} setDropoffData={setDropoffData}/>
+        ))}
+
+        {/* "Advertise here" panels fill the remaining empty slots */}
+        {!loading && Array.from({ length: Math.max(0, 6 - partners.length) }).map((_, i) => (
+          <div key={'ad-'+i} style={{ background:'linear-gradient(160deg,#ffffff,#faf5fd)', border:'2px dashed #d8b4fe', borderRadius:20, padding:'40px 24px', textAlign:'center', marginBottom:20 }}>
+            <div style={{ fontSize:52, marginBottom:12, opacity:0.85 }}>📣</div>
+            <div style={{ fontSize:20, fontWeight:800, color:'#2a1a4a', marginBottom:8 }}>Advertise Here</div>
+            <div style={{ fontSize:13.5, color:'#8a83a0', lineHeight:1.6, maxWidth:300, margin:'0 auto 18px' }}>
+              This premium featured slot is open. Put your business in front of every VilleCabs rider.
             </div>
-          ))}
-        </div>
-        <div style={{ background:'#0f1a35', borderRadius:14, padding:16, textAlign:'center' }}>
-          <div style={{ fontSize:13, color:'rgba(255,255,255,0.7)', marginBottom:10 }}>Want to be featured?</div>
-          <button onClick={() => window.open('mailto:admin@villecabs.com?subject=VilleCabs Featured Partner','_blank')}
-            style={{ padding:'10px 20px', background:'#e8b400', border:'none', borderRadius:20, color:'#0f1a35', fontSize:13, fontWeight:700, cursor:'pointer' }}>
-            Become a Partner
-          </button>
-        </div>
+            <button onClick={() => go('partner-with-us')}
+              style={{ padding:'13px 28px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:24, fontSize:14, fontWeight:700, cursor:'pointer', boxShadow:'0 6px 18px rgba(107,33,168,0.28)' }}>
+              Advertise With VilleCabs →
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -8641,7 +8712,7 @@ function PartnerWithUs({ go, user }) {
   ];
   const [form, setForm] = useState({
     bizName:'', bizType:'', contact:'', phone:'', email:'',
-    address:'', website:'', hours:'', description:'', packageId:'',
+    address:'', website:'', hours:'', description:'', packageId:'', lat:null, lng:null,
   });
   const [uploads,  setUploads]  = useState([null, null, null]); // urls
   const [uploading,setUploading]= useState(-1); // index currently uploading
@@ -8748,7 +8819,7 @@ function PartnerWithUs({ go, user }) {
               <AddressAutocompleteInput
                 value={form.address}
                 onChange={(v)=>set('address',v)}
-                onPlaceSelect={(place)=>set('address', place.formattedAddress || place.name || form.address)}
+                onPlaceSelect={(place)=>{ set('address', place.formattedAddress || place.name || form.address); set('lat', place.lat||null); set('lng', place.lng||null); }}
                 placeholder="Start typing your business address…"
               />
             </div>
