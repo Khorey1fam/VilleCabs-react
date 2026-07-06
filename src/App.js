@@ -669,7 +669,7 @@ function Footer({ go }) {
         </div>
 
         {/* Columns */}
-        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:32, marginBottom:32 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(130px, 1fr))', gap:28, marginBottom:32 }}>
           {/* Company */}
           <div>
             <div style={{ fontSize:13, fontWeight:700, color:'#2a1a4a', marginBottom:14, textTransform:'uppercase', letterSpacing:1 }}>Company</div>
@@ -679,12 +679,6 @@ function Footer({ go }) {
               ['Help & Info',         () => go('help')],
               ['FAQ',                 () => go('faq')],
               ['Rider Reviews',       () => go('reviews')],
-              ['Privacy Policy',      () => go('privacy')],
-              ['Terms & Conditions',  () => go('terms-page')],
-              ['Refund Policy',       () => go('refund-policy')],
-              ['Become a Driver',     () => go('driver-signup')],
-              ['Partner Locations',   () => go('partner-locations')],
-              ['Partner With Us',     () => window.open('mailto:admin@villecabs.com?subject=VilleCabs Partnership', '_blank')],
             ].map(([label, action], i) => (
               <div key={i} onClick={action}
                 style={{ fontSize:13, color:linkBase, marginBottom:10, cursor:'pointer' }}
@@ -719,12 +713,34 @@ function Footer({ go }) {
           {/* Travel */}
           <div>
             <div style={{ fontSize:13, fontWeight:700, color:'#2a1a4a', marginBottom:14, textTransform:'uppercase', letterSpacing:1 }}>Travel</div>
-            <div onClick={() => go && go('featured')}
-              style={{ fontSize:13, color:linkBase, marginBottom:10, cursor:'pointer' }}
-              onMouseEnter={e => e.target.style.color=linkHover}
-              onMouseLeave={e => e.target.style.color=linkBase}>
-              Explore Mandeville
-            </div>
+            {[
+              ['Explore Mandeville',  () => go && go('featured')],
+              ['Partner Locations',   () => go('partner-locations')],
+            ].map(([label, action], i) => (
+              <div key={i} onClick={action}
+                style={{ fontSize:13, color:linkBase, marginBottom:10, cursor:'pointer' }}
+                onMouseEnter={e => e.target.style.color=linkHover}
+                onMouseLeave={e => e.target.style.color=linkBase}>
+                {label}
+              </div>
+            ))}
+          </div>
+
+          {/* Support */}
+          <div>
+            <div style={{ fontSize:13, fontWeight:700, color:'#2a1a4a', marginBottom:14, textTransform:'uppercase', letterSpacing:1 }}>Support</div>
+            {[
+              ['Privacy Policy',      () => go('privacy')],
+              ['Terms & Conditions',  () => go('terms-page')],
+              ['Refund Policy',       () => go('refund-policy')],
+            ].map(([label, action], i) => (
+              <div key={i} onClick={action}
+                style={{ fontSize:13, color:linkBase, marginBottom:10, cursor:'pointer' }}
+                onMouseEnter={e => e.target.style.color=linkHover}
+                onMouseLeave={e => e.target.style.color=linkBase}>
+                {label}
+              </div>
+            ))}
           </div>
         </div>
 
