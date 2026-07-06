@@ -6488,13 +6488,18 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
 
   useEffect(() => {
     if (!user?.uid) return;
-    const q = query(collection(db,'bookings'), where('driverId','==',user.uid), where('status','==','active'));
+    // Find the driver's in-progress ride in ANY active phase (active / arrived /
+    // enroute) so re-opening the screen restores the ride instead of hanging.
+    const q = query(collection(db,'bookings'), where('driverId','==',user.uid), where('status','in',['active','arrived','enroute']));
     const unsub = onSnapshot(q, snap => {
       if (!snap.empty) {
         const b = { id:snap.docs[0].id, ...snap.docs[0].data() };
         if (b.driverId === user.uid) {
           setBooking(b);
           if (b.id) setBookingId(b.id);
+          // Restore the ride stage from the booking so the UI shows the right step
+          if (b.status === 'arrived' || b.driverArrived) setArrived(true);
+          if (b.status === 'enroute' || b.enrouteToDropoff) { setArrived(true); setEnroute(true); }
         }
       }
     });
