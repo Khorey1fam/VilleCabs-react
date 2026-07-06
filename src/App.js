@@ -1429,7 +1429,7 @@ function CustomerLogin({ go, setUser, user }) {
     try {
       const cred = await signInWithEmailAndPassword(auth, email, password);
       // Admins go straight to the dedicated /admin dashboard page (AdminPanel)
-      if (['daviskeneile@gmail.com','admin@villecabs.com'].includes((cred.user.email||'').toLowerCase())) {
+      if (['admin@villecabs.com'].includes((cred.user.email||'').toLowerCase())) {
         window.location.href = '/admin';
         return;
       }
@@ -7878,10 +7878,10 @@ function SupportMessageCard({ m, updateMessage }) {
 }
 
 // ── ADMIN DASHBOARD ───────────────────────────────────────────────────────────
-const ADMIN_EMAILS = ['daviskeneile@gmail.com', 'admin@villecabs.com'];
+const ADMIN_EMAILS = ['admin@villecabs.com'];
 
 function AdminDash({ go, user }) {
-  const ADMIN_EMAILS = ['daviskeneile@gmail.com', 'admin@villecabs.com'];
+  const ADMIN_EMAILS = ['admin@villecabs.com'];
   const [tab,         setTab]        = useState('overview');
   const [stats,       setStats]      = useState({ customers:0, drivers:0, pendingDrivers:0, activeDrivers:0, rides:0, completed:0, cancelled:0, totalFare:0, partnerRequests:0 });
   const [drivers,     setDrivers]    = useState([]);
@@ -10105,7 +10105,7 @@ export default function App() {
       // Logged in - restore session
       try {
         // Admins are handled by the dedicated /admin page — send them there
-        if (['daviskeneile@gmail.com','admin@villecabs.com'].includes((fu.email||'').toLowerCase())) {
+        if (['admin@villecabs.com'].includes((fu.email||'').toLowerCase())) {
           if (!window.location.pathname.startsWith('/admin')) {
             window.location.href = '/admin';
             return;

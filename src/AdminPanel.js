@@ -1436,7 +1436,7 @@ export default function AdminPanel() {
   const [tab,       setTab]       = useState('overview');
 
   // Must match the isAdmin() email list in firestore.rules
-  const ADMIN_EMAILS = ['daviskeneile@gmail.com', 'admin@villecabs.com'];
+  const ADMIN_EMAILS = ['admin@villecabs.com'];
   const isAdminEmail = (u) => u && ADMIN_EMAILS.includes((u.email || '').toLowerCase());
 
   useEffect(() => {
