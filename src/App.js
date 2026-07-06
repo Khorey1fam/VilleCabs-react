@@ -9669,6 +9669,16 @@ export default function App() {
   const [dropoffData, setDropoffData] = useState(null);
   const [loading,     setLoading]     = useState(true);
 
+  // Scroll back to the top whenever we navigate to a new screen (SPA fix:
+  // otherwise the browser keeps your old scroll position on the new page).
+  useEffect(() => {
+    try {
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    } catch(e) {}
+  }, [screen]);
+
   // Feature: Onboarding — show 3-slide walkthrough on first launch
   const [showOnboarding, setShowOnboarding] = useState(() => {
     try { return !localStorage.getItem('vc_onboarded'); } catch(e) { return false; }
