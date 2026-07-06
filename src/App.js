@@ -716,7 +716,7 @@ function Footer({ go }) {
           {/* Travel */}
           <div>
             <div style={{ fontSize:13, fontWeight:700, color:'#2a1a4a', marginBottom:14, textTransform:'uppercase', letterSpacing:1 }}>Travel</div>
-            <div onClick={() => window.open('https://www.tripadvisor.com/Tourism-g1877491-Mandeville_Manchester_Parish_Jamaica-Vacations.html','_blank')}
+            <div onClick={() => go && go('featured')}
               style={{ fontSize:13, color:linkBase, marginBottom:10, cursor:'pointer' }}
               onMouseEnter={e => e.target.style.color=linkHover}
               onMouseLeave={e => e.target.style.color=linkBase}>
@@ -7767,6 +7767,7 @@ function FeaturedPage({ go, user, setPickupData, setDropoffData }) {
           </div>
         )}
       </div>
+      <Footer go={go}/>
     </div>
   );
 }
