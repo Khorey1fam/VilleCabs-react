@@ -936,6 +936,19 @@ function ExploreCard({ cat, go }) {
 
 function Splash({ go }) {
   const [slide, setSlide] = useState(0);
+  const [livePromos, setLivePromos] = useState([]);
+  // Load active, non-expired promo codes so the Promotions banner reflects what
+  // the admin creates (no more hardcoded codes).
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db,'promo_codes'), snap => {
+      const now = new Date();
+      const list = snap.docs.map(d => ({ id:d.id, ...d.data() }))
+        .filter(p => p.active && (!p.expiry || new Date(p.expiry) >= now))
+        .sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+      setLivePromos(list);
+    }, () => {});
+    return () => unsub();
+  }, []);
   const slides = [
     { bg:'#6b21a8', emoji:'🚕', title:"Mandeville's Local Ride App",   sub:'Fast, safe, and reliable rides across Mandeville and Manchester.' },
     { bg:'#4c1d95', emoji:'🛡️', title:'Your Safety Comes First',       sub:'Verified drivers, GPS tracking, and SOS emergency button.' },
@@ -1100,22 +1113,23 @@ function Splash({ go }) {
       </div>
 
       {/* PROMOTIONS */}
-      <div style={{ padding:'28px 16px', background:'#1a1a2e' }}>
-        <p style={{ fontSize:11, color:'#d8b4fe', fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', textAlign:'center', margin:'0 0 6px' }}>Launch Offers</p>
-        <h2 style={{ fontSize:20, fontWeight:800, color:'#fff', textAlign:'center', margin:'0 0 14px' }}>Current Promotions</h2>
-        <div style={{ display:'flex', gap:10, overflowX:'auto', paddingBottom:4 }}>
-          {[['WELCOME200','J$200 Off First Ride','New riders get J$200 off their first booking.'],
-            ['VILLEFRIEND200','J$200 Referral Credit','Refer a friend and both get J$200 credit.'],
-            ['AIRPORT200','Beat The Rush','J$200 off rides during peak hours.']
-          ].map(([code,title,desc],i) => (
-            <div key={i} style={{ flexShrink:0, width:200, background:'rgba(107,33,168,0.4)', border:'1px solid rgba(167,139,250,0.3)', borderRadius:14, padding:16 }}>
-              <div style={{ fontSize:10, color:'#d8b4fe', fontWeight:700, letterSpacing:1, marginBottom:4 }}>{code}</div>
-              <div style={{ fontSize:14, fontWeight:700, color:'#fff', marginBottom:6 }}>{title}</div>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.65)', lineHeight:1.5 }}>{desc}</div>
-            </div>
-          ))}
+      {livePromos.length > 0 && (
+        <div style={{ padding:'28px 16px', background:'#1a1a2e' }}>
+          <p style={{ fontSize:11, color:'#d8b4fe', fontWeight:700, letterSpacing:1.2, textTransform:'uppercase', textAlign:'center', margin:'0 0 6px' }}>Current Offers</p>
+          <h2 style={{ fontSize:20, fontWeight:800, color:'#fff', textAlign:'center', margin:'0 0 14px' }}>Promo Codes</h2>
+          <div style={{ display:'flex', gap:10, overflowX:'auto', paddingBottom:4 }}>
+            {livePromos.map((p) => (
+              <div key={p.id} style={{ flexShrink:0, width:210, background:'rgba(107,33,168,0.4)', border:'1px solid rgba(167,139,250,0.3)', borderRadius:14, padding:16 }}>
+                <div style={{ fontSize:12, color:'#d8b4fe', fontWeight:800, letterSpacing:1, marginBottom:6 }}>🎟️ {p.code}</div>
+                <div style={{ fontSize:22, fontWeight:800, color:'#fff', marginBottom:6 }}>{p.discount}% OFF</div>
+                <div style={{ fontSize:11.5, color:'rgba(255,255,255,0.7)', lineHeight:1.5 }}>{p.description || `${p.discount}% off your ride`}</div>
+                {p.expiry && <div style={{ fontSize:10, color:'rgba(255,255,255,0.45)', marginTop:8 }}>Valid until {new Date(p.expiry).toLocaleDateString('en-JM',{day:'numeric',month:'short',year:'numeric'})}</div>}
+              </div>
+            ))}
+          </div>
+          <p style={{ fontSize:11, color:'rgba(255,255,255,0.5)', textAlign:'center', margin:'12px 0 0' }}>Enter your code at checkout to save on your ride.</p>
         </div>
-      </div>
+      )}
 
       {/* FOOTER */}
       <div style={{ background:'linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(250,245,252,0.94) 55%, rgba(248,240,248,0.92) 100%)', borderTop:'1px solid #efe6f4', padding:'32px 20px', textAlign:'center' }}>
