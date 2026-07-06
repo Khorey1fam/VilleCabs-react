@@ -1549,12 +1549,25 @@ function DriverLogin({ go, user, setUser }) {
 
 // ── DRIVER SIGNUP ─────────────────────────────────────────────────────────────
 function DriverSignup({ go, user }) {
+  const [step, setStep] = useState(0); // 0=tips, 1=personal, 2=vehicle
   const [form, setForm]       = useState({ name:'',trn:'',dob:'',phone:'',email:'',password:'',make:'',model:'',color:'',plate:'' });
   const [docs, setDocs]       = useState({ license:null, fitness:null, registration:null, profilePhoto:null, vehiclePhoto:null });
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState('');
   const [previews, setPreviews] = useState({ profilePhoto:null, vehiclePhoto:null });
   const set = (k,v) => setForm(p => ({ ...p, [k]:v }));
+
+  // Validate page 1 (personal) before advancing
+  const personalDone = form.name && form.trn && form.dob && form.phone && form.email && form.password && docs.profilePhoto;
+  const vehicleDone  = form.make && form.model && form.color && form.plate && docs.vehiclePhoto && docs.license && docs.fitness && docs.registration;
+
+  const goToVehicle = () => {
+    setError('');
+    if (!personalDone) { setError('Please complete all personal details and add your profile photo.'); return; }
+    if (form.password.length < 6) { setError('Password must be at least 6 characters.'); return; }
+    setStep(2);
+    window.scrollTo(0,0);
+  };
 
   const handleSubmit = async () => {
     setError('');
@@ -1601,42 +1614,112 @@ function DriverSignup({ go, user }) {
     }
   };
 
+  // ── Step indicator (shown on form pages) ──
+  const StepDots = () => (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, marginBottom:18 }}>
+      {[1,2].map(n => (
+        <React.Fragment key={n}>
+          <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+            <div style={{ width:26, height:26, borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:800,
+              background: step>=n ? '#6b21a8' : '#ece3f5', color: step>=n ? '#fff' : '#8a83a0' }}>{n}</div>
+            <span style={{ fontSize:12, fontWeight:600, color: step>=n ? '#2a1a4a' : '#8a83a0' }}>{n===1?'Personal':'Vehicle'}</span>
+          </div>
+          {n===1 && <div style={{ width:28, height:2, background: step>=2 ? '#6b21a8' : '#ece3f5' }}/>}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+
+  // ── STEP 0: Tips screen ──
+  if (step === 0) {
+    const tips = [
+      ['✅', 'Enter accurate information', 'Correct details (name, TRN, phone) speed up your approval and avoid rejection.'],
+      ['📸', 'Use clear, visible photos', 'Make sure your profile photo shows your face and documents are readable — no blur or glare.'],
+      ['🚗', 'Show your full vehicle', 'The vehicle photo should show the whole car with the licence plate visible.'],
+      ['📄', 'Have your documents ready', "You'll need your Driver's Licence, Vehicle Fitness, and Registration."],
+      ['⏱️', 'Review takes 24–48 hours', 'Our team reviews every application. Good photos mean faster approval.'],
+    ];
+    return (
+      <div style={s.content}>
+        <TopBar title="Become a Driver" go={go} user={user}/>
+        <div style={{ padding:'20px', maxWidth:420, margin:'0 auto' }}>
+          <div style={{ textAlign:'center', marginBottom:20 }}>
+            <div style={{ fontSize:44, marginBottom:8 }}>🚕</div>
+            <h2 style={{ fontSize:22, fontWeight:800, color:'#2a1a4a', margin:'0 0 6px' }}>Before you start</h2>
+            <p style={{ color:'#6b7280', fontSize:13, margin:0, lineHeight:1.5 }}>A few tips to get you approved faster.</p>
+          </div>
+          {tips.map(([icon,title,desc],i) => (
+            <div key={i} style={{ display:'flex', gap:12, background:'#faf7fd', border:'1px solid #ece3f5', borderRadius:14, padding:'14px', marginBottom:10 }}>
+              <span style={{ fontSize:24, flexShrink:0 }}>{icon}</span>
+              <div>
+                <div style={{ fontSize:14, fontWeight:700, color:'#2a1a4a', marginBottom:2 }}>{title}</div>
+                <div style={{ fontSize:12.5, color:'#6b7280', lineHeight:1.5 }}>{desc}</div>
+              </div>
+            </div>
+          ))}
+          <button style={{ ...s.btnY, marginTop:12 }} onClick={() => { setStep(1); window.scrollTo(0,0); }}>Start Application →</button>
+          <button style={s.link} onClick={() => go('login-choice')}>Already a driver? Login →</button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── STEP 1: Personal information ──
+  if (step === 1) {
+    return (
+      <div style={s.content}>
+        <TopBar title="Driver Registration" go={() => setStep(0)} user={user}/>
+        <div style={{ padding:'20px', maxWidth:420, margin:'0 auto' }}>
+          <StepDots/>
+          <h2 style={{ fontSize:20, fontWeight:800, color:'#2a1a4a', marginBottom:4 }}>Personal Information</h2>
+          <p style={{ color:'#6b7280', fontSize:13, marginBottom:16 }}>Tell us about yourself. This must match your ID.</p>
+          {error && <div style={s.errBox}>⚠️ {error}</div>}
+          {[['name','Full Legal Name','As on your ID','text'],['trn','TRN','000-000-000','text'],['dob','Date of Birth','DD/MM/YYYY','text'],['phone','Phone Number','+1876-XXX-XXXX','tel'],['email','Email Address','you@email.com','email'],['password','Password','At least 6 characters','password']].map(([k,lbl,ph,type]) => (
+            <div key={k}>
+              <label style={s.lbl}>{lbl}</label>
+              <input style={s.inp} type={type} placeholder={ph} value={form[k]} onChange={e => set(k,e.target.value)}/>
+            </div>
+          ))}
+
+          {/* Profile Photo */}
+          <div style={{ marginTop:8, marginBottom:14 }}>
+            <label style={s.lbl}>Profile Photo *</label>
+            <input type="file" id="doc-profilePhoto" accept="image/*" style={{ display:'none' }} onChange={e => { const f=e.target.files?.[0]; if(f){setDocs(p=>({...p,profilePhoto:f}));setPreviews(p=>({...p,profilePhoto:URL.createObjectURL(f)}));} }}/>
+            <div onClick={() => document.getElementById('doc-profilePhoto').click()} style={{ border:'2px dashed '+(docs.profilePhoto?'#1a9e5a':'#e9d5ff'), borderRadius:14, padding:16, textAlign:'center', cursor:'pointer', background:docs.profilePhoto?'#f0fff4':'#f9f5ff' }}>
+              {previews.profilePhoto ? <div><img src={previews.profilePhoto} alt="Profile" style={{ width:80, height:80, borderRadius:'50%', objectFit:'cover', border:'3px solid #1a9e5a' }}/><div style={{ fontSize:12, color:'#1a9e5a', fontWeight:600, marginTop:6 }}>✅ Profile Photo Added</div></div>
+              : <div><div style={{ fontSize:32, marginBottom:6 }}>📸</div><div style={{ fontSize:13, fontWeight:600, color:'#6b21a8' }}>Upload Profile Photo</div><div style={{ fontSize:11, color:'#888', marginTop:2 }}>Clear face photo required</div></div>}
+            </div>
+          </div>
+
+          <button style={{ ...s.btnY, marginTop:8, opacity:personalDone?1:0.5 }} onClick={goToVehicle} disabled={!personalDone}>
+            Next: Vehicle Information →
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── STEP 2: Vehicle information ──
   return (
     <div style={s.content}>
-      <TopBar title="Driver Registration" go={go} user={user}/>
+      <TopBar title="Driver Registration" go={() => { setError(''); setStep(1); }} user={user}/>
       <div style={{ padding:'20px', maxWidth:420, margin:'0 auto' }}>
-        <h2 style={{ fontSize:22, fontWeight:800, color:'#1a1a2e', marginBottom:4 }}>Drive with VilleCabs</h2>
-        <p style={{ color:'#6b7280', fontSize:13, marginBottom:16 }}>Fill in your details to apply as a VilleCabs driver.</p>
+        <StepDots/>
+        <h2 style={{ fontSize:20, fontWeight:800, color:'#2a1a4a', marginBottom:4 }}>Vehicle Information</h2>
+        <p style={{ color:'#6b7280', fontSize:13, marginBottom:16 }}>Your vehicle details and required documents.</p>
         {error && <div style={s.errBox}>⚠️ {error}</div>}
-        {[['name','Full Legal Name','As on your ID','text'],['trn','TRN','000-000-000','text'],['dob','Date of Birth','DD/MM/YYYY','text'],['phone','Phone Number','+1876-XXX-XXXX','tel'],['email','Email Address','you@email.com','email'],['password','Password','At least 6 characters','password']].map(([k,lbl,ph,type]) => (
-          <div key={k}>
-            <label style={s.lbl}>{lbl}</label>
-            <input style={s.inp} type={type} placeholder={ph} value={form[k]} onChange={e => set(k,e.target.value)}/>
-          </div>
-        ))}
-        <div style={{ borderTop:'1px solid #e5e7eb', marginTop:8, paddingTop:16, marginBottom:8 }}>
-          <label style={s.lbl}>Vehicle Make</label>
-          <input style={s.inp} type="text" placeholder="e.g. Toyota" value={form.make} onChange={e => set('make',e.target.value)}/>
-          <label style={s.lbl}>Vehicle Model</label>
-          <input style={s.inp} type="text" placeholder="e.g. Corolla" value={form.model} onChange={e => set('model',e.target.value)}/>
-          <label style={s.lbl}>Vehicle Color</label>
-          <input style={s.inp} type="text" placeholder="e.g. Silver" value={form.color} onChange={e => set('color',e.target.value)}/>
-          <label style={s.lbl}>Licence Plate</label>
-          <input style={s.inp} type="text" placeholder="e.g. 1234AB" value={form.plate} onChange={e => set('plate',e.target.value)}/>
-        </div>
 
-        {/* Profile Photo */}
-        <div style={{ marginBottom:14 }}>
-          <label style={s.lbl}>Profile Photo *</label>
-          <input type="file" id="doc-profilePhoto" accept="image/*" style={{ display:'none' }} onChange={e => { const f=e.target.files?.[0]; if(f){setDocs(p=>({...p,profilePhoto:f}));setPreviews(p=>({...p,profilePhoto:URL.createObjectURL(f)}));} }}/>
-          <div onClick={() => document.getElementById('doc-profilePhoto').click()} style={{ border:'2px dashed '+(docs.profilePhoto?'#1a9e5a':'#e9d5ff'), borderRadius:14, padding:16, textAlign:'center', cursor:'pointer', background:docs.profilePhoto?'#f0fff4':'#f9f5ff' }}>
-            {previews.profilePhoto ? <div><img src={previews.profilePhoto} alt="Profile" style={{ width:80, height:80, borderRadius:'50%', objectFit:'cover', border:'3px solid #1a9e5a' }}/><div style={{ fontSize:12, color:'#1a9e5a', fontWeight:600, marginTop:6 }}>✅ Profile Photo Added</div></div>
-            : <div><div style={{ fontSize:32, marginBottom:6 }}>📸</div><div style={{ fontSize:13, fontWeight:600, color:'#6b21a8' }}>Upload Profile Photo</div><div style={{ fontSize:11, color:'#888', marginTop:2 }}>Clear face photo required</div></div>}
-          </div>
-        </div>
+        <label style={s.lbl}>Vehicle Make</label>
+        <input style={s.inp} type="text" placeholder="e.g. Toyota" value={form.make} onChange={e => set('make',e.target.value)}/>
+        <label style={s.lbl}>Vehicle Model</label>
+        <input style={s.inp} type="text" placeholder="e.g. Corolla" value={form.model} onChange={e => set('model',e.target.value)}/>
+        <label style={s.lbl}>Vehicle Color</label>
+        <input style={s.inp} type="text" placeholder="e.g. Silver" value={form.color} onChange={e => set('color',e.target.value)}/>
+        <label style={s.lbl}>Licence Plate</label>
+        <input style={s.inp} type="text" placeholder="e.g. 1234AB" value={form.plate} onChange={e => set('plate',e.target.value)}/>
 
         {/* Vehicle Photo */}
-        <div style={{ marginBottom:14 }}>
+        <div style={{ marginTop:8, marginBottom:14 }}>
           <label style={s.lbl}>Vehicle Photo *</label>
           <input type="file" id="doc-vehiclePhoto" accept="image/*" style={{ display:'none' }} onChange={e => { const f=e.target.files?.[0]; if(f){setDocs(p=>({...p,vehiclePhoto:f}));setPreviews(p=>({...p,vehiclePhoto:URL.createObjectURL(f)}));} }}/>
           <div onClick={() => document.getElementById('doc-vehiclePhoto').click()} style={{ border:'2px dashed '+(docs.vehiclePhoto?'#1a9e5a':'#e9d5ff'), borderRadius:14, padding:16, textAlign:'center', cursor:'pointer', background:docs.vehiclePhoto?'#f0fff4':'#f9f5ff', marginBottom:4 }}>
@@ -1660,12 +1743,15 @@ function DriverSignup({ go, user }) {
           </div>
         ))}
 
-        <button style={{ ...s.btnY, marginTop:8, opacity:(loading||Object.values(form).some(v=>!v)||!docs.license||!docs.fitness||!docs.registration||!docs.profilePhoto||!docs.vehiclePhoto)?0.5:1 }}
-          onClick={handleSubmit}
-          disabled={loading||Object.values(form).some(v=>!v)||!docs.license||!docs.fitness||!docs.registration||!docs.profilePhoto||!docs.vehiclePhoto}>
-          {loading ? 'Submitting...' : 'Submit Application'}
-        </button>
-        <button style={s.link} onClick={() => go('login-choice')}>Already a driver? Login →</button>
+        <div style={{ display:'flex', gap:10, marginTop:8 }}>
+          <button style={{ padding:'13px', background:'#fff', color:'#6b21a8', border:'1.5px solid #d8b4fe', borderRadius:12, fontSize:14, fontWeight:700, cursor:'pointer', flex:'0 0 auto', minWidth:90 }}
+            onClick={() => { setError(''); setStep(1); }}>← Back</button>
+          <button style={{ ...s.btnY, marginTop:0, flex:1, opacity:(loading||!vehicleDone)?0.5:1 }}
+            onClick={handleSubmit}
+            disabled={loading||!vehicleDone}>
+            {loading ? 'Submitting...' : 'Submit Application'}
+          </button>
+        </div>
       </div>
     </div>
   );
