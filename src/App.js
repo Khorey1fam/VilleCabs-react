@@ -677,8 +677,10 @@ function Footer({ go }) {
               ['About VilleCabs',     () => go('about-us')],
               ['Contact Us',          () => go('contact-us')],
               ['Help & Info',         () => go('help')],
+              ['FAQ',                 () => go('faq')],
+              ['Rider Reviews',       () => go('reviews')],
               ['Privacy Policy',      () => go('privacy')],
-              ['Terms & Conditions',  () => go('terms')],
+              ['Terms & Conditions',  () => go('terms-page')],
               ['Refund Policy',       () => go('refund-policy')],
               ['Become a Driver',     () => go('driver-signup')],
               ['Partner Locations',   () => go('partner-locations')],
@@ -2723,7 +2725,10 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
                 ['❓', 'Help Centre',      () => { go('help'); setMenuOpen(false); }],
                 ['📬', 'Contact Support',  () => { go('contact-us'); setMenuOpen(false); }],
                 ['ℹ️', 'About VilleCabs', () => { go('about-us'); setMenuOpen(false); }],
-                ['📄', 'Terms & Conditions', () => { go('terms'); setMenuOpen(false); }],
+                ['❓', 'FAQ',              () => { go('faq'); setMenuOpen(false); }],
+                ['⭐', 'Rider Reviews',    () => { go('reviews'); setMenuOpen(false); }],
+                ['📄', 'Terms & Conditions', () => { go('terms-page'); setMenuOpen(false); }],
+                ['💵', 'Refund Policy',    () => { go('refund-policy'); setMenuOpen(false); }],
                 ['🔒', 'Privacy Policy',   () => { go('privacy'); setMenuOpen(false); }],
               ].map(([icon, label, action], i) => (
                 <div key={i} onClick={action}
@@ -6077,7 +6082,10 @@ function DriverDash({ go, user, setUser, setBookingId }) {
                 ['❓','Help',          () => { go('driver-help'); setMenuOpen(false); }],
                 ['ℹ️','About VilleCabs',() => { go('driver-about'); setMenuOpen(false); }],
                 ['📬','Contact Support',() => { go('driver-contact'); setMenuOpen(false); }],
-                ['📄','Terms & Conditions',() => { go('driver-terms'); setMenuOpen(false); }],
+                ['❓','FAQ',            () => { go('faq'); setMenuOpen(false); }],
+                ['⭐','Rider Reviews',  () => { go('reviews'); setMenuOpen(false); }],
+                ['📄','Terms & Conditions',() => { go('terms-page'); setMenuOpen(false); }],
+                ['💵','Refund Policy',  () => { go('refund-policy'); setMenuOpen(false); }],
                 ['🔒','Privacy Policy', () => { go('privacy'); setMenuOpen(false); }],
               ].map(([icon, label, action], i) => (
                 <div key={i} onClick={action} style={{ padding:'14px 20px', display:'flex', alignItems:'center', gap:14, cursor:'pointer', borderBottom:'1px solid #f5f5f5' }}
@@ -9269,6 +9277,282 @@ function RefundPolicy({ go, user }) {
 }
 
 
+function TermsPage({ go, user }) {
+  const sections = [
+    { n:'1', title:'Definitions',
+      items:['“VilleCabs” refers to VilleCabs Limited.','“Passenger” refers to any user requesting transportation.','“Driver” refers to independent drivers using the platform.','“Platform” refers to the website, future applications, and related services.'] },
+    { n:'2', title:'Service Description',
+      items:['VilleCabs provides a platform that connects passengers with independent transportation providers.','VilleCabs does not guarantee ride availability at all times.'] },
+    { n:'3', title:'User Eligibility', body:'Users must:',
+      items:['Be at least 18 years old to create accounts.','Provide accurate information.','Use the service lawfully.'] },
+    { n:'4', title:'Booking & Payments',
+      items:['Ride pricing may vary based on distance, demand, and availability.','Payment methods may be updated over time.','Completed rides may not qualify for refunds except where approved by VilleCabs.'] },
+    { n:'5', title:'Driver Relationship', body:'Drivers using VilleCabs are independent contractors. VilleCabs does not employ drivers unless specifically stated. Drivers remain responsible for:',
+      items:['Vehicle maintenance','Licensing','Insurance','Compliance with applicable laws'] },
+    { n:'6', title:'Safety', body:'VilleCabs aims to promote safe transportation. Passengers should:',
+      items:['Confirm ride details before entering vehicles.','Wear seatbelts.','Report concerns immediately.'],
+      foot:'VilleCabs may suspend users or drivers for unsafe behavior.' },
+    { n:'7', title:'Prohibited Conduct', body:'Users may not:',
+      items:['Commit fraud','Abuse drivers or passengers','Submit false information','Damage vehicles','Use the service unlawfully'] },
+    { n:'8', title:'Cancellations',
+      items:['Passengers and drivers may cancel rides subject to future cancellation policies.','Repeated misuse may result in account restrictions.'] },
+    { n:'9', title:'Intellectual Property',
+      body:'All VilleCabs branding, logos, website content, and materials remain property of VilleCabs unless otherwise stated.' },
+    { n:'10', title:'Limitation of Liability',
+      body:'VilleCabs provides a connection platform and is not responsible for losses arising from independent driver actions except where required by applicable law.' },
+    { n:'11', title:'Privacy',
+      body:'Personal information will be collected and handled according to the VilleCabs Privacy Policy.' },
+    { n:'12', title:'Changes',
+      body:'VilleCabs may update these Terms periodically. Continued use of the service means acceptance of revised terms.' },
+  ];
+  return (
+    <div style={{ ...s.content, background:'#f5f6fa' }}>
+      <TopBar title="Terms & Conditions" onBack={() => go(user ? (user.role==='driver'?'driver-dash':'customer-dash') : 'splash')} go={go} user={user} showMenu/>
+      <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:44 }}>
+
+        {/* Header */}
+        <div style={{ textAlign:'center', marginBottom:22 }}>
+          <div style={{ fontSize:44, marginBottom:10 }}>📄</div>
+          <h2 style={{ fontSize:20, fontWeight:800, color:'#1a1a2e', marginBottom:6 }}>VilleCabs Terms &amp; Conditions</h2>
+          <p style={{ fontSize:12, color:'#6b21a8', fontStyle:'italic' }}>Effective Date: June 19, 2026</p>
+        </div>
+
+        {/* Intro */}
+        <div style={{ background:'#ffffff', border:'0.5px solid #e5e7eb', borderRadius:14, padding:16, marginBottom:18 }}>
+          <p style={{ fontSize:13, color:'#374151', lineHeight:1.8, margin:'0 0 10px' }}>
+            Welcome to VilleCabs. These Terms &amp; Conditions govern access to and use of villecabs.com and any transportation services, booking features, or driver services offered by VilleCabs.
+          </p>
+          <p style={{ fontSize:13, color:'#6b21a8', lineHeight:1.7, margin:0, fontWeight:600 }}>
+            By accessing or using VilleCabs, users agree to these Terms.
+          </p>
+        </div>
+
+        {/* Numbered sections */}
+        {sections.map((sec) => (
+          <div key={sec.n} style={{ background:'#ffffff', border:'0.5px solid #e5e7eb', borderRadius:14, padding:16, marginBottom:12 }}>
+            <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:(sec.body||sec.items)?10:0 }}>
+              <span style={{ flexShrink:0, width:26, height:26, borderRadius:8, background:'rgba(107,33,168,0.12)', border:'0.5px solid rgba(107,33,168,0.35)', color:'#6b21a8', fontSize:12, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center' }}>{sec.n}</span>
+              <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>{sec.title}</span>
+            </div>
+            {sec.body && <p style={{ fontSize:13, color:'#374151', lineHeight:1.75, margin:'0 0 6px' }}>{sec.body}</p>}
+            {sec.items && sec.items.map((it,ii) => (
+              <div key={ii} style={{ fontSize:13, color:'#374151', marginBottom:5, display:'flex', gap:8 }}>
+                <span style={{ color:GREEN, flexShrink:0 }}>•</span>{it}
+              </div>
+            ))}
+            {sec.foot && <p style={{ fontSize:12, color:'#4b5563', lineHeight:1.7, margin:'8px 0 0', fontStyle:'italic' }}>{sec.foot}</p>}
+          </div>
+        ))}
+
+        {/* Contact */}
+        <div style={{ background:'rgba(26,158,90,0.08)', border:'0.5px solid rgba(26,158,90,0.3)', borderRadius:14, padding:16, marginBottom:16 }}>
+          <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:10 }}>
+            <span style={{ flexShrink:0, width:26, height:26, borderRadius:8, background:'rgba(26,158,90,0.15)', border:'0.5px solid rgba(26,158,90,0.4)', color:GREEN, fontSize:12, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center' }}>13</span>
+            <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>Contact</span>
+          </div>
+          <div style={{ fontSize:13, color:'#374151', lineHeight:1.9 }}>
+            <div><strong style={{ color:'#1a1a2e' }}>VilleCabs Limited</strong></div>
+            <div>Email: <a href="mailto:admin@villecabs.com" style={{ color:'#6b21a8', textDecoration:'none' }}>admin@villecabs.com</a></div>
+            <div>Phone / WhatsApp: <a href="https://wa.me/18765158113" target="_blank" rel="noreferrer" style={{ color:'#6b21a8', textDecoration:'none' }}>876-515-8113</a></div>
+            <div>Website: <a href="https://villecabs.com" target="_blank" rel="noreferrer" style={{ color:'#6b21a8', textDecoration:'none' }}>villecabs.com</a></div>
+          </div>
+        </div>
+
+        <p style={{ fontSize:12, color:'#4b5563', textAlign:'center', fontStyle:'italic', lineHeight:1.7, marginBottom:8 }}>
+          By using VilleCabs, users confirm acceptance of these Terms &amp; Conditions.
+        </p>
+      </div>
+      <Footer go={go}/>
+    </div>
+  );
+}
+
+
+// ── FAQ PAGE (standalone, full page) ─────────────────────────────────────────
+function FAQPage({ go, user }) {
+  const [open, setOpen] = useState(0);
+  const faqs = [
+    ['How do I book a ride?', 'Open VilleCabs, set your pickup and drop-off, choose your vehicle, and confirm. You\u2019ll see the exact fare before you book — no surprises.'],
+    ['How do I pay for my ride?', 'Payment is cash directly to your driver on arrival. Just confirm the fare shown in the app before booking.'],
+    ['What\u2019s the cancellation policy?', 'You can cancel free of charge any time before a driver accepts your ride. Once a driver is on the way, a small cancellation fee may apply. See our Refund Policy for full details.'],
+    ['Are the drivers verified?', 'Yes. Every VilleCabs driver is background-checked and approved by our admin team before they can accept any rides.'],
+    ['Which areas do you cover?', 'VilleCabs operates across Mandeville and the wider Manchester parish, with long-distance and out-of-town trips available on request.'],
+    ['How is my fare calculated?', 'Fares are based on distance. Local trips use our standard rates; longer parish-to-parish trips use long-distance pricing with any out-of-town surcharge shown clearly in your fare breakdown.'],
+    ['Can I share my ride with someone?', 'Yes — during a ride you can tap Share to send a live tracking link. Whoever you send it to can watch your trip in real time, no app or account needed.'],
+    ['Is there a safety feature?', 'Every ride has an SOS button and live GPS tracking. Your driver\u2019s details and vehicle are shown before pickup, and you can message them in-app.'],
+    ['How do I become a driver?', 'Tap “Become a Driver”, complete the two-step application (personal info, then vehicle & documents), and submit. Our team reviews applications within 24\u201348 hours.'],
+    ['How do I advertise my business?', 'Visit the “Partner With VilleCabs” page, fill in your business details, upload your promo material, and choose a package. Once approved, your business appears on our Featured page.'],
+  ];
+  return (
+    <div style={{ ...s.content, background:'#f5f6fa' }}>
+      <TopBar title="FAQ" onBack={() => go(user ? (user.role==='driver'?'driver-dash':'customer-dash') : 'splash')} go={go} user={user} showMenu/>
+      <div style={{ padding:'22px 18px', maxWidth:560, margin:'0 auto', paddingBottom:44 }}>
+        <div style={{ textAlign:'center', marginBottom:22 }}>
+          <div style={{ fontSize:44, marginBottom:8 }}>❓</div>
+          <h2 style={{ fontSize:24, fontWeight:800, color:'#2a1a4a', margin:'0 0 6px' }}>Frequently Asked Questions</h2>
+          <div style={{ width:60, height:3, background:'#6b21a8', borderRadius:2, margin:'8px auto 12px' }}/>
+          <p style={{ fontSize:13.5, color:'#5b5470', margin:0, lineHeight:1.6 }}>Everything you need to know about riding, paying, and driving with VilleCabs.</p>
+        </div>
+
+        {faqs.map(([q,a],i) => {
+          const isOpen = open === i;
+          return (
+            <div key={i} style={{ background:'#fff', border:`1px solid ${isOpen?'#d8b4fe':'#ece3f5'}`, borderRadius:14, marginBottom:10, overflow:'hidden', boxShadow: isOpen?'0 4px 16px rgba(107,33,168,0.08)':'none' }}>
+              <div onClick={() => setOpen(isOpen?-1:i)}
+                style={{ padding:'15px 16px', display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, cursor:'pointer' }}>
+                <span style={{ fontSize:14, fontWeight:700, color:'#2a1a4a', lineHeight:1.4 }}>{q}</span>
+                <span style={{ flexShrink:0, width:24, height:24, borderRadius:'50%', background:isOpen?'#6b21a8':'#f0e9fa', color:isOpen?'#fff':'#6b21a8', display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, fontWeight:800, transition:'all 0.2s' }}>{isOpen?'\u2212':'+'}</span>
+              </div>
+              {isOpen && (
+                <div style={{ padding:'0 16px 16px', fontSize:13.5, color:'#5b5470', lineHeight:1.7 }}>{a}</div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Still need help */}
+        <div style={{ background:'linear-gradient(135deg,#6b21a8,#4c1d95)', borderRadius:16, padding:'22px 20px', textAlign:'center', marginTop:18 }}>
+          <div style={{ fontSize:15, fontWeight:800, color:'#fff', marginBottom:6 }}>Still have questions?</div>
+          <div style={{ fontSize:13, color:'rgba(255,255,255,0.8)', marginBottom:14, lineHeight:1.5 }}>Our team is here to help.</div>
+          <button onClick={() => go('contact-us')} style={{ padding:'11px 26px', background:'#fff', color:'#6b21a8', border:'none', borderRadius:22, fontSize:13.5, fontWeight:700, cursor:'pointer' }}>Contact Support</button>
+        </div>
+      </div>
+      <Footer go={go}/>
+    </div>
+  );
+}
+
+
+// ── CUSTOMER REVIEW WALL (public rate + comment board) ───────────────────────
+function ReviewWall({ go, user }) {
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [rating,  setRating]  = useState(0);
+  const [hover,   setHover]   = useState(0);
+  const [comment, setComment] = useState('');
+  const [name,    setName]    = useState(user?.name || '');
+  const [saving,  setSaving]  = useState(false);
+  const [posted,  setPosted]  = useState(false);
+  const [error,   setError]   = useState('');
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db,'service_reviews'), snap => {
+      const list = snap.docs.map(d => ({ id:d.id, ...d.data() }))
+        .sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+      setReviews(list); setLoading(false);
+    }, () => setLoading(false));
+    return () => unsub();
+  }, []);
+
+  const submit = async () => {
+    setError('');
+    if (rating === 0) { setError('Please tap a star to rate.'); return; }
+    if (!comment.trim()) { setError('Please write a short comment.'); return; }
+    setSaving(true);
+    try {
+      await addDoc(collection(db,'service_reviews'), {
+        name:    (name.trim() || 'VilleCabs Rider').slice(0, 40),
+        rating,
+        comment: comment.trim().slice(0, 500),
+        role:    user?.role || 'customer',
+        createdAt: serverTimestamp(),
+      });
+      setPosted(true); setComment(''); setRating(0);
+    } catch(e) { setError('Could not post your review. Please try again.'); }
+    setSaving(false);
+  };
+
+  const avg = reviews.length ? (reviews.reduce((s,r) => s + (r.rating||0), 0) / reviews.length) : 0;
+  const timeAgo = (secs) => {
+    if (!secs) return '';
+    const diff = Math.floor(Date.now()/1000 - secs);
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+    return `${Math.floor(diff/86400)}d ago`;
+  };
+  const Stars = ({ n, size=14 }) => (
+    <span style={{ color:'#f59e0b', fontSize:size, letterSpacing:1 }}>{'★'.repeat(n)}<span style={{ color:'#e0d3f5' }}>{'★'.repeat(5-n)}</span></span>
+  );
+
+  return (
+    <div style={{ ...s.content, background:'linear-gradient(160deg,#ffffff,#f6f2fb 45%,#efe8f7)' }}>
+      <TopBar title="Reviews" onBack={() => go(user ? (user.role==='driver'?'driver-dash':'customer-dash') : 'splash')} go={go} user={user} showMenu/>
+      <div style={{ padding:'22px 18px', maxWidth:560, margin:'0 auto', paddingBottom:44 }}>
+        <div style={{ textAlign:'center', marginBottom:20 }}>
+          <div style={{ fontSize:44, marginBottom:8 }}>⭐</div>
+          <h2 style={{ fontSize:24, fontWeight:800, color:'#2a1a4a', margin:'0 0 6px' }}>Rider Reviews</h2>
+          <div style={{ width:60, height:3, background:'#6b21a8', borderRadius:2, margin:'8px auto 12px' }}/>
+          {reviews.length > 0 && (
+            <div style={{ fontSize:14, color:'#5b5470' }}>
+              <Stars n={Math.round(avg)} size={18}/> <strong style={{ color:'#2a1a4a' }}>{avg.toFixed(1)}</strong> · {reviews.length} review{reviews.length!==1?'s':''}
+            </div>
+          )}
+        </div>
+
+        {/* Write a review */}
+        {posted ? (
+          <div style={{ background:'#f0fff4', border:'1px solid #86efac', borderRadius:14, padding:18, textAlign:'center', marginBottom:20 }}>
+            <div style={{ fontSize:32, marginBottom:8 }}>🎉</div>
+            <div style={{ fontSize:15, fontWeight:700, color:'#166534', marginBottom:4 }}>Thanks for your review!</div>
+            <div style={{ fontSize:13, color:'#15803d', marginBottom:12 }}>It\u2019s now live on the wall for everyone to see.</div>
+            <button onClick={() => setPosted(false)} style={{ padding:'9px 20px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:20, fontSize:13, fontWeight:700, cursor:'pointer' }}>Write another</button>
+          </div>
+        ) : (
+          <div style={{ background:'#fff', border:'1px solid #ece3f5', borderRadius:16, padding:18, marginBottom:22, boxShadow:'0 4px 16px rgba(107,33,168,0.06)' }}>
+            <div style={{ fontSize:15, fontWeight:800, color:'#2a1a4a', marginBottom:12 }}>Rate your experience</div>
+            {error && <div style={{ background:'#fff0f0', border:'1px solid #fca5a5', borderRadius:10, padding:'8px 12px', fontSize:12.5, color:'#dc2626', marginBottom:12 }}>{error}</div>}
+            {/* Star picker */}
+            <div style={{ display:'flex', gap:6, justifyContent:'center', marginBottom:14 }}>
+              {[1,2,3,4,5].map(n => (
+                <span key={n} onClick={() => setRating(n)} onMouseEnter={() => setHover(n)} onMouseLeave={() => setHover(0)}
+                  style={{ fontSize:36, cursor:'pointer', color:(hover||rating)>=n ? '#f59e0b' : '#e0d3f5', transition:'color 0.1s' }}>★</span>
+              ))}
+            </div>
+            <input value={name} onChange={e=>setName(e.target.value)} placeholder="Your name (optional)"
+              style={{ width:'100%', padding:'11px 13px', border:'1.5px solid #e2e4ed', borderRadius:10, fontSize:14, marginBottom:10, boxSizing:'border-box', outline:'none', color:'#1a1a2e' }}/>
+            <textarea value={comment} onChange={e=>setComment(e.target.value)} rows={3} placeholder="Tell everyone about your VilleCabs experience…"
+              style={{ width:'100%', padding:'11px 13px', border:'1.5px solid #e2e4ed', borderRadius:10, fontSize:14, marginBottom:12, boxSizing:'border-box', outline:'none', resize:'vertical', color:'#1a1a2e' }}/>
+            <button onClick={submit} disabled={saving}
+              style={{ width:'100%', padding:'13px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:12, fontSize:14, fontWeight:700, cursor:'pointer', opacity:saving?0.7:1 }}>
+              {saving ? 'Posting…' : 'Post Review'}
+            </button>
+          </div>
+        )}
+
+        {/* The wall */}
+        <div style={{ fontSize:12, color:'#8a83a0', fontWeight:700, textTransform:'uppercase', letterSpacing:0.6, marginBottom:12 }}>What riders are saying</div>
+        {loading && <div style={{ textAlign:'center', color:'#8a83a0', fontSize:13, padding:20 }}>Loading reviews…</div>}
+        {!loading && reviews.length === 0 && (
+          <div style={{ textAlign:'center', color:'#8a83a0', fontSize:13, padding:30, background:'#fff', borderRadius:14, border:'1px solid #ece3f5' }}>
+            No reviews yet — be the first to share your experience!
+          </div>
+        )}
+        {reviews.map(r => (
+          <div key={r.id} style={{ background:'#fff', border:'1px solid #ece3f5', borderRadius:14, padding:16, marginBottom:12, boxShadow:'0 2px 10px rgba(107,33,168,0.04)' }}>
+            <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
+              <div style={{ width:38, height:38, borderRadius:'50%', background:'#f0e9fa', color:'#6b21a8', display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, fontWeight:800, flexShrink:0 }}>
+                {(r.name||'R').charAt(0).toUpperCase()}
+              </div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontSize:14, fontWeight:700, color:'#2a1a4a' }}>{r.name || 'VilleCabs Rider'}</div>
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  <Stars n={r.rating||0}/>
+                  <span style={{ fontSize:11, color:'#a9a3ba' }}>{timeAgo(r.createdAt?.seconds)}</span>
+                </div>
+              </div>
+              {r.role==='driver' && <span style={{ fontSize:9, background:'#f5f0ff', color:'#6b21a8', padding:'3px 8px', borderRadius:8, fontWeight:700, flexShrink:0 }}>DRIVER</span>}
+            </div>
+            <div style={{ fontSize:13.5, color:'#4b5563', lineHeight:1.6 }}>{r.comment}</div>
+          </div>
+        ))}
+      </div>
+      <Footer go={go}/>
+    </div>
+  );
+}
+
+
 function DriverDocuments({ go, user }) {
   const [docs,   setDocs]   = useState({});
   const [saving, setSaving] = useState('');
@@ -9936,6 +10220,9 @@ export default function App() {
     'safety-centre':         <SafetyCentre {...props}/>,
     'privacy':               <PrivacyPolicy {...props}/>,
     'refund-policy':         <RefundPolicy {...props}/>,
+    'terms-page':            <TermsPage {...props}/>,
+    'faq':                   <FAQPage {...props}/>,
+    'reviews':               <ReviewWall {...props}/>,
     'partner-with-us':       <PartnerWithUs {...props}/>,
     'driver-earnings':        <DriverEarnings {...props}/>,
     'driver-documents':       <DriverDocuments {...props}/>,
