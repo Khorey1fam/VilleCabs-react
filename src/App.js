@@ -2157,43 +2157,103 @@ function DashDriverSlider({ go }) {
 }
 
 // ── DASH PARTNERS SLIDER ───────────────────────────────────────────────────────
+// One featured-partner card: slideshow of the partner's uploaded images
+function FeaturedPartnerCard({ p, go }) {
+  const imgs = (Array.isArray(p.uploads) ? p.uploads : []).filter(u => u && !u.match(/\.pdf($|\?)/i));
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    if (imgs.length <= 1) return;
+    const t = setInterval(() => setIdx(i => (i + 1) % imgs.length), 3000);
+    return () => clearInterval(t);
+  }, [imgs.length]);
+  return (
+    <div style={{ flexShrink:0, width:300, height:380, background:'#fff', border:'1px solid #ece3f5', borderRadius:20, overflow:'hidden', boxShadow:'0 4px 18px rgba(107,33,168,0.10)', display:'flex', flexDirection:'column', cursor:'pointer' }}
+      onClick={() => go('partner-with-us')}>
+      {/* Image slideshow */}
+      <div style={{ position:'relative', width:'100%', height:230, background:'#f3edfb' }}>
+        {imgs.length > 0 ? (
+          <img src={imgs[idx]} alt={p.bizName} style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
+        ) : (
+          <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:56 }}>🏪</div>
+        )}
+        {imgs.length > 1 && (
+          <div style={{ position:'absolute', bottom:8, left:0, right:0, display:'flex', justifyContent:'center', gap:5 }}>
+            {imgs.map((_,i) => (
+              <div key={i} style={{ width:6, height:6, borderRadius:'50%', background: i===idx ? '#fff' : 'rgba(255,255,255,0.5)', boxShadow:'0 1px 2px rgba(0,0,0,0.3)' }}/>
+            ))}
+          </div>
+        )}
+        <div style={{ position:'absolute', top:10, left:10, background:'rgba(107,33,168,0.92)', color:'#fff', fontSize:10, fontWeight:700, padding:'4px 10px', borderRadius:20, letterSpacing:0.5 }}>FEATURED</div>
+      </div>
+      {/* Info */}
+      <div style={{ padding:'14px 16px', flex:1, display:'flex', flexDirection:'column' }}>
+        <div style={{ fontSize:11, color:'#6b21a8', fontWeight:700, textTransform:'uppercase', letterSpacing:0.5, marginBottom:4 }}>{p.bizType || 'Partner'}</div>
+        <div style={{ fontSize:18, fontWeight:800, color:'#2a1a4a', marginBottom:6, lineHeight:1.2 }}>{p.bizName || 'Featured Partner'}</div>
+        {p.address && <div style={{ fontSize:12, color:'#8a83a0', lineHeight:1.5, display:'flex', gap:5 }}><span>📍</span><span>{p.address}</span></div>}
+        {p.hours && <div style={{ fontSize:11.5, color:'#8a83a0', marginTop:4 }}>🕒 {p.hours}</div>}
+        <div style={{ flex:1 }}/>
+        {p.website && <div style={{ fontSize:12, color:'#6b21a8', fontWeight:600, marginTop:8 }}>🔗 {p.website}</div>}
+      </div>
+    </div>
+  );
+}
+
 function DashPartnersSlider({ go }) {
-  // Large "ad slot" cards — reserved space for future featured partners / flyers.
-  const slots = [
-    { icon:'🍔', cat:'Restaurants' },
-    { icon:'🏨', cat:'Hotels' },
-    { icon:'🎉', cat:'Nightlife' },
-    { icon:'🛒', cat:'Supermarkets' },
-    { icon:'💊', cat:'Pharmacies' },
-    { icon:'🎫', cat:'Events' },
+  const [partners, setPartners] = useState([]);
+  // Empty "ad space" placeholders shown when there are no live featured partners
+  const placeholders = [
+    { icon:'🍔', cat:'Restaurants' }, { icon:'🏨', cat:'Hotels' },
+    { icon:'🎉', cat:'Nightlife' },   { icon:'🛒', cat:'Supermarkets' },
+    { icon:'💊', cat:'Pharmacies' },  { icon:'🎫', cat:'Events' },
   ];
+
+  useEffect(() => {
+    // Live: approved partners that have been placed in a slot, ordered by slot number.
+    // Query is constrained to status=='approved' so it satisfies the public-read rule
+    // (the collection is otherwise admin-only).
+    const q = query(collection(db,'partnerRequests'), where('status','==','approved'));
+    const unsub = onSnapshot(q, snap => {
+      const live = snap.docs.map(d => ({ id:d.id, ...d.data() }))
+        .filter(p => p.slot)
+        .sort((a,b) => (a.slot||0) - (b.slot||0));
+      setPartners(live);
+    }, () => {});
+    return () => unsub();
+  }, []);
+
+  const hasLive = partners.length > 0;
+  // Duplicate the list for a seamless marquee loop
+  const loopItems = hasLive ? [...partners, ...partners] : [...placeholders, ...placeholders];
+
   return (
     <div style={{ padding:'20px 0 20px' }}>
       <div style={{ padding:'0 16px', marginBottom:12 }}>
         <div style={{ fontSize:12, fontWeight:700, color:'#8a83a0', textTransform:'uppercase', letterSpacing:0.8, marginBottom:2 }}>Featured Partners</div>
-        <div style={{ fontSize:11, color:'#aaa' }}>Premium ad space — your business could be here.</div>
+        <div style={{ fontSize:11, color:'#aaa' }}>{hasLive ? 'Discover great local businesses.' : 'Premium ad space — your business could be here.'}</div>
       </div>
       <div style={{ overflow:'hidden', position:'relative' }}>
         <div style={{ display:'flex', gap:16, width:'max-content', animation:'autoScroll 45s linear infinite', padding:'4px 16px 12px' }}
           onMouseEnter={e => e.currentTarget.style.animationPlayState='paused'}
           onMouseLeave={e => e.currentTarget.style.animationPlayState='running'}>
-          {[...slots, ...slots].map((p, i) => (
-            <div key={i} style={{
-              flexShrink:0, width:300, height:380,
-              background:'linear-gradient(160deg,#ffffff 0%,#faf5fd 100%)',
-              border:'2px dashed #d8b4fe', borderRadius:20,
-              display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-              textAlign:'center', padding:'24px 20px', boxShadow:'0 4px 18px rgba(107,33,168,0.08)',
-            }}>
-              <div style={{ fontSize:66, marginBottom:14, opacity:0.9 }}>{p.icon}</div>
-              <div style={{ fontSize:20, fontWeight:800, color:'#2a1a4a', marginBottom:8, lineHeight:1.25 }}>Featured Partner</div>
-              <div style={{ display:'inline-block', fontSize:12, background:'#f5f0ff', color:'#6b21a8', border:'1px solid #e9d5ff', padding:'6px 16px', borderRadius:20, fontWeight:700, marginBottom:14 }}>Coming Soon</div>
-              <div style={{ fontSize:13, color:'#8a83a0', lineHeight:1.6, maxWidth:230, marginBottom:16 }}>
-                This space is reserved for a featured {p.cat.toLowerCase()} partner. Advertise your business with VilleCabs.
+          {hasLive
+            ? loopItems.map((p, i) => <FeaturedPartnerCard key={p.id+'-'+i} p={p} go={go}/>)
+            : loopItems.map((p, i) => (
+              <div key={i} style={{
+                flexShrink:0, width:300, height:380,
+                background:'linear-gradient(160deg,#ffffff 0%,#faf5fd 100%)',
+                border:'2px dashed #d8b4fe', borderRadius:20,
+                display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+                textAlign:'center', padding:'24px 20px', boxShadow:'0 4px 18px rgba(107,33,168,0.08)',
+              }}>
+                <div style={{ fontSize:66, marginBottom:14, opacity:0.9 }}>{p.icon}</div>
+                <div style={{ fontSize:20, fontWeight:800, color:'#2a1a4a', marginBottom:8, lineHeight:1.25 }}>Featured Partner</div>
+                <div style={{ display:'inline-block', fontSize:12, background:'#f5f0ff', color:'#6b21a8', border:'1px solid #e9d5ff', padding:'6px 16px', borderRadius:20, fontWeight:700, marginBottom:14 }}>Coming Soon</div>
+                <div style={{ fontSize:13, color:'#8a83a0', lineHeight:1.6, maxWidth:230, marginBottom:16 }}>
+                  This space is reserved for a featured {p.cat.toLowerCase()} partner. Advertise your business with VilleCabs.
+                </div>
+                <button onClick={() => go('partner-with-us')} style={{ padding:'11px 22px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:22, fontSize:13, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 14px rgba(107,33,168,0.25)' }}>Advertise Here →</button>
               </div>
-              <button onClick={() => go('partner-with-us')} style={{ padding:'11px 22px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:22, fontSize:13, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 14px rgba(107,33,168,0.25)' }}>Advertise Here →</button>
-            </div>
-          ))}
+            ))}
         </div>
       </div>
     </div>
