@@ -1180,12 +1180,32 @@ function PartnersTab() {
       {partners.map(p => (
         <div key={p.id} style={s.card}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
-            <span style={{ fontSize:15, fontWeight:500, color:'#1a1a2e' }}>{p.businessName||p.name||'Business'}</span>
+            <span style={{ fontSize:15, fontWeight:500, color:'#1a1a2e' }}>{p.bizName||p.businessName||p.name||'Business'}</span>
             {badge(p.status)}
           </div>
-          <div style={{ fontSize:12, color:'#6b7280', marginBottom:3 }}>{p.businessType||'Business'} · {p.address||'Manchester, Jamaica'}</div>
+          <div style={{ fontSize:12, color:'#6b7280', marginBottom:3 }}>{p.bizType||p.businessType||'Business'}{(p.address)?` · ${p.address}`:''}</div>
+          {(p.contact) && <div style={{ fontSize:12, color:'#6b7280', marginBottom:3 }}>👤 {p.contact}</div>}
           {p.email && <div style={{ fontSize:12, color:'#6b7280', marginBottom:3 }}>📧 {p.email}{p.phone?` · ☎ ${p.phone}`:''}</div>}
-          {p.message && <div style={{ fontSize:12, color:'#4b5563', marginBottom:10, lineHeight:1.5 }}>{p.message}</div>}
+          {(p.website) && <div style={{ fontSize:12, color:'#6b7280', marginBottom:3 }}>🔗 {p.website}</div>}
+          {(p.hours) && <div style={{ fontSize:12, color:'#6b7280', marginBottom:3 }}>🕒 {p.hours}</div>}
+          {p.packageLabel && (
+            <div style={{ display:'inline-block', fontSize:12, background:'#f5f0ff', color:'#6b21a8', border:'1px solid #e9d5ff', padding:'3px 10px', borderRadius:8, fontWeight:700, margin:'4px 0 6px' }}>
+              📦 {p.packageLabel}
+            </div>
+          )}
+          {(p.description||p.message) && <div style={{ fontSize:12, color:'#4b5563', margin:'6px 0 10px', lineHeight:1.5 }}>{p.description||p.message}</div>}
+          {Array.isArray(p.uploads) && p.uploads.length>0 && (
+            <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:10 }}>
+              {p.uploads.map((url,i) => (
+                <a key={i} href={url} target="_blank" rel="noopener noreferrer"
+                  style={{ width:70, height:70, borderRadius:8, overflow:'hidden', border:'1px solid #e5e7eb', display:'flex', alignItems:'center', justifyContent:'center', background:'#f9fafb', textDecoration:'none' }}>
+                  {url.match(/\.pdf($|\?)/i)
+                    ? <span style={{ fontSize:24 }}>📄</span>
+                    : <img src={url} alt="promo" style={{ width:'100%', height:'100%', objectFit:'cover' }}/>}
+                </a>
+              ))}
+            </div>
+          )}
           <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:8 }}>
             <button onClick={()=>setStatus(p.id,'approved')} style={s.btnApprove}>Approve</button>
             <button onClick={()=>setStatus(p.id,'featured')} style={{ ...s.btnApprove, background:'#6b21a8' }}>⭐ Feature</button>

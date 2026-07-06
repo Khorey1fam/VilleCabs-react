@@ -8487,53 +8487,173 @@ class ErrorBoundary extends React.Component {
 
 
 function PartnerWithUs({ go, user }) {
-  const [form, setForm] = useState({ bizName:'', bizType:'', contact:'', phone:'', email:'', address:'', website:'', message:'' });
+  const BIZ_TYPES = ['Hotels','Restaurants','Guest Houses','Attractions','Businesses','Clubs','Supermarkets','Events'];
+  const PACKAGES = [
+    { id:'7day',  label:'7 Days — J$5,000',   days:7,  price:5000 },
+    { id:'14day', label:'14 Days — J$10,000', days:14, price:10000 },
+    { id:'30day', label:'30 Days — J$20,000', days:30, price:20000 },
+  ];
+  const [form, setForm] = useState({
+    bizName:'', bizType:'', contact:'', phone:'', email:'',
+    address:'', website:'', hours:'', description:'', packageId:'',
+  });
+  const [uploads,  setUploads]  = useState([null, null, null]); // urls
+  const [uploading,setUploading]= useState(-1); // index currently uploading
   const [sent,   setSent]   = useState(false);
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState('');
   const set = (k,v) => setForm(p => ({...p,[k]:v}));
+
+  const handleUpload = async (idx, file) => {
+    if (!file) return;
+    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+      setError('Uploads must be images or PDF flyers.'); return;
+    }
+    if (file.size > 8*1024*1024) { setError('Each file must be under 8MB.'); return; }
+    setError(''); setUploading(idx);
+    try {
+      const safeName = (form.bizName||'partner').replace(/[^a-z0-9]/gi,'_').slice(0,30);
+      const r = storageRef(storage, `partnerUploads/${safeName}_${Date.now()}_${idx}`);
+      const snap = await uploadBytes(r, file, { contentType: file.type });
+      const url = await getDownloadURL(snap.ref);
+      setUploads(prev => { const n=[...prev]; n[idx]=url; return n; });
+    } catch(e) { setError('Upload failed. Please try again.'); }
+    setUploading(-1);
+  };
+
   const submit = async () => {
-    if (!form.bizName||!form.email||!form.phone) { setError('Please fill in all required fields.'); return; }
+    if (!form.bizName || !form.bizType || !form.email || !form.phone) {
+      setError('Please fill in Business Name, Nature of Business, Phone and Email.'); return;
+    }
+    if (!form.packageId) { setError('Please select an advertising package.'); return; }
     setSaving(true); setError('');
-    try { await addDoc(collection(db,'partnerRequests'), {...form, type:'partner_or_advertiser', status:'new', createdAt:serverTimestamp()}); setSent(true); }
-    catch(e) { setError('Failed to submit. Please try again.'); }
+    const pkg = PACKAGES.find(p => p.id === form.packageId);
+    try {
+      await addDoc(collection(db,'partnerRequests'), {
+        ...form,
+        packageLabel: pkg?.label || null,
+        packageDays:  pkg?.days  || null,
+        packagePrice: pkg?.price || null,
+        uploads: uploads.filter(Boolean),
+        type:   'advertiser',
+        status: 'new',
+        createdAt: serverTimestamp(),
+      });
+      setSent(true);
+    } catch(e) { setError('Failed to submit. Please try again.'); }
     setSaving(false);
   };
+
+  const inputStyle = { width:'100%', padding:'11px 13px', border:'1.5px solid #e2e4ed', borderRadius:10, fontSize:14, marginBottom:12, boxSizing:'border-box', outline:'none', color:'#1a1a2e' };
+  const labelStyle = { fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:4 };
+
   return (
     <div style={{ background:'#fff', minHeight:'100vh' }}>
       <div style={{ background:'#fff', padding:'8px 14px', display:'flex', alignItems:'center', borderBottom:'1px solid #e5e7eb', position:'sticky', top:0, zIndex:10 }}>
-        <img src="/logo.png" onClick={() => go('splash')} style={{cursor:'pointer',  height:30, objectFit:'contain' }} alt="VilleCabs"/>
+        <img src="/logo.png" onClick={() => go('splash')} style={{cursor:'pointer', height:30, objectFit:'contain' }} alt="VilleCabs"/>
         <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:8 }}>Partner With VilleCabs</span>
       </div>
       <div style={{ background:'linear-gradient(135deg,#6b21a8,#4c1d95)', padding:'28px 20px', textAlign:'center' }}>
         <h1 style={{ fontSize:20, fontWeight:800, color:'#fff', margin:'0 0 8px' }}>Advertise &amp; Partner With VilleCabs</h1>
         <p style={{ fontSize:13, color:'rgba(255,255,255,0.85)', margin:0 }}>Feature your business in the app. We will drive the customers to your door.</p>
       </div>
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, padding:'16px' }}>
-        {['Hotels','Restaurants','Guest Houses','Attractions','Businesses','Clubs','Supermarkets','Events'].map((c,i) => (
-          <div key={i} style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:12, padding:'10px', textAlign:'center', fontSize:13, fontWeight:600, color:'#1a1a2e' }}>{c}</div>
-        ))}
-      </div>
+
       <div style={{ padding:'0 16px 40px' }}>
         {sent ? (
           <div style={{ textAlign:'center', padding:24 }}>
             <div style={{ fontSize:40, marginBottom:12 }}>🎉</div>
             <div style={{ fontSize:16, fontWeight:700, color:'#1a1a2e', marginBottom:6 }}>Request Received!</div>
-            <div style={{ fontSize:13, color:'#6b7280', lineHeight:1.6, maxWidth:320, margin:'0 auto 16px' }}>Thanks for your interest in advertising with VilleCabs. Our team will review your request and reach out to you soon.</div>
+            <div style={{ fontSize:13, color:'#6b7280', lineHeight:1.6, maxWidth:320, margin:'0 auto 16px' }}>Thanks for your interest in advertising with VilleCabs. Our team will review your request and reach out with payment details soon.</div>
             <button onClick={() => go('splash')} style={{ padding:'11px 24px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:22, fontSize:13, fontWeight:700, cursor:'pointer' }}>Back to Home</button>
           </div>
         ) : (
-          <div>
+          <div style={{ paddingTop:16 }}>
             {error && <div style={{ background:'#fff0f0', border:'1px solid #fca5a5', borderRadius:10, padding:'10px', fontSize:13, color:'#dc2626', marginBottom:12 }}>{error}</div>}
-            {[['Business Name *','bizName'],['Business Type *','bizType'],['Contact Person','contact'],['Phone *','phone'],['Email *','email'],['Address','address'],['Website','website']].map(([l,k]) => (
-              <div key={k}>
-                <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:4 }}>{l}</label>
-                <input value={form[k]||''} onChange={e=>set(k,e.target.value)} style={{ width:'100%', padding:'11px 13px', border:'1.5px solid #e2e4ed', borderRadius:10, fontSize:14, marginBottom:12, boxSizing:'border-box', outline:'none', color:'#1a1a2e' }}/>
-              </div>
-            ))}
-            <label style={{ fontSize:12, fontWeight:600, color:'#374151', display:'block', marginBottom:4 }}>Message</label>
-            <textarea value={form.message} onChange={e=>set('message',e.target.value)} rows={3} style={{ width:'100%', padding:'11px', border:'1.5px solid #e2e4ed', borderRadius:10, fontSize:14, marginBottom:14, boxSizing:'border-box', outline:'none', resize:'vertical', color:'#1a1a2e' }}/>
-            <button onClick={submit} disabled={saving} style={{ width:'100%', padding:'13px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:12, fontSize:14, fontWeight:700, cursor:'pointer', opacity:saving?0.7:1 }}>{saving?'Submitting...':'Submit Partner Request'}</button>
+
+            {/* Nature of business — single select */}
+            <label style={labelStyle}>Nature of Business *</label>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
+              {BIZ_TYPES.map((c) => {
+                const active = form.bizType === c;
+                return (
+                  <div key={c} onClick={() => set('bizType', c)}
+                    style={{ background:active?'#6b21a8':'#f9f5ff', border:`1.5px solid ${active?'#6b21a8':'#e9d5ff'}`, borderRadius:12, padding:'11px', textAlign:'center', fontSize:13, fontWeight:600, color:active?'#fff':'#1a1a2e', cursor:'pointer', transition:'all 0.15s', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+                    {active && <span>✓</span>}{c}
+                  </div>
+                );
+              })}
+            </div>
+
+            <label style={labelStyle}>Business Name *</label>
+            <input value={form.bizName} onChange={e=>set('bizName',e.target.value)} style={inputStyle}/>
+
+            <label style={labelStyle}>Contact Person</label>
+            <input value={form.contact} onChange={e=>set('contact',e.target.value)} style={inputStyle}/>
+
+            <label style={labelStyle}>Phone *</label>
+            <input value={form.phone} onChange={e=>set('phone',e.target.value)} type="tel" style={inputStyle}/>
+
+            <label style={labelStyle}>Email *</label>
+            <input value={form.email} onChange={e=>set('email',e.target.value)} type="email" style={inputStyle}/>
+
+            {/* Address with Google autocomplete */}
+            <label style={labelStyle}>Address</label>
+            <div style={{ marginBottom:12 }}>
+              <AddressAutocompleteInput
+                value={form.address}
+                onChange={(v)=>set('address',v)}
+                onPlaceSelect={(place)=>set('address', place.formattedAddress || place.name || form.address)}
+                placeholder="Start typing your business address…"
+              />
+            </div>
+
+            <label style={labelStyle}>Website / Social Media</label>
+            <input value={form.website} onChange={e=>set('website',e.target.value)} placeholder="e.g. instagram.com/yourbiz" style={inputStyle}/>
+
+            <label style={labelStyle}>Opening Hours</label>
+            <input value={form.hours} onChange={e=>set('hours',e.target.value)} placeholder="e.g. Mon–Sat 9am–9pm" style={inputStyle}/>
+
+            <label style={labelStyle}>Description</label>
+            <textarea value={form.description} onChange={e=>set('description',e.target.value)} rows={4} placeholder="Tell us about your business and what you'd like to promote…" style={{ ...inputStyle, resize:'vertical' }}/>
+
+            {/* Upload slots */}
+            <label style={labelStyle}>Upload Logo / Flyer / Promo Material</label>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginBottom:16 }}>
+              {[0,1,2].map((idx) => (
+                <div key={idx}>
+                  <input type="file" id={`partner-upload-${idx}`} accept="image/*,application/pdf" style={{ display:'none' }}
+                    onChange={e => handleUpload(idx, e.target.files?.[0])}/>
+                  <div onClick={() => uploading===-1 && document.getElementById(`partner-upload-${idx}`).click()}
+                    style={{ height:90, borderRadius:10, border:`1.5px dashed ${uploads[idx]?'#6b21a8':'#d8b4fe'}`, background:uploads[idx]?'#f5f0ff':'#faf7fd', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', cursor:'pointer', overflow:'hidden', position:'relative' }}>
+                    {uploading===idx ? (
+                      <span style={{ fontSize:11, color:'#6b21a8' }}>Uploading…</span>
+                    ) : uploads[idx] ? (
+                      uploads[idx].match(/\.pdf($|\?)/i)
+                        ? <><span style={{ fontSize:26 }}>📄</span><span style={{ fontSize:9, color:'#6b21a8', fontWeight:600 }}>PDF added</span></>
+                        : <img src={uploads[idx]} alt="upload" style={{ width:'100%', height:'100%', objectFit:'cover' }}/>
+                    ) : (
+                      <><span style={{ fontSize:22, opacity:0.6 }}>＋</span><span style={{ fontSize:9, color:'#8a83a0', marginTop:2 }}>Add file</span></>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Package selection */}
+            <label style={labelStyle}>Advertising Package *</label>
+            <select value={form.packageId} onChange={e=>set('packageId',e.target.value)}
+              style={{ ...inputStyle, marginBottom:16, appearance:'auto', cursor:'pointer' }}>
+              <option value="">Select a package…</option>
+              {PACKAGES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+            </select>
+
+            <button onClick={submit} disabled={saving || uploading!==-1}
+              style={{ width:'100%', padding:'14px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:12, fontSize:15, fontWeight:700, cursor:'pointer', opacity:(saving||uploading!==-1)?0.7:1 }}>
+              {saving ? 'Submitting…' : 'Submit Advertising Request'}
+            </button>
+            <div style={{ fontSize:11, color:'#8a83a0', textAlign:'center', marginTop:10, lineHeight:1.5 }}>
+              Our team will review your request and contact you with payment details. Your ad goes live once payment is confirmed.
+            </div>
           </div>
         )}
       </div>
