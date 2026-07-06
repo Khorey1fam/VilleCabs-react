@@ -679,6 +679,7 @@ function Footer({ go }) {
               ['Help & Info',         () => go('help')],
               ['Privacy Policy',      () => go('privacy')],
               ['Terms & Conditions',  () => go('terms')],
+              ['Refund Policy',       () => go('refund-policy')],
               ['Become a Driver',     () => go('driver-signup')],
               ['Partner Locations',   () => go('partner-locations')],
               ['Partner With Us',     () => window.open('mailto:admin@villecabs.com?subject=VilleCabs Partnership', '_blank')],
@@ -9195,6 +9196,79 @@ function PrivacyPolicy({ go, user }) {
 }
 
 
+function RefundPolicy({ go, user }) {
+  const sections = [
+    { n:'1', title:'Ride Cancellations',
+      items:['Customers may cancel a ride before a driver accepts the request without being charged.','If a ride is cancelled after a driver has accepted and started heading to the pickup location, a cancellation fee may apply.'] },
+    { n:'2', title:'No Driver Available',
+      body:'If no driver is available and the ride is not confirmed, the customer will not be charged.' },
+    { n:'3', title:'Failed or Incomplete Rides',
+      body:'If a ride is not completed due to a system error, driver issue, or operational problem, VilleCabs may review the trip and issue a refund where appropriate.' },
+    { n:'4', title:'Duplicate or Incorrect Charges',
+      body:'If a customer believes they were charged incorrectly, they may contact VilleCabs support for review. Refund requests should include:',
+      items:['Customer name','Ride date and time','Pickup and drop-off location','Description of the issue'] },
+    { n:'5', title:'Refund Review',
+      items:['All refund requests are reviewed on a case-by-case basis.','Approved refunds may take several business days to process, depending on the payment method or financial institution.'] },
+    { n:'6', title:'Non-Refundable Situations', body:'Refunds may not be issued where:',
+      items:['The customer entered the wrong pickup or drop-off location','The customer failed to appear at the pickup location','The customer cancelled after the driver arrived','The ride was successfully completed','Incorrect information was provided during booking'] },
+  ];
+  return (
+    <div style={{ ...s.content, background:'#f5f6fa' }}>
+      <TopBar title="Refund Policy" onBack={() => go(user ? (user.role==='driver'?'driver-dash':'customer-dash') : 'splash')} go={go} user={user} showMenu/>
+      <div style={{ padding:'20px 18px', maxWidth:480, margin:'0 auto', paddingBottom:44 }}>
+
+        {/* Header */}
+        <div style={{ textAlign:'center', marginBottom:22 }}>
+          <div style={{ fontSize:44, marginBottom:10 }}>💵</div>
+          <h2 style={{ fontSize:20, fontWeight:800, color:'#1a1a2e', marginBottom:6 }}>VilleCabs Refund Policy</h2>
+        </div>
+
+        {/* Intro */}
+        <div style={{ background:'#ffffff', border:'0.5px solid #e5e7eb', borderRadius:14, padding:16, marginBottom:18 }}>
+          <p style={{ fontSize:13, color:'#374151', lineHeight:1.8, margin:0 }}>
+            At VilleCabs, we aim to provide a fair, transparent, and reliable ride-booking experience for both customers and drivers.
+          </p>
+        </div>
+
+        {/* Numbered sections */}
+        {sections.map((sec) => (
+          <div key={sec.n} style={{ background:'#ffffff', border:'0.5px solid #e5e7eb', borderRadius:14, padding:16, marginBottom:12 }}>
+            <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:sec.body||sec.items?10:0 }}>
+              <span style={{ flexShrink:0, width:26, height:26, borderRadius:8, background:'rgba(107,33,168,0.12)', border:'0.5px solid rgba(107,33,168,0.35)', color:'#6b21a8', fontSize:12, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center' }}>{sec.n}</span>
+              <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>{sec.title}</span>
+            </div>
+            {sec.body && <p style={{ fontSize:13, color:'#374151', lineHeight:1.75, margin:'0 0 6px' }}>{sec.body}</p>}
+            {sec.items && sec.items.map((it,ii) => (
+              <div key={ii} style={{ fontSize:13, color:'#374151', marginBottom:5, display:'flex', gap:8 }}>
+                <span style={{ color:GREEN, flexShrink:0 }}>•</span>{it}
+              </div>
+            ))}
+          </div>
+        ))}
+
+        {/* Contact */}
+        <div style={{ background:'rgba(26,158,90,0.08)', border:'0.5px solid rgba(26,158,90,0.3)', borderRadius:14, padding:16, marginBottom:16 }}>
+          <div style={{ display:'flex', gap:10, alignItems:'center', marginBottom:10 }}>
+            <span style={{ flexShrink:0, width:26, height:26, borderRadius:8, background:'rgba(26,158,90,0.15)', border:'0.5px solid rgba(26,158,90,0.4)', color:GREEN, fontSize:12, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center' }}>7</span>
+            <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>Contact Us</span>
+          </div>
+          <p style={{ fontSize:13, color:'#374151', lineHeight:1.75, margin:'0 0 10px' }}>For refund requests or billing concerns, please contact:</p>
+          <div style={{ fontSize:13, color:'#374151', lineHeight:1.9 }}>
+            <div>Email: <a href="mailto:admin@villecabs.com" style={{ color:'#6b21a8', textDecoration:'none' }}>admin@villecabs.com</a></div>
+            <div>Website: <a href="https://www.villecabs.com" target="_blank" rel="noreferrer" style={{ color:'#6b21a8', textDecoration:'none' }}>www.villecabs.com</a></div>
+          </div>
+        </div>
+
+        <p style={{ fontSize:13, color:'#6b21a8', textAlign:'center', fontWeight:700, lineHeight:1.7, marginBottom:8 }}>
+          VilleCabs — Your City. Your Ride. Your Way.
+        </p>
+      </div>
+      <Footer go={go}/>
+    </div>
+  );
+}
+
+
 function DriverDocuments({ go, user }) {
   const [docs,   setDocs]   = useState({});
   const [saving, setSaving] = useState('');
@@ -9861,6 +9935,7 @@ export default function App() {
     'promotions':       <PromotionsPage {...props}/>,
     'safety-centre':         <SafetyCentre {...props}/>,
     'privacy':               <PrivacyPolicy {...props}/>,
+    'refund-policy':         <RefundPolicy {...props}/>,
     'partner-with-us':       <PartnerWithUs {...props}/>,
     'driver-earnings':        <DriverEarnings {...props}/>,
     'driver-documents':       <DriverDocuments {...props}/>,
