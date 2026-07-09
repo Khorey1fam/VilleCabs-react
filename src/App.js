@@ -3049,13 +3049,13 @@ function CustomerReferral({ go, user }) {
     // Generate deterministic referral code from uid
     const refCode = 'VILLE' + user.uid.substring(0, 5).toUpperCase();
     setCode(refCode);
-    // Check how many times it was used
-    getDocs(query(collection(db,'bookings'),
-      where('promoCode','==', refCode)
-    )).then(snap => {
-      const used   = snap.size;
-      const earned = used * 200; // J$200 per referral
-      setStats({ used, earned });
+    // Read the referral tally from the customer's OWN document. We no longer
+    // scan every booking for this code — that required reading other customers'
+    // bookings, which is both a privacy leak and blocked by the security rules.
+    getDoc(doc(db,'customers',user.uid)).then(snap => {
+      const d = snap.exists() ? snap.data() : {};
+      const used = d.referralCount || 0;
+      setStats({ used, earned: used * 200 }); // J$200 per referral
       setLoading(false);
     }).catch(() => setLoading(false));
   }, [user]);
@@ -4942,12 +4942,22 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
     return () => unsub();
   }, [bookingId]);
 
+  // Build the driver's public info from the fields copied onto the booking when
+  // the driver accepted. We deliberately do NOT read drivers/{driverId} here —
+  // that document holds private data (TRN, DOB, document URLs) that must never
+  // reach a customer's browser.
   useEffect(() => {
     if (!booking?.driverId) return;
-    getDoc(doc(db,'drivers',booking.driverId)).then(snap => {
-      if (snap.exists()) setDriverInfo(snap.data());
+    setDriverInfo({
+      profilePhotoUrl: booking.profilePhotoUrl || null,
+      vehiclePhotoUrl: booking.vehiclePhotoUrl || null,
+      vehicleMake:     booking.vehicleMake  || '',
+      vehicleModel:    booking.vehicleModel || '',
+      vehicleColor:    booking.vehicleColor || '',
+      rating:          typeof booking.rating === 'number' ? booking.rating : null,
+      ratingCount:     booking.ratingCount || 0,
     });
-  }, [booking?.driverId]);
+  }, [booking?.driverId, booking?.profilePhotoUrl, booking?.rating]);
 
   // Force completed screen when booking status changes to completed
   useEffect(() => {
@@ -6060,6 +6070,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
           profilePhotoUrl: dData.profilePhotoUrl || '',
           vehiclePhotoUrl: dData.vehiclePhotoUrl || '',
           rating:       dData.rating || 5.0,
+          ratingCount:  dData.ratingCount || 0,
           status:       'active',
           acceptedAt:   serverTimestamp(),
         });
