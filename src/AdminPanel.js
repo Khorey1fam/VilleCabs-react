@@ -134,6 +134,14 @@ function DriversTab() {
     await updateDoc(doc(db,'drivers',id), { status:'suspended', suspendedAt:serverTimestamp() });
   };
 
+  // Force a driver offline (they stop receiving ride requests immediately).
+  // Also clears any stale currentRideId so they aren't stuck "busy".
+  const forceOffline = async (id) => {
+    try {
+      await updateDoc(doc(db,'drivers',id), { isOnline:false, currentRideId:null, forcedOfflineAt:serverTimestamp() });
+    } catch(e) { console.error('forceOffline failed:', e); }
+  };
+
   // Review an individual re-uploaded document/photo (from the driver's documents screen)
   const reviewDoc = async (driverId, key, decision) => {
     try {
@@ -307,7 +315,16 @@ function DriversTab() {
               </>
             )}
             {driver.status === 'approved' && (
-              <button onClick={() => suspend(driver.id)} style={s.btnSuspend}>Suspend driver</button>
+              <>
+                {driver.isOnline && (
+                  <button onClick={() => forceOffline(driver.id)}
+                    style={{ ...s.btnSuspend, background:'#b45309' }}
+                    title="Immediately stop this driver receiving ride requests">
+                    ⏸ Put offline
+                  </button>
+                )}
+                <button onClick={() => suspend(driver.id)} style={s.btnSuspend}>Suspend driver</button>
+              </>
             )}
             {(driver.status === 'rejected' || driver.status === 'suspended') && (
               <button onClick={() => approve(driver.id)} style={s.btnApprove}>Re-activate</button>

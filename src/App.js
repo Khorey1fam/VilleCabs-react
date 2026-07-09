@@ -4148,6 +4148,27 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
         }
       } catch(e) {}
 
+      // ── ONE ACTIVE RIDE AT A TIME ────────────────────────────────────
+      // A customer may not book again while they already have a ride in
+      // progress — including one that is still 'searching' for a driver.
+      // (Scheduled rides for later are not counted here.)
+      try {
+        const liveSnap = await getDocs(query(
+          collection(db,'bookings'),
+          where('customerId','==',user.uid),
+          where('status','in',['searching','active','arrived','enroute'])
+        ));
+        if (!liveSnap.empty) {
+          const existing = liveSnap.docs[0];
+          setChecking(false); setLoading(false);
+          setError('You already have a ride in progress. Please complete or cancel it before booking another.');
+          // Send them to the ride they already have
+          setBookingId(existing.id);
+          setTimeout(() => go('live-ride'), 1600);
+          return;
+        }
+      } catch(e) { console.warn('Active-ride check skipped:', e); }
+
       // ── SCHEDULED RIDE (Feature: Scheduled Rides) ────────────────────
       if (rideTime === 'later') {
         const when = new Date(scheduledAt);
@@ -6001,7 +6022,14 @@ function DriverDash({ go, user, setUser, setBookingId }) {
     } catch(e) {}
   };
   const declineRide = async (rideId) => {
-    try { await updateDoc(doc(db,'bookings',rideId), { declinedBy: arrayUnion(user.uid) }); } catch(e) {}
+    // Optimistically drop it from this driver's list so the UI responds instantly
+    setPendingRides(prev => prev.filter(r => r.id !== rideId));
+    try {
+      await updateDoc(doc(db,'bookings',rideId), { declinedBy: arrayUnion(user.uid) });
+    } catch(e) {
+      console.error('declineRide failed:', e);
+      vcToast('Could not decline that ride. Please try again.', 'error');
+    }
   };
   const acceptRide = async (rideId) => {
     if (!rideId || acceptingId) return;
@@ -10200,27 +10228,6 @@ export default function App() {
 
     return () => { unsub(); clearTimeout(safety); };
   }, []);
-
-  // ── 10-minute idle logout ─────────────────────────────────────────────────
-  useEffect(() => {
-    if (!user) return;
-    let idleTimer;
-    const resetTimer = () => {
-      clearTimeout(idleTimer);
-      idleTimer = setTimeout(async () => {
-        try { await signOut(auth); } catch(e) {}
-        setUser(null);
-        setScreen('splash');
-      }, 5 * 60 * 1000); // 5 minutes
-    };
-    const events = ['mousedown','mousemove','keydown','scroll','touchstart','click'];
-    events.forEach(e => window.addEventListener(e, resetTimer, { passive:true }));
-    resetTimer();
-    return () => {
-      clearTimeout(idleTimer);
-      events.forEach(e => window.removeEventListener(e, resetTimer));
-    };
-  }, [user]);
 
   if (loading) return <LoadingScreen/>;
 
