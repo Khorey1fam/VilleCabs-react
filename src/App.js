@@ -4,7 +4,8 @@ import {
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
   signInWithPopup, GoogleAuthProvider, sendEmailVerification,
   onAuthStateChanged, signOut, setPersistence, browserLocalPersistence,
-  updatePassword, updateEmail, reauthenticateWithCredential, EmailAuthProvider
+  updatePassword, updateEmail, reauthenticateWithCredential, EmailAuthProvider,
+  sendPasswordResetEmail
 } from 'firebase/auth';
 import {
   getFirestore, doc, setDoc, getDoc, addDoc, collection,
@@ -1416,6 +1417,105 @@ function OTPScreen({ go, user }) {
 }
 
 // ── CUSTOMER LOGIN ────────────────────────────────────────────────────────────
+// ── FORGOT PASSWORD ───────────────────────────────────────────────────────────
+// Firebase sends a secure, single-use, time-limited reset link and hosts the
+// reset page itself — the app never sees the old or the new password.
+// For privacy we never reveal whether an email is registered.
+function ForgotPassword({ go, user }) {
+  const [email,   setEmail]   = useState('');
+  const [loading, setLoading] = useState(false);
+  const [sent,    setSent]    = useState(false);
+  const [error,   setError]   = useState('');
+
+  const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+  const handleReset = async () => {
+    setError('');
+    if (!validEmail) { setError('Please enter a valid email address.'); return; }
+    setLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, email.trim().toLowerCase());
+      setSent(true);
+    } catch (err) {
+      // Deliberately do NOT surface 'user-not-found' — that would confirm to a
+      // stranger whether an email is registered. Treat it as success.
+      if (err?.code === 'auth/user-not-found' || err?.code === 'auth/invalid-email') {
+        setSent(true);
+      } else if (err?.code === 'auth/too-many-requests') {
+        setError('Too many attempts. Please wait a few minutes and try again.');
+      } else if (err?.code === 'auth/network-request-failed') {
+        setError('Network error. Please check your connection and try again.');
+      } else {
+        setError('Could not send the reset link. Please try again shortly.');
+      }
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={s.content}>
+      <TopBar title="Reset Password" go={go} user={user}/>
+      <div style={{ padding:'32px 20px', maxWidth:420, margin:'0 auto' }}>
+
+        {sent ? (
+          <div style={{ textAlign:'center', paddingTop:8 }}>
+            <div style={{ width:74, height:74, borderRadius:'50%', background:'rgba(26,158,90,0.12)', border:'1px solid rgba(26,158,90,0.35)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:34, margin:'0 auto 18px' }}>✉️</div>
+            <h2 style={{ fontSize:21, fontWeight:800, color:'#1a1a2e', margin:'0 0 10px' }}>Check your inbox</h2>
+            <p style={{ fontSize:13.5, color:'#5b5470', lineHeight:1.7, margin:'0 0 6px' }}>
+              If an account exists for <strong style={{ color:'#2a1a4a' }}>{email.trim().toLowerCase()}</strong>, we've sent a secure link to reset your password.
+            </p>
+            <p style={{ fontSize:12.5, color:'#8a83a0', lineHeight:1.7, margin:'0 0 22px' }}>
+              The link expires in one hour. Remember to check your spam folder.
+            </p>
+
+            <button style={{ ...s.btnY, marginTop:0 }} onClick={() => go('customer-login')}>Back to Log In</button>
+            <button style={s.link} onClick={() => { setSent(false); setEmail(''); }}>Use a different email</button>
+
+            <div style={{ marginTop:26, padding:'14px 16px', background:'#faf7fd', border:'1px solid #ece3f5', borderRadius:12, textAlign:'left' }}>
+              <div style={{ fontSize:12, fontWeight:700, color:'#2a1a4a', marginBottom:5 }}>Didn't get the email?</div>
+              <div style={{ fontSize:12, color:'#8a83a0', lineHeight:1.7 }}>
+                Wait a minute and check spam. Still nothing? Contact us at{' '}
+                <a href="mailto:admin@villecabs.com" style={{ color:'#6b21a8', textDecoration:'none', fontWeight:600 }}>admin@villecabs.com</a>.
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div style={{ width:64, height:64, borderRadius:18, background:'#f5f0ff', border:'1px solid #e9d5ff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:28, marginBottom:18 }}>🔑</div>
+            <h2 style={{ fontSize:22, fontWeight:800, color:'#1a1a2e', margin:'0 0 6px' }}>Forgot your password?</h2>
+            <p style={{ color:'#5b5470', fontSize:13.5, lineHeight:1.6, marginBottom:22 }}>
+              Enter the email linked to your VilleCabs account and we'll send you a secure link to set a new password.
+            </p>
+
+            {error && <div style={s.errBox}>⚠️ {error}</div>}
+
+            <label style={s.lbl}>Email Address</label>
+            <input style={s.inp} type="email" autoComplete="email" placeholder="you@email.com"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && validEmail && !loading) handleReset(); }}/>
+
+            <button style={{ ...s.btnY, opacity:(loading||!validEmail)?0.55:1 }}
+              onClick={handleReset} disabled={loading || !validEmail}>
+              {loading ? 'Sending link…' : 'Send Reset Link'}
+            </button>
+
+            <button style={s.link} onClick={() => go('customer-login')}>← Back to Log In</button>
+
+            <div style={{ marginTop:24, display:'flex', gap:9, alignItems:'flex-start', padding:'12px 14px', background:'#faf7fd', border:'1px solid #ece3f5', borderRadius:12 }}>
+              <span style={{ fontSize:15, lineHeight:1.3 }}>🔒</span>
+              <div style={{ fontSize:11.5, color:'#8a83a0', lineHeight:1.65 }}>
+                For your security, the reset link can be used once and expires after one hour. VilleCabs never sees or stores your password.
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+      <Footer go={go}/>
+    </div>
+  );
+}
+
 function CustomerLogin({ go, setUser, user }) {
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
@@ -1485,6 +1585,12 @@ function CustomerLogin({ go, setUser, user }) {
         <input style={s.inp} type="email" placeholder="you@email.com" value={email} onChange={e => setEmail(e.target.value)}/>
         <label style={s.lbl}>Password</label>
         <input style={s.inp} type="password" placeholder="Your password" value={password} onChange={e => setPassword(e.target.value)}/>
+        <div style={{ textAlign:'right', marginTop:-4, marginBottom:14 }}>
+          <span onClick={() => go('forgot-password')}
+            style={{ fontSize:12.5, color:'#6b21a8', fontWeight:600, cursor:'pointer' }}>
+            Forgot password?
+          </span>
+        </div>
         <button style={{ ...s.btnY, opacity:loading?0.7:1 }} onClick={handleLogin} disabled={loading}>{loading?'Logging in...':'Log In'}</button>
         <button style={s.link} onClick={() => go('customer-signup')}>Create an account</button>
       </div>
@@ -1570,6 +1676,12 @@ function DriverLogin({ go, user, setUser }) {
         <input style={s.inp} type="email" placeholder="you@email.com" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key==='Enter' && handleLogin()}/>
         <label style={s.lbl}>Password</label>
         <input style={s.inp} type="password" placeholder="Your password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key==='Enter' && handleLogin()}/>
+        <div style={{ textAlign:'right', marginTop:-4, marginBottom:14 }}>
+          <span onClick={() => go('forgot-password')}
+            style={{ fontSize:12.5, color:'#6b21a8', fontWeight:600, cursor:'pointer' }}>
+            Forgot password?
+          </span>
+        </div>
         <button style={{ ...s.btnY, opacity:loading?0.7:1 }} onClick={handleLogin} disabled={loading}>
           {loading ? 'Logging in...' : 'Login'}
         </button>
@@ -10250,6 +10362,7 @@ export default function App() {
     role:             <RoleSelect {...props}/>,
     'customer-signup':<CustomerSignup {...props}/>,
     'customer-login': <CustomerLogin {...props}/>,
+    'forgot-password': <ForgotPassword {...props}/>,
     otp:              <OTPScreen {...props}/>,
     terms:            <TermsScreen {...props}/>,
     'welcome-tips':   <WelcomeTips {...props}/>,

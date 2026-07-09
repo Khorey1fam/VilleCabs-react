@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { initializeApp, getApps } from 'firebase/app';
-import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
+import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail } from 'firebase/auth';
 import { getFirestore, collection, query, where, onSnapshot, updateDoc, doc, orderBy, addDoc, deleteDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 const firebaseConfig = {
@@ -48,6 +48,7 @@ function AdminLogin({ onLogin }) {
   const [password, setPassword] = useState('');
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState('');
+  const [resetSent, setResetSent] = useState(false);
 
   const ADMIN_EMAIL = process.env.REACT_APP_ADMIN_EMAIL || 'admin@villecabs.com';
 
@@ -63,6 +64,21 @@ function AdminLogin({ onLogin }) {
     setLoading(false);
   };
 
+  // Send a Firebase password-reset link to the admin address.
+  const handleReset = async () => {
+    setError(''); setResetSent(false);
+    if (email !== ADMIN_EMAIL) { setError('Password reset is only available for the admin account.'); return; }
+    setLoading(true);
+    try {
+      await sendPasswordResetEmail(auth, ADMIN_EMAIL);
+      setResetSent(true);
+    } catch(err) {
+      if (err?.code === 'auth/too-many-requests') setError('Too many attempts. Please wait a few minutes.');
+      else setError('Could not send the reset link. Please try again.');
+    }
+    setLoading(false);
+  };
+
   return (
     <div style={{ minHeight:'100vh', background:'#f5f6fa', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'Segoe UI', sans-serif" }}>
       <div style={{ width:380, background:'#ffffff', border:'1px solid #e5e7eb', borderRadius:20, padding:32 }}>
@@ -72,6 +88,11 @@ function AdminLogin({ onLogin }) {
           <div style={{ fontSize:13, color:'#9199ad', marginTop:4 }}>Admin Panel</div>
         </div>
         {error && <div style={s.errBox}>⚠️ {error}</div>}
+        {resetSent && (
+          <div style={{ background:'#f0fff4', border:'1px solid #86efac', color:'#166534', borderRadius:10, padding:'10px 12px', fontSize:12.5, marginBottom:12, lineHeight:1.6 }}>
+            ✉️ Reset link sent to {ADMIN_EMAIL}. It expires in one hour — check spam if you don't see it.
+          </div>
+        )}
         <label style={{ fontSize:11, color:'#6b7280', marginBottom:4, display:'block' }}>Admin Email</label>
         <input style={s.inp} type="email" placeholder="admin@villecabs.com" value={email} onChange={e => setEmail(e.target.value)}/>
         <label style={{ fontSize:11, color:'#6b7280', marginBottom:4, display:'block' }}>Password</label>
@@ -81,6 +102,12 @@ function AdminLogin({ onLogin }) {
           style={{ width:'100%', padding:'14px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:12, fontSize:15, fontWeight:700, cursor:'pointer', marginTop:4, opacity:loading?0.7:1 }}>
           {loading ? 'Signing in...' : 'Sign In'}
         </button>
+        <div style={{ textAlign:'center', marginTop:14 }}>
+          <span onClick={() => !loading && handleReset()}
+            style={{ fontSize:12.5, color:'#6b21a8', fontWeight:600, cursor:loading?'default':'pointer' }}>
+            Forgot password?
+          </span>
+        </div>
       </div>
     </div>
   );
