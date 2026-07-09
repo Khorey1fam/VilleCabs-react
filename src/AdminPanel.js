@@ -130,6 +130,7 @@ function DriversTab() {
   const [filter,  setFilter]    = useState('pending');
   const [loading, setLoading]   = useState(true);
   const [confirm, setConfirm]   = useState(null);
+  const [search,  setSearch]    = useState('');
 
   useEffect(() => {
     const q = (filter === 'all' || filter === 'reuploads')
@@ -192,6 +193,16 @@ function DriversTab() {
 
   const filters = ['pending','reuploads','approved','rejected','all'];
 
+  // Client-side search across the fields an admin would actually look up by.
+  const q = search.trim().toLowerCase();
+  const visibleDrivers = !q ? drivers : drivers.filter(d => {
+    const hay = [
+      d.name, d.email, d.phone, d.trn,
+      d.licensePlate, d.vehicleMake, d.vehicleModel, d.vehicleColor,
+    ].filter(Boolean).join(' ').toLowerCase();
+    return hay.includes(q);
+  });
+
   return (
     <div>
       {/* Confirm reject modal */}
@@ -211,7 +222,7 @@ function DriversTab() {
         </div>
       )}
 
-      <div style={{ display:'flex', gap:8, marginBottom:20, flexWrap:'wrap' }}>
+      <div style={{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap' }}>
         {filters.map(f => (
           <button key={f} onClick={() => setFilter(f)}
             style={{ padding:'7px 16px', borderRadius:20, fontSize:13, border:'1px solid #e5e7eb', background:filter===f?'#6b21a8':'#f3f4f6', color:filter===f?'#fff':'#555', cursor:'pointer', textTransform:'capitalize', fontWeight:filter===f?600:400 }}>
@@ -220,14 +231,37 @@ function DriversTab() {
         ))}
       </div>
 
+      {/* Search */}
+      <div style={{ display:'flex', gap:8, alignItems:'center', marginBottom:18 }}>
+        <div style={{ position:'relative', flex:1 }}>
+          <span style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', fontSize:14, opacity:0.5 }}>🔍</span>
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search name, email, phone, TRN, plate or vehicle…"
+            style={{ ...s.inp, paddingLeft:34, marginBottom:0 }}/>
+        </div>
+        {search && (
+          <button onClick={() => setSearch('')}
+            style={{ padding:'10px 14px', borderRadius:10, border:'1px solid #e5e7eb', background:'#f3f4f6', color:'#555', fontSize:13, cursor:'pointer' }}>
+            Clear
+          </button>
+        )}
+      </div>
+      {search && (
+        <div style={{ fontSize:12, color:'#9199ad', marginBottom:12 }}>
+          {visibleDrivers.length} result{visibleDrivers.length!==1?'s':''} for “{search}”
+        </div>
+      )}
+
       {loading ? (
         <div style={{ textAlign:'center', padding:40, color:'#9199ad' }}>Loading drivers...</div>
-      ) : drivers.length === 0 ? (
+      ) : visibleDrivers.length === 0 ? (
         <div style={{ textAlign:'center', padding:40 }}>
           <div style={{ fontSize:36, marginBottom:12 }}>👤</div>
-          <div style={{ color:'#9199ad', fontSize:14 }}>No {filter} applications</div>
+          <div style={{ color:'#9199ad', fontSize:14 }}>
+            {search ? `No drivers match “${search}”` : `No ${filter} applications`}
+          </div>
         </div>
-      ) : drivers.map(driver => (
+      ) : visibleDrivers.map(driver => (
         <div key={driver.id} style={s.card}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
             <div style={{ display:'flex', alignItems:'center', gap:12 }}>
@@ -379,6 +413,9 @@ function RidesTab() {
   const [rides,   setRides]   = useState([]);
   const [filter,  setFilter]  = useState('all');
   const [loading, setLoading] = useState(true);
+  const [search,  setSearch]  = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo,   setDateTo]   = useState('');
 
   useEffect(() => {
     const q = filter === 'all'
@@ -402,7 +439,39 @@ function RidesTab() {
     return <span style={{ ...s.badge, background:m.bg, color:m.color }}>{m.text}</span>;
   };
 
-  const total = rides.reduce((sum, r) => sum + (r.fare||0), 0);
+  // ── Search + date-range filtering (client-side over the live list) ──
+  const q = search.trim().toLowerCase();
+  const fromTs = dateFrom ? new Date(dateFrom + 'T00:00:00').getTime() / 1000 : null;
+  const toTs   = dateTo   ? new Date(dateTo   + 'T23:59:59').getTime() / 1000 : null;
+
+  const visible = rides.filter(r => {
+    const ts = r.createdAt?.seconds;
+    if (fromTs && (!ts || ts < fromTs)) return false;
+    if (toTs   && (!ts || ts > toTs))   return false;
+    if (!q) return true;
+    const hay = [
+      r.customerName, r.customerPhone, r.driverName, r.id,
+      r.pickup?.address, r.dropoff?.address, r.promoCode, r.licensePlate,
+    ].filter(Boolean).join(' ').toLowerCase();
+    return hay.includes(q);
+  });
+
+  // Quick date presets
+  const iso = (d) => d.toISOString().slice(0,10);
+  const setPreset = (days) => {
+    const now = new Date();
+    if (days === 0) { const t = iso(now); setDateFrom(t); setDateTo(t); return; }
+    if (days === 'month') {
+      setDateFrom(iso(new Date(now.getFullYear(), now.getMonth(), 1)));
+      setDateTo(iso(now)); return;
+    }
+    const from = new Date(now); from.setDate(from.getDate() - (days - 1));
+    setDateFrom(iso(from)); setDateTo(iso(now));
+  };
+  const clearDates = () => { setDateFrom(''); setDateTo(''); };
+  const filtersActive = !!(search || dateFrom || dateTo);
+
+  const total = visible.reduce((sum, r) => sum + (r.fare||0), 0);
   const filters = ['all','searching','active','completed','cancelled'];
 
   const fmtDateTime = (ts) => {
@@ -419,17 +488,17 @@ function RidesTab() {
     await updateDoc(doc(db,'bookings',id), updates);
   };
 
-  const sorted = [...rides].sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+  const sorted = [...visible].sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
 
   return (
     <div>
       <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:20 }}>
-        <StatCard label="Total rides"   value={rides.length} sub="in current filter"/>
-        <StatCard label="Total revenue" value={`J$${total.toLocaleString()}`} color="#b45309" sub="all rides"/>
-        <StatCard label="Active now"    value={rides.filter(r=>r.status==='active').length} color={GREEN} sub="in progress"/>
+        <StatCard label="Total rides"   value={visible.length} sub={filtersActive ? 'matching filters' : 'in current filter'}/>
+        <StatCard label="Total revenue" value={`J$${total.toLocaleString()}`} color="#b45309" sub={filtersActive ? 'matching filters' : 'all rides'}/>
+        <StatCard label="Active now"    value={visible.filter(r=>r.status==='active').length} color={GREEN} sub="in progress"/>
       </div>
 
-      <div style={{ display:'flex', gap:8, marginBottom:20, flexWrap:'wrap' }}>
+      <div style={{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap' }}>
         {filters.map(f => (
           <button key={f} onClick={() => setFilter(f)}
             style={{ padding:'7px 16px', borderRadius:20, fontSize:13, border:'1px solid #e5e7eb', background:filter===f?'#6b21a8':'#f3f4f6', color:filter===f?'#fff':'#555', cursor:'pointer', textTransform:'capitalize', fontWeight:filter===f?600:400 }}>
@@ -438,12 +507,68 @@ function RidesTab() {
         ))}
       </div>
 
+      {/* Search */}
+      <div style={{ position:'relative', marginBottom:12 }}>
+        <span style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', fontSize:14, opacity:0.5 }}>🔍</span>
+        <input value={search} onChange={e => setSearch(e.target.value)}
+          placeholder="Search customer, driver, phone, address, promo code or ride ID…"
+          style={{ ...s.inp, paddingLeft:34, marginBottom:0 }}/>
+      </div>
+
+      {/* Date range */}
+      <div style={{ background:'#faf7fd', border:'1px solid #ece3f5', borderRadius:12, padding:'12px 14px', marginBottom:18 }}>
+        <div style={{ fontSize:11, fontWeight:700, color:'#6b21a8', textTransform:'uppercase', letterSpacing:0.6, marginBottom:10 }}>📅 Filter by date</div>
+        <div style={{ display:'flex', gap:10, flexWrap:'wrap', alignItems:'flex-end' }}>
+          <div>
+            <label style={{ fontSize:11, color:'#6b7280', display:'block', marginBottom:4 }}>From</label>
+            <input type="date" value={dateFrom} max={dateTo || undefined}
+              onChange={e => setDateFrom(e.target.value)}
+              style={{ ...s.inp, marginBottom:0, width:160, cursor:'pointer' }}/>
+          </div>
+          <div>
+            <label style={{ fontSize:11, color:'#6b7280', display:'block', marginBottom:4 }}>To</label>
+            <input type="date" value={dateTo} min={dateFrom || undefined}
+              onChange={e => setDateTo(e.target.value)}
+              style={{ ...s.inp, marginBottom:0, width:160, cursor:'pointer' }}/>
+          </div>
+          <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+            {[['Today',0],['7 days',7],['30 days',30],['This month','month']].map(([lbl,v]) => (
+              <button key={lbl} onClick={() => setPreset(v)}
+                style={{ padding:'8px 12px', borderRadius:8, fontSize:12, border:'1px solid #d8b4fe', background:'#fff', color:'#6b21a8', fontWeight:600, cursor:'pointer' }}>
+                {lbl}
+              </button>
+            ))}
+            {(dateFrom || dateTo) && (
+              <button onClick={clearDates}
+                style={{ padding:'8px 12px', borderRadius:8, fontSize:12, border:'1px solid #e5e7eb', background:'#f3f4f6', color:'#555', cursor:'pointer' }}>
+                Clear dates
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {filtersActive && (
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+          <span style={{ fontSize:12, color:'#9199ad' }}>
+            {visible.length} ride{visible.length!==1?'s':''} found
+            {(dateFrom || dateTo) && ` · ${dateFrom||'start'} → ${dateTo||'today'}`}
+          </span>
+          <button onClick={() => { setSearch(''); clearDates(); }}
+            style={{ padding:'6px 12px', borderRadius:8, fontSize:12, border:'1px solid #e5e7eb', background:'#fff', color:'#6b21a8', fontWeight:600, cursor:'pointer' }}>
+            Reset all
+          </button>
+        </div>
+      )}
+
       {loading ? (
         <div style={{ textAlign:'center', padding:40, color:'#9199ad' }}>Loading rides...</div>
       ) : sorted.length === 0 ? (
         <div style={{ textAlign:'center', padding:40 }}>
           <div style={{ fontSize:36, marginBottom:12 }}>🚕</div>
-          <div style={{ color:'#9199ad', fontSize:14 }}>No {filter} rides yet</div>
+          <div style={{ color:'#9199ad', fontSize:14 }}>
+            {filtersActive ? 'No rides match your search or date range' : `No ${filter} rides yet`}
+          </div>
         </div>
       ) : sorted.map((r,i) => (
         <div key={r.id} style={{ background:'#ffffff', border:'1px solid #e5e7eb', borderRadius:12, padding:'16px 18px', marginBottom:12 }}>
