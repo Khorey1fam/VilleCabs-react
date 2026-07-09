@@ -7947,7 +7947,7 @@ function AdminDash({ go, user }) {
   const [broadcastMsg,setBroadcastMsg]= useState(''); // Feature: Bulk Driver Broadcast
 
   // Access control
-  if (!user || !ADMIN_EMAILS.includes(user.email)) {
+  if (!user || !ADMIN_EMAILS.includes((user.email || '').toLowerCase())) {
     return (
       <div style={{ minHeight:'100vh', background:'#f5f6fa', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24 }}>
         <div style={{ fontSize:48, marginBottom:16 }}>🔒</div>
