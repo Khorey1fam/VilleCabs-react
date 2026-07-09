@@ -343,13 +343,24 @@ function DriversTab() {
             )}
             {driver.status === 'approved' && (
               <>
-                {driver.isOnline && (
-                  <button onClick={() => forceOffline(driver.id)}
-                    style={{ ...s.btnSuspend, background:'#b45309' }}
-                    title="Immediately stop this driver receiving ride requests">
-                    ⏸ Put offline
-                  </button>
-                )}
+                <span style={{ ...s.badge,
+                  background: driver.isOnline ? 'rgba(26,158,90,0.15)' : 'rgba(145,153,173,0.15)',
+                  color: driver.isOnline ? GREEN : '#9199ad',
+                  display:'inline-flex', alignItems:'center', gap:6, padding:'7px 12px' }}>
+                  <span style={{ width:8, height:8, borderRadius:'50%', background: driver.isOnline ? GREEN : '#9199ad', display:'inline-block' }}/>
+                  {driver.isOnline ? 'Online' : 'Offline'}
+                </span>
+                <button onClick={() => driver.isOnline && forceOffline(driver.id)}
+                  disabled={!driver.isOnline}
+                  style={{ ...s.btnSuspend,
+                    background: driver.isOnline ? '#b45309' : '#e5e7eb',
+                    color: driver.isOnline ? '#fff' : '#9199ad',
+                    cursor: driver.isOnline ? 'pointer' : 'not-allowed' }}
+                  title={driver.isOnline
+                    ? 'Immediately stop this driver receiving ride requests'
+                    : 'This driver is already offline'}>
+                  ⏸ {driver.isOnline ? 'Put offline' : 'Already offline'}
+                </button>
                 <button onClick={() => suspend(driver.id)} style={s.btnSuspend}>Suspend driver</button>
               </>
             )}
