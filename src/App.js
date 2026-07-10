@@ -1437,6 +1437,12 @@ function ForgotPassword({ go, user }) {
       await sendPasswordResetEmail(auth, email.trim().toLowerCase());
       setSent(true);
     } catch (err) {
+      // Log the real reason so it can be diagnosed in the browser console.
+      // NOTE: Firebase's email-enumeration protection (on by default) means this
+      // often RESOLVES successfully even when no password account exists — no
+      // email is sent. The most common cause of "no email" is that the address
+      // signed up with Google, so there is no password to reset.
+      console.error('[ForgotPassword] sendPasswordResetEmail failed:', err?.code, err?.message);
       // Deliberately do NOT surface 'user-not-found' — that would confirm to a
       // stranger whether an email is registered. Treat it as success.
       if (err?.code === 'auth/user-not-found' || err?.code === 'auth/invalid-email') {
@@ -1445,6 +1451,8 @@ function ForgotPassword({ go, user }) {
         setError('Too many attempts. Please wait a few minutes and try again.');
       } else if (err?.code === 'auth/network-request-failed') {
         setError('Network error. Please check your connection and try again.');
+      } else if (err?.code === 'auth/operation-not-allowed') {
+        setError('Password sign-in is disabled for this project. Please contact support.');
       } else {
         setError('Could not send the reset link. Please try again shortly.');
       }
@@ -1474,7 +1482,7 @@ function ForgotPassword({ go, user }) {
             <div style={{ marginTop:26, padding:'14px 16px', background:'#faf7fd', border:'1px solid #ece3f5', borderRadius:12, textAlign:'left' }}>
               <div style={{ fontSize:12, fontWeight:700, color:'#2a1a4a', marginBottom:5 }}>Didn't get the email?</div>
               <div style={{ fontSize:12, color:'#8a83a0', lineHeight:1.7 }}>
-                Wait a minute and check spam. Still nothing? Contact us at{' '}
+                Wait a minute and check your spam folder. <strong style={{ color:'#6b21a8' }}>If you signed up with Google, you don't have a VilleCabs password</strong> — go back and tap “Continue with Google” instead. Still stuck? Contact us at{' '}
                 <a href="mailto:admin@villecabs.com" style={{ color:'#6b21a8', textDecoration:'none', fontWeight:600 }}>admin@villecabs.com</a>.
               </div>
             </div>
