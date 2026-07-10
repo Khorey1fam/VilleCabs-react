@@ -3537,6 +3537,12 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
   const debRef  = useRef(null);
   const tokenRef= useRef(null);
   const inputRef= useRef(null);
+  // Distinguishes a tap from a scroll swipe on touch devices, so that lifting
+  // your finger after scrolling the suggestion list doesn't select an address.
+  const touchMovedRef = useRef(false);
+  // True while the user is touching/holding the suggestion list, so the input's
+  // blur handler doesn't close the list out from under them mid-scroll.
+  const interactingRef = useRef(false);
 
   useEffect(() => {
     if (value !== undefined && value !== query) setQuery(value || '');
@@ -3612,7 +3618,7 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
         <span style={{ position:'absolute', left:12, top:'50%', transform:'translateY(-50%)', fontSize:16, color:'#6b21a8', pointerEvents:'none' }}>🔍</span>
         <input ref={inputRef} type="text" value={query} onChange={handleChange}
           onFocus={() => { if (preds.length > 0) setOpen(true); }}
-          onBlur={() => setTimeout(() => setOpen(false), 200)}
+          onBlur={() => setTimeout(() => { if (!interactingRef.current) setOpen(false); }, 200)}
           placeholder={placeholder || 'Search address or landmark'}
           autoComplete="off" autoCorrect="off" spellCheck="false"
           style={{ width:'100%', padding:'13px 36px 13px 38px', background:'#fff', border:'2px solid #e9d5ff', borderRadius:12, fontSize:14, color:'#1a1a2e', boxSizing:'border-box', outline:'none', boxShadow:'0 2px 8px rgba(107,33,168,0.08)' }}
@@ -3624,11 +3630,21 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
         )}
       </div>
       {open && preds.length > 0 && (
-        <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, right:0, background:'#fff', border:'1px solid #e9d5ff', borderRadius:12, boxShadow:'0 8px 24px rgba(107,33,168,0.15)', zIndex:100, maxHeight:280, overflowY:'auto', overflow:'hidden' }}>
+        <div
+          onTouchStart={() => { touchMovedRef.current = false; interactingRef.current = true; }}
+          onTouchMove={() => { touchMovedRef.current = true; }}
+          onTouchEnd={() => { setTimeout(() => { interactingRef.current = false; }, 250); }}
+          style={{ position:'absolute', top:'calc(100% + 4px)', left:0, right:0, background:'#fff', border:'1px solid #e9d5ff', borderRadius:12, boxShadow:'0 8px 24px rgba(107,33,168,0.15)', zIndex:100, maxHeight:280, overflowY:'auto', overflowX:'hidden', WebkitOverflowScrolling:'touch', overscrollBehavior:'contain' }}>
           {preds.map((s, i) => (
             <div key={i}
               onMouseDown={e => { e.preventDefault(); handleSelect(s); }}
-              onTouchEnd={e => { e.preventDefault(); handleSelect(s); }}
+              onTouchEnd={e => {
+                // Only treat this as a tap if the finger didn't move (i.e. the
+                // user wasn't scrolling the list).
+                if (touchMovedRef.current) { touchMovedRef.current = false; return; }
+                e.preventDefault();
+                handleSelect(s);
+              }}
               style={{ padding:'12px 14px', cursor:'pointer', borderBottom:i<preds.length-1?'1px solid #f5f0ff':'none', display:'flex', gap:10, background:'#fff' }}
               onMouseEnter={e => e.currentTarget.style.background='#f9f5ff'}
               onMouseLeave={e => e.currentTarget.style.background='#fff'}>
