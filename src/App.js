@@ -590,11 +590,38 @@ function geocodeLatLng(lat, lng) {
 function getDirections(origin, destination) {
   return new Promise((resolve) => {
     const service = new window.google.maps.DirectionsService();
-    service.route({ origin, destination, travelMode: window.google.maps.TravelMode.DRIVING }, (result, status) => {
+    const req = {
+      origin, destination,
+      travelMode: window.google.maps.TravelMode.DRIVING,
+      // Ask for a traffic-aware ETA. Google returns duration_in_traffic when
+      // traffic data is available for the route; otherwise the normal duration
+      // is used. 'bestguess' factors in current + historical traffic.
+      drivingOptions: {
+        departureTime: new Date(),
+        trafficModel: window.google.maps.TrafficModel
+          ? window.google.maps.TrafficModel.BEST_GUESS
+          : 'bestguess',
+      },
+    };
+    service.route(req, (result, status) => {
       if (status === 'OK') resolve(result);
-      else resolve(null);
+      else {
+        // Retry once without drivingOptions (some regions/keys reject it)
+        service.route({ origin, destination, travelMode: window.google.maps.TravelMode.DRIVING },
+          (r2, s2) => resolve(s2 === 'OK' ? r2 : null));
+      }
     });
   });
+}
+
+// Pull a human ETA string out of a DirectionsResult leg (traffic-aware if present).
+function etaFromDirections(dir) {
+  try {
+    const leg = dir?.routes?.[0]?.legs?.[0];
+    if (!leg) return null;
+    const dur = leg.duration_in_traffic || leg.duration;
+    return { text: dur?.text || null, seconds: dur?.value || null, distance: leg.distance?.text || null };
+  } catch(e) { return null; }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -4890,6 +4917,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   const [cancelling, setCancelling] = useState(false);
   const [cancelDone, setCancelDone] = useState(false);
   const [graceSecs,  setGraceSecs]  = useState(15); // free-cancel window after a driver accepts
+  const [noDriverFound, setNoDriverFound] = useState(false); // set if 3 min pass with no driver
   const [shareCopied,  setShareCopied]  = useState(false);
   const sosRef = useRef(null);
 
@@ -4978,10 +5006,33 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
     }
   };
 
-  // Free cancel within the 15s grace window after a driver accepts.
-  // A cancellation fee applies only if the rider paid by card (cash rides = no fee).
-  const cancelWithinGrace = async () => {
-    if (!bookingId || cancelling) return;
+  // ── 3-MINUTE NO-DRIVER TIMEOUT ──────────────────────────────────────────────
+  // If nobody accepts within 3 minutes of booking, expire the ride, free it from
+  // the driver queue, and tell the customer to try again shortly.
+  useEffect(() => {
+    if (booking?.status !== 'searching' || !bookingId) return;
+    const createdMs = booking?.createdAt?.seconds ? booking.createdAt.seconds * 1000 : Date.now();
+    const deadline  = createdMs + 3 * 60 * 1000;
+    const fire = async () => {
+      // Re-check we're still searching (a driver may have accepted in the gap)
+      try {
+        const snap = await getDoc(doc(db,'bookings',bookingId));
+        if (!snap.exists() || snap.data().status !== 'searching') return;
+        await updateDoc(doc(db,'bookings',bookingId), {
+          status: 'expired',
+          expiredReason: 'no_driver',
+          expiredAt: serverTimestamp(),
+        });
+      } catch(e) { console.error('Expire booking failed:', e); }
+      setNoDriverFound(true);
+    };
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) { fire(); return; }
+    const t = setTimeout(fire, remaining);
+    return () => clearTimeout(t);
+  }, [booking?.status, booking?.createdAt?.seconds, bookingId]);
+
+
     const isCard = (booking?.paymentMethod || 'cash').toLowerCase() === 'card';
     const ok = await vcConfirm(
       isCard
@@ -5232,6 +5283,30 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   }, [driverCoords?.lat, driverCoords?.lng, pickupCoords?.lat, booking?.enrouteToDropoff]);
 
   // ── Cancelled screen ──
+  // ── No driver found within 3 minutes ──
+  if (noDriverFound || booking?.status === 'expired') {
+    return (
+      <div style={{ ...s.content, display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh' }}>
+        <div style={{ textAlign:'center', padding:24, maxWidth:360 }}>
+          <div style={{ fontSize:56, marginBottom:16 }}>🕐</div>
+          <h2 style={{ fontSize:21, fontWeight:800, color:'#2a1a4a', marginBottom:10 }}>No drivers available right now</h2>
+          <p style={{ color:'#5b5470', fontSize:14, lineHeight:1.6, marginBottom:8 }}>
+            We couldn't match you with a driver at the moment. This can happen during busy periods or late hours.
+          </p>
+          <p style={{ color:'#8a83a0', fontSize:13, lineHeight:1.6, marginBottom:26 }}>
+            Please try again in about 5 minutes — more drivers may be available then.
+          </p>
+          <button style={{ ...s.btnY, width:'100%', maxWidth:300 }} onClick={() => { setBookingId(null); go('customer-dash'); }}>
+            Back to Home
+          </button>
+          <button style={{ ...s.btnO, width:'100%', maxWidth:300, marginTop:10 }} onClick={() => { setBookingId(null); go('vehicle-select'); }}>
+            Try Booking Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (cancelDone || booking?.status === 'cancelled') {
     return (
       <div style={{ ...s.content, display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh' }}>
@@ -5407,6 +5482,19 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
         </div>
       )}
       <div style={{ position:'relative' }}>
+        {(() => {
+          const cEta = etaFromDirections(directions);
+          if (!cEta?.text) return null;
+          const label = booking?.enrouteToDropoff ? `${cEta.text} to drop-off` : `${cEta.text} away`;
+          return (
+            <div style={{ position:'absolute', top:12, left:'50%', transform:'translateX(-50%)', zIndex:5,
+              background:'rgba(26,26,46,0.92)', color:'#fff', padding:'8px 16px', borderRadius:22,
+              fontSize:13, fontWeight:700, boxShadow:'0 4px 14px rgba(0,0,0,0.3)', display:'flex', alignItems:'center', gap:7, whiteSpace:'nowrap' }}>
+              <span style={{ fontSize:15 }}>⏱️</span><span>{label}</span>
+              {cEta.distance && <span style={{ opacity:0.6, fontWeight:500 }}>· {cEta.distance}</span>}
+            </div>
+          );
+        })()}
         <VilleMap height={typeof window!=='undefined'?Math.max(560,window.innerHeight*0.80):640} center={driverCoords||pickupCoords} zoom={15} expandable={true} directions={directions}>
           <Marker position={pickupCoords} title="Pickup"
             icon={{ url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><circle cx="14" cy="14" r="11" fill="#1a9e5a" stroke="white" stroke-width="2.5"/></svg>'), scaledSize:{width:28,height:28} }}/>
@@ -6912,10 +7000,19 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
       prevDriverCoordsRef.current = driverCoords;
     }
   }, [driverCoords?.lat, driverCoords?.lng]);
-  const markers = [
-    ...(pickupCoords  ? [{ position: pickupCoords,  label:'A', title:'Pickup'   }] : []),
-    ...(dropoffCoords ? [{ position: dropoffCoords, label:'B', title:'Drop-off' }] : []),
-  ];
+  // ETA to show above the car — traffic-aware when Google provides it.
+  // Before arrival: ETA to pickup. After arrival: ETA to drop-off.
+  const eta = etaFromDirections(directions);
+  const etaLabel = eta?.text ? (arrived ? `${eta.text} to drop-off` : `${eta.text} to pickup`) : null;
+
+  // Pins to show on the driver map:
+  //  • before pickup: show the Pickup pin (A)
+  //  • after 'arrived': show the Drop-off pin (B)
+  // Previously this blanked ALL markers after arrival, so the map went empty
+  // for the rest of the ride.
+  const markers = arrived
+    ? (dropoffCoords ? [{ position: dropoffCoords, label:'B', title:'Drop-off' }] : [])
+    : (pickupCoords  ? [{ position: pickupCoords,  label:'A', title:'Pickup'   }] : []);
 
   const fare = booking?.fare || 0;
   const fee  = Math.round(fare * 0.15);
@@ -6955,16 +7052,27 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
            <span>⚠️ Location denied — <span style={{textDecoration:'underline',cursor:'pointer'}} onClick={() => vcToast('To enable location: tap the 🔒 lock icon in your address bar, set Location to Allow, then refresh.', 'info')}>tap here to fix</span></span>
          ) : '📍 Getting your location...'}
       </div>
-      <VilleMap height={typeof window!=='undefined'?Math.max(560,window.innerHeight*0.80):640} center={driverCoords||pickupCoords} zoom={14} markers={arrived?[]:markers} directions={directions} expandable={true}>
-        {driverCoords && !directions && (
-          <Marker position={driverCoords} title="Your location"
-            icon={{ url:carIconSVG(driverBearing, '#e8b400'), scaledSize:{width:36,height:36}, anchor:{x:18,y:18} }}/>
+      <div style={{ position:'relative' }}>
+        {etaLabel && (
+          <div style={{ position:'absolute', top:12, left:'50%', transform:'translateX(-50%)', zIndex:5,
+            background:'rgba(26,26,46,0.92)', color:'#fff', padding:'8px 16px', borderRadius:22,
+            fontSize:13, fontWeight:700, boxShadow:'0 4px 14px rgba(0,0,0,0.3)', display:'flex', alignItems:'center', gap:7, whiteSpace:'nowrap' }}>
+            <span style={{ fontSize:15 }}>⏱️</span>
+            <span>{etaLabel}</span>
+            {eta?.distance && <span style={{ opacity:0.6, fontWeight:500 }}>· {eta.distance}</span>}
+          </div>
         )}
-        {driverCoords && directions && (
-          <Marker position={driverCoords} title="You"
-            icon={{ url:carIconSVG(driverBearing, '#e8b400'), scaledSize:{width:40,height:40}, anchor:{x:20,y:20} }}/>
-        )}
-      </VilleMap>
+        <VilleMap height={typeof window!=='undefined'?Math.max(560,window.innerHeight*0.80):640} center={driverCoords||pickupCoords} zoom={14} markers={markers} directions={directions} expandable={true}>
+          {driverCoords && !directions && (
+            <Marker position={driverCoords} title="Your location"
+              icon={{ url:carIconSVG(driverBearing, '#e8b400'), scaledSize:{width:36,height:36}, anchor:{x:18,y:18} }}/>
+          )}
+          {driverCoords && directions && (
+            <Marker position={driverCoords} title="You"
+              icon={{ url:carIconSVG(driverBearing, '#e8b400'), scaledSize:{width:40,height:40}, anchor:{x:20,y:20} }}/>
+          )}
+        </VilleMap>
+      </div>
       <div style={{ padding:14 }}>
         {booking ? (
           <>
