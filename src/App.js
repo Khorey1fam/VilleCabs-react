@@ -4725,6 +4725,30 @@ function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, 
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState('');
   const navigatedRef = useRef(false);
+  const [noDriver, setNoDriver] = useState(false);
+  const searchStartRef = useRef(null);
+
+  // Safety net: if the customer sits on this confirm screen while the ride is
+  // searching and nobody accepts within 3 minutes, expire it and show a message.
+  useEffect(() => {
+    if (!bookingId || booking?.status !== 'searching') { searchStartRef.current = null; return; }
+    if (searchStartRef.current === null) {
+      searchStartRef.current = booking?.createdAt?.seconds ? booking.createdAt.seconds * 1000 : Date.now();
+    }
+    const remaining = (searchStartRef.current + 3*60*1000) - Date.now();
+    const fire = async () => {
+      try {
+        const snap = await getDoc(doc(db,'bookings',bookingId));
+        if (snap.exists() && snap.data().status === 'searching') {
+          await updateDoc(doc(db,'bookings',bookingId), { status:'expired', expiredReason:'no_driver', expiredAt:serverTimestamp() });
+        }
+      } catch(e) { console.error(e); }
+      setNoDriver(true);
+    };
+    if (remaining <= 0) { fire(); return; }
+    const t = setTimeout(fire, remaining);
+    return () => clearTimeout(t);
+  }, [booking?.status, bookingId]);
 
   // Watch the booking live — if a driver accepts while the customer is still on
   // this page, pull them straight into the live ride.
@@ -4793,6 +4817,21 @@ function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, 
   const address = booking?.pickup?.address || pickupData?.address || '';
   const dropoff = booking?.dropoff?.address || dropoffData?.address || '';
   const vehicle = booking?.vehicleType || pickupData?.vehicleType || 'VilleRide';
+
+  if (noDriver || booking?.status === 'expired') {
+    return (
+      <div style={{ background:'linear-gradient(160deg,#ffffff,#f6f2fb 45%,#efe8f7)', minHeight:'100vh', display:'flex', alignItems:'center', justifyContent:'center' }}>
+        <div style={{ textAlign:'center', padding:24, maxWidth:360 }}>
+          <div style={{ fontSize:56, marginBottom:16 }}>🕐</div>
+          <h2 style={{ fontSize:21, fontWeight:800, color:'#2a1a4a', marginBottom:10 }}>No drivers available right now</h2>
+          <p style={{ color:'#5b5470', fontSize:14, lineHeight:1.6, marginBottom:8 }}>We couldn't match you with a driver at the moment. This can happen during busy periods or late hours.</p>
+          <p style={{ color:'#8a83a0', fontSize:13, lineHeight:1.6, marginBottom:26 }}>Please try again in about 5 minutes — more drivers may be available then.</p>
+          <button style={{ ...s.btnY, width:'100%', maxWidth:300 }} onClick={() => { setBookingId(null); go('customer-dash'); }}>Back to Home</button>
+          <button style={{ ...s.btnO, width:'100%', maxWidth:300, marginTop:10 }} onClick={() => { setBookingId(null); go('vehicle-select'); }}>Try Booking Again</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ background:'linear-gradient(160deg, #ffffff 0%, #f6f2fb 45%, #efe8f7 100%)', minHeight:'100vh' }}>
@@ -5007,30 +5046,41 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   };
 
   // ── 3-MINUTE NO-DRIVER TIMEOUT ──────────────────────────────────────────────
-  // If nobody accepts within 3 minutes of booking, expire the ride, free it from
-  // the driver queue, and tell the customer to try again shortly.
+  // If nobody accepts within 3 minutes, expire the ride, free it from the driver
+  // queue, and tell the customer to try again shortly. We anchor the deadline to
+  // the booking's createdAt when available, else to when we first saw 'searching'
+  // (stored in a ref so snapshot updates don't keep resetting the clock).
+  const searchStartRef = useRef(null);
   useEffect(() => {
-    if (booking?.status !== 'searching' || !bookingId) return;
-    const createdMs = booking?.createdAt?.seconds ? booking.createdAt.seconds * 1000 : Date.now();
-    const deadline  = createdMs + 3 * 60 * 1000;
+    if (booking?.status !== 'searching' || !bookingId) {
+      searchStartRef.current = null;
+      return;
+    }
+    // Establish the start time once.
+    if (searchStartRef.current === null) {
+      searchStartRef.current = booking?.createdAt?.seconds
+        ? booking.createdAt.seconds * 1000
+        : Date.now();
+    }
+    const deadline  = searchStartRef.current + 3 * 60 * 1000;
+    const remaining = deadline - Date.now();
+
     const fire = async () => {
-      // Re-check we're still searching (a driver may have accepted in the gap)
       try {
         const snap = await getDoc(doc(db,'bookings',bookingId));
-        if (!snap.exists() || snap.data().status !== 'searching') return;
-        await updateDoc(doc(db,'bookings',bookingId), {
-          status: 'expired',
-          expiredReason: 'no_driver',
-          expiredAt: serverTimestamp(),
-        });
+        if (snap.exists() && snap.data().status === 'searching') {
+          await updateDoc(doc(db,'bookings',bookingId), {
+            status: 'expired', expiredReason: 'no_driver', expiredAt: serverTimestamp(),
+          });
+        }
       } catch(e) { console.error('Expire booking failed:', e); }
       setNoDriverFound(true);
     };
-    const remaining = deadline - Date.now();
+
     if (remaining <= 0) { fire(); return; }
     const t = setTimeout(fire, remaining);
     return () => clearTimeout(t);
-  }, [booking?.status, booking?.createdAt?.seconds, bookingId]);
+  }, [booking?.status, bookingId]);
 
 
     const isCard = (booking?.paymentMethod || 'cash').toLowerCase() === 'card';
