@@ -434,6 +434,7 @@ function RidesTab() {
       active:    { bg:'rgba(26,158,90,0.15)',  color:'#1a9e5a',  text:'Active'    },
       completed: { bg:'#f3f4f6',color:'#6b7280', text:'Completed' },
       cancelled: { bg:'rgba(226,75,74,0.12)', color:'#dc2626',  text:'Cancelled' },
+      expired:   { bg:'rgba(180,83,9,0.14)',  color:'#b45309',  text:'No Driver' },
     };
     const m = map[status] || map.searching;
     return <span style={{ ...s.badge, background:m.bg, color:m.color }}>{m.text}</span>;
@@ -472,7 +473,7 @@ function RidesTab() {
   const filtersActive = !!(search || dateFrom || dateTo);
 
   const total = visible.reduce((sum, r) => sum + (r.fare||0), 0);
-  const filters = ['all','searching','active','completed','cancelled'];
+  const filters = ['all','searching','active','completed','cancelled','expired'];
 
   const fmtDateTime = (ts) => {
     if (!ts?.seconds) return '--';
@@ -502,7 +503,7 @@ function RidesTab() {
         {filters.map(f => (
           <button key={f} onClick={() => setFilter(f)}
             style={{ padding:'7px 16px', borderRadius:20, fontSize:13, border:'1px solid #e5e7eb', background:filter===f?'#6b21a8':'#f3f4f6', color:filter===f?'#fff':'#555', cursor:'pointer', textTransform:'capitalize', fontWeight:filter===f?600:400 }}>
-            {f === 'all' ? 'All rides' : f}
+            {f === 'all' ? 'All rides' : f === 'expired' ? '🚫 No Driver' : f}
           </button>
         ))}
       </div>
@@ -567,7 +568,7 @@ function RidesTab() {
         <div style={{ textAlign:'center', padding:40 }}>
           <div style={{ fontSize:36, marginBottom:12 }}>🚕</div>
           <div style={{ color:'#9199ad', fontSize:14 }}>
-            {filtersActive ? 'No rides match your search or date range' : `No ${filter} rides yet`}
+            {filtersActive ? 'No rides match your search or date range' : filter === 'expired' ? 'No “no driver” rides yet' : `No ${filter} rides yet`}
           </div>
         </div>
       ) : sorted.map((r,i) => (
