@@ -1,10 +1,11 @@
-[{
-  "relation": ["delegate_permission/common.handle_all_urls"],
-  "target": {
-    "namespace": "android_app",
-    "package_name": "com.villecabs.app",
-    "sha256_cert_fingerprints": [
-      "DD:4B:BE:ED:7C:76:F1:4E:8E:7D:97:AC:2D:BC:A5:A4:A3:E6:8B:DB:90:69:C8:C8:28:64:A3:02:42:FC:21:8D"
-    ]
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.villecabs.app",
+      "sha256_cert_fingerprints":
+        ["F9:3E:AE:92:5D:A0:B3:CC:6B:15:60:33:A3:F9:8C:B2:42:55:2B:69:5D:EA:78:7F:B9:49:12:40:8B:7D:7B:00"]
+    }
   }
-}]
+]
