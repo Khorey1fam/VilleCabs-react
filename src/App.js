@@ -5082,7 +5082,9 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
     return () => clearTimeout(t);
   }, [booking?.status, bookingId]);
 
-
+  // Free cancel within the 15s grace window after a driver accepts.
+  const cancelWithinGrace = async () => {
+    if (!bookingId || cancelling) return;
     const isCard = (booking?.paymentMethod || 'cash').toLowerCase() === 'card';
     const ok = await vcConfirm(
       isCard
