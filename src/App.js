@@ -6103,11 +6103,19 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   const [isOnline,     setIsOnline]     = useState(false);
   const [earnings,     setEarnings]     = useState({ today:0, week:0, total:0, todayRides:0, weekRides:0, totalRides:0, history:[] });
   const [pendingRides, setPendingRides] = useState([]);
+  const [nowTick, setNowTick] = useState(Date.now()); // drives the live "requested X ago" age
   const [loading,      setLoading]      = useState(true);
   const [activeRideId, setActiveRideId] = useState(null);
   const prevCountRef = useRef(0);
   const locWatchRef  = useRef(null); // Feature: broadcast idle-online driver location for admin Live Map
   const driverProfileRef = useRef(null); // cached driver profile for instant ride acceptance
+
+  // Tick every second so each request card's "requested X ago" stays current.
+  useEffect(() => {
+    if (pendingRides.length === 0) return;
+    const t = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [pendingRides.length]);
   const [acceptingId, setAcceptingId] = useState(null); // which ride is currently being accepted (button feedback)
   const [notifPerm, setNotifPerm] = useState(typeof Notification !== 'undefined' ? Notification.permission : 'unsupported');
 
@@ -6575,6 +6583,21 @@ function DriverDash({ go, user, setUser, setBookingId }) {
                       <div style={{ fontSize:10, color:'#6b21a8', fontWeight:700, textTransform:'uppercase', letterSpacing:1, marginBottom:4 }}>🔔 New Ride Request</div>
                       <div style={{ fontSize:16, fontWeight:700, color:'#1a1a2e' }}>{r.customerName||'Passenger'}</div>
                       <div style={{ fontSize:11, color:'#888', marginTop:2 }}>✓ Verified · 👥 {r.passengers||1} passenger{(r.passengers||1)>1?'s':''}</div>
+                      {(() => {
+                        const createdMs = r.createdAt?.seconds ? r.createdAt.seconds*1000 : (r.createdAt?.toMillis ? r.createdAt.toMillis() : null);
+                        if (!createdMs) return <div style={{ fontSize:11, color:'#b45309', marginTop:4, fontWeight:600 }}>🕐 Just now</div>;
+                        const secs = Math.max(0, Math.floor((nowTick - createdMs)/1000));
+                        const mins = Math.floor(secs/60);
+                        const ageText = secs < 60 ? `${secs}s ago` : `${mins}m ${secs%60}s ago`;
+                        const t = new Date(createdMs).toLocaleTimeString('en-JM',{hour:'numeric',minute:'2-digit'});
+                        // Amber past 2 min, red past 3 (the auto-expiry point)
+                        const col = secs >= 180 ? '#dc2626' : secs >= 120 ? '#b45309' : '#1a9e5a';
+                        return (
+                          <div style={{ fontSize:11, color:col, marginTop:4, fontWeight:700, display:'flex', alignItems:'center', gap:5 }}>
+                            🕐 Requested {ageText} <span style={{ color:'#aaa', fontWeight:500 }}>· {t}</span>
+                          </div>
+                        );
+                      })()}
                     </div>
                     <div style={{ textAlign:'right' }}>
                       <div style={{ fontSize:20, fontWeight:800, color:'#6b21a8' }}>J${(r.fare||0).toLocaleString()}</div>
