@@ -9949,9 +9949,31 @@ function DriverDocuments({ go, user }) {
   const [docs,   setDocs]   = useState({});
   const [saving, setSaving] = useState('');
   const [msg,    setMsg]    = useState('');
+  const [preview, setPreview] = useState(null); // { url, label } for the lightbox
   useEffect(() => {
     if (!user?.uid) return;
-    getDoc(doc(db,'drivers',user.uid)).then(snap => { if (snap.exists()) setDocs(snap.data().documents||{}); });
+    getDoc(doc(db,'drivers',user.uid)).then(snap => {
+      if (!snap.exists()) return;
+      const data = snap.data();
+      // Reconcile the two shapes this data has been saved in over time:
+      //  • signup writes flat URLs to  data.docs = { license, fitness, registration, profilePhoto, vehiclePhoto }
+      //  • re-uploads here write rich objects to data.documents = { key: {url,status,...} }
+      // Merge both so a driver always sees what they already submitted.
+      const flat = data.docs || {};
+      const rich = data.documents || {};
+      const merged = { ...rich };
+      // Map signup's flat URLs (US spelling 'license') into this screen's keys.
+      const flatMap = {
+        licence: flat.license, fitness: flat.fitness, registration: flat.registration,
+        vehiclePhoto: flat.vehiclePhoto || data.vehiclePhotoUrl,
+        profilePhoto: flat.profilePhoto || data.profilePhotoUrl,
+        insurance: flat.insurance,
+      };
+      Object.entries(flatMap).forEach(([k, url]) => {
+        if (url && !merged[k]) merged[k] = { url, status:'pending', name:'Uploaded at signup' };
+      });
+      setDocs(merged);
+    });
   }, [user]);
   const docTypes=[{key:'licence',label:"Driver Licence",icon:'🪪'},{key:'fitness',label:'Vehicle Fitness',icon:'📋'},{key:'registration',label:'Vehicle Registration',icon:'📄'},{key:'insurance',label:'Insurance',icon:'🛡️'},{key:'vehiclePhoto',label:'Vehicle Photo',icon:'🚗'}];
   const handleUpload = async (key, file) => {
@@ -10002,18 +10024,47 @@ function DriverDocuments({ go, user }) {
           return (<div key={key} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
             <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
               <span style={{ fontSize:24 }}>{icon}</span>
-              <div>
+              <div style={{ flex:1 }}>
                 <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>{label}</div>
                 <div style={{ fontSize:11, color:colors[status], fontWeight:600 }}>{labels[status]}</div>
               </div>
+              {d?.url && (
+                <button onClick={() => setPreview({ url:d.url, label })}
+                  style={{ padding:'6px 12px', background:'#f5f0ff', color:'#6b21a8', border:'1px solid #e9d5ff', borderRadius:8, fontSize:12, fontWeight:600, cursor:'pointer' }}>
+                  👁 View
+                </button>
+              )}
             </div>
+            {d?.url && (
+              <div onClick={() => setPreview({ url:d.url, label })}
+                style={{ marginBottom:10, borderRadius:10, overflow:'hidden', border:'1px solid #eee', cursor:'pointer', maxHeight:120, display:'flex', alignItems:'center', justifyContent:'center', background:'#faf7fd' }}>
+                {/\.pdf($|\?)/i.test(d.url)
+                  ? <div style={{ padding:'18px', fontSize:12, color:'#6b21a8', fontWeight:600 }}>📄 PDF document — tap to view</div>
+                  : <img src={d.url} alt={label} style={{ width:'100%', maxHeight:120, objectFit:'cover' }}/>}
+              </div>
+            )}
             <label style={{ display:'block', padding:'9px', background:status==='approved'?'#f9f5ff':'#6b21a8', color:status==='approved'?'#6b21a8':'#fff', borderRadius:10, fontSize:12, fontWeight:600, cursor:'pointer', textAlign:'center' }}>
-              {saving===key?'Uploading...':status==='approved'?'Replace':'Upload Document'}
+              {saving===key?'Uploading...':d?.url?'Replace Document':'Upload Document'}
               <input type="file" accept="image/*,.pdf" style={{ display:'none' }} onChange={e=>handleUpload(key,e.target.files[0])} disabled={saving===key}/>
             </label>
           </div>);
         })}
       </div>
+
+      {/* Full-screen document preview */}
+      {preview && (
+        <div onClick={() => setPreview(null)}
+          style={{ position:'fixed', inset:0, zIndex:1000, background:'rgba(0,0,0,0.9)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:20 }}>
+          <div style={{ color:'#fff', fontSize:14, fontWeight:600, marginBottom:12 }}>{preview.label}</div>
+          {/\.pdf($|\?)/i.test(preview.url)
+            ? <iframe src={preview.url} title={preview.label} style={{ width:'100%', maxWidth:700, height:'80vh', border:'none', borderRadius:8, background:'#fff' }}/>
+            : <img src={preview.url} alt={preview.label} style={{ maxWidth:'100%', maxHeight:'80vh', objectFit:'contain', borderRadius:8 }}/>}
+          <button onClick={() => setPreview(null)}
+            style={{ marginTop:16, padding:'10px 24px', background:'#fff', color:'#1a1a2e', border:'none', borderRadius:10, fontSize:14, fontWeight:600, cursor:'pointer' }}>
+            Close
+          </button>
+        </div>
+      )}
     </div>
   );
 }
