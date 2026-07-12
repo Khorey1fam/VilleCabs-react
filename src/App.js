@@ -445,7 +445,7 @@ function GlobalStyles() {
 
 function MapBg() { return null; }
 
-function VilleMap({ height = 620, center = MANCHESTER_CENTER, zoom = 14, onClick, markers = [], directions = null, children, expandable = false }) {
+function VilleMap({ height = 620, center = MANCHESTER_CENTER, zoom = 14, onClick, markers = [], directions = null, children, expandable = false, followCenter = null, focusZoom = null, fitRoute = true }) {
   const [expanded, setExpanded] = useState(false);
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: GOOGLE_MAPS_KEY,
@@ -461,19 +461,38 @@ function VilleMap({ height = 620, center = MANCHESTER_CENTER, zoom = 14, onClick
 
   // Keep a handle on the map instance so we can imperatively pan/zoom
   const mapRef = useRef(null);
-  const onMapLoad = (map) => { mapRef.current = map; };
-  // Smoothly re-center and re-zoom whenever the target center or zoom changes
+  const didInitialFit = useRef(false);
+  const onMapLoad = (map) => {
+    mapRef.current = map;
+    // Set the starting camera once.
+    if (center) map.setCenter(center);
+    if (typeof zoom === 'number') map.setZoom(expanded ? zoom + 1 : zoom);
+  };
+
+  // Follow a moving target (e.g. the driver) WITHOUT stealing the user's manual
+  // zoom/pan. We only pan when followCenter is provided, and we NEVER reset zoom
+  // here — so pinch-zoom sticks instead of snapping back every GPS update.
   useEffect(() => {
-    if (!mapRef.current || !center) return;
-    // If we have a route, frame both endpoints instead of a fixed zoom
-    if (directions?.routes?.[0]?.bounds) {
-      try { mapRef.current.fitBounds(directions.routes[0].bounds, 60); return; } catch(e) {}
+    if (!mapRef.current || !followCenter?.lat) return;
+    try { mapRef.current.panTo(followCenter); } catch(e) {}
+  }, [followCenter?.lat, followCenter?.lng]);
+
+  // When a brand-new route arrives, frame it ONCE (not on every render).
+  useEffect(() => {
+    if (!mapRef.current) return;
+    if (fitRoute && directions?.routes?.[0]?.bounds && !didInitialFit.current) {
+      try { mapRef.current.fitBounds(directions.routes[0].bounds, 60); didInitialFit.current = true; } catch(e) {}
     }
+  }, [directions, fitRoute]);
+
+  // Allow an explicit, intentional zoom-in (e.g. right after the driver accepts).
+  useEffect(() => {
+    if (!mapRef.current || !focusZoom) return;
     try {
-      mapRef.current.panTo(center);
-      if (typeof zoom === 'number') mapRef.current.setZoom(expanded ? zoom + 1 : zoom);
+      if (focusZoom.center) mapRef.current.panTo(focusZoom.center);
+      if (typeof focusZoom.zoom === 'number') mapRef.current.setZoom(focusZoom.zoom);
     } catch(e) {}
-  }, [center?.lat, center?.lng, zoom, expanded, directions]);
+  }, [focusZoom?.token]);
 
   // Use window height for mobile-aware sizing (allow the map to fill most of the screen)
   const mobileHeight = Math.min(height, window.innerHeight * 0.82);
@@ -494,8 +513,6 @@ function VilleMap({ height = 620, center = MANCHESTER_CENTER, zoom = 14, onClick
   const mapEl = (
     <GoogleMap
       mapContainerStyle={{ width:'100%', height: expanded ? '100%' : mobileHeight }}
-      center={center}
-      zoom={expanded ? zoom + 1 : zoom}
       onLoad={onMapLoad}
       onClick={handleMapClick}
       options={{ styles:MAP_STYLE, disableDefaultUI:true, zoomControl:true, gestureHandling:'greedy' }}
@@ -5303,6 +5320,19 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   const dropoffCoords = booking?.dropoff?.lat   ? { lat:booking.dropoff.lat,        lng:booking.dropoff.lng        } : null;
   const driverCoords  = booking?.driverLocation ? { lat:booking.driverLocation.lat, lng:booking.driverLocation.lng } : null;
 
+  // When a driver first accepts (status → active) zoom in close on the driver so
+  // the rider can see the actual road and turns. Fires once per acceptance.
+  const [focusZoom, setFocusZoom] = useState(null);
+  const zoomedOnAcceptRef = useRef(false);
+  useEffect(() => {
+    const active = booking?.driverId && ['active','arrived','enroute'].includes(booking?.status);
+    if (active && driverCoords?.lat && !zoomedOnAcceptRef.current) {
+      zoomedOnAcceptRef.current = true;
+      setFocusZoom({ center: driverCoords, zoom: 17, token: Date.now() });
+    }
+    if (!active) zoomedOnAcceptRef.current = false;
+  }, [booking?.status, booking?.driverId, driverCoords?.lat]);
+
   // Track heading so the driver's car icon visually points the way they're travelling (Feature: Live map polish)
   const [driverBearing, setDriverBearing] = useState(0);
   const prevDriverCoordsRef = useRef(null);
@@ -5316,13 +5346,17 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
     }
   }, [driverCoords?.lat, driverCoords?.lng]);
 
-  // Compute directions: driver→pickup OR pickup→dropoff
+  // Compute directions:
+  //  • before pickup: driver → pickup
+  //  • after 'start journey' (enroute): driver → dropoff, recomputed as the
+  //    driver moves, so the customer sees the car advancing along live roads
+  //    instead of a frozen pickup→dropoff line.
   useEffect(() => {
     if (!window.google?.maps?.DirectionsService) return;
     const enroute     = booking?.enrouteToDropoff;
-    const origin      = enroute ? pickupCoords  : driverCoords;
+    const origin      = driverCoords || pickupCoords;            // always anchor on the driver
     const destination = enroute ? dropoffCoords : pickupCoords;
-    if (!origin?.lat || !destination?.lat) { setDirections(null); return; }
+    if (!origin?.lat || !destination?.lat) { return; }           // keep last route rather than blanking
     const svc = new window.google.maps.DirectionsService();
     svc.route({
       origin:      { lat: origin.lat, lng: origin.lng },
@@ -5330,9 +5364,9 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
       travelMode:  window.google.maps.TravelMode.DRIVING,
     }, (result, status) => {
       if (status === 'OK') setDirections(result);
-      else { console.warn('Directions failed:', status); setDirections(null); }
+      // On failure keep the previous route rather than clearing (avoids the freeze/blank)
     });
-  }, [driverCoords?.lat, driverCoords?.lng, pickupCoords?.lat, booking?.enrouteToDropoff]);
+  }, [driverCoords?.lat, driverCoords?.lng, dropoffCoords?.lat, pickupCoords?.lat, booking?.enrouteToDropoff]);
 
   // ── Cancelled screen ──
   // ── No driver found within 3 minutes ──
@@ -5547,7 +5581,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
             </div>
           );
         })()}
-        <VilleMap height={typeof window!=='undefined'?Math.max(560,window.innerHeight*0.80):640} center={driverCoords||pickupCoords} zoom={15} expandable={true} directions={directions}>
+        <VilleMap height={typeof window!=='undefined'?Math.max(560,window.innerHeight*0.80):640} center={driverCoords||pickupCoords} zoom={15} expandable={true} directions={directions} followCenter={driverCoords} focusZoom={focusZoom} fitRoute={false}>
           <Marker position={pickupCoords} title="Pickup"
             icon={{ url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><circle cx="14" cy="14" r="11" fill="#1a9e5a" stroke="white" stroke-width="2.5"/></svg>'), scaledSize:{width:28,height:28} }}/>
           {dropoffCoords && (
@@ -7080,6 +7114,17 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
   const eta = etaFromDirections(directions);
   const etaLabel = eta?.text ? (arrived ? `${eta.text} to drop-off` : `${eta.text} to pickup`) : null;
 
+  // Zoom in close on the driver once the ride is active, so they see their road
+  // and turns. Fires once; after that the map just follows without stealing zoom.
+  const [driverFocus, setDriverFocus] = useState(null);
+  const driverZoomedRef = useRef(false);
+  useEffect(() => {
+    if (booking && driverCoords?.lat && !driverZoomedRef.current) {
+      driverZoomedRef.current = true;
+      setDriverFocus({ center: driverCoords, zoom: 17, token: Date.now() });
+    }
+  }, [booking?.id, driverCoords?.lat]);
+
   // Pins to show on the driver map:
   //  • before pickup: show the Pickup pin (A)
   //  • after 'arrived': show the Drop-off pin (B)
@@ -7137,7 +7182,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
             {eta?.distance && <span style={{ opacity:0.6, fontWeight:500 }}>· {eta.distance}</span>}
           </div>
         )}
-        <VilleMap height={typeof window!=='undefined'?Math.max(560,window.innerHeight*0.80):640} center={driverCoords||pickupCoords} zoom={14} markers={markers} directions={directions} expandable={true}>
+        <VilleMap height={typeof window!=='undefined'?Math.max(560,window.innerHeight*0.80):640} center={driverCoords||pickupCoords} zoom={14} markers={markers} directions={directions} expandable={true} followCenter={driverCoords} focusZoom={driverFocus} fitRoute={false}>
           {driverCoords && !directions && (
             <Marker position={driverCoords} title="Your location"
               icon={{ url:carIconSVG(driverBearing, '#e8b400'), scaledSize:{width:36,height:36}, anchor:{x:18,y:18} }}/>
