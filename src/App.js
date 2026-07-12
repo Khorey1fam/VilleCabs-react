@@ -5129,7 +5129,6 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
       window.removeEventListener('focus', check);
     };
   }, [booking?.status, bookingId]);
-  }, [booking?.status, bookingId]);
 
   // Free cancel within the 15s grace window after a driver accepts.
   const cancelWithinGrace = async () => {
