@@ -4763,7 +4763,7 @@ function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, 
     if (searchStartRef.current === null) {
       searchStartRef.current = booking?.createdAt?.seconds ? booking.createdAt.seconds * 1000 : Date.now();
     }
-    const remaining = (searchStartRef.current + 3*60*1000) - Date.now();
+    const deadline = searchStartRef.current + 3*60*1000;
     const fire = async () => {
       try {
         const snap = await getDoc(doc(db,'bookings',bookingId));
@@ -4773,9 +4773,18 @@ function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, 
       } catch(e) { console.error(e); }
       setNoDriver(true);
     };
-    if (remaining <= 0) { fire(); return; }
-    const t = setTimeout(fire, remaining);
-    return () => clearTimeout(t);
+    // Poll + focus check rather than one long timeout (survives phone sleep).
+    const check = () => { if (Date.now() >= deadline) fire(); };
+    check();
+    const iv = setInterval(check, 10000);
+    const onVis = () => { if (document.visibilityState === 'visible') check(); };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('focus', check);
+    return () => {
+      clearInterval(iv);
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('focus', check);
+    };
   }, [booking?.status, bookingId]);
 
   // Watch the booking live — if a driver accepts while the customer is still on
@@ -5090,8 +5099,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
         ? booking.createdAt.seconds * 1000
         : Date.now();
     }
-    const deadline  = searchStartRef.current + 3 * 60 * 1000;
-    const remaining = deadline - Date.now();
+    const deadline = searchStartRef.current + 3 * 60 * 1000;
 
     const fire = async () => {
       try {
@@ -5105,9 +5113,22 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
       setNoDriverFound(true);
     };
 
-    if (remaining <= 0) { fire(); return; }
-    const t = setTimeout(fire, remaining);
-    return () => clearTimeout(t);
+    // Instead of ONE long setTimeout (which mobile browsers freeze when the app
+    // is backgrounded or the screen locks), we poll every 10s AND re-check when
+    // the tab regains focus. This computes elapsed time from a fixed deadline,
+    // so it fires correctly even if the device slept through the 3 minutes.
+    const check = () => { if (Date.now() >= deadline) fire(); };
+    check(); // immediate check on mount (covers reopening an old searching ride)
+    const iv = setInterval(check, 10000);
+    const onVis = () => { if (document.visibilityState === 'visible') check(); };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('focus', check);
+    return () => {
+      clearInterval(iv);
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('focus', check);
+    };
+  }, [booking?.status, bookingId]);
   }, [booking?.status, bookingId]);
 
   // Free cancel within the 15s grace window after a driver accepts.
@@ -6293,6 +6314,12 @@ function DriverDash({ go, user, setUser, setBookingId }) {
       const open = snap.docs
         .map(d => ({ id:d.id, ...d.data() }))
         .filter(r => !r.driverId && !(r.declinedBy||[]).includes(user.uid))
+        // Safety net: never show a request older than 3 minutes, even if the
+        // customer's app died before it could self-expire. Keeps the queue clean.
+        .filter(r => {
+          const created = r.createdAt?.seconds ? r.createdAt.seconds * 1000 : null;
+          return !created || (Date.now() - created) < 3 * 60 * 1000;
+        })
         .sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
       // Play sound when new ride arrives
       if (open.length > prevCountRef.current && prevCountRef.current >= 0) {
