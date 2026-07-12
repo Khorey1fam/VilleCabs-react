@@ -2644,6 +2644,17 @@ function DashFAQ({ go }) {
 }
 
 function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupData, setDropoffData }) {
+  // Verification gate: a password (email/password) account that hasn't verified
+  // its email must not reach the dashboard via any navigation path (logo tap,
+  // back button, etc). Bounce them back to the verify screen. Google accounts
+  // are inherently verified and skip this.
+  useEffect(() => {
+    const fu = auth.currentUser;
+    if (fu && !fu.emailVerified && fu.providerData?.[0]?.providerId === 'password') {
+      go('otp');
+    }
+  }, []);
+
   const [tab,        setTab]        = useState('book');
   const [menuOpen,   setMenuOpen]   = useState(false);
   const [history,    setHistory]    = useState([]);
