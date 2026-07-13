@@ -1,7 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail } from 'firebase/auth';
 import { getFirestore, collection, query, where, onSnapshot, updateDoc, doc, orderBy, addDoc, deleteDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from '@react-google-maps/api';
+
+const GOOGLE_MAPS_KEY = process.env.REACT_APP_GOOGLE_MAPS_KEY || '';
+const MAP_LIBRARIES = ['places'];
 
 const firebaseConfig = {
   apiKey:            process.env.REACT_APP_FIREBASE_API_KEY,
@@ -1207,6 +1211,13 @@ function OverviewTab({ setTab }) {
 function LiveMapTab() {
   const [drivers, setDrivers] = useState([]);
   const [rides,   setRides]   = useState([]);
+  const [selected, setSelected] = useState(null); // {type, data} for InfoWindow
+  const mapRef = useRef(null);
+  const { isLoaded } = useJsApiLoader({
+    googleMapsApiKey: GOOGLE_MAPS_KEY,
+    libraries: MAP_LIBRARIES,
+    id: 'villecabs-admin-map',
+  });
   useEffect(() => {
     const u1 = onSnapshot(collection(db,'drivers'), snap => setDrivers(snap.docs.map(d=>({id:d.id,...d.data()}))));
     const u2 = onSnapshot(query(collection(db,'bookings'), where('status','in',['active','enroute','arrived'])), snap => setRides(snap.docs.map(d=>({id:d.id,...d.data()}))), () => {});
@@ -1218,6 +1229,27 @@ function LiveMapTab() {
   const onlineDrivers   = drivers.filter(d => d.isOnline);
   const locatedDrivers  = onlineDrivers.filter(d => isFresh(d.currentLocation));
 
+  // Build clickable markers: available drivers (green) + active-ride drivers (purple).
+  const MANDEVILLE = { lat: 18.0416, lng: -77.5036 };
+  const driverMarkers = locatedDrivers
+    .filter(d => !rides.some(r => r.driverId === d.id))  // not already shown as an active ride
+    .map(d => ({ type:'driver', id:d.id, pos:{ lat:d.currentLocation.lat, lng:d.currentLocation.lng }, data:d }));
+  const rideMarkers = rides
+    .filter(r => r.driverLocation?.lat)
+    .map(r => ({ type:'ride', id:r.id, pos:{ lat:r.driverLocation.lat, lng:r.driverLocation.lng }, data:r }));
+  const allMarkers = [...driverMarkers, ...rideMarkers];
+
+  // Center on the average of all markers, else Mandeville.
+  const center = allMarkers.length
+    ? { lat: allMarkers.reduce((s,m)=>s+m.pos.lat,0)/allMarkers.length,
+        lng: allMarkers.reduce((s,m)=>s+m.pos.lng,0)/allMarkers.length }
+    : MANDEVILLE;
+
+  const dotIcon = (color) => isLoaded && window.google ? {
+    path: window.google.maps.SymbolPath.CIRCLE,
+    scale: 9, fillColor: color, fillOpacity: 1, strokeColor: '#fff', strokeWeight: 3,
+  } : undefined;
+
   return (
     <div>
       <div style={s.statgrid}>
@@ -1225,6 +1257,64 @@ function LiveMapTab() {
         <StatCard label="Active rides"   value={rides.length} color="#6b21a8" sub="in progress"/>
         <StatCard label="Live locations" value={locatedDrivers.length + rides.filter(r=>r.driverLocation?.lat).length} sub="broadcasting GPS"/>
         <StatCard label="Idle online"    value={onlineDrivers.length - locatedDrivers.length} sub="no live GPS"/>
+      </div>
+
+      {/* Interactive live map */}
+      <div style={s.card}>
+        <div style={{ fontSize:14, fontWeight:500, marginBottom:12, color:'#1a1a2e', display:'flex', alignItems:'center', gap:14, flexWrap:'wrap' }}>
+          <span>🗺️ Live Map</span>
+          <span style={{ fontSize:11, color:GREEN, display:'inline-flex', alignItems:'center', gap:4 }}><span style={{ width:9,height:9,borderRadius:'50%',background:GREEN,display:'inline-block',border:'2px solid #fff',boxShadow:'0 0 0 1px '+GREEN }}/> Available driver</span>
+          <span style={{ fontSize:11, color:'#6b21a8', display:'inline-flex', alignItems:'center', gap:4 }}><span style={{ width:9,height:9,borderRadius:'50%',background:'#6b21a8',display:'inline-block',border:'2px solid #fff',boxShadow:'0 0 0 1px #6b21a8' }}/> On a ride</span>
+        </div>
+        {!GOOGLE_MAPS_KEY ? (
+          <div style={{ padding:30, textAlign:'center', color:'#b45309', fontSize:13, background:'#fffbeb', borderRadius:10 }}>
+            ⚠️ Google Maps key not configured (REACT_APP_GOOGLE_MAPS_KEY). The lists below still work.
+          </div>
+        ) : !isLoaded ? (
+          <div style={{ padding:40, textAlign:'center', color:'#9199ad', fontSize:13 }}>Loading map…</div>
+        ) : (
+          <GoogleMap
+            mapContainerStyle={{ width:'100%', height:420, borderRadius:12 }}
+            center={center}
+            zoom={allMarkers.length ? 13 : 12}
+            onLoad={(m)=>{ mapRef.current = m; }}
+            options={{ disableDefaultUI:false, zoomControl:true, streetViewControl:false, mapTypeControl:false, fullscreenControl:true }}
+          >
+            {allMarkers.map(m => (
+              <Marker
+                key={m.type+'-'+m.id}
+                position={m.pos}
+                icon={dotIcon(m.type==='ride' ? '#6b21a8' : GREEN)}
+                onClick={() => setSelected(m)}
+              />
+            ))}
+            {selected && (
+              <InfoWindow position={selected.pos} onCloseClick={() => setSelected(null)}>
+                <div style={{ fontSize:12, lineHeight:1.6, minWidth:150 }}>
+                  {selected.type === 'driver' ? (
+                    <>
+                      <div style={{ fontWeight:700, color:'#1a1a2e' }}>{selected.data.name || 'Driver'}</div>
+                      <div style={{ color:'#6b7280' }}>{selected.data.vehicleMake||''} {selected.data.vehicleModel||''}</div>
+                      <div style={{ color:'#6b7280' }}>Plate: {selected.data.licensePlate||'—'}</div>
+                      <div style={{ color:GREEN, fontWeight:600, marginTop:2 }}>🟢 Available</div>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ fontWeight:700, color:'#1a1a2e' }}>{selected.data.driverName||'Driver'} → {selected.data.customerName||'Rider'}</div>
+                      <div style={{ color:'#6b7280' }}>{(selected.data.pickup?.address||'—').split(',')[0]} → {(selected.data.dropoff?.address||'—').split(',')[0]}</div>
+                      <div style={{ color:'#6b21a8', fontWeight:600, marginTop:2 }}>🚕 {selected.data.status} · J${(selected.data.fare||0).toLocaleString()}</div>
+                    </>
+                  )}
+                </div>
+              </InfoWindow>
+            )}
+          </GoogleMap>
+        )}
+        {isLoaded && allMarkers.length === 0 && (
+          <div style={{ marginTop:10, fontSize:12, color:'#9199ad', textAlign:'center' }}>
+            No drivers are broadcasting live GPS right now. Markers appear when a driver is online with the app open.
+          </div>
+        )}
       </div>
 
       <div style={s.card}>
