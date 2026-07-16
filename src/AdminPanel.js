@@ -45,6 +45,7 @@ const s = {
   btnReject: { background:'#fff0f0', color:'#dc2626', border:'1px solid #fca5a5', borderRadius:8, padding:'8px 16px', fontSize:13, fontWeight:600, cursor:'pointer' },
   btnSuspend:{ background:'#f3f4f6', color:'#6b7280', border:'1px solid #e5e7eb', borderRadius:8, padding:'8px 16px', fontSize:13, cursor:'pointer' },
   inp:      { width:'100%', padding:'12px 14px', background:'#ffffff', border:'1px solid #d0d3e0', borderRadius:10, color:'#1a1a2e', fontSize:14, boxSizing:'border-box', outline:'none', marginBottom:12 },
+  lbl:      { fontSize:11, color:'#8a83a0', fontWeight:700, marginBottom:4, textTransform:'uppercase', letterSpacing:0.4 },
   errBox:   { background:'#fff0f0', border:'1px solid #fca5a5', borderRadius:10, padding:'10px 14px', marginBottom:12, fontSize:13, color:'#dc2626' },
 };
 
@@ -1427,16 +1428,140 @@ function ScheduledTab() {
 }
 
 // ── PARTNERS TAB ──────────────────────────────────────────────────────────────
+// ── ADMIN ADDRESS AUTOCOMPLETE ────────────────────────────────────────────────
+// Same Google Places search the rider's pickup box uses, so the address an admin
+// picks carries real lat/lng. Those coords are what let "Book a Ride Here" on the
+// Featured page drop the rider straight at the partner's door.
+function AdminAddressInput({ value, onChange, onPlaceSelect, placeholder }) {
+  const [query, setQuery] = useState(value || '');
+  const [preds, setPreds] = useState([]);
+  const [open,  setOpen]  = useState(false);
+  const debRef   = useRef(null);
+  const tokenRef = useRef(null);
+  useEffect(() => { setQuery(value || ''); }, [value]);
+
+  const search = async (text) => {
+    if (!text || text.length < 2) { setPreds([]); setOpen(false); return; }
+    if (!window.google?.maps?.importLibrary) return;
+    try {
+      const { AutocompleteSessionToken, AutocompleteSuggestion } = await window.google.maps.importLibrary('places');
+      if (!tokenRef.current) tokenRef.current = new AutocompleteSessionToken();
+      const req = {
+        input: text,
+        includedRegionCodes: ['jm'],
+        locationBias: { center:{ lat:18.0417, lng:-77.5071 }, radius:30000 },
+        language: 'en',
+        sessionToken: tokenRef.current,
+      };
+      const { suggestions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions(req);
+      setPreds(suggestions || []);
+      setOpen((suggestions || []).length > 0);
+    } catch(e) { setPreds([]); setOpen(false); }
+  };
+
+  const handleSelect = async (sg) => {
+    const pred = sg.placePrediction;
+    const main = pred.mainText?.text || pred.text?.text || '';
+    setOpen(false); setPreds([]);
+    try {
+      const place = pred.toPlace();
+      await place.fetchFields({ fields:['displayName','formattedAddress','location'] });
+      const addr = place.formattedAddress || place.displayName || main;
+      setQuery(addr);
+      onChange && onChange(addr);
+      onPlaceSelect && onPlaceSelect({ address: addr, lat: place.location.lat(), lng: place.location.lng() });
+      tokenRef.current = null; // session ends on selection
+    } catch(e) {
+      setQuery(main); onChange && onChange(main);
+    }
+  };
+
+  return (
+    <div style={{ position:'relative' }}>
+      <input value={query} placeholder={placeholder || 'Search address…'}
+        onChange={e => {
+          const v = e.target.value; setQuery(v); onChange && onChange(v);
+          clearTimeout(debRef.current);
+          if (!v) { setPreds([]); setOpen(false); return; }
+          debRef.current = setTimeout(() => search(v), 350);
+        }}
+        onBlur={() => setTimeout(() => setOpen(false), 200)}
+        style={{ ...s.inp, marginBottom:0 }}/>
+      {open && preds.length > 0 && (
+        <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, right:0, background:'#fff', border:'1px solid #e9d5ff', borderRadius:10, boxShadow:'0 8px 24px rgba(107,33,168,0.15)', zIndex:50, maxHeight:220, overflowY:'auto' }}>
+          {preds.map((sg, i) => {
+            const main = sg.placePrediction?.mainText?.text || sg.placePrediction?.text?.text || '';
+            const sub  = sg.placePrediction?.secondaryText?.text || '';
+            return (
+              <div key={i} onMouseDown={e => { e.preventDefault(); handleSelect(sg); }}
+                style={{ padding:'10px 12px', cursor:'pointer', borderBottom: i<preds.length-1?'1px solid #f5f0ff':'none' }}>
+                <div style={{ fontSize:13, color:'#1a1a2e', fontWeight:600 }}>{main}</div>
+                {sub && <div style={{ fontSize:11, color:'#9199ad' }}>{sub}</div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PartnersTab() {
   const [partners, setPartners] = useState([]);
   const [loading,  setLoading]  = useState(true);
   const [busyImg,  setBusyImg]  = useState('');   // partner id currently uploading
   const [imgErr,   setImgErr]   = useState('');
+  const [editing,  setEditing]  = useState(null); // partner id being edited
+  const [form,     setForm]     = useState({});   // working copy of that partner
+  const [savedMsg, setSavedMsg] = useState('');
   const TOTAL_SLOTS = 10; // secret internal slot names (admin-only)
+  // Load Google Places so the address box can capture real coordinates.
+  useJsApiLoader({ googleMapsApiKey: GOOGLE_MAPS_KEY, libraries: MAP_LIBRARIES, id: 'villecabs-admin-map' });
   useEffect(() => {
     const unsub = onSnapshot(collection(db,'partnerRequests'), snap => { setPartners(snap.docs.map(d=>({id:d.id,...d.data()}))); setLoading(false); }, ()=>setLoading(false));
     return () => unsub();
   }, []);
+
+  // ── Edit the public-facing details shown on the Featured page ────────────
+  const startEdit = (p) => {
+    setEditing(p.id);
+    setForm({
+      bizName:     p.bizName || p.businessName || p.name || '',
+      bizType:     p.bizType || p.businessType || '',
+      address:     p.address || '',
+      lat:         p.lat ?? null,
+      lng:         p.lng ?? null,
+      hours:       p.hours || '',
+      website:     p.website || '',
+      phone:       p.phone || '',
+      email:       p.email || '',
+      description: p.description || p.message || '',
+    });
+  };
+  const cancelEdit = () => { setEditing(null); setForm({}); };
+  const saveEdit = async (id) => {
+    try {
+      await updateDoc(doc(db,'partnerRequests',id), {
+        bizName:     form.bizName || '',
+        bizType:     form.bizType || '',
+        address:     form.address || '',
+        lat:         form.lat ?? null,
+        lng:         form.lng ?? null,
+        hours:       form.hours || '',
+        website:     form.website || '',
+        phone:       form.phone || '',
+        email:       form.email || '',
+        description: form.description || '',
+        editedAt:    serverTimestamp(),
+      });
+      setSavedMsg(id);
+      setTimeout(() => setSavedMsg(''), 2500);
+      setEditing(null); setForm({});
+    } catch (e) {
+      console.error('Save partner failed:', e);
+      window.alert('Could not save. Please try again.');
+    }
+  };
 
   // ── Slideshow image management (admin) ──────────────────────────────────
   // Uploads land in partnerUploads/ (same bucket the public form uses) and the
@@ -1516,17 +1641,113 @@ function PartnersTab() {
             <span style={{ fontSize:15, fontWeight:500, color:'#1a1a2e' }}>{p.bizName||p.businessName||p.name||'Business'}</span>
             {badge(p.status)}
           </div>
-          <div style={{ fontSize:12, color:'#6b7280', marginBottom:3 }}>{p.bizType||p.businessType||'Business'}{(p.address)?` · ${p.address}`:''}</div>
-          {(p.contact) && <div style={{ fontSize:12, color:'#6b7280', marginBottom:3 }}>👤 {p.contact}</div>}
-          {p.email && <div style={{ fontSize:12, color:'#6b7280', marginBottom:3 }}>📧 {p.email}{p.phone?` · ☎ ${p.phone}`:''}</div>}
-          {(p.website) && <div style={{ fontSize:12, color:'#6b7280', marginBottom:3 }}>🔗 {p.website}</div>}
-          {(p.hours) && <div style={{ fontSize:12, color:'#6b7280', marginBottom:3 }}>🕒 {p.hours}</div>}
-          {p.packageLabel && (
-            <div style={{ display:'inline-block', fontSize:12, background:'#f5f0ff', color:'#6b21a8', border:'1px solid #e9d5ff', padding:'3px 10px', borderRadius:8, fontWeight:700, margin:'4px 0 6px' }}>
-              📦 {p.packageLabel}
+          {editing === p.id ? (
+            /* ── EDIT MODE — these fields are what riders see on the Featured page ── */
+            <div style={{ background:'#faf7fd', border:'1px solid #e9d5ff', borderRadius:10, padding:'12px 14px', marginBottom:10 }}>
+              <div style={{ fontSize:11, color:'#6b21a8', fontWeight:700, textTransform:'uppercase', letterSpacing:0.5, marginBottom:10 }}>
+                ✏️ Editing public details
+              </div>
+
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
+                <div>
+                  <div style={s.lbl}>Business name</div>
+                  <input value={form.bizName} onChange={e=>setForm({...form, bizName:e.target.value})}
+                    placeholder="e.g. Vibes Vault" style={{ ...s.inp, marginBottom:0 }}/>
+                </div>
+                <div>
+                  <div style={s.lbl}>Type / category</div>
+                  <input value={form.bizType} onChange={e=>setForm({...form, bizType:e.target.value})}
+                    placeholder="e.g. Events, Restaurant" style={{ ...s.inp, marginBottom:0 }}/>
+                </div>
+              </div>
+
+              {/* Address with the same Places search the rider's pickup box uses,
+                  so we capture real coordinates for "Book a Ride Here". */}
+              <div style={{ marginBottom:8 }}>
+                <div style={s.lbl}>Address (search to set the map pin)</div>
+                <AdminAddressInput
+                  value={form.address}
+                  placeholder="Search the business address…"
+                  onChange={v => setForm(f => ({ ...f, address:v }))}
+                  onPlaceSelect={pl => setForm(f => ({ ...f, address:pl.address, lat:pl.lat, lng:pl.lng }))}
+                />
+                <div style={{ fontSize:10.5, marginTop:5, color: (form.lat && form.lng) ? GREEN : '#b45309' }}>
+                  {(form.lat && form.lng)
+                    ? `📍 Coordinates set (${Number(form.lat).toFixed(5)}, ${Number(form.lng).toFixed(5)}) — "Book a Ride Here" will drop riders at this exact spot.`
+                    : '⚠️ No coordinates yet. Pick an address from the dropdown so riders can book straight here.'}
+                </div>
+              </div>
+
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
+                <div>
+                  <div style={s.lbl}>Opening hours</div>
+                  <input value={form.hours} onChange={e=>setForm({...form, hours:e.target.value})}
+                    placeholder="e.g. Mon–Sat 9am–9pm" style={{ ...s.inp, marginBottom:0 }}/>
+                </div>
+                <div>
+                  <div style={s.lbl}>Website</div>
+                  <input value={form.website} onChange={e=>setForm({...form, website:e.target.value})}
+                    placeholder="e.g. vibesvault.com" style={{ ...s.inp, marginBottom:0 }}/>
+                </div>
+              </div>
+
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
+                <div>
+                  <div style={s.lbl}>Phone</div>
+                  <input value={form.phone} onChange={e=>setForm({...form, phone:e.target.value})}
+                    placeholder="876-000-0000" style={{ ...s.inp, marginBottom:0 }}/>
+                </div>
+                <div>
+                  <div style={s.lbl}>Email</div>
+                  <input value={form.email} onChange={e=>setForm({...form, email:e.target.value})}
+                    placeholder="business@email.com" style={{ ...s.inp, marginBottom:0 }}/>
+                </div>
+              </div>
+
+              <div style={{ marginBottom:10 }}>
+                <div style={s.lbl}>Description (shown on the Featured page)</div>
+                <textarea value={form.description} onChange={e=>setForm({...form, description:e.target.value})}
+                  rows={3} placeholder="Short blurb riders will read…"
+                  style={{ ...s.inp, marginBottom:0, resize:'vertical', fontFamily:'inherit' }}/>
+              </div>
+
+              <div style={{ display:'flex', gap:8 }}>
+                <button onClick={() => saveEdit(p.id)}
+                  style={{ padding:'9px 18px', background:GREEN, color:'#fff', border:'none', borderRadius:8, fontSize:12.5, fontWeight:700, cursor:'pointer' }}>
+                  ✓ Save details
+                </button>
+                <button onClick={cancelEdit}
+                  style={{ padding:'9px 18px', background:'#fff', color:'#6b7280', border:'1px solid #e5e7eb', borderRadius:8, fontSize:12.5, fontWeight:600, cursor:'pointer' }}>
+                  Cancel
+                </button>
+              </div>
             </div>
+          ) : (
+            /* ── READ-ONLY VIEW ── */
+            <>
+              <div style={{ fontSize:12, color:'#6b7280', marginBottom:3 }}>{p.bizType||p.businessType||'Business'}{(p.address)?` · ${p.address}`:''}</div>
+              {(p.contact) && <div style={{ fontSize:12, color:'#6b7280', marginBottom:3 }}>👤 {p.contact}</div>}
+              {p.email && <div style={{ fontSize:12, color:'#6b7280', marginBottom:3 }}>📧 {p.email}{p.phone?` · ☎ ${p.phone}`:''}</div>}
+              {(p.website) && <div style={{ fontSize:12, color:'#6b7280', marginBottom:3 }}>🔗 {p.website}</div>}
+              {(p.hours) && <div style={{ fontSize:12, color:'#6b7280', marginBottom:3 }}>🕒 {p.hours}</div>}
+              {p.packageLabel && (
+                <div style={{ display:'inline-block', fontSize:12, background:'#f5f0ff', color:'#6b21a8', border:'1px solid #e9d5ff', padding:'3px 10px', borderRadius:8, fontWeight:700, margin:'4px 0 6px' }}>
+                  📦 {p.packageLabel}
+                </div>
+              )}
+              {(p.description||p.message) && <div style={{ fontSize:12, color:'#4b5563', margin:'6px 0 10px', lineHeight:1.5 }}>{p.description||p.message}</div>}
+              <div style={{ display:'flex', alignItems:'center', gap:10, margin:'0 0 10px' }}>
+                <button onClick={() => startEdit(p)}
+                  style={{ padding:'7px 14px', background:'#f5f0ff', color:'#6b21a8', border:'1px solid #e9d5ff', borderRadius:8, fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                  ✏️ Edit details
+                </button>
+                {savedMsg === p.id && <span style={{ fontSize:11.5, color:GREEN, fontWeight:700 }}>✓ Saved</span>}
+                {!(p.lat && p.lng) && (
+                  <span style={{ fontSize:11, color:'#b45309' }}>⚠️ No map pin — riders can't book straight here</span>
+                )}
+              </div>
+            </>
           )}
-          {(p.description||p.message) && <div style={{ fontSize:12, color:'#4b5563', margin:'6px 0 10px', lineHeight:1.5 }}>{p.description||p.message}</div>}
           {/* Slideshow images — admin can add and remove */}
           <div style={{ background:'#faf7fd', border:'1px solid #ece3f5', borderRadius:10, padding:'10px 12px', marginBottom:10 }}>
             <div style={{ fontSize:11, color:'#8a83a0', fontWeight:700, textTransform:'uppercase', letterSpacing:0.5, marginBottom:8 }}>
