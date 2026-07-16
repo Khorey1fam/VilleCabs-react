@@ -2451,7 +2451,7 @@ function FeaturedPartnerCard({ p, go }) {
   }, [imgs.length]);
   return (
     <div style={{ flexShrink:0, width:300, height:380, background:'#fff', border:'1px solid #ece3f5', borderRadius:20, overflow:'hidden', boxShadow:'0 4px 18px rgba(107,33,168,0.10)', display:'flex', flexDirection:'column', cursor:'pointer' }}
-      onClick={() => go('partner-with-us')}>
+      onClick={() => go('featured')}>
       {/* Image slideshow */}
       <div style={{ position:'relative', width:'100%', height:230, background:'#f3edfb' }}>
         {imgs.length > 0 ? (
@@ -8165,11 +8165,13 @@ function BusinessPage({ go, user }) {
 function FeaturedPanel({ p, go, setPickupData, setDropoffData }) {
   const imgs = (Array.isArray(p.uploads) ? p.uploads : []).filter(u => u && !u.match(/\.pdf($|\?)/i));
   const [idx, setIdx] = useState(0);
+  const [lightbox, setLightbox] = useState(false); // full-size flyer view
   useEffect(() => {
     if (imgs.length <= 1) return;
+    if (lightbox) return; // don't auto-advance while someone is reading the flyer
     const t = setInterval(() => setIdx(i => (i + 1) % imgs.length), 3500);
     return () => clearInterval(t);
-  }, [imgs.length]);
+  }, [imgs.length, lightbox]);
 
   const bookRide = () => {
     // Pre-fill the drop-off with this partner's location, then start at pickup
@@ -8182,8 +8184,9 @@ function FeaturedPanel({ p, go, setPickupData, setDropoffData }) {
 
   return (
     <div style={{ background:'#fff', border:'1px solid #ece3f5', borderRadius:20, overflow:'hidden', boxShadow:'0 6px 24px rgba(107,33,168,0.10)', display:'flex', flexDirection:'column' }}>
-      {/* Bigger slideshow — more of the flyer/photo is visible */}
-      <div style={{ position:'relative', width:'100%', aspectRatio:'4 / 3', minHeight:340, background:'#f3edfb' }}>
+      {/* Bigger slideshow — tap to see the full flyer */}
+      <div onClick={() => imgs.length > 0 && setLightbox(true)}
+        style={{ position:'relative', width:'100%', aspectRatio:'4 / 3', minHeight:340, background:'#f3edfb', cursor: imgs.length ? 'zoom-in' : 'default' }}>
         {imgs.length > 0 ? (
           imgs.map((url, i) => (
             <img key={i} src={url} alt={p.bizName}
@@ -8193,6 +8196,11 @@ function FeaturedPanel({ p, go, setPickupData, setDropoffData }) {
           <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:72 }}>🏪</div>
         )}
         <div style={{ position:'absolute', top:12, left:12, background:'rgba(107,33,168,0.92)', color:'#fff', fontSize:11, fontWeight:800, padding:'5px 12px', borderRadius:20, letterSpacing:0.5 }}>⭐ FEATURED</div>
+        {imgs.length > 0 && (
+          <div style={{ position:'absolute', top:12, right:12, background:'rgba(0,0,0,0.55)', color:'#fff', fontSize:10.5, fontWeight:700, padding:'5px 10px', borderRadius:20, display:'flex', alignItems:'center', gap:5 }}>
+            🔍 Tap to enlarge
+          </div>
+        )}
         {imgs.length > 1 && (
           <div style={{ position:'absolute', bottom:12, left:0, right:0, display:'flex', justifyContent:'center', gap:6 }}>
             {imgs.map((_,i) => (
@@ -8235,6 +8243,41 @@ function FeaturedPanel({ p, go, setPickupData, setDropoffData }) {
           </button>
         </div>
       </div>
+
+      {/* Full-size flyer view — objectFit 'contain' so the WHOLE image (and all
+          the event details printed on it) is readable, never cropped. */}
+      {lightbox && imgs.length > 0 && (
+        <div onClick={() => setLightbox(false)}
+          style={{ position:'fixed', inset:0, zIndex:1000, background:'rgba(0,0,0,0.92)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:16 }}>
+
+          <div style={{ color:'#fff', fontSize:14, fontWeight:700, marginBottom:10, textAlign:'center' }}>{p.bizName || 'Featured Partner'}</div>
+
+          <img src={imgs[idx]} alt={p.bizName}
+            onClick={e => e.stopPropagation()}
+            style={{ maxWidth:'100%', maxHeight:'74vh', objectFit:'contain', borderRadius:10 }}/>
+
+          {imgs.length > 1 && (
+            <div style={{ display:'flex', alignItems:'center', gap:16, marginTop:14 }} onClick={e => e.stopPropagation()}>
+              <button onClick={() => setIdx(i => (i - 1 + imgs.length) % imgs.length)}
+                style={{ padding:'8px 16px', background:'rgba(255,255,255,0.15)', color:'#fff', border:'none', borderRadius:8, fontSize:14, cursor:'pointer' }}>‹ Prev</button>
+              <span style={{ color:'#fff', fontSize:12.5 }}>{idx+1} / {imgs.length}</span>
+              <button onClick={() => setIdx(i => (i + 1) % imgs.length)}
+                style={{ padding:'8px 16px', background:'rgba(255,255,255,0.15)', color:'#fff', border:'none', borderRadius:8, fontSize:14, cursor:'pointer' }}>Next ›</button>
+            </div>
+          )}
+
+          <div style={{ display:'flex', gap:10, marginTop:16 }} onClick={e => e.stopPropagation()}>
+            <button onClick={bookRide}
+              style={{ padding:'11px 20px', background:'linear-gradient(135deg,#6b21a8,#4c1d95)', color:'#fff', border:'none', borderRadius:10, fontSize:13.5, fontWeight:700, cursor:'pointer' }}>
+              🚕 Book a Ride Here
+            </button>
+            <button onClick={() => setLightbox(false)}
+              style={{ padding:'11px 20px', background:'#fff', color:'#2a1a4a', border:'none', borderRadius:10, fontSize:13.5, fontWeight:700, cursor:'pointer' }}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
