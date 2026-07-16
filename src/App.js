@@ -2505,8 +2505,12 @@ function DashPartnersSlider({ go }) {
   }, []);
 
   const hasLive = partners.length > 0;
-  // Duplicate the list for a seamless marquee loop
-  const loopItems = hasLive ? [...partners, ...partners] : [...placeholders, ...placeholders];
+  // The marquee duplicates its items so the scroll loops seamlessly. With only a
+  // couple of partners that just looks like the same business listed twice, so
+  // we only loop once there are enough cards to fill the strip.
+  const baseItems  = hasLive ? partners : placeholders;
+  const shouldLoop = baseItems.length >= 3;
+  const loopItems  = shouldLoop ? [...baseItems, ...baseItems] : baseItems;
 
   return (
     <div style={{ padding:'20px 0 20px' }}>
@@ -2514,10 +2518,10 @@ function DashPartnersSlider({ go }) {
         <div style={{ fontSize:12, fontWeight:700, color:'#8a83a0', textTransform:'uppercase', letterSpacing:0.8, marginBottom:2 }}>Featured Partners</div>
         <div style={{ fontSize:11, color:'#aaa' }}>{hasLive ? 'Discover great local businesses.' : 'Premium ad space — your business could be here.'}</div>
       </div>
-      <div style={{ overflow:'hidden', position:'relative' }}>
-        <div style={{ display:'flex', gap:16, width:'max-content', animation:'autoScroll 45s linear infinite', padding:'4px 16px 12px' }}
-          onMouseEnter={e => e.currentTarget.style.animationPlayState='paused'}
-          onMouseLeave={e => e.currentTarget.style.animationPlayState='running'}>
+      <div style={{ overflow: shouldLoop ? 'hidden' : 'auto', position:'relative' }}>
+        <div style={{ display:'flex', gap:16, width:'max-content', animation: shouldLoop ? 'autoScroll 45s linear infinite' : 'none', padding:'4px 16px 12px' }}
+          onMouseEnter={e => { if (shouldLoop) e.currentTarget.style.animationPlayState='paused'; }}
+          onMouseLeave={e => { if (shouldLoop) e.currentTarget.style.animationPlayState='running'; }}>
           {hasLive
             ? loopItems.map((p, i) => <FeaturedPartnerCard key={p.id+'-'+i} p={p} go={go}/>)
             : loopItems.map((p, i) => (
@@ -8178,8 +8182,8 @@ function FeaturedPanel({ p, go, setPickupData, setDropoffData }) {
 
   return (
     <div style={{ background:'#fff', border:'1px solid #ece3f5', borderRadius:20, overflow:'hidden', boxShadow:'0 6px 24px rgba(107,33,168,0.10)', display:'flex', flexDirection:'column' }}>
-      {/* Big slideshow */}
-      <div style={{ position:'relative', width:'100%', height:300, background:'#f3edfb' }}>
+      {/* Bigger slideshow — more of the flyer/photo is visible */}
+      <div style={{ position:'relative', width:'100%', aspectRatio:'4 / 3', minHeight:340, background:'#f3edfb' }}>
         {imgs.length > 0 ? (
           imgs.map((url, i) => (
             <img key={i} src={url} alt={p.bizName}
@@ -8197,20 +8201,39 @@ function FeaturedPanel({ p, go, setPickupData, setDropoffData }) {
           </div>
         )}
       </div>
-      {/* Info */}
-      <div style={{ padding:'18px 20px 20px', flex:1, display:'flex', flexDirection:'column' }}>
-        <div style={{ fontSize:12, color:'#6b21a8', fontWeight:700, textTransform:'uppercase', letterSpacing:0.5, marginBottom:5 }}>{p.bizType || 'Featured Partner'}</div>
-        <div style={{ fontSize:24, fontWeight:800, color:'#2a1a4a', marginBottom:8, lineHeight:1.15 }}>{p.bizName || 'Featured Partner'}</div>
-        {p.address && <div style={{ fontSize:13.5, color:'#5b5470', lineHeight:1.5, display:'flex', gap:7, marginBottom:6 }}><span>📍</span><span>{p.address}</span></div>}
-        {p.hours && <div style={{ fontSize:12.5, color:'#8a83a0', marginBottom:6, display:'flex', gap:7 }}><span>🕒</span><span>{p.hours}</span></div>}
-        {p.description && <div style={{ fontSize:13.5, color:'#5b5470', lineHeight:1.6, marginTop:8, marginBottom:6 }}>{p.description}</div>}
-        {p.website && <div style={{ fontSize:12.5, color:'#6b21a8', fontWeight:600, marginTop:8 }}>🔗 {p.website}</div>}
 
-        <div style={{ flex:1 }}/>
-        <button onClick={bookRide}
-          style={{ width:'100%', marginTop:16, padding:'15px', background:'linear-gradient(135deg,#6b21a8,#4c1d95)', color:'#fff', border:'none', borderRadius:14, fontSize:15, fontWeight:800, cursor:'pointer', boxShadow:'0 6px 18px rgba(107,33,168,0.3)', display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
-          🚕 Book a Ride Here
-        </button>
+      {/* Info — tighter, aligned, with the CTA sitting bottom-right */}
+      <div style={{ padding:'14px 16px 14px', flex:1, display:'flex', flexDirection:'column' }}>
+        <div style={{ fontSize:10.5, color:'#6b21a8', fontWeight:700, textTransform:'uppercase', letterSpacing:0.6, marginBottom:3 }}>{p.bizType || 'Featured Partner'}</div>
+        <div style={{ fontSize:19, fontWeight:800, color:'#2a1a4a', marginBottom:6, lineHeight:1.2 }}>{p.bizName || 'Featured Partner'}</div>
+
+        {p.address && (
+          <div style={{ fontSize:12.5, color:'#5b5470', lineHeight:1.45, display:'flex', gap:6, marginBottom:3, alignItems:'flex-start' }}>
+            <span style={{ flexShrink:0 }}>📍</span><span>{p.address}</span>
+          </div>
+        )}
+        {p.hours && (
+          <div style={{ fontSize:12, color:'#8a83a0', marginBottom:3, display:'flex', gap:6, alignItems:'flex-start' }}>
+            <span style={{ flexShrink:0 }}>🕒</span><span>{p.hours}</span>
+          </div>
+        )}
+        {p.website && (
+          <div style={{ fontSize:12, color:'#6b21a8', fontWeight:600, marginBottom:3, display:'flex', gap:6, alignItems:'flex-start' }}>
+            <span style={{ flexShrink:0 }}>🔗</span><span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.website}</span>
+          </div>
+        )}
+        {p.description && (
+          <div style={{ fontSize:12.5, color:'#5b5470', lineHeight:1.5, marginTop:6 }}>{p.description}</div>
+        )}
+
+        <div style={{ flex:1, minHeight:10 }}/>
+        {/* Small CTA, bottom-right */}
+        <div style={{ display:'flex', justifyContent:'flex-end', marginTop:10 }}>
+          <button onClick={bookRide}
+            style={{ padding:'9px 16px', background:'linear-gradient(135deg,#6b21a8,#4c1d95)', color:'#fff', border:'none', borderRadius:10, fontSize:12.5, fontWeight:700, cursor:'pointer', boxShadow:'0 3px 10px rgba(107,33,168,0.28)', display:'inline-flex', alignItems:'center', gap:6, whiteSpace:'nowrap' }}>
+            🚕 Book a Ride
+          </button>
+        </div>
       </div>
     </div>
   );
