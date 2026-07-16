@@ -661,37 +661,156 @@ function etaFromDirections(dir) {
   } catch(e) { return null; }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-function TopBar({ title, onBack, go, user, showMenu }) {
+// ── APP MENU ──────────────────────────────────────────────────────────────────
+// The slide-out drawer, usable from ANY page via TopBar. It only needs `go` and
+// `user`, so it works everywhere (the dashboard's own drawer additionally
+// switches tabs, which only makes sense there).
+function AppMenu({ open, onClose, go, user }) {
+  if (!open) return null;
+  const isDriver = user?.role === 'driver';
+
+  const nav = (screen) => { onClose(); go(screen); };
+  const doLogout = async () => {
+    onClose();
+    try { await signOut(auth); } catch(e) {}
+    go('splash');
+  };
+
+  const items = isDriver ? [
+    ['🚗', 'Driver Dashboard', () => nav('driver-dash')],
+    ['📄', 'My Documents',     () => nav('driver-documents')],
+    ['👤', 'My Profile',       () => nav('driver-profile')],
+    ['🎉', 'VilleEvents',      () => nav('ville-events')],
+    ['⭐', 'Featured',         () => nav('featured')],
+    ['❓', 'Help Centre',      () => nav('help')],
+    ['📬', 'Contact Support',  () => nav('contact-us')],
+    ['ℹ️', 'About VilleCabs',  () => nav('about-us')],
+    ['📄', 'Terms & Conditions', () => nav('terms-page')],
+    ['🔒', 'Privacy Policy',   () => nav('privacy')],
+  ] : [
+    ['🚕', 'Book a Ride',      () => nav('customer-dash')],
+    ['🎉', 'VilleEvents',      () => nav('ville-events')],
+    ['⭐', 'Featured',         () => nav('featured')],
+    ['👤', 'My Profile',       () => nav('customer-profile')],
+    ['💰', 'Payments',         () => nav('payments')],
+    ['🎁', 'Promotions',       () => nav('promotions')],
+    ['🛡️', 'Safety Centre',   () => nav('safety-centre')],
+    ['⚙️', 'Settings',         () => nav('customer-settings')],
+    ['❓', 'Help Centre',      () => nav('help')],
+    ['📬', 'Contact Support',  () => nav('contact-us')],
+    ['ℹ️', 'About VilleCabs',  () => nav('about-us')],
+    ['❓', 'FAQ',              () => nav('faq')],
+    ['⭐', 'Rider Reviews',    () => nav('reviews')],
+    ['📄', 'Terms & Conditions', () => nav('terms-page')],
+    ['💵', 'Refund Policy',    () => nav('refund-policy')],
+    ['🔒', 'Privacy Policy',   () => nav('privacy')],
+  ];
+
+  const extras = isDriver ? [] : [
+    ['🚗', 'Become a Driver',  () => nav('driver-signup')],
+    ['🤝', 'Advertise With Us',() => nav('partner-with-us')],
+  ];
+
   return (
-    <div style={s.topBar}>
-      {onBack && <button style={s.backBtn} onClick={onBack}>←</button>}
-      {showMenu && (
-        <button onClick={() => go && go(user ? (user.role === 'driver' ? 'driver-dash' : 'customer-dash') : 'splash')}
-          style={{ background:'none', border:'none', cursor:'pointer', padding:'0 6px 0 0', display:'flex', flexDirection:'column', gap:4, flexShrink:0 }}>
-          <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
-          <div style={{ width:13, height:2, background:'#1a1a2e', borderRadius:1 }}/>
-          <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
-        </button>
-      )}
-      <img src="/logo.png" alt="VilleCabs"
-        onClick={() => go ? go(user ? (user.role === 'driver' ? 'driver-dash' : 'customer-dash') : 'splash') : null}
-        style={{ height:32, width:'auto', objectFit:'contain', cursor:'pointer', flexShrink:0, maxWidth:160 }}/>
-      <div style={{ display:'flex', gap:5, marginLeft:'auto' }}>
-        <button onClick={() => setDarkPref(!getDarkPref())} title="Toggle dark mode"
-          style={{ padding:'4px 8px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, fontSize:11, cursor:'pointer' }}>
-          🌙
-        </button>
-        <button onClick={() => go && go('ville-events')}
-          style={{ padding:'4px 10px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, color:'#6b21a8', fontSize:10, fontWeight:600, cursor:'pointer' }}>
-          VilleEvents
-        </button>
-        <button onClick={() => go && go('featured')}
-          style={{ padding:'4px 10px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, color:'#6b21a8', fontSize:10, fontWeight:600, cursor:'pointer' }}>
-          Featured
-        </button>
+    <div style={{ position:'fixed', inset:0, zIndex:100 }}>
+      <div onClick={onClose} style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.65)', backdropFilter:'blur(4px)' }}/>
+      <div style={{ position:'absolute', left:0, top:0, bottom:0, width:'82%', maxWidth:320, background:'#0f1a35', display:'flex', flexDirection:'column', boxShadow:'6px 0 32px rgba(0,0,0,0.4)', animation:'slideInLeft 0.28s ease' }}>
+
+        <div style={{ padding:'32px 20px 18px', background:'linear-gradient(135deg, #1a2744 0%, #0f1a35 100%)', borderBottom:'1px solid rgba(255,255,255,0.08)' }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:14 }}>
+            <div style={{ width:56, height:56, borderRadius:'50%', background:'rgba(232,180,0,0.2)', border:'2px solid rgba(232,180,0,0.5)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:26 }}>{isDriver ? '🚗' : '👤'}</div>
+            <button onClick={onClose} style={{ background:'rgba(255,255,255,0.1)', border:'none', color:'#ffffff', width:34, height:34, borderRadius:'50%', cursor:'pointer', fontSize:16 }}>✕</button>
+          </div>
+          {user ? (
+            <>
+              <div style={{ fontSize:18, fontWeight:700, color:'#ffffff', marginBottom:2 }}>{user?.name}</div>
+              <div style={{ fontSize:12, color:'#c3c9d6', marginBottom:10 }}>{user?.email}</div>
+              <div style={{ display:'inline-flex', alignItems:'center', gap:5, background:'rgba(26,158,90,0.15)', border:'1px solid rgba(26,158,90,0.3)', borderRadius:20, padding:'4px 12px' }}>
+                <div style={{ width:6, height:6, borderRadius:'50%', background:'#1a9e5a' }}/>
+                <span style={{ fontSize:11, color:'#1a9e5a', fontWeight:600 }}>{isDriver ? 'Verified Driver' : 'Verified Rider'}</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize:18, fontWeight:700, color:'#ffffff', marginBottom:2 }}>Welcome</div>
+              <div style={{ fontSize:12, color:'#c3c9d6' }}>Sign in to book a ride</div>
+            </>
+          )}
+        </div>
+
+        <div style={{ flex:1, overflowY:'auto', padding:'8px 0 24px', WebkitOverflowScrolling:'touch' }}>
+          {items.map(([icon, label, action], i) => (
+            <div key={i} onClick={action}
+              style={{ padding:'13px 20px', display:'flex', alignItems:'center', gap:14, cursor:'pointer', borderBottom:'1px solid rgba(255,255,255,0.04)' }}
+              onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,0.06)'}
+              onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+              <span style={{ fontSize:18, width:26, textAlign:'center' }}>{icon}</span>
+              <span style={{ fontSize:14, color:'rgba(255,255,255,0.95)', fontWeight:500 }}>{label}</span>
+            </div>
+          ))}
+          {extras.length > 0 && <div style={{ height:1, background:'rgba(255,255,255,0.06)', margin:'8px 20px' }}/>}
+          {extras.map(([icon, label, action], i) => (
+            <div key={i} onClick={action}
+              style={{ padding:'12px 20px', display:'flex', alignItems:'center', gap:14, cursor:'pointer' }}
+              onMouseEnter={e => e.currentTarget.style.background='rgba(255,255,255,0.04)'}
+              onMouseLeave={e => e.currentTarget.style.background='transparent'}>
+              <span style={{ fontSize:18, width:26, textAlign:'center' }}>{icon}</span>
+              <span style={{ fontSize:13, color:'rgba(255,255,255,0.8)' }}>{label}</span>
+            </div>
+          ))}
+        </div>
+
+        {user && (
+          <div style={{ padding:'14px 20px', borderTop:'1px solid rgba(255,255,255,0.08)' }}>
+            <button onClick={doLogout} style={{ width:'100%', padding:'12px', background:'rgba(226,75,74,0.12)', border:'1px solid rgba(226,75,74,0.3)', borderRadius:12, color:'#f09595', fontSize:14, cursor:'pointer', fontWeight:600 }}>🚪 Log Out</button>
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function TopBar({ title, onBack, go, user, showMenu, hideMenu }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  return (
+    <>
+      <div style={s.topBar}>
+        {/* FAR LEFT — working hamburger menu (every page except login screens) */}
+        {!hideMenu && (
+          <button onClick={() => setMenuOpen(true)} aria-label="Menu"
+            style={{ background:'none', border:'none', cursor:'pointer', padding:4, display:'flex', flexDirection:'column', gap:5, flexShrink:0 }}>
+            <div style={{ width:22, height:2.5, background:'#1a1a2e', borderRadius:2 }}/>
+            <div style={{ width:16, height:2.5, background:'#1a1a2e', borderRadius:2 }}/>
+            <div style={{ width:22, height:2.5, background:'#1a1a2e', borderRadius:2 }}/>
+          </button>
+        )}
+
+        {onBack && <button style={{ ...s.backBtn, marginLeft:6 }} onClick={onBack}>←</button>}
+
+        {/* Logo — taps home */}
+        <img src="/logo.png" alt="VilleCabs"
+          onClick={() => go ? go(user ? (user.role === 'driver' ? 'driver-dash' : 'customer-dash') : 'splash') : null}
+          style={{ height:30, width:'auto', objectFit:'contain', cursor:'pointer', flexShrink:0, maxWidth:150, marginLeft:10 }}/>
+
+        {/* RIGHT — VilleEvents · Featured */}
+        <div style={{ display:'flex', gap:5, marginLeft:'auto', alignItems:'center' }}>
+          <button onClick={() => setDarkPref(!getDarkPref())} title="Toggle dark mode"
+            style={{ padding:'4px 8px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, fontSize:11, cursor:'pointer' }}>
+            🌙
+          </button>
+          <button onClick={() => go && go('ville-events')}
+            style={{ padding:'4px 10px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, color:'#6b21a8', fontSize:10, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap' }}>
+            VilleEvents
+          </button>
+          <button onClick={() => go && go('featured')}
+            style={{ padding:'4px 10px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, color:'#6b21a8', fontSize:10, fontWeight:600, cursor:'pointer' }}>
+            Featured
+          </button>
+        </div>
+      </div>
+      <AppMenu open={menuOpen} onClose={() => setMenuOpen(false)} go={go} user={user}/>
+    </>
   );
 }
 
@@ -1647,7 +1766,7 @@ function CustomerLogin({ go, setUser, user }) {
 
   return (
     <div style={s.content}>
-      <TopBar title="Log In" go={go} user={user}/>
+      <TopBar title="Log In" go={go} user={user} hideMenu/>
       <div style={{ padding:'32px 20px', maxWidth:420, margin:'0 auto' }}>
         <h2 style={{ fontSize:22, fontWeight:800, color:"#1a1a2e", marginBottom:4 }}>Welcome back</h2>
         <p style={{ color:'rgba(255,255,255,0.5)', fontSize:13, marginBottom:20 }}>Log in to book a VilleCabs ride</p>
@@ -1740,7 +1859,7 @@ function DriverLogin({ go, user, setUser }) {
 
   return (
     <div style={s.content}>
-      <TopBar title="Driver Login" go={go} user={user}/>
+      <TopBar title="Driver Login" go={go} user={user} hideMenu/>
       <div style={{ padding:'32px 20px', maxWidth:420, margin:'0 auto' }}>
         <h2 style={{ fontSize:22, fontWeight:800, color:'#1a1a2e', marginBottom:4 }}>Welcome back</h2>
         <p style={{ color:'#6b7280', fontSize:13, marginBottom:20 }}>Sign in to your driver account</p>
@@ -2272,15 +2391,7 @@ function ContactUs({ go, user }) {
 
   return (
     <div style={{ ...s.content, background:'#f5f6fa' }}>
-      <div style={s.topBar}>
-        <button onClick={() => go('customer-dash')} style={{ background:'none', border:'none', cursor:'pointer', padding:'0 8px 0 0', display:'flex', flexDirection:'column', gap:4, flexShrink:0 }}>
-            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
-            <div style={{ width:13, height:2, background:'#1a1a2e', borderRadius:1 }}/>
-            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
-          </button>
-          <img src="/logo.png" alt="VilleCabs" onClick={() => go('customer-dash')} style={{ height:26, objectFit:'contain', cursor:'pointer', marginRight:8 }}/>
-        <span style={s.topTitle}>Contact Support</span>
-      </div>
+      <TopBar title="Contact Support" go={go} user={user}/>
       <div style={{ padding:'14px 16px 0' }}>
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
           {[
@@ -2948,7 +3059,7 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
           <img src="/logo.png" alt="VilleCabs" onClick={() => setTab('book')} style={{ height:26, width:'auto', objectFit:'contain', cursor:'pointer' }}/>
         </div>
         <div style={{ display:'flex', gap:5, marginLeft:'auto', alignItems:'center' }}>
-          <button onClick={() => go('business')} style={{ padding:'3px 8px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, color:'#6b21a8', fontSize:10, fontWeight:600, cursor:'pointer' }}>Business</button>
+          <button onClick={() => go('ville-events')} style={{ padding:'3px 8px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, color:'#6b21a8', fontSize:10, fontWeight:600, cursor:'pointer' }}>VilleEvents</button>
           <button onClick={() => go('featured')} style={{ padding:'3px 8px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, color:'#6b21a8', fontSize:10, fontWeight:600, cursor:'pointer' }}>Featured</button>
           {activeRide && <div onClick={() => { if (activeRide?.id) setBookingId(activeRide.id); go('live-ride'); }} style={{ background:GREEN, borderRadius:14, padding:'3px 8px', fontSize:10, color:WHITE, cursor:'pointer', fontWeight:600 }}>🚕 Live</div>}
           <span style={{ fontSize:11, fontWeight:600, color:'#2a1a4a', maxWidth:70, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{user?.name?.split(' ')[0]||''}</span>
@@ -3481,15 +3592,7 @@ function CustomerProfile({ go, user, setUser }) {
 
   return (
     <div style={{ ...s.content, background:'#f5f6fa' }}>
-      <div style={s.topBar}>
-        <button onClick={() => go('customer-dash')} style={{ background:'none', border:'none', cursor:'pointer', padding:'0 8px 0 0', display:'flex', flexDirection:'column', gap:4, flexShrink:0 }}>
-            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
-            <div style={{ width:13, height:2, background:'#1a1a2e', borderRadius:1 }}/>
-            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
-          </button>
-          <img src="/logo.png" alt="VilleCabs" onClick={() => go('customer-dash')} style={{ height:26, objectFit:'contain', cursor:'pointer', marginRight:8 }}/>
-        <span style={s.topTitle}>My Profile</span>
-      </div>
+      <TopBar title="My Profile" go={go} user={user}/>
       <div style={{ background:'linear-gradient(135deg, #0f1a35 0%, #1a2744 100%)', padding:'24px 20px 28px', textAlign:'center' }}>
         <input type="file" id="cust-profile-photo" accept="image/*" style={{ display:'none' }} onChange={e => handlePhotoUpload(e.target.files?.[0])}/>
         <div onClick={() => !uploadingPhoto && document.getElementById('cust-profile-photo').click()} style={{ position:'relative', width:80, height:80, margin:'0 auto 12px', cursor:'pointer' }}>
@@ -3870,18 +3973,7 @@ function PinPickup({ go, setPickupData, user }) {
   return (
     <div style={{ minHeight:'100vh', background:'#F5F6FA', display:'flex', flexDirection:'column' }}>
 
-      {/* ── HEADER ── */}
-      <div style={{ background:'#ffffff', padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0, boxShadow:'0 2px 12px rgba(0,0,0,0.4)' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <button onClick={() => go('customer-dash')} style={{ background:'none', border:'none', color:'#111827', fontSize:20, cursor:'pointer', padding:'2px 6px' }}>←</button>
-          <img src="/logo.png" alt="VilleCabs" style={{ height:26, objectFit:'contain' }}/>
-        </div>
-        <span style={{ color:'#111827', fontSize:14, fontWeight:700, letterSpacing:0.3 }}>Pin Pickup Location</span>
-        <div style={{ display:'flex', gap:6 }}>
-          <button onClick={() => go('business')} style={{ padding:'4px 10px', background:'rgba(106,27,185,0.3)', border:'1px solid #6A1BB9', borderRadius:20, color:'#6A1BB9', fontSize:10, fontWeight:600, cursor:'pointer' }}>Business</button>
-          <button onClick={() => go('featured')} style={{ padding:'4px 10px', background:'rgba(212,175,55,0.1)', border:'1px solid #D4AF37', borderRadius:20, color:'#b8860b', fontSize:10, fontWeight:600, cursor:'pointer' }}>Featured</button>
-        </div>
-      </div>
+      <TopBar title="Pin Pickup Location" onBack={() => go('customer-dash')} go={go} user={user}/>
 
       {/* ── SEARCH BAR ── */}
       <div style={{ background:'#ffffff', padding:'10px 16px 14px', flexShrink:0, borderBottom:'1px solid #ece3f5' }}>
@@ -4077,18 +4169,7 @@ function PinDropoff({ go, pickupData, dropoffData, setDropoffData, user }) {
   return (
     <div style={{ minHeight:'100vh', background:'#F5F6FA', display:'flex', flexDirection:'column' }}>
 
-      {/* ── HEADER ── */}
-      <div style={{ background:'#ffffff', padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0, boxShadow:'0 2px 8px rgba(0,0,0,0.08)' }}>
-        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          <button onClick={() => go('pin-pickup')} style={{ background:'none', border:'none', color:'#111827', fontSize:20, cursor:'pointer', padding:'2px 6px' }}>←</button>
-          <img src="/logo.png" alt="VilleCabs" style={{ height:26, objectFit:'contain' }}/>
-        </div>
-        <span style={{ color:'#111827', fontSize:14, fontWeight:700, letterSpacing:0.3 }}>Pin Drop-off Location</span>
-        <div style={{ display:'flex', gap:6 }}>
-          <button onClick={() => go('business')} style={{ padding:'4px 10px', background:'rgba(106,27,185,0.3)', border:'1px solid #6A1BB9', borderRadius:20, color:'#2a1a4a', fontSize:10, fontWeight:600, cursor:'pointer' }}>Business</button>
-          <button onClick={() => go('featured')} style={{ padding:'4px 10px', background:'rgba(212,175,55,0.2)', border:'1px solid #D4AF37', borderRadius:20, color:'#D4AF37', fontSize:10, fontWeight:600, cursor:'pointer' }}>Featured</button>
-        </div>
-      </div>
+      <TopBar title="Pin Drop-off Location" onBack={() => go('pin-pickup')} go={go} user={user}/>
 
       {/* ── SEARCH BAR ── */}
       <div style={{ background:'#ffffff', padding:'10px 16px 14px', flexShrink:0, borderBottom:'1px solid #ece3f5' }}>
@@ -8065,19 +8146,10 @@ function ChatScreen({ go, user, bookingId }) {
 }
 
 // ── PAYMENTS PAGE ─────────────────────────────────────────────────────────────
-function PaymentsPage({ go }) {
+function PaymentsPage({ go, user }) {
   return (
     <div style={{ ...s.content, background:'#f5f6fa' }}>
-      <div style={s.topBar}>
-        
-        <button onClick={() => go('customer-dash')} style={{ background:'none', border:'none', cursor:'pointer', padding:'0 8px 0 0', display:'flex', flexDirection:'column', gap:4, flexShrink:0 }}>
-            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
-            <div style={{ width:13, height:2, background:'#1a1a2e', borderRadius:1 }}/>
-            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
-          </button>
-          <img src="/logo.png" alt="VilleCabs" onClick={() => go('customer-dash')} style={{ height:28, objectFit:'contain', cursor:'pointer', flexShrink:0, marginRight:10 }}/>
-        <span style={s.topTitle}>Payments</span>
-      </div>
+      <TopBar title="Payments" go={go} user={user}/>
       <div style={{ padding:20 }}>
         <div style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:16, padding:20, marginBottom:14, boxShadow:'0 2px 8px rgba(0,0,0,0.05)' }}>
           <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:10 }}>
@@ -8129,16 +8201,7 @@ function PromotionsPage({ go, user }) {
 
   return (
     <div style={{ ...s.content, background:'#f5f6fa' }}>
-      <div style={s.topBar}>
-        
-        <button onClick={() => go('customer-dash')} style={{ background:'none', border:'none', cursor:'pointer', padding:'0 8px 0 0', display:'flex', flexDirection:'column', gap:4, flexShrink:0 }}>
-            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
-            <div style={{ width:13, height:2, background:'#1a1a2e', borderRadius:1 }}/>
-            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
-          </button>
-          <img src="/logo.png" alt="VilleCabs" onClick={() => go('customer-dash')} style={{ height:28, objectFit:'contain', cursor:'pointer', flexShrink:0, marginRight:10 }}/>
-        <span style={s.topTitle}>Promotions</span>
-      </div>
+      <TopBar title="Promotions" go={go} user={user}/>
       <div style={{ padding:20 }}>
         {/* Referral card */}
         <div style={{ background:'linear-gradient(135deg, #0f1a35 0%, #1a2744 100%)', borderRadius:18, padding:20, marginBottom:16, position:'relative', overflow:'hidden' }}>
@@ -8191,19 +8254,10 @@ function PromotionsPage({ go, user }) {
 }
 
 // ── SAFETY CENTRE PAGE ────────────────────────────────────────────────────────
-function SafetyCentre({ go }) {
+function SafetyCentre({ go, user }) {
   return (
     <div style={{ ...s.content, background:'#f5f6fa' }}>
-      <div style={s.topBar}>
-        
-        <button onClick={() => go('customer-dash')} style={{ background:'none', border:'none', cursor:'pointer', padding:'0 8px 0 0', display:'flex', flexDirection:'column', gap:4, flexShrink:0 }}>
-            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
-            <div style={{ width:13, height:2, background:'#1a1a2e', borderRadius:1 }}/>
-            <div style={{ width:18, height:2, background:'#1a1a2e', borderRadius:1 }}/>
-          </button>
-          <img src="/logo.png" alt="VilleCabs" onClick={() => go('customer-dash')} style={{ height:28, objectFit:'contain', cursor:'pointer', flexShrink:0, marginRight:10 }}/>
-        <span style={s.topTitle}>Safety Centre</span>
-      </div>
+      <TopBar title="Safety Centre" go={go} user={user}/>
       <div style={{ padding:20 }}>
         {/* SOS card */}
         <div style={{ background:'linear-gradient(135deg, rgba(226,75,74,0.15) 0%, rgba(226,75,74,0.05) 100%)', border:'1.5px solid rgba(226,75,74,0.4)', borderRadius:16, padding:18, marginBottom:20, display:'flex', gap:14, alignItems:'flex-start' }}>
