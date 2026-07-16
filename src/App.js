@@ -682,9 +682,9 @@ function TopBar({ title, onBack, go, user, showMenu }) {
           style={{ padding:'4px 8px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, fontSize:11, cursor:'pointer' }}>
           🌙
         </button>
-        <button onClick={() => go && go('partner-with-us')}
+        <button onClick={() => go && go('ville-events')}
           style={{ padding:'4px 10px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, color:'#6b21a8', fontSize:10, fontWeight:600, cursor:'pointer' }}>
-          Business
+          VilleEvents
         </button>
         <button onClick={() => go && go('featured')}
           style={{ padding:'4px 10px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, color:'#6b21a8', fontSize:10, fontWeight:600, cursor:'pointer' }}>
@@ -2361,39 +2361,6 @@ function HelpScreen({ go, user }) {
 }
 
 // ── CUSTOMER DASHBOARD ────────────────────────────────────────────────────────
-// ── DASH HERO SLIDER ──────────────────────────────────────────────────────────
-function DashHeroSlider({ go }) {
-  const [slide, setSlide] = useState(0);
-  const slides = [
-    { bg:'#111111', icon:'🚕', title:'Safe rides in Manchester',  sub:'Trusted local drivers · GPS tracked · SOS protected',    accent:'#1a9e5a' },
-    { bg:'#0f1a35', icon:'📍', title:'Book rides across Mandeville', sub:'Fast, simple, and built for your city',             accent:'#e8b400' },
-    { bg:'#1a0a2a', icon:'🛡️', title:'Your safety comes first',  sub:'Verify your driver, share your trip, and use SOS anytime', accent:'#e8b400' },
-    { bg:'#0a2a1a', icon:'✨', title:'VilleCabs is growing',      sub:'More drivers, more routes, more convenience',           accent:'#1a9e5a' },
-  ];
-  useEffect(() => { const t=setInterval(()=>setSlide(s=>(s+1)%slides.length),5000); return ()=>clearInterval(t); }, [slides.length]);
-  const cur = slides[slide];
-  return (
-    <div style={{ margin:'16px 16px 0', borderRadius:16, overflow:'hidden', position:'relative', minHeight:130, background: cur.bg, transition:'background 0.8s ease', display:'flex', alignItems:'center', padding:'16px 20px' }}>
-      {/* Floating taxis */}
-      {[...Array(3)].map((_, i) => (
-        <div key={i} style={{ position:'absolute', fontSize:20, opacity:0.08, top:(20+i*25)+'%', left:'-30px', animation:'driveAcross '+(12+i*3)+'s linear infinite', animationDelay:(i*2)+'s', pointerEvents:'none' }}>🚕</div>
-      ))}
-      <div key={slide} style={{ animation:'fadeSlideIn 0.5s ease', flex:1, position:'relative', zIndex:1 }}>
-        <div style={{ fontSize:32, marginBottom:6 }}>{cur.icon}</div>
-        <div style={{ fontSize:17, fontWeight:700, color:'#ffffff', marginBottom:4, lineHeight:1.3 }}>{cur.title}</div>
-        <div style={{ fontSize:11, color:'rgba(255,255,255,0.65)', marginBottom:12, lineHeight:1.5 }}>{cur.sub}</div>
-        <button onClick={() => go('pin-pickup')} style={{ padding:'7px 18px', background: cur.accent, border:'none', borderRadius:20, color: cur.accent==='#e8b400'?'#0f1a35':'#ffffff', fontSize:12, fontWeight:700, cursor:'pointer' }}>Book Now →</button>
-      </div>
-      {/* Slide dots */}
-      <div style={{ position:'absolute', bottom:10, right:14, display:'flex', gap:5 }}>
-        {slides.map((_, i) => (
-          <button key={i} onClick={() => setSlide(i)} style={{ width: i===slide?20:5, height:5, borderRadius:3, border:'none', background: i===slide?'#ffffff':'rgba(255,255,255,0.3)', cursor:'pointer', transition:'all 0.3s', padding:0 }}/>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 // ── DASH SAFETY SLIDER ─────────────────────────────────────────────────────────
 function DashSafetySlider() {
   const [slide, setSlide] = useState(0);
@@ -2502,13 +2469,106 @@ function FeaturedPartnerCard({ p, go }) {
   );
 }
 
+// ── VilleEvents strip for the dashboard ──
+// One continuous auto-scrolling row of every live event flyer — no month
+// sections here (that's the VilleEvents page's job). Tapping opens that page.
+function DashEventCard({ p, go }) {
+  const imgs = (Array.isArray(p.uploads) ? p.uploads : []).filter(u => u && !u.match(/\.pdf($|\?)/i));
+  const [idx, setIdx] = useState(0);
+  useEffect(() => {
+    if (imgs.length <= 1) return;
+    const t = setInterval(() => setIdx(i => (i + 1) % imgs.length), 4000);
+    return () => clearInterval(t);
+  }, [imgs.length]);
+  const d = parseEventDate(p.eventDate);
+  const dateLabel = d ? d.toLocaleDateString('en-US', { month:'short', day:'numeric' }) : null;
+
+  return (
+    <div onClick={() => go('ville-events')}
+      style={{ flexShrink:0, width:200, background:'#fff', border:'1px solid #ece3f5', borderRadius:16, overflow:'hidden', boxShadow:'0 4px 16px rgba(107,33,168,0.10)', cursor:'pointer' }}>
+      <div style={{ position:'relative', width:'100%', aspectRatio:'4 / 5', background:'#f3edfb' }}>
+        {imgs.length > 0 ? imgs.map((url, i) => (
+          <img key={i} src={url} alt={p.bizName}
+            style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', opacity: i===idx?1:0, transition:'opacity 0.6s ease' }}/>
+        )) : (
+          <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:46 }}>🎉</div>
+        )}
+        {dateLabel && (
+          <div style={{ position:'absolute', top:8, left:8, background:'rgba(107,33,168,0.94)', color:'#fff', fontSize:10, fontWeight:800, padding:'4px 9px', borderRadius:16 }}>{dateLabel}</div>
+        )}
+        {imgs.length > 1 && (
+          <div style={{ position:'absolute', bottom:8, left:0, right:0, display:'flex', justifyContent:'center', gap:4 }}>
+            {imgs.map((_,i) => <div key={i} style={{ width:5, height:5, borderRadius:'50%', background: i===idx?'#fff':'rgba(255,255,255,0.5)' }}/>)}
+          </div>
+        )}
+      </div>
+      <div style={{ padding:'9px 11px 11px' }}>
+        <div style={{ fontSize:13, fontWeight:800, color:'#2a1a4a', lineHeight:1.25, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.bizName || 'Event'}</div>
+        {p.address && <div style={{ fontSize:10.5, color:'#8a83a0', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>📍 {p.address}</div>}
+      </div>
+    </div>
+  );
+}
+
+function DashEventsSlider({ go }) {
+  const [events, setEvents] = useState([]);
+  useEffect(() => {
+    const q = query(collection(db,'partnerRequests'), where('status','==','approved'));
+    const unsub = onSnapshot(q, snap => {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const live = snap.docs.map(d => ({ id:d.id, ...d.data() }))
+        .filter(p => p.bizType === 'Events' && p.slot)
+        // drop events whose date has already passed; undated ones stay
+        .filter(p => { const d = parseEventDate(p.eventDate); return !d || d >= today; })
+        .sort((a,b) => {
+          const da = parseEventDate(a.eventDate), db_ = parseEventDate(b.eventDate);
+          if (da && db_) return da - db_;
+          if (da) return -1;
+          if (db_) return 1;
+          return 0;
+        });
+      setEvents(live);
+    }, () => {});
+    return () => unsub();
+  }, []);
+
+  if (events.length === 0) return null;   // nothing on yet — don't show an empty strip
+
+  const shouldLoop = events.length >= 3;
+  const items = shouldLoop ? [...events, ...events] : events;
+  const duration = Math.max(25, events.length * 9);
+
+  return (
+    <div style={{ padding:'20px 0 0' }}>
+      <div style={{ padding:'0 16px', marginBottom:12, display:'flex', alignItems:'center', justifyContent:'space-between', gap:10 }}>
+        <div>
+          <div style={{ fontSize:12, fontWeight:700, color:'#8a83a0', textTransform:'uppercase', letterSpacing:0.8 }}>🎉 VilleEvents</div>
+          <div style={{ fontSize:12.5, color:'#8a83a0', marginTop:3 }}>Parties &amp; events happening in Mandeville</div>
+        </div>
+        <button onClick={() => go('ville-events')}
+          style={{ padding:'7px 14px', background:'#f5f0ff', color:'#6b21a8', border:'1px solid #e9d5ff', borderRadius:18, fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}>
+          See all →
+        </button>
+      </div>
+      <div style={{ overflowX: shouldLoop ? 'hidden' : 'auto', position:'relative', WebkitOverflowScrolling:'touch' }}>
+        <div style={{ display:'flex', gap:12, width:'max-content', padding:'4px 16px 12px', animation: shouldLoop ? `autoScroll ${duration}s linear infinite` : 'none' }}
+          onMouseEnter={e => { if (shouldLoop) e.currentTarget.style.animationPlayState='paused'; }}
+          onMouseLeave={e => { if (shouldLoop) e.currentTarget.style.animationPlayState='running'; }}>
+          {items.map((p, i) => <DashEventCard key={p.id+'-'+i} p={p} go={go}/>)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DashPartnersSlider({ go }) {
   const [partners, setPartners] = useState([]);
   // Empty "ad space" placeholders shown when there are no live featured partners
   const placeholders = [
     { icon:'🍔', cat:'Restaurants' }, { icon:'🏨', cat:'Hotels' },
-    { icon:'🎉', cat:'Nightlife' },   { icon:'🛒', cat:'Supermarkets' },
-    { icon:'💊', cat:'Pharmacies' },  { icon:'🎫', cat:'Events' },
+    { icon:'🛒', cat:'Supermarkets' }, { icon:'💊', cat:'Pharmacies' },
+    { icon:'🏝️', cat:'Attractions' }, { icon:'🏪', cat:'Businesses' },
   ];
 
   useEffect(() => {
@@ -2518,7 +2578,9 @@ function DashPartnersSlider({ go }) {
     const q = query(collection(db,'partnerRequests'), where('status','==','approved'));
     const unsub = onSnapshot(q, snap => {
       const live = snap.docs.map(d => ({ id:d.id, ...d.data() }))
-        .filter(p => p.slot)
+        // Events live on the VilleEvents page / slider — Featured Partners is
+        // for businesses (restaurants, hotels, shops).
+        .filter(p => p.slot && p.bizType !== 'Events')
         .sort((a,b) => (a.slot||0) - (b.slot||0));
       setPartners(live);
     }, () => {});
@@ -3083,8 +3145,8 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
               </div>
             </div>
 
-            {/* ── HERO BANNER SLIDESHOW ── */}
-            <DashHeroSlider go={go}/>
+            {/* ── VILLEEVENTS — live event flyers, one continuous scroll ── */}
+            <DashEventsSlider go={go}/>
 
             {/* ── WHY VILLECABS — feature cards with hover ── */}
             <div style={{ padding:'20px 16px 0' }}>
