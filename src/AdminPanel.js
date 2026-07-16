@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail } from 'firebase/auth';
-import { getFirestore, collection, query, where, onSnapshot, updateDoc, doc, orderBy, addDoc, deleteDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, collection, query, where, onSnapshot, updateDoc, doc, orderBy, addDoc, deleteDoc, setDoc, serverTimestamp, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from '@react-google-maps/api';
 
 const GOOGLE_MAPS_KEY = process.env.REACT_APP_GOOGLE_MAPS_KEY || '';
@@ -19,6 +20,7 @@ const firebaseConfig = {
 const app  = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db   = getFirestore(app);
+const storage = getStorage(app);
 
 const YELLOW = '#e8b400';
 const DARK   = '#1a1a2e';
@@ -1428,11 +1430,52 @@ function ScheduledTab() {
 function PartnersTab() {
   const [partners, setPartners] = useState([]);
   const [loading,  setLoading]  = useState(true);
+  const [busyImg,  setBusyImg]  = useState('');   // partner id currently uploading
+  const [imgErr,   setImgErr]   = useState('');
   const TOTAL_SLOTS = 10; // secret internal slot names (admin-only)
   useEffect(() => {
     const unsub = onSnapshot(collection(db,'partnerRequests'), snap => { setPartners(snap.docs.map(d=>({id:d.id,...d.data()}))); setLoading(false); }, ()=>setLoading(false));
     return () => unsub();
   }, []);
+
+  // ── Slideshow image management (admin) ──────────────────────────────────
+  // Uploads land in partnerUploads/ (same bucket the public form uses) and the
+  // URL is appended to the partner's `uploads` array, which drives the
+  // customer-facing slideshow.
+  const addImages = async (partnerId, fileList) => {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    setImgErr(''); setBusyImg(partnerId);
+    try {
+      for (const file of files) {
+        if (file.size > 8 * 1024 * 1024) { setImgErr(`"${file.name}" is over 8MB — skipped.`); continue; }
+        const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const path = `partnerUploads/${partnerId}_${Date.now()}_${safe}`;
+        const r = storageRef(storage, path);
+        await uploadBytes(r, file);
+        const url = await getDownloadURL(r);
+        await updateDoc(doc(db,'partnerRequests',partnerId), { uploads: arrayUnion(url) });
+      }
+    } catch (e) {
+      console.error('Partner image upload failed:', e);
+      setImgErr('Upload failed. Please try again.');
+    }
+    setBusyImg('');
+  };
+
+  // Removes the image from the partner's slideshow. NOTE: the file itself stays
+  // in Storage (client deletes are blocked by the storage rules) — this only
+  // detaches it from the partner, which is what the slideshow reads.
+  const removeImage = async (partnerId, url) => {
+    if (!window.confirm('Remove this image from the partner\'s slideshow?')) return;
+    try {
+      await updateDoc(doc(db,'partnerRequests',partnerId), { uploads: arrayRemove(url) });
+    } catch (e) {
+      console.error('Remove image failed:', e);
+      setImgErr('Could not remove that image.');
+    }
+  };
+
   const setStatus = async (id, status) => { await updateDoc(doc(db,'partnerRequests',id), { status }); };
   // Approve a partner INTO a specific slot (slot names are internal/admin-only)
   const approveToSlot = async (id, slot) => {
@@ -1484,18 +1527,40 @@ function PartnersTab() {
             </div>
           )}
           {(p.description||p.message) && <div style={{ fontSize:12, color:'#4b5563', margin:'6px 0 10px', lineHeight:1.5 }}>{p.description||p.message}</div>}
-          {Array.isArray(p.uploads) && p.uploads.length>0 && (
-            <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:10 }}>
-              {p.uploads.map((url,i) => (
-                <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                  style={{ width:70, height:70, borderRadius:8, overflow:'hidden', border:'1px solid #e5e7eb', display:'flex', alignItems:'center', justifyContent:'center', background:'#f9fafb', textDecoration:'none' }}>
-                  {url.match(/\.pdf($|\?)/i)
-                    ? <span style={{ fontSize:24 }}>📄</span>
-                    : <img src={url} alt="promo" style={{ width:'100%', height:'100%', objectFit:'cover' }}/>}
-                </a>
-              ))}
+          {/* Slideshow images — admin can add and remove */}
+          <div style={{ background:'#faf7fd', border:'1px solid #ece3f5', borderRadius:10, padding:'10px 12px', marginBottom:10 }}>
+            <div style={{ fontSize:11, color:'#8a83a0', fontWeight:700, textTransform:'uppercase', letterSpacing:0.5, marginBottom:8 }}>
+              Slideshow Images {Array.isArray(p.uploads) && p.uploads.length>0 ? `(${p.uploads.length})` : '— none yet'}
             </div>
-          )}
+            {Array.isArray(p.uploads) && p.uploads.length>0 && (
+              <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:10 }}>
+                {p.uploads.map((url,i) => (
+                  <div key={i} style={{ position:'relative', width:74, height:74 }}>
+                    <a href={url} target="_blank" rel="noopener noreferrer"
+                      style={{ width:74, height:74, borderRadius:8, overflow:'hidden', border:'1px solid #e5e7eb', display:'flex', alignItems:'center', justifyContent:'center', background:'#f9fafb', textDecoration:'none' }}>
+                      {url.match(/\.pdf($|\?)/i)
+                        ? <span style={{ fontSize:24 }}>📄</span>
+                        : <img src={url} alt="promo" style={{ width:'100%', height:'100%', objectFit:'cover' }}/>}
+                    </a>
+                    <button onClick={() => removeImage(p.id, url)} title="Remove from slideshow"
+                      style={{ position:'absolute', top:-7, right:-7, width:22, height:22, borderRadius:'50%', background:'#dc2626', color:'#fff', border:'2px solid #fff', fontSize:12, fontWeight:700, cursor:'pointer', lineHeight:1, padding:0, display:'flex', alignItems:'center', justifyContent:'center', boxShadow:'0 1px 4px rgba(0,0,0,0.3)' }}>
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <label style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'8px 14px', background: busyImg===p.id ? '#e5e7eb' : '#6b21a8', color: busyImg===p.id ? '#9199ad' : '#fff', borderRadius:8, fontSize:12, fontWeight:700, cursor: busyImg===p.id ? 'default' : 'pointer' }}>
+              {busyImg===p.id ? 'Uploading…' : '＋ Add images'}
+              <input type="file" accept="image/*" multiple style={{ display:'none' }}
+                disabled={busyImg===p.id}
+                onChange={e => { addImages(p.id, e.target.files); e.target.value=''; }}/>
+            </label>
+            <div style={{ fontSize:10.5, color:'#9199ad', marginTop:6 }}>
+              Images appear in the customer slideshow in the order added. Max 8MB each.
+            </div>
+            {imgErr && busyImg==='' && <div style={{ fontSize:11, color:'#dc2626', marginTop:6 }}>⚠️ {imgErr}</div>}
+          </div>
           {p.changesNote && (p.status==='changes_requested') && (
             <div style={{ fontSize:11.5, color:'#2563eb', background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:8, padding:'6px 10px', marginBottom:10 }}>
               ✏️ Changes requested: {p.changesNote}
