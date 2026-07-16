@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import {
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
@@ -780,6 +780,7 @@ function Footer({ go }) {
             <div style={{ fontSize:13, fontWeight:700, color:'#2a1a4a', marginBottom:14, textTransform:'uppercase', letterSpacing:1 }}>Travel</div>
             {[
               ['Explore Mandeville',  () => go && go('featured')],
+              ['VilleEvents',         () => go && go('ville-events')],
               ['Partner Locations',   () => go('partner-locations')],
             ].map(([label, action], i) => (
               <div key={i} onClick={action}
@@ -8323,6 +8324,267 @@ function FeaturedPanel({ p, go, setPickupData, setDropoffData }) {
   );
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// VILLE EVENTS — parties & events in Mandeville, grouped by month
+// Partners who choose "Events" land here instead of the Featured page. Each
+// month gets its own horizontally auto-scrolling strip of flyers.
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Parse the 'YYYY-MM-DD' string from the signup form into a local Date.
+// (new Date('2026-08-01') parses as UTC and can shift a day in our timezone.)
+function parseEventDate(s) {
+  if (!s || typeof s !== 'string') return null;
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function EventFlyerCard({ p, go, setPickupData, setDropoffData }) {
+  const imgs = (Array.isArray(p.uploads) ? p.uploads : []).filter(u => u && !u.match(/\.pdf($|\?)/i));
+  const [idx, setIdx] = useState(0);
+  const [lightbox, setLightbox] = useState(false);
+  useEffect(() => {
+    if (imgs.length <= 1 || lightbox) return;
+    const t = setInterval(() => setIdx(i => (i + 1) % imgs.length), 4000);
+    return () => clearInterval(t);
+  }, [imgs.length, lightbox]);
+
+  const when = parseEventDate(p.eventDate);
+  const dateLabel = when
+    ? when.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' })
+    : null;
+
+  // Pre-fill the drop-off with the event's location, then start the booking flow.
+  const rideToEvent = (e) => {
+    e && e.stopPropagation();
+    if (typeof setDropoffData === 'function') {
+      const coords = (p.lat && p.lng) ? { lat:p.lat, lng:p.lng } : null;
+      setDropoffData({ address: p.address || p.bizName || '', coords });
+    }
+    go('pin-pickup');
+  };
+
+  return (
+    <>
+      <div style={{ flexShrink:0, width:260, background:'#fff', border:'1px solid #ece3f5', borderRadius:18, overflow:'hidden', boxShadow:'0 4px 18px rgba(107,33,168,0.10)', display:'flex', flexDirection:'column' }}>
+        {/* Flyer — tap to read the full poster */}
+        <div onClick={() => imgs.length > 0 && setLightbox(true)}
+          style={{ position:'relative', width:'100%', aspectRatio:'4 / 5', background:'#f3edfb', cursor: imgs.length ? 'zoom-in' : 'default' }}>
+          {imgs.length > 0 ? imgs.map((url, i) => (
+            <img key={i} src={url} alt={p.bizName}
+              style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', opacity: i===idx?1:0, transition:'opacity 0.6s ease' }}/>
+          )) : (
+            <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:60 }}>🎉</div>
+          )}
+          {dateLabel && (
+            <div style={{ position:'absolute', top:10, left:10, background:'rgba(107,33,168,0.94)', color:'#fff', fontSize:11, fontWeight:800, padding:'5px 11px', borderRadius:20, letterSpacing:0.3 }}>
+              {dateLabel}{p.eventTime ? ` · ${p.eventTime}` : ''}
+            </div>
+          )}
+          {imgs.length > 0 && (
+            <div style={{ position:'absolute', top:10, right:10, background:'rgba(0,0,0,0.55)', color:'#fff', fontSize:10, fontWeight:700, padding:'4px 9px', borderRadius:20 }}>🔍 Tap</div>
+          )}
+          {imgs.length > 1 && (
+            <div style={{ position:'absolute', bottom:10, left:0, right:0, display:'flex', justifyContent:'center', gap:5 }}>
+              {imgs.map((_,i) => <div key={i} style={{ width:6, height:6, borderRadius:'50%', background: i===idx?'#fff':'rgba(255,255,255,0.5)' }}/>)}
+            </div>
+          )}
+        </div>
+        {/* Info */}
+        <div style={{ padding:'11px 13px 13px', flex:1, display:'flex', flexDirection:'column' }}>
+          <div style={{ fontSize:15, fontWeight:800, color:'#2a1a4a', lineHeight:1.2, marginBottom:4 }}>{p.bizName || 'Event'}</div>
+          {p.address && (
+            <div style={{ fontSize:11.5, color:'#5b5470', display:'flex', gap:5, marginBottom:3, lineHeight:1.4 }}>
+              <span style={{ flexShrink:0 }}>📍</span>
+              <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.address}</span>
+            </div>
+          )}
+          {p.description && (
+            <div style={{ fontSize:11.5, color:'#8a83a0', lineHeight:1.45, marginTop:2, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>{p.description}</div>
+          )}
+          <div style={{ flex:1, minHeight:8 }}/>
+          <div style={{ display:'flex', justifyContent:'flex-end', marginTop:8 }}>
+            <button onClick={rideToEvent}
+              style={{ padding:'8px 14px', background:'linear-gradient(135deg,#6b21a8,#4c1d95)', color:'#fff', border:'none', borderRadius:9, fontSize:11.5, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap', boxShadow:'0 3px 10px rgba(107,33,168,0.26)' }}>
+              🚕 Ride Here
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Full flyer — 'contain' so every detail printed on the poster is readable */}
+      {lightbox && imgs.length > 0 && (
+        <div onClick={() => setLightbox(false)}
+          style={{ position:'fixed', inset:0, zIndex:1000, background:'rgba(0,0,0,0.93)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:16 }}>
+          <div style={{ color:'#fff', fontSize:15, fontWeight:700, marginBottom:4, textAlign:'center' }}>{p.bizName}</div>
+          {dateLabel && <div style={{ color:'#c4b5fd', fontSize:12.5, marginBottom:10 }}>{dateLabel}{p.eventTime ? ` · ${p.eventTime}` : ''}</div>}
+          <img src={imgs[idx]} alt={p.bizName} onClick={e => e.stopPropagation()}
+            style={{ maxWidth:'100%', maxHeight:'70vh', objectFit:'contain', borderRadius:10 }}/>
+          {imgs.length > 1 && (
+            <div style={{ display:'flex', alignItems:'center', gap:14, marginTop:12 }} onClick={e => e.stopPropagation()}>
+              <button onClick={() => setIdx(i => (i - 1 + imgs.length) % imgs.length)}
+                style={{ padding:'8px 15px', background:'rgba(255,255,255,0.15)', color:'#fff', border:'none', borderRadius:8, fontSize:13.5, cursor:'pointer' }}>‹ Prev</button>
+              <span style={{ color:'#fff', fontSize:12 }}>{idx+1} / {imgs.length}</span>
+              <button onClick={() => setIdx(i => (i + 1) % imgs.length)}
+                style={{ padding:'8px 15px', background:'rgba(255,255,255,0.15)', color:'#fff', border:'none', borderRadius:8, fontSize:13.5, cursor:'pointer' }}>Next ›</button>
+            </div>
+          )}
+          <div style={{ display:'flex', gap:10, marginTop:14 }} onClick={e => e.stopPropagation()}>
+            <button onClick={rideToEvent}
+              style={{ padding:'11px 20px', background:'linear-gradient(135deg,#6b21a8,#4c1d95)', color:'#fff', border:'none', borderRadius:10, fontSize:13.5, fontWeight:700, cursor:'pointer' }}>
+              🚕 Ride to this Event
+            </button>
+            <button onClick={() => setLightbox(false)}
+              style={{ padding:'11px 20px', background:'#fff', color:'#2a1a4a', border:'none', borderRadius:10, fontSize:13.5, fontWeight:700, cursor:'pointer' }}>Close</button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// One month's strip of flyers, scrolling horizontally.
+function EventMonthRow({ title, subtitle, events, go, setPickupData, setDropoffData }) {
+  // The marquee duplicates its items so the loop is seamless — but with only a
+  // couple of flyers that reads as a duplicate, so we only loop when it's full.
+  const shouldLoop = events.length >= 3;
+  const items = shouldLoop ? [...events, ...events] : events;
+  // Longer strips need proportionally more time, or they whip past.
+  const duration = Math.max(25, events.length * 9);
+
+  return (
+    <div style={{ marginBottom:30 }}>
+      <div style={{ padding:'0 4px', marginBottom:10 }}>
+        <h3 style={{ fontSize:18, fontWeight:800, color:'#2a1a4a', margin:0 }}>{title}</h3>
+        {subtitle && <p style={{ fontSize:12.5, color:'#8a83a0', margin:'3px 0 0' }}>{subtitle}</p>}
+      </div>
+      <div style={{ overflowX: shouldLoop ? 'hidden' : 'auto', position:'relative', WebkitOverflowScrolling:'touch' }}>
+        <div style={{ display:'flex', gap:14, width:'max-content', padding:'4px 4px 12px', animation: shouldLoop ? `autoScroll ${duration}s linear infinite` : 'none' }}
+          onMouseEnter={e => { if (shouldLoop) e.currentTarget.style.animationPlayState='paused'; }}
+          onMouseLeave={e => { if (shouldLoop) e.currentTarget.style.animationPlayState='running'; }}>
+          {items.map((p, i) => (
+            <EventFlyerCard key={p.id+'-'+i} p={p} go={go} setPickupData={setPickupData} setDropoffData={setDropoffData}/>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VilleEventsPage({ go, user, setPickupData, setDropoffData }) {
+  const [events,  setEvents]  = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const q = query(collection(db,'partnerRequests'), where('status','==','approved'));
+    const unsub = onSnapshot(q, snap => {
+      const live = snap.docs.map(d => ({ id:d.id, ...d.data() }))
+        .filter(p => (p.bizType === 'Events') && p.slot);
+      setEvents(live);
+      setLoading(false);
+    }, () => setLoading(false));
+    return () => unsub();
+  }, []);
+
+  // Group into month buckets, dropping anything already past.
+  const { buckets, undated } = useMemo(() => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const map = new Map();   // 'YYYY-M' → { date, list }
+    const noDate = [];
+    events.forEach(p => {
+      const d = parseEventDate(p.eventDate);
+      if (!d) { noDate.push(p); return; }
+      if (d < today) return;                       // event has passed
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      if (!map.has(key)) map.set(key, { date:new Date(d.getFullYear(), d.getMonth(), 1), list:[] });
+      map.get(key).list.push(p);
+    });
+    // sort events inside each month by day, and months chronologically
+    const arr = [...map.values()]
+      .map(b => ({ ...b, list: b.list.sort((a,z) => (parseEventDate(a.eventDate) - parseEventDate(z.eventDate))) }))
+      .sort((a,z) => a.date - z.date);
+    return { buckets:arr, undated:noDate };
+  }, [events]);
+
+  const now = new Date();
+  const thisKey = `${now.getFullYear()}-${now.getMonth()}`;
+  const nextD   = new Date(now.getFullYear(), now.getMonth()+1, 1);
+  const nextKey = `${nextD.getFullYear()}-${nextD.getMonth()}`;
+
+  const labelFor = (b) => {
+    const k = `${b.date.getFullYear()}-${b.date.getMonth()}`;
+    if (k === thisKey) return { title:"This Month's Events", sub: b.date.toLocaleDateString('en-US',{ month:'long', year:'numeric' }) };
+    if (k === nextKey) return { title:'Next Month', sub: b.date.toLocaleDateString('en-US',{ month:'long', year:'numeric' }) };
+    return { title: b.date.toLocaleDateString('en-US',{ month:'long', year:'numeric' }), sub:null };
+  };
+
+  const hasAny = buckets.length > 0 || undated.length > 0;
+
+  return (
+    <div style={{ ...s.content, background:'linear-gradient(160deg,#ffffff,#f6f2fb 45%,#efe8f7)' }}>
+      <TopBar title="VilleEvents" go={go} user={user}/>
+      <div style={{ padding:20, maxWidth:1000, margin:'0 auto' }}>
+        <h2 style={{ fontSize:26, fontWeight:800, color:'#2a1a4a', margin:'0 0 6px' }}>🎉 VilleEvents</h2>
+        <p style={{ fontSize:14, color:'#5b5470', marginBottom:20, lineHeight:1.5 }}>
+          Parties and events happening in Mandeville &amp; Manchester. Tap any flyer to see the full details — then book or schedule your ride straight there.
+        </p>
+
+        {/* Schedule a ride — right on the events page */}
+        <div style={{ background:'linear-gradient(135deg,#2a1a4a,#4c1d95)', borderRadius:16, padding:'16px 18px', marginBottom:26, display:'flex', alignItems:'center', gap:14, flexWrap:'wrap' }}>
+          <div style={{ fontSize:30 }}>🗓️</div>
+          <div style={{ flex:1, minWidth:180 }}>
+            <div style={{ fontSize:15, fontWeight:800, color:'#fff', marginBottom:2 }}>Going out? Book your ride ahead.</div>
+            <div style={{ fontSize:12.5, color:'#c4b5fd', lineHeight:1.45 }}>Schedule a pickup for later so you're not stuck finding a ride when the party done.</div>
+          </div>
+          <button onClick={() => go('pin-pickup')}
+            style={{ padding:'11px 20px', background:'#fff', color:'#2a1a4a', border:'none', borderRadius:22, fontSize:13.5, fontWeight:800, cursor:'pointer', whiteSpace:'nowrap' }}>
+            Schedule a Ride →
+          </button>
+        </div>
+
+        {loading ? (
+          <div style={{ textAlign:'center', padding:'50px 0', color:'#8a83a0', fontSize:14 }}>Loading events…</div>
+        ) : !hasAny ? (
+          <div style={{ textAlign:'center', padding:'44px 20px', background:'#fff', border:'1px dashed #e9d5ff', borderRadius:18 }}>
+            <div style={{ fontSize:48, marginBottom:10 }}>🎉</div>
+            <div style={{ fontSize:16, fontWeight:800, color:'#2a1a4a', marginBottom:6 }}>No events listed yet</div>
+            <div style={{ fontSize:13, color:'#8a83a0', marginBottom:16, lineHeight:1.5 }}>
+              Promoting a party or event in Mandeville? Get your flyer in front of every VilleCabs rider.
+            </div>
+            <button onClick={() => go('partner-with-us')}
+              style={{ padding:'11px 22px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:22, fontSize:13.5, fontWeight:700, cursor:'pointer' }}>
+              Promote Your Event →
+            </button>
+          </div>
+        ) : (
+          <>
+            {buckets.map(b => {
+              const { title, sub } = labelFor(b);
+              return <EventMonthRow key={`${b.date.getFullYear()}-${b.date.getMonth()}`} title={title} subtitle={sub}
+                events={b.list} go={go} setPickupData={setPickupData} setDropoffData={setDropoffData}/>;
+            })}
+            {undated.length > 0 && (
+              <EventMonthRow title="More Events" subtitle="Date to be announced"
+                events={undated} go={go} setPickupData={setPickupData} setDropoffData={setDropoffData}/>
+            )}
+            <div style={{ textAlign:'center', marginTop:10, padding:'20px', background:'#fff', border:'1px dashed #e9d5ff', borderRadius:16 }}>
+              <div style={{ fontSize:13.5, fontWeight:700, color:'#2a1a4a', marginBottom:4 }}>Promoting an event?</div>
+              <div style={{ fontSize:12.5, color:'#8a83a0', marginBottom:12 }}>Put your flyer in front of every VilleCabs rider in Manchester.</div>
+              <button onClick={() => go('partner-with-us')}
+                style={{ padding:'10px 20px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:20, fontSize:13, fontWeight:700, cursor:'pointer' }}>
+                Promote Your Event →
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+      <Footer go={go}/>
+    </div>
+  );
+}
+
 function FeaturedPage({ go, user, setPickupData, setDropoffData }) {
   const [partners, setPartners] = useState([]);
   const [loading,  setLoading]  = useState(true);
@@ -8331,7 +8593,9 @@ function FeaturedPage({ go, user, setPickupData, setDropoffData }) {
     const q = query(collection(db,'partnerRequests'), where('status','==','approved'));
     const unsub = onSnapshot(q, snap => {
       const live = snap.docs.map(d => ({ id:d.id, ...d.data() }))
-        .filter(p => p.slot)
+        // Events have their own home on the VilleEvents page — keep them out of
+        // Featured so a flyer never shows up in two places at once.
+        .filter(p => p.slot && p.bizType !== 'Events')
         .sort((a,b) => (a.slot||0) - (b.slot||0));
       setPartners(live);
       setLoading(false);
@@ -9323,6 +9587,7 @@ function PartnerWithUs({ go, user }) {
   const [form, setForm] = useState({
     bizName:'', bizType:'', contact:'', phone:'', email:'',
     address:'', website:'', hours:'', description:'', packageId:'', lat:null, lng:null,
+    eventDate:'', eventTime:'',
   });
   const [uploads,  setUploads]  = useState([null, null, null]); // urls
   const [uploading,setUploading]= useState(-1); // index currently uploading
@@ -9351,6 +9616,10 @@ function PartnerWithUs({ go, user }) {
   const submit = async () => {
     if (!form.bizName || !form.bizType || !form.email || !form.phone) {
       setError('Please fill in Business Name, Nature of Business, Phone and Email.'); return;
+    }
+    // Events are sorted onto the VilleEvents page by date, so it's mandatory.
+    if (form.bizType === 'Events' && !form.eventDate) {
+      setError('Please enter the date of your event.'); return;
     }
     if (!form.packageId) { setError('Please select an advertising package.'); return; }
     setSaving(true); setError('');
@@ -9410,6 +9679,21 @@ function PartnerWithUs({ go, user }) {
                 );
               })}
             </div>
+
+            {/* Event date — only asked when they're promoting an event. This is
+                what sorts the flyer into "This Month" / "Next Month" on the
+                VilleEvents page, so it's required for events. */}
+            {form.bizType === 'Events' && (
+              <div style={{ background:'#faf7fd', border:'1.5px solid #e9d5ff', borderRadius:12, padding:'14px 16px', marginBottom:16 }}>
+                <label style={{ ...labelStyle, marginTop:0 }}>🗓️ Event Date *</label>
+                <input type="date" value={form.eventDate} onChange={e=>set('eventDate',e.target.value)} style={inputStyle}/>
+                <label style={labelStyle}>Start Time (optional)</label>
+                <input type="time" value={form.eventTime} onChange={e=>set('eventTime',e.target.value)} style={{ ...inputStyle, marginBottom:6 }}/>
+                <div style={{ fontSize:11.5, color:'#8a83a0', lineHeight:1.5 }}>
+                  Your flyer appears on the VilleEvents page under the month of your event, and drops off automatically once the date passes.
+                </div>
+              </div>
+            )}
 
             <label style={labelStyle}>Business Name *</label>
             <input value={form.bizName} onChange={e=>set('bizName',e.target.value)} style={inputStyle}/>
@@ -10839,6 +11123,7 @@ export default function App() {
     'customer-settings':<CustomerSettings {...props}/>,
     'business':         <BusinessPage {...props}/>,
     'featured':         <FeaturedPage {...props}/>,
+    'ville-events':     <VilleEventsPage {...props}/>,
     'payments':         <PaymentsPage {...props}/>,
     'promotions':       <PromotionsPage {...props}/>,
     'safety-centre':         <SafetyCentre {...props}/>,

@@ -1536,6 +1536,8 @@ function PartnersTab() {
       phone:       p.phone || '',
       email:       p.email || '',
       description: p.description || p.message || '',
+      eventDate:   p.eventDate || '',
+      eventTime:   p.eventTime || '',
     });
   };
   const cancelEdit = () => { setEditing(null); setForm({}); };
@@ -1552,6 +1554,8 @@ function PartnersTab() {
         phone:       form.phone || '',
         email:       form.email || '',
         description: form.description || '',
+        eventDate:   form.eventDate || '',
+        eventTime:   form.eventTime || '',
         editedAt:    serverTimestamp(),
       });
       setSavedMsg(id);
@@ -1677,6 +1681,31 @@ function PartnersTab() {
                     : '⚠️ No coordinates yet. Pick an address from the dropdown so riders can book straight here.'}
                 </div>
               </div>
+
+              {/* Event date — drives which month section the flyer appears under
+                  on the VilleEvents page, and when it drops off. */}
+              {form.bizType === 'Events' && (
+                <div style={{ background:'#fff', border:'1.5px solid #e9d5ff', borderRadius:8, padding:'10px 12px', marginBottom:8 }}>
+                  <div style={{ fontSize:11, color:'#6b21a8', fontWeight:700, marginBottom:8 }}>🗓️ EVENT SCHEDULING</div>
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                    <div>
+                      <div style={s.lbl}>Event date</div>
+                      <input type="date" value={form.eventDate} onChange={e=>setForm({...form, eventDate:e.target.value})}
+                        style={{ ...s.inp, marginBottom:0 }}/>
+                    </div>
+                    <div>
+                      <div style={s.lbl}>Start time</div>
+                      <input type="time" value={form.eventTime} onChange={e=>setForm({...form, eventTime:e.target.value})}
+                        style={{ ...s.inp, marginBottom:0 }}/>
+                    </div>
+                  </div>
+                  <div style={{ fontSize:10.5, marginTop:6, color: form.eventDate ? GREEN : '#b45309' }}>
+                    {form.eventDate
+                      ? '📅 Will show under this month on VilleEvents, then drop off after the date passes.'
+                      : '⚠️ No date — this event lands in "More Events" instead of a month section.'}
+                  </div>
+                </div>
+              )}
 
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
                 <div>
