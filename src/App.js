@@ -563,6 +563,22 @@ function VilleMap({ height = 620, center = MANCHESTER_CENTER, zoom = 14, onClick
 }
 
 // ── Geocode helper ────────────────────────────────────────────────────────────
+// ── Plus Codes ────────────────────────────────────────────────────────────────
+// Google sometimes returns an Open Location Code ("Plus Code") instead of a real
+// street address — e.g. "Q2XX+95 Mandeville" or "87G8Q2XX+95". These are useless
+// to a driver trying to find a rider, so we detect and reject them.
+// Plus Code alphabet is: 23456789CFGHJMPQRVWX
+const PLUS_CODE_RE = /(^|\s)[23456789CFGHJMPQRVWX]{4,8}\+[23456789CFGHJMPQRVWX]{2,3}\b/i;
+function isPlusCode(address) {
+  if (!address || typeof address !== 'string') return false;
+  return PLUS_CODE_RE.test(address.trim());
+}
+// Remove a leading plus code from an otherwise usable address
+function stripPlusCode(address) {
+  if (!address) return address;
+  return address.replace(PLUS_CODE_RE, '').replace(/^[\s,]+/, '').trim();
+}
+
 function geocodeLatLng(lat, lng) {
   return new Promise((resolve) => {
     const geocoder = new window.google.maps.Geocoder();
@@ -573,7 +589,7 @@ function geocodeLatLng(lat, lng) {
           const c = r.address_components || [];
           return c.some(x => x.types.includes('route') || x.types.includes('street_address'));
         });
-        const best = withStreet || results.find(r => !r.formatted_address.includes('+')) || results[0];
+        const best = withStreet || results.find(r => !isPlusCode(r.formatted_address)) || results[0];
         const components = best.address_components || [];
         const streetNumber = components.find(c => c.types.includes('street_number'))?.long_name || '';
         const street       = components.find(c => c.types.includes('route'))?.long_name || '';
@@ -594,9 +610,13 @@ function geocodeLatLng(lat, lng) {
           address = parish ? `${locality}, ${parish}` : locality;
         } else {
           // fallback — clean up plus codes from the formatted address
-          address = best.formatted_address.replace(/^[A-Z0-9+]+\s/, '').trim();
+          address = stripPlusCode(best.formatted_address);
         }
-        resolve(address || best.formatted_address);
+        const finalAddr = stripPlusCode(address || best.formatted_address);
+        // If everything we got was just a plus code, return empty so callers can
+        // ask the user for a more specific location rather than sending a driver
+        // to an unusable address.
+        resolve(isPlusCode(finalAddr) || !finalAddr ? '' : finalAddr);
       } else {
         resolve(`Near ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
       }
@@ -3637,8 +3657,15 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
       };
       if (tokenRef.current) req.sessionToken = tokenRef.current;
       const { suggestions } = await AutocompleteSuggestion.fetchAutocompleteSuggestions(req);
-      setPreds(suggestions || []);
-      setOpen((suggestions || []).length > 0);
+      // Drop Plus Code results — a driver can't navigate to "Q2XX+95", so never
+      // offer them as a choice in the first place.
+      const usable = (suggestions || []).filter(sg => {
+        const main = sg.placePrediction?.mainText?.text || sg.placePrediction?.text?.text || '';
+        const sub  = sg.placePrediction?.secondaryText?.text || '';
+        return !isPlusCode(main) && !isPlusCode(`${main} ${sub}`);
+      });
+      setPreds(usable);
+      setOpen(usable.length > 0);
     } catch(e) {
       console.error('Search error:', e.message);
       setPreds([]);
@@ -3754,6 +3781,9 @@ function PinPickup({ go, setPickupData, user }) {
     const addr = await geocodeLatLng(lat, lng);
     setAddress(addr);
     setLoading(false);
+    // geocodeLatLng returns '' when the only match was a Plus Code, which is
+    // useless to a driver — tell the user instead of silently doing nothing.
+    if (!addr) vcToast('No street address found there. Try tapping closer to a road, or search the street name.', 'error');
   }, []);
 
   const handlePlaceSelect = (place) => {
@@ -3764,6 +3794,11 @@ function PinPickup({ go, setPickupData, user }) {
   };
 
   const handleConfirm = () => {
+    // Never let a Plus Code through — a driver can't find "Q2XX+95".
+    if (!address || isPlusCode(address)) {
+      vcToast('Please choose a more specific location — search the street name or move the pin onto a road.', 'error');
+      return;
+    }
     const finalAddress = note.trim() ? `${address} — ${note.trim()}` : address;
     setPickupData({ coords:pinPos, address: finalAddress, passengers });
     go('pin-dropoff');
@@ -3939,6 +3974,7 @@ function PinDropoff({ go, pickupData, dropoffData, setDropoffData, user }) {
     try {
       const addr = await geocodeLatLng(lat, lng);
       setAddress(addr);
+      if (!addr) vcToast('No street address found there. Try tapping closer to a road, or search the street name.', 'error');
     } catch(err) {}
     // Calculate fare estimate
     if (pickupData?.coords) {
@@ -3957,6 +3993,11 @@ function PinDropoff({ go, pickupData, dropoffData, setDropoffData, user }) {
 
   const handleConfirm = () => {
     if (!address || !pinPos) return;
+    // Never let a Plus Code through — a driver can't find "Q2XX+95".
+    if (isPlusCode(address)) {
+      vcToast('Please choose a more specific drop-off — search the street name or move the pin onto a road.', 'error');
+      return;
+    }
     const finalAddress = note.trim() ? address + ' — ' + note.trim() : address;
     setDropoffData({ coords: pinPos, address: finalAddress });
     go('vehicle-select');
