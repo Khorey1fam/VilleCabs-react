@@ -1138,6 +1138,111 @@ function ExploreCard({ cat, go }) {
   );
 }
 
+// ── Landing VilleEvents: same card language as Explore Mandeville ─────────────
+function LandingEventCard({ p, go }) {
+  const imgs = (Array.isArray(p.uploads) ? p.uploads : []).filter(u => u && !u.match(/\.pdf($|\?)/i));
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    if (imgs.length <= 1) return;
+    const t = setInterval(() => setI(x => (x + 1) % imgs.length), 3600);
+    return () => clearInterval(t);
+  }, [imgs.length]);
+
+  const when = parseEventDate(p.eventDate);
+  const dateLabel = when ? when.toLocaleDateString('en-US', { month:'short', day:'numeric' }) : 'Upcoming';
+  // Logged-out visitor — send them to sign up.
+  const toSignup = (e) => { e && e.stopPropagation(); go('customer-signup'); };
+
+  return (
+    <div style={{ flexShrink:0, width:280, background:'#fff', border:'1px solid #ececf2', borderRadius:16, overflow:'hidden', boxShadow:'0 2px 10px rgba(0,0,0,0.06)' }}>
+      {/* FLYER */}
+      <div onClick={toSignup} style={{ position:'relative', height:150, cursor:'pointer', background:'linear-gradient(135deg,#6b21a8,#4c1d95)' }}>
+        {imgs.length > 0 ? imgs.map((url, x) => (
+          <img key={x} src={url} alt={p.bizName}
+            style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'cover', opacity: x===i?1:0, transition:'opacity 0.6s ease' }}/>
+        )) : (
+          <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:60, opacity:0.5 }}>🎉</div>
+        )}
+        {/* date pill */}
+        <div style={{ position:'absolute', top:12, left:12, background:'#6b21a8', color:'#fff', fontSize:11, fontWeight:700, padding:'4px 12px', borderRadius:8 }}>{dateLabel}</div>
+        <div style={{ position:'absolute', top:12, right:12, width:28, height:28, borderRadius:8, background:'rgba(255,255,255,0.92)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14 }}>🎉</div>
+        {/* slideshow dots */}
+        {imgs.length > 1 && (
+          <div style={{ position:'absolute', bottom:10, right:12, display:'flex', gap:4 }}>
+            {imgs.map((_, d) => (
+              <button key={d} onClick={(e)=>{ e.stopPropagation(); setI(d); }}
+                style={{ width:d===i?16:5, height:5, borderRadius:3, border:'none', background:d===i?'#fff':'rgba(255,255,255,0.5)', cursor:'pointer', padding:0 }}/>
+            ))}
+          </div>
+        )}
+      </div>
+      {/* BODY */}
+      <div style={{ padding:'12px 14px 14px' }}>
+        <div style={{ fontSize:11, color:'#6b7280', marginBottom:3, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>📍 {p.address || 'Mandeville, Jamaica'}</div>
+        <div style={{ fontSize:15, fontWeight:800, color:'#1a1a2e', marginBottom:5, lineHeight:1.2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.bizName || 'Event'}</div>
+        <div style={{ fontSize:11.5, color:'#555770', lineHeight:1.5, marginBottom:12, minHeight:34, display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden' }}>
+          {p.eventTime && <span style={{ color:'#6b21a8', fontWeight:700 }}>🕒 {p.eventTime}</span>}
+          {p.eventTime && p.description ? ' · ' : ''}
+          {p.description || 'Tap to sign up and book your ride to this event.'}
+        </div>
+        <div style={{ borderTop:'1px solid #f0f0f4', paddingTop:10, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <button onClick={toSignup} style={{ background:'none', border:'none', color:'#6b21a8', fontSize:12, fontWeight:700, cursor:'pointer', padding:0 }}>View details →</button>
+          <button onClick={toSignup} style={{ background:'#6b21a8', color:'#fff', border:'none', borderRadius:10, padding:'8px 14px', fontSize:12, fontWeight:700, cursor:'pointer' }}>Book a Ride</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LandingEventsSection({ go }) {
+  const [events, setEvents] = useState([]);
+  useEffect(() => {
+    // Signed-out visitors can read approved partners (the rules allow it), so
+    // this works on the public landing page.
+    const q = query(collection(db,'partnerRequests'), where('status','==','approved'));
+    const unsub = onSnapshot(q, snap => {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const live = snap.docs.map(d => ({ id:d.id, ...d.data() }))
+        .filter(p => p.bizType === 'Events' && p.slot)
+        .filter(p => { const d = parseEventDate(p.eventDate); return !d || d >= today; })
+        .sort((a,b) => {
+          const da = parseEventDate(a.eventDate), db_ = parseEventDate(b.eventDate);
+          if (da && db_) return da - db_;
+          if (da) return -1;
+          if (db_) return 1;
+          return 0;
+        });
+      setEvents(live);
+    }, () => {});
+    return () => unsub();
+  }, []);
+
+  if (events.length === 0) return null;   // no events on — don't show an empty band
+
+  // Only duplicate for the seamless loop when there are enough cards to fill it.
+  const shouldLoop = events.length >= 3;
+  const items = shouldLoop ? [...events, ...events] : events;
+
+  return (
+    <div style={{ padding:'32px 0', overflow:'hidden' }}>
+      <div style={{ padding:'0 16px', marginBottom:20, textAlign:'center' }}>
+        <p style={{ fontSize:12, color:'#6b21a8', fontWeight:700, letterSpacing:1.4, textTransform:'uppercase', margin:'0 0 6px' }}>What's On</p>
+        <h2 style={{ fontSize:30, fontWeight:800, color:'#2a1a4a', margin:'0 0 8px' }}>VilleEvents</h2>
+        <div style={{ width:64, height:3, background:'#6b21a8', borderRadius:2, margin:'0 auto 10px' }}/>
+        <p style={{ fontSize:13.5, color:'#5b5470', margin:0 }}>Parties &amp; events in Mandeville — tap any flyer to book a ride there</p>
+      </div>
+      <div style={{ overflowX: shouldLoop ? 'hidden' : 'auto', position:'relative', WebkitOverflowScrolling:'touch' }}>
+        <div style={{ display:'flex', gap:14, width:'max-content', animation: shouldLoop ? 'autoScroll 40s linear infinite' : 'none', padding:'6px 8px 10px' }}
+          onMouseEnter={e => { if (shouldLoop) e.currentTarget.style.animationPlayState='paused'; }}
+          onMouseLeave={e => { if (shouldLoop) e.currentTarget.style.animationPlayState='running'; }}>
+          {items.map((p,i) => <LandingEventCard key={p.id+'-'+i} p={p} go={go}/>)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Splash({ go }) {
   const [slide, setSlide] = useState(0);
   const [livePromos, setLivePromos] = useState([]);
@@ -1250,6 +1355,9 @@ function Splash({ go }) {
           ))}
         </div>
       </div>
+
+      {/* VILLEEVENTS — sits above Explore Mandeville */}
+      <LandingEventsSection go={go}/>
 
       {/* EXPLORE MANDEVILLE */}
       <div style={{ padding:'32px 0', overflow:'hidden' }}>
