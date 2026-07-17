@@ -4532,6 +4532,9 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
       // A customer may not book again while they already have a ride in
       // progress — including one that is still 'searching' for a driver.
       // (Scheduled rides for later are not counted here.)
+      // This is FAIL-CLOSED on purpose: if we can't confirm they're clear, we
+      // don't book. A double-booking sends two drivers to one rider, which is
+      // worse than asking them to retry.
       try {
         const liveSnap = await getDocs(query(
           collection(db,'bookings'),
@@ -4547,7 +4550,12 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
           setTimeout(() => go('live-ride'), 1600);
           return;
         }
-      } catch(e) { console.warn('Active-ride check skipped:', e); }
+      } catch(e) {
+        console.error('Active-ride check failed:', e);
+        setChecking(false); setLoading(false);
+        setError('Could not verify your current rides. Please check your connection and try again.');
+        return;
+      }
 
       // ── SCHEDULED RIDE (Feature: Scheduled Rides) ────────────────────
       if (rideTime === 'later') {
@@ -5181,22 +5189,9 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   const [sosCount,   setSosCount]   = useState(5);
   const [cancelling, setCancelling] = useState(false);
   const [cancelDone, setCancelDone] = useState(false);
-  const [graceSecs,  setGraceSecs]  = useState(15); // free-cancel window after a driver accepts
   const [noDriverFound, setNoDriverFound] = useState(false); // set if 3 min pass with no driver
   const [shareCopied,  setShareCopied]  = useState(false);
   const sosRef = useRef(null);
-
-  // Count down the 15s free-cancel window once a driver has accepted
-  useEffect(() => {
-    if (!booking?.acceptedAt?.seconds || booking?.status !== 'active') return;
-    const tick = () => {
-      const elapsed = Math.floor(Date.now()/1000 - booking.acceptedAt.seconds);
-      setGraceSecs(Math.max(0, 15 - elapsed));
-    };
-    tick();
-    const t = setInterval(tick, 500);
-    return () => clearInterval(t);
-  }, [booking?.acceptedAt?.seconds, booking?.status]);
 
   const shareRide = async () => {
     const driverName = booking?.driverName || 'A VilleCabs driver';
@@ -5335,7 +5330,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
       await updateDoc(doc(db,'bookings',bookingId), {
         status:          'cancelled',
         cancelledBy:     'customer',
-        cancelReason:    'Cancelled within grace window',
+        cancelReason:    'Cancelled by customer before driver arrived',
         cancellationFee: isCard,
         cancelledAt:     serverTimestamp(),
       });
@@ -5891,17 +5886,17 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
               </div>
             </div>
 
-            {/* 15-second free-cancel window after a driver accepts */}
-            {booking?.status === 'active' && graceSecs > 0 && (
+            {/* Cancel — available the whole time the driver is on the way to
+                pickup. Once the driver taps "I've arrived" the status becomes
+                'arrived' and this disappears: no cancelling on a driver who has
+                already made the trip. */}
+            {booking?.status === 'active' && (
               <div style={{ background:'#fff7ed', border:'1px solid #fdba74', borderRadius:12, padding:'12px 14px', marginBottom:12 }}>
-                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10, marginBottom:10 }}>
-                  <div style={{ fontSize:12.5, color:'#9a3412', lineHeight:1.5 }}>
-                    Changed your mind? You can cancel now.
-                    {(booking?.paymentMethod||'cash').toLowerCase()==='card'
-                      ? ' A small fee applies for card payments.'
-                      : ' No fee for cash rides.'}
-                  </div>
-                  <div style={{ flexShrink:0, width:38, height:38, borderRadius:'50%', border:'2px solid #ea580c', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:800, color:'#ea580c' }}>{graceSecs}</div>
+                <div style={{ fontSize:12.5, color:'#9a3412', lineHeight:1.5, marginBottom:10 }}>
+                  Changed your mind? You can cancel while your driver is on the way.
+                  {(booking?.paymentMethod||'cash').toLowerCase()==='card'
+                    ? ' A small fee applies for card payments.'
+                    : ' No fee for cash rides.'}
                 </div>
                 <button onClick={cancelWithinGrace} disabled={cancelling}
                   style={{ width:'100%', padding:'11px', background:'#ea580c', color:'#fff', border:'none', borderRadius:10, fontSize:13.5, fontWeight:700, cursor:cancelling?'default':'pointer' }}>
