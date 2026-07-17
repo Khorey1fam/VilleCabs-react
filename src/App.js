@@ -7177,6 +7177,8 @@ function DriverDash({ go, user, setUser, setBookingId }) {
 
 function DriverActive({ go, user, bookingId, setBookingId }) {
   const [booking,       setBooking]       = useState(null);
+  const [bookingLoaded, setBookingLoaded] = useState(false); // has the ride query answered yet?
+  const [loadError,     setLoadError]     = useState(false); // the query itself failed
   const [locationStatus,setLocationStatus]= useState('idle');
   const [arrived,       setArrived]       = useState(false);
   const [enroute,       setEnroute]       = useState(false);
@@ -7216,9 +7218,34 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
           if (b.status === 'enroute' || b.enrouteToDropoff) { setArrived(true); setEnroute(true); }
         }
       }
+      setBookingLoaded(true);
+    }, (err) => {
+      // Without this the query could fail silently and the screen would hang
+      // forever on "Getting your location…" with no ride details.
+      console.error('Driver active-ride query failed:', err);
+      setBookingLoaded(true);
+      setLoadError(true);
     });
     return () => unsub();
-  }, [user]);
+  }, [user?.uid]);   // uid, not the user object — an object dep tears the
+                     // listener down and rebuilds it on every parent re-render.
+
+  // Fallback: if the query hasn't produced a ride but we were handed a
+  // bookingId (e.g. coming back from the chat screen), read that doc directly.
+  useEffect(() => {
+    if (booking || !bookingId) return;
+    const unsub = onSnapshot(doc(db,'bookings',bookingId), snap => {
+      if (!snap.exists()) return;
+      const b = { id:snap.id, ...snap.data() };
+      if (b.driverId !== user?.uid) return;
+      if (['active','arrived','enroute'].includes(b.status)) {
+        setBooking(b);
+        if (b.status === 'arrived' || b.driverArrived) setArrived(true);
+        if (b.status === 'enroute' || b.enrouteToDropoff) { setArrived(true); setEnroute(true); }
+      }
+    }, (err) => console.error('Driver booking doc read failed:', err));
+    return () => unsub();
+  }, [booking, bookingId, user?.uid]);
 
   // Watch the specific ride for cancellation by the customer
   useEffect(() => {
@@ -7265,38 +7292,54 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     fetchRoute();
   }, [booking?.driverLocation?.lat, booking?.driverLocation?.lng, arrived, booking?.pickup?.lat]);
 
+  // Keep the live booking id in a ref so the geolocation callback below always
+  // writes to the CURRENT ride without needing to re-subscribe the watch.
+  const bookingIdRef = useRef(null);
+  useEffect(() => { bookingIdRef.current = booking?.id || bookingId || null; }, [booking?.id, bookingId]);
+
   useEffect(() => {
-    if (!booking?.id || !user?.uid) return;
+    // NOTE: deliberately does NOT wait for the booking to load. Location and the
+    // ride load independently — previously a slow/failed ride query left this
+    // effect un-run, so the banner sat on "Getting your location…" forever.
+    if (!user?.uid) return;
     if (!navigator.geolocation) { setLocationStatus('denied'); return; }
+    let cancelled = false;
     // Request permission first then start watching
     navigator.geolocation.getCurrentPosition(
       () => {
+        if (cancelled) return;
         // Permission granted - start watching
         setLocationStatus('tracking');
         watchRef.current = navigator.geolocation.watchPosition(
           async (pos) => {
             const { latitude: lat, longitude: lng } = pos.coords;
+            const rideId = bookingIdRef.current;
             // Always write the location straight to the booking so the customer's
             // live map (and shared tracking link) update reliably.
             try {
-              await updateDoc(doc(db,'bookings',booking.id), { driverLocation:{ lat, lng, updatedAt: Date.now() } });
+              if (rideId) await updateDoc(doc(db,'bookings',rideId), { driverLocation:{ lat, lng, updatedAt: Date.now() } });
               await updateDoc(doc(db,'drivers',user.uid), { currentLocation:{ lat, lng, updatedAt: Date.now() } });
             } catch(e) { console.error('Location write failed:', e); }
             // Also notify the cloud function (for ETA/analytics), but don't depend on it.
-            try { await updateDriverLocationFn({ lat, lng, bookingId: booking.id }); } catch(err) {}
+            if (rideId) { try { await updateDriverLocationFn({ lat, lng, bookingId: rideId }); } catch(err) {} }
           },
-          (err) => setLocationStatus(err.code===1?'denied':'idle'),
+          (err) => { if (!cancelled) setLocationStatus(err.code===1?'denied':'idle'); },
           { enableHighAccuracy:false, maximumAge:10000, timeout:15000 }
         );
       },
       (err) => {
+        if (cancelled) return;
         console.warn('Location permission denied:', err);
         setLocationStatus('denied');
       },
       { enableHighAccuracy:false, timeout:10000 }
     );
-    return () => { if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current); };
-  }, [booking?.id, user?.uid]);
+    return () => {
+      cancelled = true;
+      if (watchRef.current !== null) { try { navigator.geolocation.clearWatch(watchRef.current); } catch(e) {} }
+      watchRef.current = null;   // reset, or a stale id lingers across remounts
+    };
+  }, [user?.uid]);   // starts once per driver; the ride id is read from a ref
 
   useEffect(() => () => { clearInterval(sosRef.current); }, []);
 
@@ -7494,7 +7537,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
 
   return (
     <div style={{ ...s.content }}>
-      <TopBar title="Active Ride" onBack={() => { vcToast('You cannot leave an active ride. Please complete the ride first.', 'warn'); }}/>
+      <TopBar title="Active Ride" go={go} user={user} onBack={() => { vcToast('You cannot leave an active ride. Please complete the ride first.', 'warn'); }}/>
       <div style={{ background:locationStatus==='tracking'?'rgba(26,158,90,0.15)':'rgba(226,75,74,0.1)', padding:'6px 16px', fontSize:11, color:locationStatus==='tracking'?'#9fe1cb':'#f09595', display:'flex', alignItems:'center', gap:6 }}>
         {locationStatus==='tracking' ? '📍 Sharing live location with passenger' :
          locationStatus==='denied' ? (
@@ -7640,8 +7683,28 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
               </button>
             )}
           </>
-        ) : (
+        ) : !bookingLoaded ? (
           <div style={{ textAlign:'center', padding:40, color:'rgba(255,255,255,0.4)' }}>Loading ride details...</div>
+        ) : (
+          // The query has answered and there's no ride for us (or it failed).
+          // Never leave the driver staring at a spinner with no way out.
+          <div style={{ textAlign:'center', padding:'30px 20px' }}>
+            <div style={{ fontSize:40, marginBottom:10 }}>{loadError ? '⚠️' : '🚕'}</div>
+            <div style={{ fontSize:15, fontWeight:700, color:WHITE, marginBottom:6 }}>
+              {loadError ? "Couldn't load your ride" : 'No active ride'}
+            </div>
+            <div style={{ fontSize:12.5, color:'rgba(255,255,255,0.55)', lineHeight:1.5, marginBottom:18 }}>
+              {loadError
+                ? 'Check your connection and try again.'
+                : 'This ride may have been completed or cancelled.'}
+            </div>
+            <button onClick={() => window.location.reload()}
+              style={{ ...s.btnY, width:'100%', maxWidth:280, marginBottom:10 }}>Retry</button>
+            <button onClick={() => go('driver-dash')}
+              style={{ background:'none', border:'1px solid rgba(255,255,255,0.2)', color:'rgba(255,255,255,0.7)', fontSize:13, cursor:'pointer', padding:'10px 20px', borderRadius:10, width:'100%', maxWidth:280 }}>
+              Back to Dashboard
+            </button>
+          </div>
         )}
       </div>
     </div>
@@ -8049,7 +8112,7 @@ function ChatScreen({ go, user, bookingId }) {
     const q = query(
       collection(db,'bookings'),
       where('driverId','==',user.uid),
-      where('status','==','active')
+      where('status','in',['active','arrived','enroute'])
     );
     const unsub = onSnapshot(q, snap => {
       if (!snap.empty) {
@@ -8066,7 +8129,7 @@ function ChatScreen({ go, user, bookingId }) {
     const q = query(
       collection(db,'bookings'),
       where('customerId','==',user.uid),
-      where('status','==','active')
+      where('status','in',['active','arrived','enroute'])
     );
     const unsub = onSnapshot(q, snap => {
       if (!snap.empty) {
