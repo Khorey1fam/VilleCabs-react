@@ -1931,8 +1931,15 @@ function DriverLogin({ go, user, setUser }) {
       if (data.status === 'rejected')  { setError('Your application was not approved. Contact support.'); setLoading(false); return; }
       if (data.status === 'suspended') { setError('Your account has been suspended. Contact support.'); setLoading(false); return; }
 
-      // Step 3: Update last login
-      updateDoc(doc(db,'drivers',cred.user.uid), { lastLogin:serverTimestamp() }).catch(()=>{});
+      // Step 3: Update last login. Always start a session OFFLINE — a driver
+      // must deliberately tap "Go Online" before requests reach them, so simply
+      // opening the app never puts them back in the queue unexpectedly (e.g.
+      // if they closed it mid-shift while still marked online).
+      updateDoc(doc(db,'drivers',cred.user.uid), {
+        lastLogin: serverTimestamp(),
+        isOnline:  false,
+        currentLocation: null,
+      }).catch(()=>{});
 
       // Step 4: Navigate
       console.log('Step 4: navigating...');
@@ -6533,13 +6540,16 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   // ── Load driver online status + earnings (live) ───────────────────────────
   useEffect(() => {
     if (!user?.uid) return;
-    getDoc(doc(db, 'drivers', user.uid)).then(snap => {
+    // Live listener (not a one-off read) so the toggle reflects reality straight
+    // away — after auto-going-online at the end of a trip, and when an admin
+    // forces a driver offline from the panel.
+    const unsubDriver = onSnapshot(doc(db, 'drivers', user.uid), snap => {
       if (snap.exists()) {
         const d = snap.data();
         setIsOnline(d.isOnline || false);
         driverProfileRef.current = d; // cache for instant ride acceptance (no extra read)
       }
-    }).catch(e => console.error('Driver load error:', e));
+    }, e => console.error('Driver load error:', e));
 
     // Live listener so earnings update the moment a ride is completed
     const unsub = onSnapshot(
@@ -6569,8 +6579,8 @@ function DriverDash({ go, user, setUser, setBookingId }) {
       },
       err => { console.error('Earnings listener error:', err); setLoading(false); }
     );
-    return () => unsub();
-  }, [user]);
+    return () => { unsubDriver(); unsub(); };
+  }, [user?.uid]);
 
   // ── Check if driver has an active ride (real-time) ──────────────────────
   useEffect(() => {
@@ -7441,7 +7451,18 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
       vcToast('Couldn\u2019t complete the ride \u2014 please check your connection and try again.', 'error');
       return;
     }
-    try { await updateDoc(doc(db,'drivers',user.uid), { currentLocation:null, currentRideId:null }); } catch(e) {}
+    // Trip done — put the driver straight back in the queue. They just finished
+    // a fare, so they're clearly working; making them re-tap "Go Online" between
+    // every trip only loses them rides. (The completion screen still offers a
+    // "Go Offline" button if they're knocking off.)
+    try {
+      await updateDoc(doc(db,'drivers',user.uid), {
+        currentLocation: null,
+        currentRideId:   null,
+        isOnline:        true,
+        lastOnline:      serverTimestamp(),
+      });
+    } catch(e) {}
     // Send receipt email to customer (non-critical — never blocks completion)
     try {
       if (booking?.customerId) {
