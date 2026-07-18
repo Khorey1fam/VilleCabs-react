@@ -3971,11 +3971,24 @@ function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder 
     try {
       const place = pred.toPlace();
       await place.fetchFields({ fields:['displayName','formattedAddress','location'] });
-      const addr = place.formattedAddress || place.displayName || main;
+      // Google sometimes returns a Plus Code (e.g. "Q2XX+95 Mandeville") as the
+      // formattedAddress when a place has no street address. That's useless to a
+      // driver, so prefer the place's NAME, and strip any leading Plus Code off
+      // the formatted string before falling back to it.
+      const fmt  = place.formattedAddress || '';
+      const named = place.displayName || '';
+      let addr;
+      if (fmt && !isPlusCode(fmt)) {
+        addr = fmt;                                   // real street address — best
+      } else if (named && !isPlusCode(named)) {
+        addr = named;                                 // fall back to the place name
+      } else {
+        addr = stripPlusCode(fmt) || stripPlusCode(named) || main;  // last resort
+      }
       setQuery(addr); if (onChange) onChange(addr);
       if (onPlaceSelect) onPlaceSelect({
         name: place.displayName,
-        formattedAddress: place.formattedAddress,
+        formattedAddress: addr,
         lat: place.location.lat(),
         lng: place.location.lng(),
       });
