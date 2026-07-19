@@ -689,6 +689,7 @@ function AppMenu({ open, onClose, go, user }) {
     ['🔒', 'Privacy Policy',   () => nav('privacy')],
   ] : [
     ['🚕', 'Book a Ride',      () => nav('customer-dash')],
+    ['🚘', 'Charter a Car',    () => nav('charter')],
     ['🎉', 'VilleEvents',      () => nav('ville-events')],
     ['⭐', 'Featured',         () => nav('featured')],
     ['👤', 'My Profile',       () => nav('customer-profile')],
@@ -1355,6 +1356,9 @@ function Splash({ go }) {
           ))}
         </div>
       </div>
+
+      {/* CHARTER — premium promo band */}
+      <div style={{ padding:'8px 0 4px' }}><CharterPromo go={go} variant="landing"/></div>
 
       {/* VILLEEVENTS — sits above Explore Mandeville */}
       <LandingEventsSection go={go}/>
@@ -2888,8 +2892,9 @@ function DashSchedule({ go, activeRide, ridesPaused }) {
         ))}
       </div>
       <div style={{ display:'flex', gap:12, flexWrap:'wrap', justifyContent:'center' }}>
-        <button onClick={bookNow} style={{ padding:'13px 26px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:24, fontSize:14, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 14px rgba(107,33,168,0.25)' }}>Schedule a Trip →</button>
-        <button onClick={bookNow} style={{ padding:'13px 26px', background:'#fff', color:'#6b21a8', border:'2px solid #d8b4fe', borderRadius:24, fontSize:14, fontWeight:700, cursor:'pointer' }}>Book Now</button>
+        <button onClick={bookNow} style={{ padding:'13px 26px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:24, fontSize:14, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 14px rgba(107,33,168,0.25)' }}>Book Now</button>
+        <button onClick={bookNow} style={{ padding:'13px 26px', background:'#fff', color:'#6b21a8', border:'2px solid #d8b4fe', borderRadius:24, fontSize:14, fontWeight:700, cursor:'pointer' }}>Schedule a Trip</button>
+        <button onClick={() => go('charter')} style={{ padding:'13px 26px', background:'linear-gradient(135deg,#2a1a4a,#4c1d95)', color:'#fff', border:'none', borderRadius:24, fontSize:14, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 14px rgba(76,29,149,0.28)' }}>🚘 Charter a Car</button>
       </div>
     </div>
   );
@@ -3370,6 +3375,9 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
 
               </div>
             </div>
+
+            {/* ── CHARTER — premium promo ── */}
+            <div style={{ padding:'18px 0 0' }}><CharterPromo go={go} variant="dash"/></div>
 
             {/* ── VILLEEVENTS — live event flyers, one continuous scroll ── */}
             <DashEventsSlider go={go}/>
@@ -8788,6 +8796,251 @@ function EventMonthRow({ title, subtitle, events, go, setPickupData, setDropoffD
   );
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// VILLECABS CHARTER — hire a car by the day, or across multiple days
+// Request-based: the customer builds their charter (dates + hours per day), sees
+// a live price, and submits. VilleCabs then contacts them to arrange the rest.
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Pricing for a single day, by hours booked:
+//   • 1st hour            J$1,500
+//   • hours 2–8           J$1,000 each
+//   • hours 9+            J$1,500 each
+const CHARTER_RATES = { firstHour: 1500, midHour: 1000, overHour: 1500, midCap: 8 };
+function charterDayCost(hours) {
+  const h = Math.max(1, Math.min(24, Math.round(hours || 0)));
+  let cost = CHARTER_RATES.firstHour;              // first hour
+  const midHours  = Math.max(0, Math.min(h, CHARTER_RATES.midCap) - 1);  // hours 2..8
+  const overHours = Math.max(0, h - CHARTER_RATES.midCap);               // hours 9+
+  cost += midHours  * CHARTER_RATES.midHour;
+  cost += overHours * CHARTER_RATES.overHour;
+  return cost;
+}
+
+function CharterPage({ go, user }) {
+  // Each entry: { date:'YYYY-MM-DD', hours:8 }
+  const [days, setDays] = useState([{ date:'', hours:8 }]);
+  const [name,  setName]  = useState(user?.name || '');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState(user?.email || '');
+  const [pickup, setPickup] = useState('');
+  const [notes, setNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [sent, setSent]   = useState(false);
+  const [error, setError] = useState('');
+
+  const addDay    = () => setDays(d => [...d, { date:'', hours:8 }]);
+  const removeDay = (i) => setDays(d => d.filter((_,x) => x !== i));
+  const setDay    = (i, patch) => setDays(d => d.map((row,x) => x===i ? { ...row, ...patch } : row));
+
+  // Live totals
+  const validDays = days.filter(d => d.date);
+  const subtotal  = days.reduce((s,d) => s + charterDayCost(d.hours), 0);
+  const dayCount  = days.length;
+  const discountApplies = dayCount >= 6;               // "more than 5 days"
+  const discount  = discountApplies ? Math.round(subtotal * 0.10) : 0;
+  const total     = subtotal - discount;
+
+  const today = (dt => new Date(dt.getTime() - dt.getTimezoneOffset()*60000).toISOString().slice(0,10))(new Date());
+
+  const submit = async () => {
+    setError('');
+    if (!name.trim() || !phone.trim()) { setError('Please add your name and phone number so we can reach you.'); return; }
+    if (days.some(d => !d.date))       { setError('Please choose a date for each charter day (or remove empty ones).'); return; }
+    if (validDays.length === 0)        { setError('Add at least one charter day.'); return; }
+    setSubmitting(true);
+    try {
+      // Save the request for the admin to action.
+      await addDoc(collection(db,'charterRequests'), {
+        name: name.trim(), phone: phone.trim(), email: email.trim(),
+        pickup: pickup.trim(), notes: notes.trim(),
+        days: days.map(d => ({ date:d.date, hours:d.hours, cost:charterDayCost(d.hours) })),
+        dayCount, subtotal, discount, total,
+        status: 'new',
+        customerId: user?.uid || null,
+        createdAt: serverTimestamp(),
+      });
+      // Notify admin by email (non-critical).
+      try {
+        const dayLines = days.filter(d=>d.date).map(d => `${d.date}: ${d.hours}h (J$${charterDayCost(d.hours).toLocaleString()})`).join(' | ');
+        await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            service_id:'service_8fp53l4', template_id:'template_ss6rofa', user_id:'NYE1IvkRipsFf-pQg',
+            template_params:{
+              to_email:'admin@villecabs.com', to_name:'VilleCabs Admin', from_name:'VilleCabs Charter',
+              subject:`New Charter Request — ${name.trim()}`,
+              message:`Charter request from ${name.trim()} (${phone.trim()}${email.trim()?', '+email.trim():''}).\n`+
+                      `Days (${dayCount}): ${dayLines}\n`+
+                      `Pickup: ${pickup.trim()||'—'}\nNotes: ${notes.trim()||'—'}\n`+
+                      `Subtotal J$${subtotal.toLocaleString()}${discount?`, discount -J$${discount.toLocaleString()}`:''}, TOTAL J$${total.toLocaleString()}`,
+            },
+          }),
+        });
+      } catch(e) { /* email is best-effort */ }
+      setSent(true);
+    } catch(e) {
+      console.error('Charter submit failed:', e);
+      setError('Something went wrong sending your request. Please try again or WhatsApp us at 876-515-8113.');
+    }
+    setSubmitting(false);
+  };
+
+  if (sent) {
+    return (
+      <div style={{ ...s.content, background:'#fff' }}>
+        <TopBar title="VilleCabs Charter" go={go} user={user}/>
+        <div style={{ maxWidth:520, margin:'0 auto', padding:'40px 20px', textAlign:'center' }}>
+          <div style={{ fontSize:60, marginBottom:14 }}>✅</div>
+          <h2 style={{ fontSize:24, fontWeight:800, color:'#2a1a4a', margin:'0 0 10px' }}>Charter request sent!</h2>
+          <p style={{ fontSize:14.5, color:'#5b5470', lineHeight:1.6, marginBottom:8 }}>
+            Thanks {name.split(' ')[0] || 'there'} — we've got your request for {validDays.length} day{validDays.length!==1?'s':''}.
+            A VilleCabs team member will call or WhatsApp you shortly to confirm the details and your driver.
+          </p>
+          <div style={{ display:'inline-block', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:14, padding:'14px 22px', margin:'12px 0 22px' }}>
+            <div style={{ fontSize:12, color:'#8a83a0', fontWeight:700, textTransform:'uppercase', letterSpacing:0.5 }}>Estimated total</div>
+            <div style={{ fontSize:28, fontWeight:800, color:'#6b21a8' }}>J${total.toLocaleString()}</div>
+          </div>
+          <div>
+            <button onClick={() => go(user?.role==='driver'?'driver-dash':'customer-dash')}
+              style={{ padding:'12px 26px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:24, fontSize:14, fontWeight:700, cursor:'pointer' }}>
+              Back to Home
+            </button>
+          </div>
+        </div>
+        <Footer go={go}/>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ ...s.content, background:'#fff' }}>
+      <TopBar title="VilleCabs Charter" go={go} user={user}/>
+      <div style={{ maxWidth:640, margin:'0 auto', padding:'22px 18px 40px' }}>
+
+        {/* Hero */}
+        <div style={{ textAlign:'center', marginBottom:24 }}>
+          <div style={{ display:'inline-block', background:'#f5f0ff', border:'1px solid #e9d5ff', color:'#6b21a8', fontSize:11, fontWeight:800, letterSpacing:1, textTransform:'uppercase', padding:'5px 14px', borderRadius:20, marginBottom:12 }}>Premium Service</div>
+          <h1 style={{ fontSize:30, fontWeight:800, color:'#2a1a4a', margin:'0 0 8px' }}>🚘 VilleCabs Charter</h1>
+          <p style={{ fontSize:14.5, color:'#5b5470', lineHeight:1.6, maxWidth:480, margin:'0 auto' }}>
+            Hire a car and driver for a full day or across several days — errands, events, business, or touring Manchester. Build your schedule below and we'll take care of the rest.
+          </p>
+        </div>
+
+        {/* Rate card */}
+        <div style={{ background:'linear-gradient(135deg,#2a1a4a,#4c1d95)', borderRadius:16, padding:'18px 20px', marginBottom:20, color:'#fff' }}>
+          <div style={{ fontSize:12, fontWeight:700, letterSpacing:0.8, textTransform:'uppercase', color:'#c4b5fd', marginBottom:10 }}>How pricing works</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:6, fontSize:13.5 }}>
+            <div style={{ display:'flex', justifyContent:'space-between' }}><span>First hour</span><span style={{ fontWeight:700 }}>J$1,500</span></div>
+            <div style={{ display:'flex', justifyContent:'space-between' }}><span>Each hour after (up to 8 hrs)</span><span style={{ fontWeight:700 }}>J$1,000</span></div>
+            <div style={{ display:'flex', justifyContent:'space-between' }}><span>Each hour beyond 8 hrs</span><span style={{ fontWeight:700 }}>J$1,500</span></div>
+            <div style={{ display:'flex', justifyContent:'space-between', paddingTop:8, marginTop:4, borderTop:'1px solid rgba(255,255,255,0.15)', color:'#a7f3d0' }}><span>6+ days booked</span><span style={{ fontWeight:800 }}>10% OFF total</span></div>
+          </div>
+        </div>
+
+        {/* Day builder */}
+        <div style={{ fontSize:13, fontWeight:800, color:'#2a1a4a', textTransform:'uppercase', letterSpacing:0.6, marginBottom:10 }}>Your charter days</div>
+        {days.map((d, i) => (
+          <div key={i} style={{ background:'#faf7fd', border:'1px solid #ece3f5', borderRadius:14, padding:'14px 16px', marginBottom:10 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+              <span style={{ fontSize:13, fontWeight:700, color:'#6b21a8' }}>Day {i+1}</span>
+              {days.length > 1 && (
+                <button onClick={() => removeDay(i)} style={{ background:'none', border:'none', color:'#dc2626', fontSize:12, fontWeight:700, cursor:'pointer' }}>Remove</button>
+              )}
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+              <div>
+                <div style={{ fontSize:11, color:'#8a83a0', fontWeight:700, marginBottom:4 }}>DATE</div>
+                <input type="date" value={d.date} min={today}
+                  onChange={e => setDay(i, { date:e.target.value })}
+                  style={{ width:'100%', padding:'11px 12px', background:'#fff', border:'1.5px solid #e9d5ff', borderRadius:10, fontSize:13.5, color:'#1a1a2e', boxSizing:'border-box', outline:'none' }}/>
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:'#8a83a0', fontWeight:700, marginBottom:4 }}>HOURS</div>
+                <select value={d.hours} onChange={e => setDay(i, { hours:Number(e.target.value) })}
+                  style={{ width:'100%', padding:'11px 12px', background:'#fff', border:'1.5px solid #e9d5ff', borderRadius:10, fontSize:13.5, color:'#1a1a2e', boxSizing:'border-box', outline:'none' }}>
+                  {Array.from({length:14}, (_,x) => x+1).map(h => <option key={h} value={h}>{h} hour{h>1?'s':''}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{ textAlign:'right', marginTop:8, fontSize:13, color:'#2a1a4a' }}>
+              Day total: <span style={{ fontWeight:800, color:'#6b21a8' }}>J${charterDayCost(d.hours).toLocaleString()}</span>
+            </div>
+          </div>
+        ))}
+        <button onClick={addDay}
+          style={{ width:'100%', padding:'12px', background:'#fff', border:'2px dashed #c4b5fd', borderRadius:12, color:'#6b21a8', fontSize:13.5, fontWeight:700, cursor:'pointer', marginBottom:18 }}>
+          ＋ Add another day
+        </button>
+
+        {/* Live total */}
+        <div style={{ background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:14, padding:'16px 18px', marginBottom:20 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:13.5, color:'#5b5470', marginBottom:6 }}>
+            <span>{dayCount} day{dayCount!==1?'s':''} · subtotal</span><span>J${subtotal.toLocaleString()}</span>
+          </div>
+          {discountApplies && (
+            <div style={{ display:'flex', justifyContent:'space-between', fontSize:13.5, color:'#1a9e5a', fontWeight:700, marginBottom:6 }}>
+              <span>Multi-day discount (10%)</span><span>−J${discount.toLocaleString()}</span>
+            </div>
+          )}
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:20, fontWeight:800, color:'#2a1a4a', paddingTop:8, borderTop:'1px solid #e9d5ff' }}>
+            <span>Total</span><span style={{ color:'#6b21a8' }}>J${total.toLocaleString()}</span>
+          </div>
+          {!discountApplies && dayCount >= 4 && (
+            <div style={{ fontSize:11.5, color:'#8a83a0', marginTop:8, textAlign:'center' }}>Add {6-dayCount} more day{6-dayCount!==1?'s':''} to unlock 10% off</div>
+          )}
+        </div>
+
+        {/* Contact */}
+        <div style={{ fontSize:13, fontWeight:800, color:'#2a1a4a', textTransform:'uppercase', letterSpacing:0.6, marginBottom:10 }}>Your details</div>
+        <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:18 }}>
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Full name *"
+            style={charterInput}/>
+          <input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="Phone / WhatsApp *" inputMode="tel"
+            style={charterInput}/>
+          <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email (optional)" inputMode="email"
+            style={charterInput}/>
+          <input value={pickup} onChange={e=>setPickup(e.target.value)} placeholder="Pickup area (optional)"
+            style={charterInput}/>
+          <textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={3} placeholder="Anything else we should know? (optional)"
+            style={{ ...charterInput, resize:'vertical', fontFamily:'inherit' }}/>
+        </div>
+
+        {error && <div style={{ background:'#fff0f0', border:'1px solid #fca5a5', color:'#dc2626', borderRadius:10, padding:'10px 14px', fontSize:13, marginBottom:14 }}>{error}</div>}
+
+        <button onClick={submit} disabled={submitting}
+          style={{ width:'100%', padding:'15px', background: submitting?'#9199ad':'linear-gradient(135deg,#6b21a8,#4c1d95)', color:'#fff', border:'none', borderRadius:14, fontSize:15.5, fontWeight:800, cursor: submitting?'default':'pointer', boxShadow:'0 6px 18px rgba(107,33,168,0.3)' }}>
+          {submitting ? 'Sending…' : `Request Charter — J$${total.toLocaleString()}`}
+        </button>
+        <p style={{ fontSize:11.5, color:'#8a83a0', textAlign:'center', marginTop:10, lineHeight:1.5 }}>
+          This sends a request — no payment now. We'll contact you to confirm your driver and arrange the details.
+        </p>
+      </div>
+      <Footer go={go}/>
+    </div>
+  );
+}
+const charterInput = { width:'100%', padding:'13px 14px', background:'#fff', border:'1.5px solid #e9d5ff', borderRadius:11, fontSize:14, color:'#1a1a2e', boxSizing:'border-box', outline:'none' };
+
+function CharterPromo({ go, variant = 'landing' }) {
+  // Premium promo band used on the landing page and dashboard.
+  return (
+    <div onClick={() => go('charter')}
+      style={{ cursor:'pointer', margin: variant==='dash' ? '0 16px 4px' : '0 16px', background:'linear-gradient(135deg,#2a1a4a 0%,#4c1d95 55%,#6b21a8 100%)', borderRadius:18, padding:'22px 22px', position:'relative', overflow:'hidden', boxShadow:'0 8px 26px rgba(76,29,149,0.28)' }}>
+      <div style={{ position:'absolute', right:-30, top:-30, width:150, height:150, borderRadius:'50%', border:'2px solid rgba(255,255,255,0.08)' }}/>
+      <div style={{ position:'absolute', right:14, top:16, fontSize:52, opacity:0.9 }}>🚘</div>
+      <div style={{ display:'inline-block', background:'rgba(255,255,255,0.15)', color:'#fff', fontSize:10, fontWeight:800, letterSpacing:1, textTransform:'uppercase', padding:'4px 11px', borderRadius:16, marginBottom:10 }}>Premium</div>
+      <div style={{ fontSize:20, fontWeight:800, color:'#fff', marginBottom:5, maxWidth:'80%' }}>VilleCabs Charter</div>
+      <div style={{ fontSize:13, color:'#dcccf5', lineHeight:1.5, marginBottom:14, maxWidth:'82%' }}>
+        Hire a car &amp; driver for a full day or several days. Build your schedule, see the price instantly.
+      </div>
+      <div style={{ display:'inline-flex', alignItems:'center', gap:8, background:'#fff', color:'#4c1d95', fontSize:13, fontWeight:800, padding:'9px 18px', borderRadius:22 }}>
+        Charter a car →
+      </div>
+    </div>
+  );
+}
+
 function VilleEventsPage({ go, user, setPickupData, setDropoffData }) {
   const [events,  setEvents]  = useState([]);
   const [loading, setLoading] = useState(true);
@@ -11440,6 +11693,7 @@ export default function App() {
     'business':         <BusinessPage {...props}/>,
     'featured':         <FeaturedPage {...props}/>,
     'ville-events':     <VilleEventsPage {...props}/>,
+    'charter':          <CharterPage {...props}/>,
     'payments':         <PaymentsPage {...props}/>,
     'promotions':       <PromotionsPage {...props}/>,
     'safety-centre':         <SafetyCentre {...props}/>,
