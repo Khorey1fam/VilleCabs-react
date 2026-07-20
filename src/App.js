@@ -8893,6 +8893,14 @@ function charterRoute(points) {
 const CHARTER_PURPOSES = ['Business','Airport Transfer','Wedding','Event','Shopping and Errands','Tourism','Personal','Other'];
 
 function CharterPage({ go, user }) {
+  // The charter page has no <VilleMap>, so nothing else triggers the Google Maps
+  // load here — without this, address autocomplete and route calculation silently
+  // do nothing. Load it directly.
+  const { isLoaded: mapsReady } = useJsApiLoader({
+    googleMapsApiKey: GOOGLE_MAPS_KEY,
+    libraries: LIBRARIES,
+    version: 'weekly',
+  });
   const blankDay = () => ({
     _id: Math.random().toString(36).slice(2),  // stable key for address-field remounts
     date:'', startTime:'', hours:8, purpose:'Business', notes:'',
@@ -9096,6 +9104,12 @@ function CharterPage({ go, user }) {
         </div>
 
         <div style={{ fontSize:13, fontWeight:800, color:'#2a1a4a', textTransform:'uppercase', letterSpacing:0.6, marginBottom:10 }}>Your charter days</div>
+
+        {!mapsReady && (
+          <div style={{ background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, padding:'12px 14px', marginBottom:12, fontSize:12.5, color:'#6b21a8', textAlign:'center' }}>
+            🔄 Loading address search…
+          </div>
+        )}
 
         {days.map((d, i) => {
           const res = dayResults[i];
