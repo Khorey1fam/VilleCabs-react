@@ -1506,6 +1506,198 @@ function AdminAddressInput({ value, onChange, onPlaceSelect, placeholder }) {
   );
 }
 
+// ── CHARTER BOOKINGS (admin) ──────────────────────────────────────────────────
+const CHARTER_STATUSES = ['pending','underReview','confirmed','driverAssigned','inProgress','completed','cancelled','rejected'];
+const CHARTER_STATUS_META = {
+  pending:       { label:'Pending',        color:'#b45309', bg:'#fffbeb' },
+  underReview:   { label:'Under Review',   color:'#6b21a8', bg:'#f5f0ff' },
+  confirmed:     { label:'Confirmed',      color:'#1a9e5a', bg:'#f0fdf4' },
+  driverAssigned:{ label:'Driver Assigned',color:'#0369a1', bg:'#f0f9ff' },
+  inProgress:    { label:'In Progress',    color:'#0369a1', bg:'#eff6ff' },
+  completed:     { label:'Completed',      color:'#166534', bg:'#f0fdf4' },
+  cancelled:     { label:'Cancelled',      color:'#6b7280', bg:'#f3f4f6' },
+  rejected:      { label:'Rejected',       color:'#dc2626', bg:'#fff0f0' },
+};
+
+function CharterTab() {
+  const [rows, setRows]       = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [drivers, setDrivers] = useState([]);
+  const [openId, setOpenId]   = useState(null);
+  const [filter, setFilter]   = useState('all');
+  const [adjust, setAdjust]   = useState({}); // { [id]: { amount, reason } }
+
+  useEffect(() => {
+    const u1 = onSnapshot(query(collection(db,'charterRequests'), orderBy('createdAt','desc')),
+      snap => { setRows(snap.docs.map(d=>({id:d.id,...d.data()}))); setLoading(false); },
+      () => setLoading(false));
+    const u2 = onSnapshot(query(collection(db,'drivers'), where('status','==','approved')),
+      snap => setDrivers(snap.docs.map(d=>({id:d.id,...d.data()}))), ()=>{});
+    return () => { u1(); u2(); };
+  }, []);
+
+  const setStatus = async (id, status) => {
+    try { await updateDoc(doc(db,'charterRequests',id), { status, updatedAt:serverTimestamp() }); } catch(e){ console.error(e); }
+  };
+  const assignDriver = async (id, driverId) => {
+    const drv = drivers.find(d=>d.id===driverId);
+    try {
+      await updateDoc(doc(db,'charterRequests',id), {
+        assignedDriverId: driverId || null,
+        assignedDriverName: drv?.name || null,
+        status: driverId ? 'driverAssigned' : 'confirmed',
+        updatedAt: serverTimestamp(),
+      });
+    } catch(e){ console.error(e); }
+  };
+  const saveAdjustment = async (id) => {
+    const a = adjust[id] || {};
+    const amount = Number(a.amount);
+    if (!amount || amount <= 0) { window.alert('Enter a valid adjusted amount.'); return; }
+    if (!a.reason || !a.reason.trim()) { window.alert('Please record a reason for the price adjustment.'); return; }
+    try {
+      await updateDoc(doc(db,'charterRequests',id), {
+        adjustedTotal: amount, adjustmentReason: a.reason.trim(),
+        quotedTotal: amount, updatedAt: serverTimestamp(),
+      });
+      setAdjust(prev => ({ ...prev, [id]: { amount:'', reason:'' } }));
+    } catch(e){ console.error(e); window.alert('Could not save adjustment.'); }
+  };
+
+  const shown = filter==='all' ? rows : rows.filter(r => (r.status||'pending')===filter);
+  const money = n => 'J$' + (n||0).toLocaleString();
+  const fmtDate = ts => ts?.seconds ? new Date(ts.seconds*1000).toLocaleString('en-JM',{ dateStyle:'medium', timeStyle:'short' }) : '—';
+
+  if (loading) return <div style={s.card}><div style={{ color:'#9199ad', fontSize:13, textAlign:'center', padding:20 }}>Loading charter bookings…</div></div>;
+
+  return (
+    <div>
+      <div style={s.statgrid}>
+        <StatCard label="Total" value={rows.length}/>
+        <StatCard label="Pending" value={rows.filter(r=>(r.status||'pending')==='pending').length} color="#b45309"/>
+        <StatCard label="Confirmed" value={rows.filter(r=>['confirmed','driverAssigned','inProgress'].includes(r.status)).length} color={GREEN}/>
+        <StatCard label="Completed" value={rows.filter(r=>r.status==='completed').length} color="#166534"/>
+      </div>
+
+      {/* status filter */}
+      <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:14 }}>
+        {['all',...CHARTER_STATUSES].map(f => (
+          <button key={f} onClick={()=>setFilter(f)}
+            style={{ padding:'6px 12px', borderRadius:16, fontSize:12, fontWeight:600, cursor:'pointer',
+              background: filter===f ? '#6b21a8' : '#f5f0ff', color: filter===f ? '#fff' : '#6b21a8',
+              border:'1px solid #e9d5ff' }}>
+            {f==='all' ? 'All' : (CHARTER_STATUS_META[f]?.label||f)}
+          </button>
+        ))}
+      </div>
+
+      {shown.length===0 && <div style={s.card}><div style={{ color:'#9199ad', fontSize:13, textAlign:'center', padding:20 }}>No charter bookings{filter!=='all'?' in this status':''} yet.</div></div>}
+
+      {shown.map(r => {
+        const meta = CHARTER_STATUS_META[r.status||'pending'] || CHARTER_STATUS_META.pending;
+        const open = openId === r.id;
+        const finalAmount = r.adjustedTotal || r.total;
+        return (
+          <div key={r.id} style={{ ...s.card, marginBottom:12 }}>
+            {/* header row */}
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:10, cursor:'pointer' }} onClick={()=>setOpenId(open?null:r.id)}>
+              <div>
+                <div style={{ fontSize:15, fontWeight:800, color:'#1a1a2e' }}>{r.name || 'Charter'} · {r.dayCount||r.days?.length||0} day{(r.dayCount||1)!==1?'s':''}</div>
+                <div style={{ fontSize:12, color:'#6b7280', marginTop:2 }}>☎ {r.phone||'—'}{r.email?` · ${r.email}`:''} · {Math.round(r.totalKm||0)} km</div>
+                <div style={{ fontSize:11, color:'#9199ad', marginTop:2 }}>Requested {fmtDate(r.createdAt)} · pricing {r.pricingVersion||'—'}</div>
+              </div>
+              <div style={{ textAlign:'right' }}>
+                <span style={{ display:'inline-block', fontSize:11, fontWeight:700, color:meta.color, background:meta.bg, border:`1px solid ${meta.color}33`, padding:'3px 10px', borderRadius:12 }}>{meta.label}</span>
+                <div style={{ fontSize:17, fontWeight:800, color:'#6b21a8', marginTop:6 }}>{money(finalAmount)}</div>
+                {r.adjustedTotal && <div style={{ fontSize:10.5, color:'#9199ad', textDecoration:'line-through' }}>{money(r.total)}</div>}
+              </div>
+            </div>
+
+            {open && (
+              <div style={{ marginTop:14, borderTop:'1px solid #f0f0f4', paddingTop:14 }}>
+                {/* itinerary per day */}
+                {(r.days||[]).map((d, di) => (
+                  <div key={di} style={{ background:'#faf7fd', border:'1px solid #ece3f5', borderRadius:10, padding:'12px 14px', marginBottom:8 }}>
+                    <div style={{ fontSize:12.5, fontWeight:800, color:'#6b21a8', marginBottom:6 }}>Day {di+1} · {d.date}{d.startTime?` · ${d.startTime}`:''} · {d.hours}h · {d.purpose||'—'}</div>
+                    <div style={{ fontSize:12.5, color:'#374151', lineHeight:1.7 }}>
+                      <div>🟢 <strong>Start:</strong> {d.start||'—'}</div>
+                      {(d.stops||[]).map((sp,x)=><div key={x}>📍 <strong>Stop {x+1}:</strong> {sp}</div>)}
+                      <div>🏁 <strong>End:</strong> {d.destination||'—'}</div>
+                      {d.returnTo && <div>↩️ <strong>Return:</strong> {d.returnTo}</div>}
+                      {d.airport && <div style={{ color:'#b45309' }}>✈️ Airport: {d.airport}</div>}
+                      {d.driverNotes && <div style={{ color:'#6b7280', fontStyle:'italic', marginTop:4 }}>📝 {d.driverNotes}</div>}
+                    </div>
+                    <div style={{ fontSize:11.5, color:'#6b7280', marginTop:8, display:'flex', gap:14, flexWrap:'wrap', borderTop:'1px dashed #e9d5ff', paddingTop:8 }}>
+                      <span>{Math.round(d.km||0)} km · {d.mins||0} min</span>
+                      <span>Time {money(d.timeCharge)}</span>
+                      {d.distanceCharge>0 && <span>Distance {money(d.distanceCharge)}</span>}
+                      {d.airportFee>0 && <span>Airport {money(d.airportFee)}</span>}
+                      {d.surcharge>0 && <span>+10% {money(d.surcharge)}</span>}
+                      <span style={{ fontWeight:700, color:'#6b21a8' }}>Day {money(d.dayTotal)}</span>
+                    </div>
+                  </div>
+                ))}
+
+                {/* price breakdown */}
+                <div style={{ background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:10, padding:'12px 14px', marginBottom:12, fontSize:12.5, color:'#374151' }}>
+                  <div style={{ display:'flex', justifyContent:'space-between' }}><span>Time charge</span><span>{money(r.timeCharge)}</span></div>
+                  <div style={{ display:'flex', justifyContent:'space-between' }}><span>Distance charge</span><span>{money(r.distanceCharge)}</span></div>
+                  {r.airportFee>0 && <div style={{ display:'flex', justifyContent:'space-between' }}><span>Airport fee</span><span>{money(r.airportFee)}</span></div>}
+                  {r.surcharge>0 && <div style={{ display:'flex', justifyContent:'space-between', color:'#b45309' }}><span>Long-distance surcharge</span><span>{money(r.surcharge)}</span></div>}
+                  {r.discount>0 && <div style={{ display:'flex', justifyContent:'space-between', color:'#1a9e5a' }}><span>Multi-day discount</span><span>−{money(r.discount)}</span></div>}
+                  <div style={{ display:'flex', justifyContent:'space-between', fontWeight:800, color:'#2a1a4a', borderTop:'1px solid #e9d5ff', marginTop:6, paddingTop:6 }}><span>System estimate</span><span>{money(r.total)}</span></div>
+                  {r.adjustedTotal && <div style={{ display:'flex', justifyContent:'space-between', fontWeight:800, color:'#6b21a8', marginTop:4 }}><span>Adjusted price</span><span>{money(r.adjustedTotal)}</span></div>}
+                  {r.adjustmentReason && <div style={{ fontSize:11, color:'#9199ad', marginTop:4, fontStyle:'italic' }}>Reason: {r.adjustmentReason}</div>}
+                </div>
+
+                {/* admin controls */}
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+                  <div>
+                    <div style={s.lbl}>Status</div>
+                    <select value={r.status||'pending'} onChange={e=>setStatus(r.id, e.target.value)} style={{ ...s.inp, marginBottom:0 }}>
+                      {CHARTER_STATUSES.map(st=><option key={st} value={st}>{CHARTER_STATUS_META[st]?.label||st}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <div style={s.lbl}>Assign driver</div>
+                    <select value={r.assignedDriverId||''} onChange={e=>assignDriver(r.id, e.target.value)} style={{ ...s.inp, marginBottom:0 }}>
+                      <option value="">— none —</option>
+                      {drivers.map(dr=><option key={dr.id} value={dr.id}>{dr.name||dr.email}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                {/* price adjustment */}
+                <div style={{ background:'#fff', border:'1px solid #e5e7eb', borderRadius:10, padding:'10px 12px', marginBottom:10 }}>
+                  <div style={{ fontSize:11.5, fontWeight:700, color:'#6b21a8', marginBottom:8 }}>Adjust quoted price</div>
+                  <div style={{ display:'flex', gap:8, marginBottom:8 }}>
+                    <input type="number" placeholder="New amount (J$)" value={(adjust[r.id]?.amount)||''}
+                      onChange={e=>setAdjust(p=>({ ...p, [r.id]:{ ...(p[r.id]||{}), amount:e.target.value } }))}
+                      style={{ ...s.inp, marginBottom:0, flex:1 }}/>
+                    <button onClick={()=>saveAdjustment(r.id)} style={{ padding:'0 16px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:8, fontSize:12.5, fontWeight:700, cursor:'pointer' }}>Save</button>
+                  </div>
+                  <input placeholder="Reason for adjustment (recorded)" value={(adjust[r.id]?.reason)||''}
+                    onChange={e=>setAdjust(p=>({ ...p, [r.id]:{ ...(p[r.id]||{}), reason:e.target.value } }))}
+                    style={{ ...s.inp, marginBottom:0 }}/>
+                </div>
+
+                {/* actions */}
+                <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+                  <a href={`tel:${r.phone}`} style={{ textDecoration:'none', padding:'9px 16px', background:GREEN, color:'#fff', borderRadius:8, fontSize:12.5, fontWeight:700 }}>📞 Call</a>
+                  <a href={`https://wa.me/${(r.phone||'').replace(/[^0-9]/g,'')}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration:'none', padding:'9px 16px', background:'#25D366', color:'#fff', borderRadius:8, fontSize:12.5, fontWeight:700 }}>💬 WhatsApp</a>
+                  {r.status!=='confirmed' && <button onClick={()=>setStatus(r.id,'confirmed')} style={{ padding:'9px 16px', background:'#f0fdf4', color:'#166534', border:'1px solid #86efac', borderRadius:8, fontSize:12.5, fontWeight:700, cursor:'pointer' }}>✓ Confirm</button>}
+                  {r.status!=='rejected' && <button onClick={()=>setStatus(r.id,'rejected')} style={{ padding:'9px 16px', background:'#fff0f0', color:'#dc2626', border:'1px solid #fca5a5', borderRadius:8, fontSize:12.5, fontWeight:700, cursor:'pointer' }}>✕ Reject</button>}
+                </div>
+                <div style={{ fontSize:10.5, color:'#9199ad', marginTop:10 }}>Updated {fmtDate(r.updatedAt)}</div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function PartnersTab() {
   const [partners, setPartners] = useState([]);
   const [loading,  setLoading]  = useState(true);
@@ -2066,6 +2258,7 @@ export default function AdminPanel() {
     { id:'revenue',   label:'Revenue',     icon:'💰' },
     { id:'performance',label:'Performance',icon:'📈' },
     { id:'partners',  label:'Partners',    icon:'🤝' },
+    { id:'charter',   label:'Charter',     icon:'🚘' },
     { id:'contacts',  label:'Messages',    icon:'📬' },
     { id:'alerts',    label:'Alerts',      icon:'🆘' },
     { id:'unfulfilled',label:'No Driver',  icon:'📍' },
@@ -2099,7 +2292,7 @@ export default function AdminPanel() {
       {/* ── CONTENT ── */}
       <div style={s.main}>
         <div style={{ fontSize:18, fontWeight:800, marginBottom:16, color:'#1a1a2e' }}>
-          {tab==='overview'?'📊 Dashboard Overview':tab==='analytics'?'📉 Analytics':tab==='drivers'?'🚗 Driver Management':tab==='rides'?'🚕 Ride Management':tab==='livemap'?'🗺️ Live Operations Map':tab==='scheduled'?'🗓️ Scheduled Rides':tab==='customers'?'👥 Customers':tab==='revenue'?'💰 Revenue':tab==='performance'?'📈 Driver Performance':tab==='partners'?'🤝 Partner Requests':tab==='contacts'?'📬 Messages':tab==='alerts'?'🆘 Safety Alerts':tab==='unfulfilled'?'📍 No Driver Available':tab==='broadcast'?'📢 Broadcast to Drivers':'🎟️ Promo Codes'}
+          {tab==='overview'?'📊 Dashboard Overview':tab==='analytics'?'📉 Analytics':tab==='drivers'?'🚗 Driver Management':tab==='rides'?'🚕 Ride Management':tab==='livemap'?'🗺️ Live Operations Map':tab==='scheduled'?'🗓️ Scheduled Rides':tab==='customers'?'👥 Customers':tab==='revenue'?'💰 Revenue':tab==='performance'?'📈 Driver Performance':tab==='partners'?'🤝 Partner Requests':tab==='charter'?'🚘 Charter Bookings':tab==='contacts'?'📬 Messages':tab==='alerts'?'🆘 Safety Alerts':tab==='unfulfilled'?'📍 No Driver Available':tab==='broadcast'?'📢 Broadcast to Drivers':'🎟️ Promo Codes'}
         </div>
         {tab === 'overview'  && <OverviewTab setTab={setTab}/>}
         {tab === 'analytics' && <AnalyticsTab/>}
@@ -2111,6 +2304,7 @@ export default function AdminPanel() {
         {tab === 'revenue'   && <RevenueTab/>}
         {tab === 'performance' && <PerformanceTab/>}
         {tab === 'partners'  && <PartnersTab/>}
+        {tab === 'charter'   && <CharterTab/>}
         {tab === 'contacts'  && <ContactsTab/>}
         {tab === 'alerts'    && <AlertsTab/>}
         {tab === 'unfulfilled' && <UnfulfilledTab/>}

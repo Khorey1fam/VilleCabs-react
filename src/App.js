@@ -8806,6 +8806,7 @@ function EventMonthRow({ title, subtitle, events, go, setPickupData, setDropoffD
 //   • 1st hour            J$1,500
 //   • hours 2–8           J$1,000 each
 //   • hours 9+            J$1,500 each
+const CHARTER_PRICING_VERSION = 'v2-2026-07'; // bump when rates change; stored on each booking
 // ── Charter pricing ──────────────────────────────────────────────────────────
 // Time charge, by hours booked in a day:
 //   1st hour J$1,500 · hours 2–8 J$1,000 · hours 9+ J$1,500
@@ -8828,12 +8829,28 @@ function charterTimeCost(hours) {
   return cost + midHours * CHARTER_RATES.midHour + overHours * CHARTER_RATES.overHour;
 }
 
-// Is a place an airport? Check its name/address for airport signals.
-function isAirportPlace(p) {
-  if (!p) return false;
-  const t = `${p.name||''} ${p.address||''}`.toLowerCase();
-  return /airport|aerodrome|\bmbj\b|\bkin\b|sangster|norman manley/.test(t);
+// Known airports — extend this list as needed. Each entry has display names and
+// match tokens (lowercase) checked against a place's name AND formatted address.
+const CHARTER_AIRPORTS = [
+  { label:'Norman Manley International Airport (Kingston)', tokens:['norman manley','nmia','kin airport','kingston airport'] },
+  { label:'Sangster International Airport (Montego Bay)',   tokens:['sangster','mbj','montego bay airport'] },
+  { label:'Ian Fleming International Airport (Ocho Rios)',  tokens:['ian fleming','ocj','boscobel airport'] },
+];
+// Generic fallback so any airport still triggers the fee even if not listed above.
+const AIRPORT_GENERIC = /\bairport\b|\baerodrome\b|international airport/i;
+
+// Detect an airport from a place's structured details (name + formatted address),
+// not just typed text. Returns the matched airport label, or null.
+function detectAirport(place) {
+  if (!place) return null;
+  const hay = `${place.name || ''} ${place.address || ''}`.toLowerCase();
+  for (const a of CHARTER_AIRPORTS) {
+    if (a.tokens.some(t => hay.includes(t))) return a.label;
+  }
+  if (AIRPORT_GENERIC.test(hay)) return 'Airport';
+  return null;
 }
+function isAirportPlace(p) { return !!detectAirport(p); }
 
 // Compute one day's price from its resolved route distance (km) + hours + airport flag.
 function charterDayPrice({ hours, km, hasAirport }) {
@@ -8877,7 +8894,7 @@ const CHARTER_PURPOSES = ['Business','Airport Transfer','Wedding','Event','Shopp
 
 function CharterPage({ go, user }) {
   const blankDay = () => ({
-    date:'', hours:8, purpose:'Business', notes:'',
+    date:'', startTime:'', hours:8, purpose:'Business', notes:'',
     start:null,        // { address, lat, lng, name }
     stops:[],          // [{ address, lat, lng, name }]
     destination:null,
@@ -8896,6 +8913,15 @@ function CharterPage({ go, user }) {
   const [error, setError] = useState('');
 
   const addDay    = () => setDays(d => [...d, blankDay()]);
+  // Duplicate the last day's whole itinerary (locations, hours, purpose) onto a
+  // new day — dates stay blank so the customer picks a new one. Route is copied
+  // too so pricing shows immediately without re-selecting every address.
+  const copyPrevDay = () => {
+    setDays(d => {
+      const last = d[d.length - 1];
+      return [...d, { ...last, date:'', startTime:'' }];
+    });
+  };
   const removeDay = (i) => setDays(d => d.filter((_,x) => x !== i));
   const patchDay  = (i, patch) => setDays(d => d.map((row,x) => x===i ? { ...row, ...patch } : row));
 
@@ -8929,6 +8955,16 @@ function CharterPage({ go, user }) {
   const pricedDays  = dayResults.filter(Boolean);
   const allPriced   = days.length > 0 && dayResults.every(Boolean);
   const subtotal    = pricedDays.reduce((s,r) => s + r.subtotal, 0);
+  // Aggregate line items across all priced days, for the transparent breakdown.
+  const agg = pricedDays.reduce((a,r) => ({
+    time:      a.time      + r.time,
+    distance:  a.distance  + r.distance,
+    airport:   a.airport   + r.airport,
+    surcharge: a.surcharge + r.surcharge,
+    billableKm:a.billableKm+ r.billableKm,
+  }), { time:0, distance:0, airport:0, surcharge:0, billableKm:0 });
+  const totalReservedHours = days.reduce((s,d) => s + (d.hours||0), 0);
+  const totalIncludedKm = pricedDays.length * CHARTER_RATES.includedKm;
   const totalKm     = days.reduce((s,d) => s + (d.route?.km || 0), 0);
   const totalMins   = days.reduce((s,d) => s + (d.route?.mins || 0), 0);
   const dayCount    = days.length;
@@ -8954,17 +8990,42 @@ function CharterPage({ go, user }) {
     try {
       await addDoc(collection(db,'charterRequests'), {
         name:name.trim(), phone:phone.trim(), email:email.trim(), notes:notes.trim(),
+        customerId:user?.uid||null,
         days: days.map((d,i) => ({
-          date:d.date, hours:d.hours, purpose:d.purpose, driverNotes:d.notes,
-          start:d.start?.address||'', stops:(d.stops||[]).filter(Boolean).map(sp=>sp.address),
+          date:d.date, startTime:d.startTime||'', hours:d.hours,
+          purpose:d.purpose, driverNotes:d.notes,
+          start:d.start?.address||'',
+          stops:(d.stops||[]).filter(Boolean).map(sp=>sp.address),
           destination:d.destination?.address||'',
           returnTo: d.hasReturn ? (d.returnTo?.address || d.start?.address || '') : '',
-          km: Math.round((d.route?.km||0)*10)/10, mins:d.route?.mins||0,
-          price: dayResults[i]?.subtotal || 0,
+          airport: detectAirport(d.destination) || ((d.stops||[]).map(detectAirport).find(Boolean)) || null,
+          km: Math.round((d.route?.km||0)*10)/10,
+          mins: d.route?.mins||0,
+          timeCharge:     dayResults[i]?.time || 0,
+          distanceCharge: dayResults[i]?.distance || 0,
+          airportFee:     dayResults[i]?.airport || 0,
+          surcharge:      dayResults[i]?.surcharge || 0,
+          dayTotal:       dayResults[i]?.subtotal || 0,
         })),
-        dayCount, subtotal, discount, total,
-        totalKm: Math.round(totalKm*10)/10, totalMins,
-        status:'new', customerId:user?.uid||null, createdAt:serverTimestamp(),
+        dayCount,
+        totalReservedHours,
+        totalKm: Math.round(totalKm*10)/10,
+        totalMins,
+        timeCharge:     agg.time,
+        distanceCharge: agg.distance,
+        airportFee:     agg.airport,
+        surcharge:      agg.surcharge,
+        subtotal,
+        discount,
+        total,                       // customer-facing estimated total
+        quotedTotal:    total,       // may be adjusted by admin
+        adjustedTotal:  null,        // admin override, if any
+        adjustmentReason: null,
+        pricingVersion: CHARTER_PRICING_VERSION,
+        status:'pending',            // pending → underReview → confirmed → driverAssigned → inProgress → completed / cancelled / rejected
+        assignedDriverId: null,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
       });
       try {
         const lines = days.map((d,i)=>`${d.date} · ${d.hours}h · ${d.purpose} · ${Math.round(d.route?.km||0)}km · J$${(dayResults[i]?.subtotal||0).toLocaleString()}`).join(' | ');
@@ -9044,24 +9105,30 @@ function CharterPage({ go, user }) {
               {days.length > 1 && <button onClick={() => removeDay(i)} style={{ background:'none', border:'none', color:'#dc2626', fontSize:12, fontWeight:700, cursor:'pointer' }}>Remove day</button>}
             </div>
 
-            {/* Date · Hours · Purpose */}
+            {/* Date · Start time · Hours · Purpose */}
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
               <div>
                 <div style={cLbl}>DATE</div>
                 <input type="date" value={d.date} min={today} onChange={e=>patchDay(i,{date:e.target.value})} style={cField}/>
               </div>
               <div>
+                <div style={cLbl}>START TIME</div>
+                <input type="time" value={d.startTime} onChange={e=>patchDay(i,{startTime:e.target.value})} style={cField}/>
+              </div>
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+              <div>
                 <div style={cLbl}>RESERVED HOURS</div>
                 <select value={d.hours} onChange={e=>patchDay(i,{hours:Number(e.target.value)})} style={cField}>
                   {Array.from({length:14},(_,x)=>x+1).map(h=><option key={h} value={h}>{h} hour{h>1?'s':''}</option>)}
                 </select>
               </div>
-            </div>
-            <div style={{ marginBottom:10 }}>
-              <div style={cLbl}>CHARTER PURPOSE</div>
-              <select value={d.purpose} onChange={e=>patchDay(i,{purpose:e.target.value})} style={cField}>
-                {CHARTER_PURPOSES.map(p=><option key={p} value={p}>{p}</option>)}
-              </select>
+              <div>
+                <div style={cLbl}>CHARTER PURPOSE</div>
+                <select value={d.purpose} onChange={e=>patchDay(i,{purpose:e.target.value})} style={cField}>
+                  {CHARTER_PURPOSES.map(p=><option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
             </div>
 
             {/* Itinerary */}
@@ -9130,18 +9197,41 @@ function CharterPage({ go, user }) {
           </div>
         );})}
 
-        <button onClick={addDay} style={{ width:'100%', padding:'12px', background:'#fff', border:'2px dashed #c4b5fd', borderRadius:12, color:'#6b21a8', fontSize:13.5, fontWeight:700, cursor:'pointer', marginBottom:18 }}>＋ Add another day</button>
+        <div style={{ display:'flex', gap:10, marginBottom:18 }}>
+          <button onClick={addDay} style={{ flex:1, padding:'12px', background:'#fff', border:'2px dashed #c4b5fd', borderRadius:12, color:'#6b21a8', fontSize:13, fontWeight:700, cursor:'pointer' }}>＋ Add another day</button>
+          {days.length >= 1 && (
+            <button onClick={copyPrevDay} style={{ flex:1, padding:'12px', background:'#faf7fd', border:'1px solid #e9d5ff', borderRadius:12, color:'#6b21a8', fontSize:13, fontWeight:700, cursor:'pointer' }}>⧉ Copy last day's itinerary</button>
+          )}
+        </div>
 
-        {/* Grand total */}
-        <div style={{ background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:14, padding:'16px 18px', marginBottom:20 }}>
+        {/* Transparent quote breakdown */}
+        <div style={{ background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:14, padding:'16px 18px', marginBottom:14 }}>
+          <div style={{ fontSize:12, fontWeight:800, color:'#6b21a8', textTransform:'uppercase', letterSpacing:0.6, marginBottom:12 }}>Estimated Charter Price</div>
           {anyLoading && <div style={{ fontSize:12.5, color:'#6b21a8', textAlign:'center', marginBottom:8 }}>🔄 Calculating routes…</div>}
-          <div style={{ display:'flex', justifyContent:'space-between', fontSize:13.5, color:'#5b5470', marginBottom:6 }}>
-            <span>{dayCount} day{dayCount!==1?'s':''} · {Math.round(totalKm)} km total</span><span>J${subtotal.toLocaleString()}</span>
-          </div>
-          {multiDay && <div style={{ display:'flex', justifyContent:'space-between', fontSize:13.5, color:'#1a9e5a', fontWeight:700, marginBottom:6 }}><span>Multi-day discount (10%)</span><span>−J${discount.toLocaleString()}</span></div>}
-          <div style={{ display:'flex', justifyContent:'space-between', fontSize:20, fontWeight:800, color:'#2a1a4a', paddingTop:8, borderTop:'1px solid #e9d5ff' }}><span>Total</span><span style={{ color:'#6b21a8' }}>J${total.toLocaleString()}</span></div>
-          {!multiDay && dayCount>=4 && <div style={{ fontSize:11.5, color:'#8a83a0', marginTop:8, textAlign:'center' }}>Add {6-dayCount} more day{6-dayCount!==1?'s':''} to unlock 10% off</div>}
-          {!allPriced && !anyLoading && <div style={{ fontSize:11.5, color:'#b45309', marginTop:8, textAlign:'center' }}>Total updates once every day has a start &amp; destination.</div>}
+          {allPriced ? (
+            <div style={{ display:'flex', flexDirection:'column', gap:7, fontSize:13.5, color:'#5b5470' }}>
+              <div style={brkRow}><span>Reserved time</span><span>{totalReservedHours} hour{totalReservedHours!==1?'s':''}</span></div>
+              <div style={brkRow}><span>Time charge</span><span>J${agg.time.toLocaleString()}</span></div>
+              <div style={brkRow}><span>Estimated route</span><span>{Math.round(totalKm)} km</span></div>
+              <div style={{ ...brkRow, color:'#9199ad', fontSize:12.5 }}><span>Included distance ({pricedDays.length} × 15 km)</span><span>{totalIncludedKm} km</span></div>
+              <div style={{ ...brkRow, color:'#9199ad', fontSize:12.5 }}><span>Billable distance</span><span>{Math.round(agg.billableKm)} km</span></div>
+              {agg.distance>0 && <div style={brkRow}><span>Distance charge</span><span>J${agg.distance.toLocaleString()}</span></div>}
+              {agg.surcharge>0 && <div style={{ ...brkRow, color:'#b45309' }}><span>Long-distance surcharge</span><span>J${agg.surcharge.toLocaleString()}</span></div>}
+              {agg.airport>0 && <div style={brkRow}><span>Airport service fee</span><span>J${agg.airport.toLocaleString()}</span></div>}
+              {multiDay && <div style={{ ...brkRow, color:'#1a9e5a', fontWeight:700 }}><span>Multi-day discount (10%)</span><span>−J${discount.toLocaleString()}</span></div>}
+              <div style={{ ...brkRow, fontSize:20, fontWeight:800, color:'#2a1a4a', paddingTop:9, marginTop:2, borderTop:'1px solid #e9d5ff' }}><span>Estimated total</span><span style={{ color:'#6b21a8' }}>J${total.toLocaleString()}</span></div>
+            </div>
+          ) : (
+            <div style={{ fontSize:13, color:'#8a83a0', textAlign:'center', padding:'6px 0' }}>
+              {anyLoading ? 'Working out your route…' : 'Add a start and destination for each day to see your full quote.'}
+            </div>
+          )}
+          {!multiDay && dayCount>=4 && allPriced && <div style={{ fontSize:11.5, color:'#8a83a0', marginTop:10, textAlign:'center' }}>Add {6-dayCount} more day{6-dayCount!==1?'s':''} to unlock 10% off</div>}
+        </div>
+
+        {/* Pricing disclaimer */}
+        <div style={{ fontSize:11.5, color:'#8a83a0', lineHeight:1.6, background:'#fafafc', border:'1px solid #eee', borderRadius:10, padding:'10px 12px', marginBottom:20 }}>
+          <strong style={{ color:'#5b5470' }}>Please note:</strong> Final pricing may change if the itinerary, waiting time, route, or number of stops changes. Tolls, parking fees, accommodation, and other extraordinary expenses may be charged separately where applicable.
         </div>
 
         <div style={{ fontSize:13, fontWeight:800, color:'#2a1a4a', textTransform:'uppercase', letterSpacing:0.6, marginBottom:10 }}>Your details</div>
@@ -9167,6 +9257,7 @@ function CharterPage({ go, user }) {
   );
 }
 const cLbl = { fontSize:11, color:'#8a83a0', fontWeight:700, marginBottom:4 };
+const brkRow = { display:'flex', justifyContent:'space-between' };
 const cField = { width:'100%', padding:'11px 12px', background:'#fff', border:'1.5px solid #e9d5ff', borderRadius:10, fontSize:13.5, color:'#1a1a2e', boxSizing:'border-box', outline:'none' };
 const charterInput = { width:'100%', padding:'13px 14px', background:'#fff', border:'1.5px solid #e9d5ff', borderRadius:11, fontSize:14, color:'#1a1a2e', boxSizing:'border-box', outline:'none' };
 
