@@ -8806,82 +8806,180 @@ function EventMonthRow({ title, subtitle, events, go, setPickupData, setDropoffD
 //   • 1st hour            J$1,500
 //   • hours 2–8           J$1,000 each
 //   • hours 9+            J$1,500 each
-const CHARTER_RATES = { firstHour: 1500, midHour: 1000, overHour: 1500, midCap: 8 };
-function charterDayCost(hours) {
+// ── Charter pricing ──────────────────────────────────────────────────────────
+// Time charge, by hours booked in a day:
+//   1st hour J$1,500 · hours 2–8 J$1,000 · hours 9+ J$1,500
+const CHARTER_RATES = {
+  firstHour: 1500, midHour: 1000, overHour: 1500, midCap: 8,
+  includedKm: 15,        // free km per day
+  perKm: 80,             // J$ per km above the included 15
+  longDistanceKm: 80,    // day route over this → +10% that day
+  longDistancePct: 0.10,
+  airportFee: 1500,
+  multiDayThreshold: 6,  // 6+ days → 10% off the whole charter
+  multiDayPct: 0.10,
+};
+
+function charterTimeCost(hours) {
   const h = Math.max(1, Math.min(24, Math.round(hours || 0)));
-  let cost = CHARTER_RATES.firstHour;              // first hour
-  const midHours  = Math.max(0, Math.min(h, CHARTER_RATES.midCap) - 1);  // hours 2..8
-  const overHours = Math.max(0, h - CHARTER_RATES.midCap);               // hours 9+
-  cost += midHours  * CHARTER_RATES.midHour;
-  cost += overHours * CHARTER_RATES.overHour;
-  return cost;
+  let cost = CHARTER_RATES.firstHour;
+  const midHours  = Math.max(0, Math.min(h, CHARTER_RATES.midCap) - 1);
+  const overHours = Math.max(0, h - CHARTER_RATES.midCap);
+  return cost + midHours * CHARTER_RATES.midHour + overHours * CHARTER_RATES.overHour;
 }
 
+// Is a place an airport? Check its name/address for airport signals.
+function isAirportPlace(p) {
+  if (!p) return false;
+  const t = `${p.name||''} ${p.address||''}`.toLowerCase();
+  return /airport|aerodrome|\bmbj\b|\bkin\b|sangster|norman manley/.test(t);
+}
+
+// Compute one day's price from its resolved route distance (km) + hours + airport flag.
+function charterDayPrice({ hours, km, hasAirport }) {
+  const time = charterTimeCost(hours);
+  const billableKm = Math.max(0, (km || 0) - CHARTER_RATES.includedKm);
+  const distance = Math.round(billableKm * CHARTER_RATES.perKm);
+  const airport = hasAirport ? CHARTER_RATES.airportFee : 0;
+  let subtotal = time + distance + airport;
+  const longDistance = (km || 0) > CHARTER_RATES.longDistanceKm;
+  const surcharge = longDistance ? Math.round(subtotal * CHARTER_RATES.longDistancePct) : 0;
+  subtotal += surcharge;
+  return { time, distance, airport, surcharge, longDistance, subtotal, billableKm };
+}
+
+// Route a day through start → stops → destination (+ return). Waypoint-aware,
+// real driving distance (never straight-line). Returns { km, mins } or null.
+function charterRoute(points) {
+  return new Promise((resolve) => {
+    if (!window.google?.maps?.DirectionsService) { resolve(null); return; }
+    const valid = points.filter(p => p && typeof p.lat === 'number' && typeof p.lng === 'number');
+    if (valid.length < 2) { resolve(null); return; }
+    const origin = valid[0];
+    const destination = valid[valid.length - 1];
+    const waypoints = valid.slice(1, -1).map(p => ({ location: { lat:p.lat, lng:p.lng }, stopover:true }));
+    const svc = new window.google.maps.DirectionsService();
+    svc.route({
+      origin: { lat:origin.lat, lng:origin.lng },
+      destination: { lat:destination.lat, lng:destination.lng },
+      waypoints,
+      travelMode: window.google.maps.TravelMode.DRIVING,
+    }, (res, status) => {
+      if (status !== 'OK' || !res?.routes?.[0]) { resolve(null); return; }
+      let meters = 0, seconds = 0;
+      res.routes[0].legs.forEach(leg => { meters += leg.distance?.value || 0; seconds += leg.duration?.value || 0; });
+      resolve({ km: meters / 1000, mins: Math.round(seconds / 60) });
+    });
+  });
+}
+
+const CHARTER_PURPOSES = ['Business','Airport Transfer','Wedding','Event','Shopping and Errands','Tourism','Personal','Other'];
+
 function CharterPage({ go, user }) {
-  // Each entry: { date:'YYYY-MM-DD', hours:8 }
-  const [days, setDays] = useState([{ date:'', hours:8 }]);
+  const blankDay = () => ({
+    date:'', hours:8, purpose:'Business', notes:'',
+    start:null,        // { address, lat, lng, name }
+    stops:[],          // [{ address, lat, lng, name }]
+    destination:null,
+    hasReturn:false,
+    returnTo:null,     // defaults to start when hasReturn && null
+    route:null,        // { km, mins }
+    routeStatus:'idle',// idle | loading | ok | error
+  });
+  const [days, setDays] = useState([blankDay()]);
   const [name,  setName]  = useState(user?.name || '');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState(user?.email || '');
-  const [pickup, setPickup] = useState('');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent]   = useState(false);
   const [error, setError] = useState('');
 
-  const addDay    = () => setDays(d => [...d, { date:'', hours:8 }]);
+  const addDay    = () => setDays(d => [...d, blankDay()]);
   const removeDay = (i) => setDays(d => d.filter((_,x) => x !== i));
-  const setDay    = (i, patch) => setDays(d => d.map((row,x) => x===i ? { ...row, ...patch } : row));
+  const patchDay  = (i, patch) => setDays(d => d.map((row,x) => x===i ? { ...row, ...patch } : row));
 
-  // Live totals
-  const validDays = days.filter(d => d.date);
-  const subtotal  = days.reduce((s,d) => s + charterDayCost(d.hours), 0);
-  const dayCount  = days.length;
-  const discountApplies = dayCount >= 6;               // "more than 5 days"
-  const discount  = discountApplies ? Math.round(subtotal * 0.10) : 0;
-  const total     = subtotal - discount;
+  const addStop    = (i) => patchDay(i, { stops:[...days[i].stops, null] });
+  const removeStop = (i, si) => patchDay(i, { stops: days[i].stops.filter((_,x)=>x!==si) });
+  const setStop    = (i, si, place) => {
+    const stops = days[i].stops.slice(); stops[si] = place;
+    patchDay(i, { stops });
+  };
+
+  // Recompute a day's route whenever its geography changes.
+  const recalcDay = async (i, dayOverride) => {
+    const d = dayOverride || days[i];
+    const pts = [d.start, ...(d.stops||[]), d.destination];
+    if (d.hasReturn) pts.push(d.returnTo || d.start);  // return leg
+    const resolved = pts.filter(Boolean);
+    if (!d.start || !d.destination) { patchDay(i, { route:null, routeStatus:'idle' }); return; }
+    if (resolved.length < 2) { patchDay(i, { route:null, routeStatus:'idle' }); return; }
+    patchDay(i, { routeStatus:'loading' });
+    const r = await charterRoute(resolved);
+    setDays(prev => prev.map((row,x) => x===i ? { ...row, route:r, routeStatus: r ? 'ok' : 'error' } : row));
+  };
+
+  // Derived day prices (only for days with a good route).
+  const dayResults = days.map(d => {
+    if (d.routeStatus !== 'ok' || !d.route) return null;
+    const hasAirport = isAirportPlace(d.destination) || (d.stops||[]).some(isAirportPlace);
+    return charterDayPrice({ hours:d.hours, km:d.route.km, hasAirport });
+  });
+
+  const pricedDays  = dayResults.filter(Boolean);
+  const allPriced   = days.length > 0 && dayResults.every(Boolean);
+  const subtotal    = pricedDays.reduce((s,r) => s + r.subtotal, 0);
+  const totalKm     = days.reduce((s,d) => s + (d.route?.km || 0), 0);
+  const totalMins   = days.reduce((s,d) => s + (d.route?.mins || 0), 0);
+  const dayCount    = days.length;
+  const multiDay    = dayCount >= CHARTER_RATES.multiDayThreshold;
+  const discount    = multiDay ? Math.round(subtotal * CHARTER_RATES.multiDayPct) : 0;
+  const total       = subtotal - discount;
+  const anyLoading  = days.some(d => d.routeStatus === 'loading');
+  const anyError    = days.some(d => d.start && d.destination && d.routeStatus === 'error');
 
   const today = (dt => new Date(dt.getTime() - dt.getTimezoneOffset()*60000).toISOString().slice(0,10))(new Date());
 
   const submit = async () => {
     setError('');
     if (!name.trim() || !phone.trim()) { setError('Please add your name and phone number so we can reach you.'); return; }
-    if (days.some(d => !d.date))       { setError('Please choose a date for each charter day (or remove empty ones).'); return; }
-    if (validDays.length === 0)        { setError('Add at least one charter day.'); return; }
+    if (days.some(d => !d.date)) { setError('Please choose a date for each charter day.'); return; }
+    if (days.some(d => !d.start || !d.destination)) { setError('Each day needs a starting location and a final destination.'); return; }
+    // Block submit if any route couldn't be calculated — we can't price it.
+    if (anyError || !allPriced) {
+      setError("We couldn't calculate the driving route for one or more days. Please check the addresses, or submit and we'll quote you directly.");
+      return;
+    }
     setSubmitting(true);
     try {
-      // Save the request for the admin to action.
       await addDoc(collection(db,'charterRequests'), {
-        name: name.trim(), phone: phone.trim(), email: email.trim(),
-        pickup: pickup.trim(), notes: notes.trim(),
-        days: days.map(d => ({ date:d.date, hours:d.hours, cost:charterDayCost(d.hours) })),
+        name:name.trim(), phone:phone.trim(), email:email.trim(), notes:notes.trim(),
+        days: days.map((d,i) => ({
+          date:d.date, hours:d.hours, purpose:d.purpose, driverNotes:d.notes,
+          start:d.start?.address||'', stops:(d.stops||[]).filter(Boolean).map(sp=>sp.address),
+          destination:d.destination?.address||'',
+          returnTo: d.hasReturn ? (d.returnTo?.address || d.start?.address || '') : '',
+          km: Math.round((d.route?.km||0)*10)/10, mins:d.route?.mins||0,
+          price: dayResults[i]?.subtotal || 0,
+        })),
         dayCount, subtotal, discount, total,
-        status: 'new',
-        customerId: user?.uid || null,
-        createdAt: serverTimestamp(),
+        totalKm: Math.round(totalKm*10)/10, totalMins,
+        status:'new', customerId:user?.uid||null, createdAt:serverTimestamp(),
       });
-      // Notify admin by email (non-critical).
       try {
-        const dayLines = days.filter(d=>d.date).map(d => `${d.date}: ${d.hours}h (J$${charterDayCost(d.hours).toLocaleString()})`).join(' | ');
+        const lines = days.map((d,i)=>`${d.date} · ${d.hours}h · ${d.purpose} · ${Math.round(d.route?.km||0)}km · J$${(dayResults[i]?.subtotal||0).toLocaleString()}`).join(' | ');
         await fetch('https://api.emailjs.com/api/v1.0/email/send', {
           method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({
-            service_id:'service_8fp53l4', template_id:'template_ss6rofa', user_id:'NYE1IvkRipsFf-pQg',
-            template_params:{
-              to_email:'admin@villecabs.com', to_name:'VilleCabs Admin', from_name:'VilleCabs Charter',
+          body: JSON.stringify({ service_id:'service_8fp53l4', template_id:'template_ss6rofa', user_id:'NYE1IvkRipsFf-pQg',
+            template_params:{ to_email:'admin@villecabs.com', to_name:'VilleCabs Admin', from_name:'VilleCabs Charter',
               subject:`New Charter Request — ${name.trim()}`,
-              message:`Charter request from ${name.trim()} (${phone.trim()}${email.trim()?', '+email.trim():''}).\n`+
-                      `Days (${dayCount}): ${dayLines}\n`+
-                      `Pickup: ${pickup.trim()||'—'}\nNotes: ${notes.trim()||'—'}\n`+
-                      `Subtotal J$${subtotal.toLocaleString()}${discount?`, discount -J$${discount.toLocaleString()}`:''}, TOTAL J$${total.toLocaleString()}`,
-            },
-          }),
+              message:`Charter from ${name.trim()} (${phone.trim()}${email.trim()?', '+email.trim():''}).\nDays (${dayCount}): ${lines}\nTotal distance ${Math.round(totalKm)}km. TOTAL J$${total.toLocaleString()}${discount?` (incl. -J$${discount.toLocaleString()} multi-day)`:''}` } }),
         });
-      } catch(e) { /* email is best-effort */ }
+      } catch(e) {}
       setSent(true);
     } catch(e) {
       console.error('Charter submit failed:', e);
-      setError('Something went wrong sending your request. Please try again or WhatsApp us at 876-515-8113.');
+      setError('Something went wrong. Please try again or WhatsApp us at 876-515-8113.');
     }
     setSubmitting(false);
   };
@@ -8894,8 +8992,7 @@ function CharterPage({ go, user }) {
           <div style={{ fontSize:60, marginBottom:14 }}>✅</div>
           <h2 style={{ fontSize:24, fontWeight:800, color:'#2a1a4a', margin:'0 0 10px' }}>Charter request sent!</h2>
           <p style={{ fontSize:14.5, color:'#5b5470', lineHeight:1.6, marginBottom:8 }}>
-            Thanks {name.split(' ')[0] || 'there'} — we've got your request for {validDays.length} day{validDays.length!==1?'s':''}.
-            A VilleCabs team member will call or WhatsApp you shortly to confirm the details and your driver.
+            Thanks {name.split(' ')[0] || 'there'} — we've got your {dayCount}-day charter request. A VilleCabs team member will call or WhatsApp you shortly to confirm the details and your driver.
           </p>
           <div style={{ display:'inline-block', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:14, padding:'14px 22px', margin:'12px 0 22px' }}>
             <div style={{ fontSize:12, color:'#8a83a0', fontWeight:700, textTransform:'uppercase', letterSpacing:0.5 }}>Estimated total</div>
@@ -8903,9 +9000,7 @@ function CharterPage({ go, user }) {
           </div>
           <div>
             <button onClick={() => go(user?.role==='driver'?'driver-dash':'customer-dash')}
-              style={{ padding:'12px 26px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:24, fontSize:14, fontWeight:700, cursor:'pointer' }}>
-              Back to Home
-            </button>
+              style={{ padding:'12px 26px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:24, fontSize:14, fontWeight:700, cursor:'pointer' }}>Back to Home</button>
           </div>
         </div>
         <Footer go={go}/>
@@ -8916,101 +9011,152 @@ function CharterPage({ go, user }) {
   return (
     <div style={{ ...s.content, background:'#fff' }}>
       <TopBar title="VilleCabs Charter" go={go} user={user}/>
-      <div style={{ maxWidth:640, margin:'0 auto', padding:'22px 18px 40px' }}>
+      <div style={{ maxWidth:660, margin:'0 auto', padding:'22px 18px 40px' }}>
 
-        {/* Hero */}
-        <div style={{ textAlign:'center', marginBottom:24 }}>
+        <div style={{ textAlign:'center', marginBottom:22 }}>
           <div style={{ display:'inline-block', background:'#f5f0ff', border:'1px solid #e9d5ff', color:'#6b21a8', fontSize:11, fontWeight:800, letterSpacing:1, textTransform:'uppercase', padding:'5px 14px', borderRadius:20, marginBottom:12 }}>Premium Service</div>
           <h1 style={{ fontSize:30, fontWeight:800, color:'#2a1a4a', margin:'0 0 8px' }}>🚘 VilleCabs Charter</h1>
-          <p style={{ fontSize:14.5, color:'#5b5470', lineHeight:1.6, maxWidth:480, margin:'0 auto' }}>
-            Hire a car and driver for a full day or across several days — errands, events, business, or touring Manchester. Build your schedule below and we'll take care of the rest.
+          <p style={{ fontSize:14.5, color:'#5b5470', lineHeight:1.6, maxWidth:500, margin:'0 auto' }}>
+            Hire a car &amp; driver — around town or across the island. Build each day's route and we'll price it instantly, distance included.
           </p>
         </div>
 
         {/* Rate card */}
         <div style={{ background:'linear-gradient(135deg,#2a1a4a,#4c1d95)', borderRadius:16, padding:'18px 20px', marginBottom:20, color:'#fff' }}>
           <div style={{ fontSize:12, fontWeight:700, letterSpacing:0.8, textTransform:'uppercase', color:'#c4b5fd', marginBottom:10 }}>How pricing works</div>
-          <div style={{ display:'flex', flexDirection:'column', gap:6, fontSize:13.5 }}>
-            <div style={{ display:'flex', justifyContent:'space-between' }}><span>First hour</span><span style={{ fontWeight:700 }}>J$1,500</span></div>
-            <div style={{ display:'flex', justifyContent:'space-between' }}><span>Each hour after (up to 8 hrs)</span><span style={{ fontWeight:700 }}>J$1,000</span></div>
-            <div style={{ display:'flex', justifyContent:'space-between' }}><span>Each hour beyond 8 hrs</span><span style={{ fontWeight:700 }}>J$1,500</span></div>
-            <div style={{ display:'flex', justifyContent:'space-between', paddingTop:8, marginTop:4, borderTop:'1px solid rgba(255,255,255,0.15)', color:'#a7f3d0' }}><span>6+ days booked</span><span style={{ fontWeight:800 }}>10% OFF total</span></div>
+          <div style={{ display:'flex', flexDirection:'column', gap:6, fontSize:13 }}>
+            <div style={{ display:'flex', justifyContent:'space-between' }}><span>First hour · then to 8 hrs · beyond 8</span><span style={{ fontWeight:700 }}>$1,500 · $1,000 · $1,500</span></div>
+            <div style={{ display:'flex', justifyContent:'space-between' }}><span>First 15 km each day</span><span style={{ fontWeight:700 }}>Included</span></div>
+            <div style={{ display:'flex', justifyContent:'space-between' }}><span>Each km beyond 15</span><span style={{ fontWeight:700 }}>J$80</span></div>
+            <div style={{ display:'flex', justifyContent:'space-between' }}><span>Airport pickup / drop-off</span><span style={{ fontWeight:700 }}>+J$1,500</span></div>
+            <div style={{ display:'flex', justifyContent:'space-between', paddingTop:8, marginTop:4, borderTop:'1px solid rgba(255,255,255,0.15)', color:'#a7f3d0' }}><span>6+ days booked</span><span style={{ fontWeight:800 }}>10% OFF</span></div>
           </div>
         </div>
 
-        {/* Day builder */}
         <div style={{ fontSize:13, fontWeight:800, color:'#2a1a4a', textTransform:'uppercase', letterSpacing:0.6, marginBottom:10 }}>Your charter days</div>
-        {days.map((d, i) => (
-          <div key={i} style={{ background:'#faf7fd', border:'1px solid #ece3f5', borderRadius:14, padding:'14px 16px', marginBottom:10 }}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
-              <span style={{ fontSize:13, fontWeight:700, color:'#6b21a8' }}>Day {i+1}</span>
-              {days.length > 1 && (
-                <button onClick={() => removeDay(i)} style={{ background:'none', border:'none', color:'#dc2626', fontSize:12, fontWeight:700, cursor:'pointer' }}>Remove</button>
-              )}
+
+        {days.map((d, i) => {
+          const res = dayResults[i];
+          return (
+          <div key={i} style={{ background:'#faf7fd', border:'1px solid #ece3f5', borderRadius:14, padding:'14px 16px', marginBottom:12 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+              <span style={{ fontSize:13.5, fontWeight:800, color:'#6b21a8' }}>Day {i+1}</span>
+              {days.length > 1 && <button onClick={() => removeDay(i)} style={{ background:'none', border:'none', color:'#dc2626', fontSize:12, fontWeight:700, cursor:'pointer' }}>Remove day</button>}
             </div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+
+            {/* Date · Hours · Purpose */}
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
               <div>
-                <div style={{ fontSize:11, color:'#8a83a0', fontWeight:700, marginBottom:4 }}>DATE</div>
-                <input type="date" value={d.date} min={today}
-                  onChange={e => setDay(i, { date:e.target.value })}
-                  style={{ width:'100%', padding:'11px 12px', background:'#fff', border:'1.5px solid #e9d5ff', borderRadius:10, fontSize:13.5, color:'#1a1a2e', boxSizing:'border-box', outline:'none' }}/>
+                <div style={cLbl}>DATE</div>
+                <input type="date" value={d.date} min={today} onChange={e=>patchDay(i,{date:e.target.value})} style={cField}/>
               </div>
               <div>
-                <div style={{ fontSize:11, color:'#8a83a0', fontWeight:700, marginBottom:4 }}>HOURS</div>
-                <select value={d.hours} onChange={e => setDay(i, { hours:Number(e.target.value) })}
-                  style={{ width:'100%', padding:'11px 12px', background:'#fff', border:'1.5px solid #e9d5ff', borderRadius:10, fontSize:13.5, color:'#1a1a2e', boxSizing:'border-box', outline:'none' }}>
-                  {Array.from({length:14}, (_,x) => x+1).map(h => <option key={h} value={h}>{h} hour{h>1?'s':''}</option>)}
+                <div style={cLbl}>RESERVED HOURS</div>
+                <select value={d.hours} onChange={e=>patchDay(i,{hours:Number(e.target.value)})} style={cField}>
+                  {Array.from({length:14},(_,x)=>x+1).map(h=><option key={h} value={h}>{h} hour{h>1?'s':''}</option>)}
                 </select>
               </div>
             </div>
-            <div style={{ textAlign:'right', marginTop:8, fontSize:13, color:'#2a1a4a' }}>
-              Day total: <span style={{ fontWeight:800, color:'#6b21a8' }}>J${charterDayCost(d.hours).toLocaleString()}</span>
+            <div style={{ marginBottom:10 }}>
+              <div style={cLbl}>CHARTER PURPOSE</div>
+              <select value={d.purpose} onChange={e=>patchDay(i,{purpose:e.target.value})} style={cField}>
+                {CHARTER_PURPOSES.map(p=><option key={p} value={p}>{p}</option>)}
+              </select>
             </div>
-          </div>
-        ))}
-        <button onClick={addDay}
-          style={{ width:'100%', padding:'12px', background:'#fff', border:'2px dashed #c4b5fd', borderRadius:12, color:'#6b21a8', fontSize:13.5, fontWeight:700, cursor:'pointer', marginBottom:18 }}>
-          ＋ Add another day
-        </button>
 
-        {/* Live total */}
-        <div style={{ background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:14, padding:'16px 18px', marginBottom:20 }}>
-          <div style={{ display:'flex', justifyContent:'space-between', fontSize:13.5, color:'#5b5470', marginBottom:6 }}>
-            <span>{dayCount} day{dayCount!==1?'s':''} · subtotal</span><span>J${subtotal.toLocaleString()}</span>
-          </div>
-          {discountApplies && (
-            <div style={{ display:'flex', justifyContent:'space-between', fontSize:13.5, color:'#1a9e5a', fontWeight:700, marginBottom:6 }}>
-              <span>Multi-day discount (10%)</span><span>−J${discount.toLocaleString()}</span>
+            {/* Itinerary */}
+            <div style={{ marginBottom:8 }}>
+              <div style={cLbl}>STARTING LOCATION</div>
+              <AddressAutocompleteInput value={d.start?.address||''} placeholder="Where does the day start?"
+                onChange={()=>{}}
+                onPlaceSelect={pl=>{ const nd={...days[i], start:{address:pl.formattedAddress||pl.name,lat:pl.lat,lng:pl.lng,name:pl.name}}; patchDay(i,{start:nd.start}); recalcDay(i,nd); }}/>
             </div>
-          )}
-          <div style={{ display:'flex', justifyContent:'space-between', fontSize:20, fontWeight:800, color:'#2a1a4a', paddingTop:8, borderTop:'1px solid #e9d5ff' }}>
-            <span>Total</span><span style={{ color:'#6b21a8' }}>J${total.toLocaleString()}</span>
+
+            {(d.stops||[]).map((sp, si) => (
+              <div key={si} style={{ marginBottom:8 }}>
+                <div style={{ ...cLbl, display:'flex', justifyContent:'space-between' }}>
+                  <span>STOP {si+1}</span>
+                  <span onClick={()=>{ const nd={...days[i], stops:days[i].stops.filter((_,x)=>x!==si)}; patchDay(i,{stops:nd.stops}); recalcDay(i,nd); }} style={{ color:'#dc2626', cursor:'pointer', fontWeight:700 }}>Remove</span>
+                </div>
+                <AddressAutocompleteInput value={sp?.address||''} placeholder="Add a stop"
+                  onChange={()=>{}}
+                  onPlaceSelect={pl=>{ const stops=days[i].stops.slice(); stops[si]={address:pl.formattedAddress||pl.name,lat:pl.lat,lng:pl.lng,name:pl.name}; const nd={...days[i],stops}; patchDay(i,{stops}); recalcDay(i,nd); }}/>
+              </div>
+            ))}
+            <button onClick={()=>patchDay(i,{stops:[...(d.stops||[]),null]})}
+              style={{ background:'none', border:'none', color:'#6b21a8', fontSize:12.5, fontWeight:700, cursor:'pointer', padding:'2px 0 10px' }}>＋ Add a stop</button>
+
+            <div style={{ marginBottom:8 }}>
+              <div style={cLbl}>FINAL DESTINATION</div>
+              <AddressAutocompleteInput value={d.destination?.address||''} placeholder="Where does the day end?"
+                onChange={()=>{}}
+                onPlaceSelect={pl=>{ const nd={...days[i], destination:{address:pl.formattedAddress||pl.name,lat:pl.lat,lng:pl.lng,name:pl.name}}; patchDay(i,{destination:nd.destination}); recalcDay(i,nd); }}/>
+            </div>
+
+            <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:13, color:'#5b5470', marginBottom:8, cursor:'pointer' }}>
+              <input type="checkbox" checked={d.hasReturn} onChange={e=>{ const nd={...days[i], hasReturn:e.target.checked}; patchDay(i,{hasReturn:e.target.checked}); recalcDay(i,nd); }}/>
+              Add a return trip
+            </label>
+            {d.hasReturn && (
+              <div style={{ marginBottom:8 }}>
+                <div style={cLbl}>RETURN TO (leave blank to return to start)</div>
+                <AddressAutocompleteInput value={d.returnTo?.address||''} placeholder="Return destination"
+                  onChange={()=>{}}
+                  onPlaceSelect={pl=>{ const nd={...days[i], returnTo:{address:pl.formattedAddress||pl.name,lat:pl.lat,lng:pl.lng,name:pl.name}}; patchDay(i,{returnTo:nd.returnTo}); recalcDay(i,nd); }}/>
+              </div>
+            )}
+
+            <div style={{ marginBottom:10 }}>
+              <div style={cLbl}>NOTES FOR THE DRIVER (optional)</div>
+              <textarea value={d.notes} onChange={e=>patchDay(i,{notes:e.target.value})} rows={2} placeholder="Gate code, luggage, timing…" style={{ ...cField, resize:'vertical', fontFamily:'inherit' }}/>
+            </div>
+
+            {/* Route + price status for this day */}
+            <div style={{ borderTop:'1px solid #efe6f8', paddingTop:10 }}>
+              {d.routeStatus==='loading' && <div style={{ fontSize:12.5, color:'#6b21a8' }}>🔄 Calculating route…</div>}
+              {d.routeStatus==='error' && <div style={{ fontSize:12.5, color:'#dc2626' }}>⚠️ Couldn't find a driving route for these locations. We'll quote this day directly.</div>}
+              {d.routeStatus==='ok' && res && (
+                <div style={{ fontSize:12.5, color:'#5b5470', lineHeight:1.7 }}>
+                  <div>📍 {Math.round(d.route.km)} km · about {Math.floor(d.route.mins/60)>0?`${Math.floor(d.route.mins/60)}h `:''}{d.route.mins%60}m driving</div>
+                  <div style={{ display:'flex', justifyContent:'space-between' }}><span>Time ({d.hours}h)</span><span>J${res.time.toLocaleString()}</span></div>
+                  {res.distance>0 && <div style={{ display:'flex', justifyContent:'space-between' }}><span>Distance ({Math.round(res.billableKm)} km over 15)</span><span>J${res.distance.toLocaleString()}</span></div>}
+                  {res.airport>0 && <div style={{ display:'flex', justifyContent:'space-between' }}><span>Airport service</span><span>J${res.airport.toLocaleString()}</span></div>}
+                  {res.surcharge>0 && <div style={{ display:'flex', justifyContent:'space-between', color:'#b45309' }}><span>Long-distance (+10%)</span><span>J${res.surcharge.toLocaleString()}</span></div>}
+                  <div style={{ display:'flex', justifyContent:'space-between', fontWeight:800, color:'#6b21a8', marginTop:2 }}><span>Day total</span><span>J${res.subtotal.toLocaleString()}</span></div>
+                </div>
+              )}
+              {d.routeStatus==='idle' && <div style={{ fontSize:12, color:'#9199ad' }}>Enter a start and destination to see this day's price.</div>}
+            </div>
           </div>
-          {!discountApplies && dayCount >= 4 && (
-            <div style={{ fontSize:11.5, color:'#8a83a0', marginTop:8, textAlign:'center' }}>Add {6-dayCount} more day{6-dayCount!==1?'s':''} to unlock 10% off</div>
-          )}
+        );})}
+
+        <button onClick={addDay} style={{ width:'100%', padding:'12px', background:'#fff', border:'2px dashed #c4b5fd', borderRadius:12, color:'#6b21a8', fontSize:13.5, fontWeight:700, cursor:'pointer', marginBottom:18 }}>＋ Add another day</button>
+
+        {/* Grand total */}
+        <div style={{ background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:14, padding:'16px 18px', marginBottom:20 }}>
+          {anyLoading && <div style={{ fontSize:12.5, color:'#6b21a8', textAlign:'center', marginBottom:8 }}>🔄 Calculating routes…</div>}
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:13.5, color:'#5b5470', marginBottom:6 }}>
+            <span>{dayCount} day{dayCount!==1?'s':''} · {Math.round(totalKm)} km total</span><span>J${subtotal.toLocaleString()}</span>
+          </div>
+          {multiDay && <div style={{ display:'flex', justifyContent:'space-between', fontSize:13.5, color:'#1a9e5a', fontWeight:700, marginBottom:6 }}><span>Multi-day discount (10%)</span><span>−J${discount.toLocaleString()}</span></div>}
+          <div style={{ display:'flex', justifyContent:'space-between', fontSize:20, fontWeight:800, color:'#2a1a4a', paddingTop:8, borderTop:'1px solid #e9d5ff' }}><span>Total</span><span style={{ color:'#6b21a8' }}>J${total.toLocaleString()}</span></div>
+          {!multiDay && dayCount>=4 && <div style={{ fontSize:11.5, color:'#8a83a0', marginTop:8, textAlign:'center' }}>Add {6-dayCount} more day{6-dayCount!==1?'s':''} to unlock 10% off</div>}
+          {!allPriced && !anyLoading && <div style={{ fontSize:11.5, color:'#b45309', marginTop:8, textAlign:'center' }}>Total updates once every day has a start &amp; destination.</div>}
         </div>
 
-        {/* Contact */}
         <div style={{ fontSize:13, fontWeight:800, color:'#2a1a4a', textTransform:'uppercase', letterSpacing:0.6, marginBottom:10 }}>Your details</div>
         <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:18 }}>
-          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Full name *"
-            style={charterInput}/>
-          <input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="Phone / WhatsApp *" inputMode="tel"
-            style={charterInput}/>
-          <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email (optional)" inputMode="email"
-            style={charterInput}/>
-          <input value={pickup} onChange={e=>setPickup(e.target.value)} placeholder="Pickup area (optional)"
-            style={charterInput}/>
-          <textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={3} placeholder="Anything else we should know? (optional)"
-            style={{ ...charterInput, resize:'vertical', fontFamily:'inherit' }}/>
+          <input value={name} onChange={e=>setName(e.target.value)} placeholder="Full name *" style={charterInput}/>
+          <input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="Phone / WhatsApp *" inputMode="tel" style={charterInput}/>
+          <input value={email} onChange={e=>setEmail(e.target.value)} placeholder="Email (optional)" inputMode="email" style={charterInput}/>
+          <textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={2} placeholder="Anything else about the whole charter? (optional)" style={{ ...charterInput, resize:'vertical', fontFamily:'inherit' }}/>
         </div>
 
         {error && <div style={{ background:'#fff0f0', border:'1px solid #fca5a5', color:'#dc2626', borderRadius:10, padding:'10px 14px', fontSize:13, marginBottom:14 }}>{error}</div>}
 
-        <button onClick={submit} disabled={submitting}
-          style={{ width:'100%', padding:'15px', background: submitting?'#9199ad':'linear-gradient(135deg,#6b21a8,#4c1d95)', color:'#fff', border:'none', borderRadius:14, fontSize:15.5, fontWeight:800, cursor: submitting?'default':'pointer', boxShadow:'0 6px 18px rgba(107,33,168,0.3)' }}>
-          {submitting ? 'Sending…' : `Request Charter — J$${total.toLocaleString()}`}
+        <button onClick={submit} disabled={submitting || anyLoading}
+          style={{ width:'100%', padding:'15px', background:(submitting||anyLoading)?'#9199ad':'linear-gradient(135deg,#6b21a8,#4c1d95)', color:'#fff', border:'none', borderRadius:14, fontSize:15.5, fontWeight:800, cursor:(submitting||anyLoading)?'default':'pointer', boxShadow:'0 6px 18px rgba(107,33,168,0.3)' }}>
+          {submitting ? 'Sending…' : anyLoading ? 'Calculating…' : `Request Charter — J$${total.toLocaleString()}`}
         </button>
         <p style={{ fontSize:11.5, color:'#8a83a0', textAlign:'center', marginTop:10, lineHeight:1.5 }}>
           This sends a request — no payment now. We'll contact you to confirm your driver and arrange the details.
@@ -9020,6 +9166,9 @@ function CharterPage({ go, user }) {
     </div>
   );
 }
+const cLbl = { fontSize:11, color:'#8a83a0', fontWeight:700, marginBottom:4 };
+const cField = { width:'100%', padding:'11px 12px', background:'#fff', border:'1.5px solid #e9d5ff', borderRadius:10, fontSize:13.5, color:'#1a1a2e', boxSizing:'border-box', outline:'none' };
+const charterInput = { width:'100%', padding:'13px 14px', background:'#fff', border:'1.5px solid #e9d5ff', borderRadius:11, fontSize:14, color:'#1a1a2e', boxSizing:'border-box', outline:'none' };
 const charterInput = { width:'100%', padding:'13px 14px', background:'#fff', border:'1.5px solid #e9d5ff', borderRadius:11, fontSize:14, color:'#1a1a2e', boxSizing:'border-box', outline:'none' };
 
 function CharterPromo({ go, variant = 'landing' }) {
