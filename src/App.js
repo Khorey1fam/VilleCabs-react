@@ -3905,8 +3905,8 @@ function CustomerSettings({ go, user, setUser }) {
 const MANDEVILLE_BIAS = { lat:18.0417, lng:-77.5071 };
 const BIAS_RADIUS_METERS = 25000;
 
-function AddressAutocompleteInput({ value, onChange, onPlaceSelect, placeholder }) {
-  const [query,   setQuery]   = useState(value || '');
+function AddressAutocompleteInput({ value, defaultValue, onChange, onPlaceSelect, placeholder }) {
+  const [query,   setQuery]   = useState(value || defaultValue || '');
   const [preds,   setPreds]   = useState([]);
   const [open,    setOpen]    = useState(false);
   const [loading, setLoading] = useState(false);
@@ -8894,6 +8894,7 @@ const CHARTER_PURPOSES = ['Business','Airport Transfer','Wedding','Event','Shopp
 
 function CharterPage({ go, user }) {
   const blankDay = () => ({
+    _id: Math.random().toString(36).slice(2),  // stable key for address-field remounts
     date:'', startTime:'', hours:8, purpose:'Business', notes:'',
     start:null,        // { address, lat, lng, name }
     stops:[],          // [{ address, lat, lng, name }]
@@ -8919,7 +8920,7 @@ function CharterPage({ go, user }) {
   const copyPrevDay = () => {
     setDays(d => {
       const last = d[d.length - 1];
-      return [...d, { ...last, date:'', startTime:'' }];
+      return [...d, { ...last, _id: Math.random().toString(36).slice(2), date:'', startTime:'' }];
     });
   };
   const removeDay = (i) => setDays(d => d.filter((_,x) => x !== i));
@@ -9099,7 +9100,7 @@ function CharterPage({ go, user }) {
         {days.map((d, i) => {
           const res = dayResults[i];
           return (
-          <div key={i} style={{ background:'#faf7fd', border:'1px solid #ece3f5', borderRadius:14, padding:'14px 16px', marginBottom:12 }}>
+          <div key={d._id||i} style={{ background:'#faf7fd', border:'1px solid #ece3f5', borderRadius:14, padding:'14px 16px', marginBottom:12 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
               <span style={{ fontSize:13.5, fontWeight:800, color:'#6b21a8' }}>Day {i+1}</span>
               {days.length > 1 && <button onClick={() => removeDay(i)} style={{ background:'none', border:'none', color:'#dc2626', fontSize:12, fontWeight:700, cursor:'pointer' }}>Remove day</button>}
@@ -9134,8 +9135,7 @@ function CharterPage({ go, user }) {
             {/* Itinerary */}
             <div style={{ marginBottom:8 }}>
               <div style={cLbl}>STARTING LOCATION</div>
-              <AddressAutocompleteInput value={d.start?.address||''} placeholder="Where does the day start?"
-                onChange={()=>{}}
+              <AddressAutocompleteInput key={`${d._id}-start`} defaultValue={d.start?.address||''} placeholder="Where does the day start?"
                 onPlaceSelect={pl=>{ const nd={...days[i], start:{address:pl.formattedAddress||pl.name,lat:pl.lat,lng:pl.lng,name:pl.name}}; patchDay(i,{start:nd.start}); recalcDay(i,nd); }}/>
             </div>
 
@@ -9145,8 +9145,7 @@ function CharterPage({ go, user }) {
                   <span>STOP {si+1}</span>
                   <span onClick={()=>{ const nd={...days[i], stops:days[i].stops.filter((_,x)=>x!==si)}; patchDay(i,{stops:nd.stops}); recalcDay(i,nd); }} style={{ color:'#dc2626', cursor:'pointer', fontWeight:700 }}>Remove</span>
                 </div>
-                <AddressAutocompleteInput value={sp?.address||''} placeholder="Add a stop"
-                  onChange={()=>{}}
+                <AddressAutocompleteInput key={`${d._id}-stop-${si}`} defaultValue={sp?.address||''} placeholder="Add a stop"
                   onPlaceSelect={pl=>{ const stops=days[i].stops.slice(); stops[si]={address:pl.formattedAddress||pl.name,lat:pl.lat,lng:pl.lng,name:pl.name}; const nd={...days[i],stops}; patchDay(i,{stops}); recalcDay(i,nd); }}/>
               </div>
             ))}
@@ -9155,8 +9154,7 @@ function CharterPage({ go, user }) {
 
             <div style={{ marginBottom:8 }}>
               <div style={cLbl}>FINAL DESTINATION</div>
-              <AddressAutocompleteInput value={d.destination?.address||''} placeholder="Where does the day end?"
-                onChange={()=>{}}
+              <AddressAutocompleteInput key={`${d._id}-dest`} defaultValue={d.destination?.address||''} placeholder="Where does the day end?"
                 onPlaceSelect={pl=>{ const nd={...days[i], destination:{address:pl.formattedAddress||pl.name,lat:pl.lat,lng:pl.lng,name:pl.name}}; patchDay(i,{destination:nd.destination}); recalcDay(i,nd); }}/>
             </div>
 
@@ -9167,8 +9165,7 @@ function CharterPage({ go, user }) {
             {d.hasReturn && (
               <div style={{ marginBottom:8 }}>
                 <div style={cLbl}>RETURN TO (leave blank to return to start)</div>
-                <AddressAutocompleteInput value={d.returnTo?.address||''} placeholder="Return destination"
-                  onChange={()=>{}}
+                <AddressAutocompleteInput key={`${d._id}-return`} defaultValue={d.returnTo?.address||''} placeholder="Return destination"
                   onPlaceSelect={pl=>{ const nd={...days[i], returnTo:{address:pl.formattedAddress||pl.name,lat:pl.lat,lng:pl.lng,name:pl.name}}; patchDay(i,{returnTo:nd.returnTo}); recalcDay(i,nd); }}/>
               </div>
             )}
