@@ -9169,7 +9169,6 @@ function CharterPage({ go, user }) {
 const cLbl = { fontSize:11, color:'#8a83a0', fontWeight:700, marginBottom:4 };
 const cField = { width:'100%', padding:'11px 12px', background:'#fff', border:'1.5px solid #e9d5ff', borderRadius:10, fontSize:13.5, color:'#1a1a2e', boxSizing:'border-box', outline:'none' };
 const charterInput = { width:'100%', padding:'13px 14px', background:'#fff', border:'1.5px solid #e9d5ff', borderRadius:11, fontSize:14, color:'#1a1a2e', boxSizing:'border-box', outline:'none' };
-const charterInput = { width:'100%', padding:'13px 14px', background:'#fff', border:'1.5px solid #e9d5ff', borderRadius:11, fontSize:14, color:'#1a1a2e', boxSizing:'border-box', outline:'none' };
 
 function CharterPromo({ go, variant = 'landing' }) {
   // Premium promo band used on the landing page and dashboard.
