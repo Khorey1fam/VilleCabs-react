@@ -8806,8 +8806,59 @@ function EventMonthRow({ title, subtitle, events, go, setPickupData, setDropoffD
 //   • 1st hour            J$1,500
 //   • hours 2–8           J$1,000 each
 //   • hours 9+            J$1,500 each
-const CHARTER_PRICING_VERSION = 'v2-2026-07'; // bump when rates change; stored on each booking
+const CHARTER_PRICING_VERSION = 'v3-2026-07'; // bump when rates change; stored on each booking
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SHARED RIDE FARE ENGINE
+// This is the SAME distance math VehicleSelect uses to price a normal ride,
+// extracted here as a pure function so Charter can reuse it instead of
+// duplicating (or undercutting) it. VehicleSelect still has its own copy for the
+// live booking flow — this mirrors that formula exactly (VilleRide base, i.e.
+// multiplier 1.0, no time-of-day surge, no out-of-town flat multiplier tricks).
+// If the ride formula changes, update BOTH or centralise later.
+// ──────────────────────────────────────────────────────────────────────────────
+const RIDE_FARE_BANDS = [
+  [0.1, 0.2, 500], [0.2, 0.3, 525], [0.3, 0.4, 550], [0.4, 0.5, 575],
+  [0.5, 0.6, 600], [0.6, 0.7, 650], [0.7, 0.8, 700], [0.8, 0.9, 725],
+  [0.9, 1.0, 751],
+];
+const RIDE_OVER_1KM_BASE = 751;
+const RIDE_OVER_1KM_PER_100M = 10.44;
+const RIDE_LONGDIST_MID_PER_KM = 180;   // per km 10–30km
+const RIDE_LONGDIST_FAR_PER_KM = 220;   // per km beyond 30km
+const RIDE_OUT_OF_TOWN_SURCHARGE = 1500;
+
+function rideLocalFare(km) {
+  if (km < 0.1) return 500;
+  for (const [lo, hi, fare] of RIDE_FARE_BANDS) {
+    if (km >= lo && km < hi) return fare;
+  }
+  const extra100m = Math.ceil((km - 1.0) / 0.1);
+  return Math.round(RIDE_OVER_1KM_BASE + extra100m * RIDE_OVER_1KM_PER_100M);
+}
+
+// Standard VilleRide fare for a given driving distance, with a component
+// breakdown. This is the figure a normal ride would cost for the same route.
+function standardRideFare(km) {
+  km = km || 0;
+  const first10 = rideLocalFare(Math.min(km, 10));
+  if (km <= 10) {
+    return { first10, midCharge:0, farCharge:0, outOfTown:0, total: first10, isLong:false, isFar:false };
+  }
+  if (km <= 30) {
+    const midCharge = Math.round((km - 10) * RIDE_LONGDIST_MID_PER_KM);
+    return { first10, midCharge, farCharge:0, outOfTown:0, total: first10 + midCharge, isLong:true, isFar:false };
+  }
+  const midCharge = 20 * RIDE_LONGDIST_MID_PER_KM;
+  const farCharge = Math.round((km - 30) * RIDE_LONGDIST_FAR_PER_KM);
+  const total = first10 + midCharge + farCharge + RIDE_OUT_OF_TOWN_SURCHARGE;
+  return { first10, midCharge, farCharge, outOfTown: RIDE_OUT_OF_TOWN_SURCHARGE, total, isLong:true, isFar:true };
+}
+
 // ── Charter pricing ──────────────────────────────────────────────────────────
+// Charter = MAX(standard ride fare, charter distance rate) as the base for the
+// route, PLUS charter-specific charges (reserved time, airport, surcharges),
+// so a charter can never be cheaper than the equivalent ride.
 // Time charge, by hours booked in a day:
 //   1st hour J$1,500 · hours 2–8 J$1,000 · hours 9+ J$1,500
 const CHARTER_RATES = {
@@ -8853,16 +8904,37 @@ function detectAirport(place) {
 function isAirportPlace(p) { return !!detectAirport(p); }
 
 // Compute one day's price from its resolved route distance (km) + hours + airport flag.
+//
+// The DISTANCE portion is the greater of:
+//   (a) the charter per-km rate: (km − 15 included) × J$80, or
+//   (b) the equivalent STANDARD RIDE fare for that same route.
+// Flooring at (b) is what stops a long/airport charter from ever being cheaper
+// than a normal ride to the same place. Reserved time, airport fee, and the
+// long-distance surcharge are then added ON TOP of that base.
 function charterDayPrice({ hours, km, hasAirport }) {
   const time = charterTimeCost(hours);
+
+  // (a) charter's own distance rate
   const billableKm = Math.max(0, (km || 0) - CHARTER_RATES.includedKm);
-  const distance = Math.round(billableKm * CHARTER_RATES.perKm);
+  const charterDistance = Math.round(billableKm * CHARTER_RATES.perKm);
+
+  // (b) what a normal ride would cost for this exact route
+  const ride = standardRideFare(km || 0);
+  const rideFare = ride.total;
+
+  // Base distance charge = the higher of the two. Never undercut a real ride.
+  const distance = Math.max(charterDistance, rideFare);
+  const distanceBasis = distance === rideFare && rideFare > charterDistance ? 'ride' : 'charter';
+
   const airport = hasAirport ? CHARTER_RATES.airportFee : 0;
   let subtotal = time + distance + airport;
   const longDistance = (km || 0) > CHARTER_RATES.longDistanceKm;
   const surcharge = longDistance ? Math.round(subtotal * CHARTER_RATES.longDistancePct) : 0;
   subtotal += surcharge;
-  return { time, distance, airport, surcharge, longDistance, subtotal, billableKm };
+  return {
+    time, distance, airport, surcharge, longDistance, subtotal, billableKm,
+    charterDistance, rideFare, distanceBasis,
+  };
 }
 
 // Route a day through start → stops → destination (+ return). Waypoint-aware,
@@ -8971,7 +9043,8 @@ function CharterPage({ go, user }) {
     airport:   a.airport   + r.airport,
     surcharge: a.surcharge + r.surcharge,
     billableKm:a.billableKm+ r.billableKm,
-  }), { time:0, distance:0, airport:0, surcharge:0, billableKm:0 });
+    usedRideFloor: a.usedRideFloor || r.distanceBasis === 'ride',
+  }), { time:0, distance:0, airport:0, surcharge:0, billableKm:0, usedRideFloor:false });
   const totalReservedHours = days.reduce((s,d) => s + (d.hours||0), 0);
   const totalIncludedKm = pricedDays.length * CHARTER_RATES.includedKm;
   const totalKm     = days.reduce((s,d) => s + (d.route?.km || 0), 0);
@@ -9012,6 +9085,8 @@ function CharterPage({ go, user }) {
           mins: d.route?.mins||0,
           timeCharge:     dayResults[i]?.time || 0,
           distanceCharge: dayResults[i]?.distance || 0,
+          rideFare:       dayResults[i]?.rideFare || 0,
+          distanceBasis:  dayResults[i]?.distanceBasis || 'charter',
           airportFee:     dayResults[i]?.airport || 0,
           surcharge:      dayResults[i]?.surcharge || 0,
           dayTotal:       dayResults[i]?.subtotal || 0,
@@ -9197,7 +9272,7 @@ function CharterPage({ go, user }) {
                 <div style={{ fontSize:12.5, color:'#5b5470', lineHeight:1.7 }}>
                   <div>📍 {Math.round(d.route.km)} km · about {Math.floor(d.route.mins/60)>0?`${Math.floor(d.route.mins/60)}h `:''}{d.route.mins%60}m driving</div>
                   <div style={{ display:'flex', justifyContent:'space-between' }}><span>Time ({d.hours}h)</span><span>J${res.time.toLocaleString()}</span></div>
-                  {res.distance>0 && <div style={{ display:'flex', justifyContent:'space-between' }}><span>Distance ({Math.round(res.billableKm)} km over 15)</span><span>J${res.distance.toLocaleString()}</span></div>}
+                  {res.distance>0 && <div style={{ display:'flex', justifyContent:'space-between' }}><span>{res.distanceBasis==='ride' ? 'Distance (standard ride rate)' : `Distance (${Math.round(res.billableKm)} km over 15)`}</span><span>J${res.distance.toLocaleString()}</span></div>}
                   {res.airport>0 && <div style={{ display:'flex', justifyContent:'space-between' }}><span>Airport service</span><span>J${res.airport.toLocaleString()}</span></div>}
                   {res.surcharge>0 && <div style={{ display:'flex', justifyContent:'space-between', color:'#b45309' }}><span>Long-distance (+10%)</span><span>J${res.surcharge.toLocaleString()}</span></div>}
                   <div style={{ display:'flex', justifyContent:'space-between', fontWeight:800, color:'#6b21a8', marginTop:2 }}><span>Day total</span><span>J${res.subtotal.toLocaleString()}</span></div>
@@ -9226,7 +9301,8 @@ function CharterPage({ go, user }) {
               <div style={brkRow}><span>Estimated route</span><span>{Math.round(totalKm)} km</span></div>
               <div style={{ ...brkRow, color:'#9199ad', fontSize:12.5 }}><span>Included distance ({pricedDays.length} × 15 km)</span><span>{totalIncludedKm} km</span></div>
               <div style={{ ...brkRow, color:'#9199ad', fontSize:12.5 }}><span>Billable distance</span><span>{Math.round(agg.billableKm)} km</span></div>
-              {agg.distance>0 && <div style={brkRow}><span>Distance charge</span><span>J${agg.distance.toLocaleString()}</span></div>}
+              {agg.distance>0 && <div style={brkRow}><span>Distance charge{agg.usedRideFloor?' *':''}</span><span>J${agg.distance.toLocaleString()}</span></div>}
+              {agg.usedRideFloor && <div style={{ fontSize:11, color:'#9199ad', fontStyle:'italic', marginTop:-2 }}>* Priced at the standard ride fare for this route (whichever is higher).</div>}
               {agg.surcharge>0 && <div style={{ ...brkRow, color:'#b45309' }}><span>Long-distance surcharge</span><span>J${agg.surcharge.toLocaleString()}</span></div>}
               {agg.airport>0 && <div style={brkRow}><span>Airport service fee</span><span>J${agg.airport.toLocaleString()}</span></div>}
               {multiDay && <div style={{ ...brkRow, color:'#1a9e5a', fontWeight:700 }}><span>Multi-day discount (10%)</span><span>−J${discount.toLocaleString()}</span></div>}
