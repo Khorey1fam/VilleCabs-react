@@ -10473,6 +10473,13 @@ class ErrorBoundary extends React.Component {
 
 
 function PartnerWithUs({ go, user }) {
+  // No <VilleMap> on this page, so nothing else triggers the Google Maps load —
+  // without this the business-address autocomplete silently returns nothing.
+  const { isLoaded: mapsReady } = useJsApiLoader({
+    googleMapsApiKey: GOOGLE_MAPS_KEY,
+    libraries: LIBRARIES,
+    version: 'weekly',
+  });
   const BIZ_TYPES = ['Hotels','Restaurants','Guest Houses','Attractions','Businesses','Clubs','Supermarkets','Events'];
   const PACKAGES = [
     { id:'7day',  label:'7 Days — J$5,000',   days:7,  price:5000 },
@@ -10611,6 +10618,7 @@ function PartnerWithUs({ go, user }) {
                 onPlaceSelect={(place)=>{ set('address', place.formattedAddress || place.name || form.address); set('lat', place.lat||null); set('lng', place.lng||null); }}
                 placeholder="Start typing your business address…"
               />
+              {!mapsReady && <div style={{ fontSize:11.5, color:'#8a83a0', marginTop:4 }}>🔄 Loading address search…</div>}
             </div>
 
             <label style={labelStyle}>Website / Social Media</label>
