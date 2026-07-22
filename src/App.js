@@ -1845,6 +1845,12 @@ function CustomerLogin({ go, setUser, user }) {
         ]);
         if (snap && snap.exists && snap.exists()) data = snap.data();
       } catch(e) { console.warn('Firestore slow, proceeding anyway'); }
+      if (['banned','suspended','deactivated'].includes(data.status)) {
+        await signOut(auth).catch(()=>{});
+        setError('Your account has been suspended. Please contact admin@villecabs.com.');
+        setLoading(false);
+        return;
+      }
       setUser({ uid:cred.user.uid, name:data.name||cred.user.displayName||email, email:cred.user.email, role:'customer' });
       if (!data.termsAccepted) go('terms');
       else if (!data.tipsSeen) go('welcome-tips');
@@ -2982,6 +2988,24 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
   const [ridesPaused, setRidesPaused] = useState(false);
   const prevStatusRef = useRef(null);
   const twoMinNotifiedRef = useRef(false); // Feature: Push Notifications
+
+  // Live account-status enforcement. Like drivers, a customer already logged in
+  // never re-hits the login-time suspension check — so without this, banning
+  // them has no effect until they sign in again. The moment their status becomes
+  // banned/suspended/deactivated, end the session.
+  useEffect(() => {
+    if (!user?.uid) return;
+    const unsub = onSnapshot(doc(db,'customers',user.uid), snap => {
+      if (!snap.exists()) return;
+      const st = snap.data().status;
+      if (['banned','suspended','deactivated'].includes(st)) {
+        vcToast('Your account has been suspended. Contact admin@villecabs.com.', 'error');
+        signOut(auth).catch(()=>{});
+        go('customer-login');
+      }
+    }, e => console.error('Account status listen failed:', e));
+    return () => unsub();
+  }, [user?.uid]);
 
   // Respect the admin's global ride-request switch (settings/operations)
   useEffect(() => {
@@ -4654,15 +4678,23 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
       const price      = calcPrice(v);
       const finalPrice = calcFinalPrice(v);
 
-      // ── CUSTOMER BLACKLIST CHECK (Feature: Customer Blacklist) ───────
+      // ── CUSTOMER SUSPENSION / BAN CHECK ──────────────────────────────
+      // Fail-CLOSED: if we can't confirm the account is in good standing, we
+      // don't book. A stale session on a banned account must not slip through.
       try {
         const meSnap = await getDoc(doc(db,'customers',user.uid));
-        if (meSnap.exists() && meSnap.data().status === 'banned') {
+        const st = meSnap.exists() ? meSnap.data().status : null;
+        if (['banned','suspended','deactivated'].includes(st)) {
           setChecking(false); setLoading(false);
           setError('Your account has been suspended from booking rides. Please contact admin@villecabs.com.');
           return;
         }
-      } catch(e) {}
+      } catch(e) {
+        console.error('Account status check failed:', e);
+        setChecking(false); setLoading(false);
+        setError('Could not verify your account. Please check your connection and try again.');
+        return;
+      }
 
       // ── ONE ACTIVE RIDE AT A TIME ────────────────────────────────────
       // A customer may not book again while they already have a ride in
@@ -12000,6 +12032,13 @@ export default function App() {
           else                               setScreen('driver-login');
         } else if (cSnap.exists()) {
           const d = cSnap.data();
+          // Suspended/banned customers don't get a session restored.
+          if (['banned','suspended','deactivated'].includes(d.status)) {
+            await signOut(auth);
+            clearTimeout(safety); done = true;
+            setScreen('customer-login'); setTimeout(() => setLoading(false), 100);
+            return;
+          }
           setUser({ uid:fu.uid, name:d.name||fu.displayName||'Customer', email:fu.email, role:'customer' });
           if (!fu.emailVerified && fu.providerData?.[0]?.providerId === 'password') {
             setScreen('otp');
