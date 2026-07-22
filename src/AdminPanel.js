@@ -132,12 +132,87 @@ function StatCard({ label, value, color = '#1a1a2e', sub }) {
 }
 
 // ── DRIVERS TAB ───────────────────────────────────────────────────────────────
+// ── Driver tiers ──────────────────────────────────────────────────────────────
+// Recognition labels shown on the driver's card. Add to this list freely — the
+// dropdown and badge both read from it.
+const DRIVER_TIERS = [
+  { id:'',           label:'— none —',        color:'#9199ad', bg:'#f3f4f6' },
+  { id:'new',        label:'New Driver',      color:'#0369a1', bg:'#f0f9ff' },
+  { id:'founding',   label:'Founding Driver', color:'#b45309', bg:'#fffbeb' },
+  { id:'veteran',    label:'Veteran Driver',  color:'#6b21a8', bg:'#f5f0ff' },
+  { id:'topRated',   label:'Top Rated',       color:'#166534', bg:'#f0fdf4' },
+  { id:'elite',      label:'Elite',           color:'#be123c', bg:'#fff1f2' },
+];
+const tierMeta = (id) => DRIVER_TIERS.find(t => t.id === (id||'')) || DRIVER_TIERS[0];
+
+// Per-driver earnings, grouped by day. Loads only when the row is expanded so we
+// aren't querying every driver's ride history on page load.
+function DriverEarnings({ driverId }) {
+  const [rides,   setRides]   = useState([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (!driverId) return;
+    const q = query(collection(db,'bookings'), where('driverId','==',driverId), where('status','==','completed'));
+    const unsub = onSnapshot(q,
+      snap => { setRides(snap.docs.map(d=>({id:d.id,...d.data()}))); setLoading(false); },
+      e => { console.error('Driver earnings load failed:', e); setLoading(false); });
+    return () => unsub();
+  }, [driverId]);
+
+  if (loading) return <div style={{ fontSize:12, color:'#9199ad', padding:'10px 0' }}>Loading earnings…</div>;
+  if (rides.length === 0) return <div style={{ fontSize:12, color:'#9199ad', padding:'10px 0' }}>No completed rides yet.</div>;
+
+  // Group by calendar day (most recent first).
+  const byDay = {};
+  rides.forEach(r => {
+    const secs = r.completedAt?.seconds || r.createdAt?.seconds;
+    if (!secs) return;
+    const d = new Date(secs*1000);
+    const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    if (!byDay[key]) byDay[key] = { key, date:d, gross:0, count:0 };
+    byDay[key].gross += (r.fare || 0);
+    byDay[key].count += 1;
+  });
+  const days = Object.values(byDay).sort((a,b) => b.date - a.date);
+  const grandGross = days.reduce((s,d)=>s+d.gross,0);
+  // Platform takes 15%, so the driver keeps 85% — same split shown elsewhere.
+  const net = n => Math.round(n * 0.85);
+  const max = Math.max(...days.map(d=>d.gross), 1);
+
+  return (
+    <div style={{ padding:'4px 0 2px' }}>
+      <div style={{ display:'flex', gap:16, flexWrap:'wrap', marginBottom:10, fontSize:12 }}>
+        <span style={{ color:'#6b7280' }}>Total gross <strong style={{ color:'#1a1a2e' }}>J${grandGross.toLocaleString()}</strong></span>
+        <span style={{ color:'#6b7280' }}>Driver keeps (85%) <strong style={{ color:GREEN }}>J${net(grandGross).toLocaleString()}</strong></span>
+        <span style={{ color:'#6b7280' }}>Rides <strong style={{ color:'#1a1a2e' }}>{rides.length}</strong></span>
+      </div>
+      <div style={{ maxHeight:260, overflowY:'auto' }}>
+        {days.map(d => (
+          <div key={d.key} style={{ padding:'7px 0', borderTop:'1px solid #f0f0f4' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, fontSize:12.5 }}>
+              <span style={{ color:'#374151', minWidth:120 }}>{d.date.toLocaleDateString('en-JM',{ weekday:'short', day:'numeric', month:'short' })}</span>
+              <span style={{ color:'#9199ad', fontSize:11.5 }}>{d.count} ride{d.count!==1?'s':''}</span>
+              <span style={{ flex:1, height:6, background:'#f3f4f6', borderRadius:3, overflow:'hidden', minWidth:40 }}>
+                <span style={{ display:'block', width:`${Math.round((d.gross/max)*100)}%`, height:'100%', background:'#6b21a8' }}/>
+              </span>
+              <span style={{ fontWeight:700, color:'#1a1a2e', minWidth:78, textAlign:'right' }}>J${d.gross.toLocaleString()}</span>
+              <span style={{ color:GREEN, fontSize:11.5, minWidth:70, textAlign:'right' }}>J${net(d.gross).toLocaleString()}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize:10.5, color:'#9199ad', marginTop:8 }}>Gross fare · driver's 85% share after the 15% platform fee.</div>
+    </div>
+  );
+}
+
 function DriversTab() {
   const [drivers, setDrivers]   = useState([]);
   const [filter,  setFilter]    = useState('pending');
   const [loading, setLoading]   = useState(true);
   const [confirm, setConfirm]   = useState(null);
   const [search,  setSearch]    = useState('');
+  const [earnOpen, setEarnOpen] = useState(null);   // driver id whose earnings are expanded
 
   useEffect(() => {
     const q = (filter === 'all' || filter === 'reuploads')
@@ -167,6 +242,12 @@ function DriversTab() {
 
   const suspend = async (id) => {
     await updateDoc(doc(db,'drivers',id), { status:'suspended', suspendedAt:serverTimestamp() });
+  };
+
+  // Recognition tier (Founding Driver, New Driver, …). Purely a label for now.
+  const setTier = async (id, tier) => {
+    try { await updateDoc(doc(db,'drivers',id), { tier: tier || null, tierSetAt: serverTimestamp() }); }
+    catch(e) { console.error('Could not set driver tier:', e); }
   };
 
   // Force a driver offline (they stop receiving ride requests immediately).
@@ -409,6 +490,33 @@ function DriversTab() {
               <button onClick={() => approve(driver.id)} style={s.btnApprove}>Re-activate</button>
             )}
           </div>
+
+          {/* Tier + earnings — only meaningful once a driver is on the road */}
+          {driver.status === 'approved' && (
+            <div style={{ marginTop:12, paddingTop:12, borderTop:'1px solid #f0f0f4' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+                <span style={{ fontSize:11, color:'#8a83a0', fontWeight:700 }}>DRIVER STATUS</span>
+                <select value={driver.tier || ''} onChange={e => setTier(driver.id, e.target.value)}
+                  style={{ padding:'7px 10px', background:'#fff', border:'1px solid #d0d3e0', borderRadius:8, fontSize:12.5, color:'#1a1a2e', cursor:'pointer' }}>
+                  {DRIVER_TIERS.map(t => <option key={t.id||'none'} value={t.id}>{t.label}</option>)}
+                </select>
+                {driver.tier && (
+                  <span style={{ fontSize:11, fontWeight:700, color:tierMeta(driver.tier).color, background:tierMeta(driver.tier).bg, border:`1px solid ${tierMeta(driver.tier).color}33`, padding:'4px 11px', borderRadius:12 }}>
+                    ★ {tierMeta(driver.tier).label}
+                  </span>
+                )}
+                <button onClick={() => setEarnOpen(earnOpen === driver.id ? null : driver.id)}
+                  style={{ marginLeft:'auto', padding:'7px 14px', background:'#f5f0ff', color:'#6b21a8', border:'1px solid #e9d5ff', borderRadius:8, fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                  💰 {earnOpen === driver.id ? 'Hide earnings' : 'Earnings by day'}
+                </button>
+              </div>
+              {earnOpen === driver.id && (
+                <div style={{ marginTop:10, background:'#fafafc', border:'1px solid #eee', borderRadius:10, padding:'10px 12px' }}>
+                  <DriverEarnings driverId={driver.id}/>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       ))}
     </div>
@@ -1173,6 +1281,10 @@ function OverviewTab({ setTab }) {
   return (
     <div>
       <div style={{ fontSize:16, fontWeight:500, marginBottom:16 }}>Overview — Manchester, Jamaica</div>
+
+      {/* Safety alerts first — never bury these */}
+      <OverviewAlerts setTab={setTab}/>
+
       <div style={s.statgrid}>
         <StatCard label="Pending applications" value={stats.pending}    color="#b45309" sub="awaiting review"/>
         <StatCard label="Active drivers"        value={stats.approved}  color={GREEN}  sub="approved"/>
@@ -2048,36 +2160,120 @@ function PartnersTab() {
 }
 
 // ── SAFETY ALERTS TAB ─────────────────────────────────────────────────────────
+// ── Active SOS alerts banner for the Overview tab ─────────────────────────────
+// Safety alerts are the one thing the admin must never miss, so they surface at
+// the very top of Overview rather than only inside the Alerts tab.
+function OverviewAlerts({ setTab }) {
+  const [active, setActive] = useState([]);
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db,'sos_alerts'), snap => {
+      setActive(snap.docs.map(d=>({id:d.id,...d.data()})).filter(a => a.status !== 'resolved'));
+    }, ()=>{});
+    return () => unsub();
+  }, []);
+
+  if (active.length === 0) {
+    return (
+      <div style={{ ...s.card, marginBottom:14, borderLeft:`3px solid ${GREEN}`, display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, flexWrap:'wrap' }}>
+        <div style={{ fontSize:13.5, color:'#4b5563' }}>✅ No active safety alerts</div>
+        <button onClick={()=>setTab('alerts')} style={{ background:'none', border:'none', color:'#6b21a8', fontSize:12.5, fontWeight:700, cursor:'pointer' }}>View alert history →</button>
+      </div>
+    );
+  }
+
+  const recent = [...active].sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0)).slice(0,3);
+  return (
+    <div style={{ ...s.card, marginBottom:14, borderLeft:`3px solid ${RED}`, background:'#fff5f5' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', gap:10, marginBottom:10, flexWrap:'wrap' }}>
+        <div style={{ fontSize:15, fontWeight:800, color:'#dc2626' }}>
+          🆘 {active.length} active safety alert{active.length!==1?'s':''}
+        </div>
+        <button onClick={()=>setTab('alerts')}
+          style={{ padding:'8px 16px', background:RED, color:'#fff', border:'none', borderRadius:18, fontSize:12.5, fontWeight:700, cursor:'pointer' }}>
+          Respond now →
+        </button>
+      </div>
+      {recent.map(a => (
+        <div key={a.id} onClick={()=>setTab('alerts')}
+          style={{ fontSize:12.5, color:'#4b5563', padding:'7px 0', borderTop:'1px solid #fee2e2', cursor:'pointer' }}>
+          👤 {a.customerName||'—'} · 🚗 {a.driverName||'—'}
+          {a.location ? ` · 📍 ${a.location}` : ''}
+          <span style={{ color:'#9199ad' }}> · {a.createdAt?.seconds ? new Date(a.createdAt.seconds*1000).toLocaleTimeString() : '—'}</span>
+          {a.status==='responding' && <span style={{ color:'#b45309', fontWeight:700 }}> · responding</span>}
+        </div>
+      ))}
+      {active.length > recent.length && (
+        <div style={{ fontSize:11.5, color:'#9199ad', marginTop:8 }}>+{active.length - recent.length} more in the Alerts tab</div>
+      )}
+    </div>
+  );
+}
+
 function AlertsTab() {
   const [alerts,  setAlerts]  = useState([]);
   const [loading, setLoading] = useState(true);
+  const [view,    setView]    = useState('active');   // active | history
   useEffect(() => {
     const unsub = onSnapshot(collection(db,'sos_alerts'), snap => { setAlerts(snap.docs.map(d=>({id:d.id,...d.data()}))); setLoading(false); }, ()=>setLoading(false));
     return () => unsub();
   }, []);
-  const setStatus = async (id, status) => { await updateDoc(doc(db,'sos_alerts',id), { status }); };
-  const sorted = [...alerts].sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+  // Resolving stamps the time so History can show when it was closed out.
+  const setStatus = async (id, status) => {
+    const patch = { status };
+    if (status === 'resolved') patch.resolvedAt = serverTimestamp();
+    await updateDoc(doc(db,'sos_alerts',id), patch);
+  };
+  const reopen = async (id) => { await updateDoc(doc(db,'sos_alerts',id), { status:'new', resolvedAt:null }); };
+
+  const isResolved = a => a.status === 'resolved';
+  const active  = alerts.filter(a => !isResolved(a));
+  const history = alerts.filter(isResolved);
+  const list = (view === 'active' ? active : history)
+    .sort((a,b) => ((view==='active' ? b.createdAt?.seconds : b.resolvedAt?.seconds||b.createdAt?.seconds)||0)
+                 - ((view==='active' ? a.createdAt?.seconds : a.resolvedAt?.seconds||a.createdAt?.seconds)||0));
+
   if (loading) return <div style={{ color:'#9199ad', fontSize:13 }}>Loading...</div>;
   return (
     <div>
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:20 }}>
-        <StatCard label="Total alerts" value={alerts.length}/>
-        <StatCard label="New" value={alerts.filter(a=>(a.status||'new')==='new').length} color={RED}/>
-        <StatCard label="Resolved" value={alerts.filter(a=>a.status==='resolved').length} color={GREEN}/>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:16 }}>
+        <StatCard label="Active alerts" value={active.length} color={active.length?RED:GREEN}/>
+        <StatCard label="Responding" value={alerts.filter(a=>a.status==='responding').length} color="#b45309"/>
+        <StatCard label="Resolved" value={history.length} color={GREEN}/>
       </div>
-      {sorted.length===0 && <div style={s.card}><div style={{ color:'#9199ad', fontSize:13, textAlign:'center', padding:20 }}>✅ No safety alerts.</div></div>}
-      {sorted.map(a => (
-        <div key={a.id} style={{ ...s.card, borderLeft:`3px solid ${a.status==='resolved'?GREEN:RED}` }}>
+
+      {/* Active / History switch */}
+      <div style={{ display:'flex', gap:8, marginBottom:14 }}>
+        {[['active',`🆘 Active (${active.length})`],['history',`🗂 Alert History (${history.length})`]].map(([k,label]) => (
+          <button key={k} onClick={()=>setView(k)}
+            style={{ padding:'8px 16px', borderRadius:18, fontSize:12.5, fontWeight:700, cursor:'pointer',
+              background: view===k ? '#6b21a8' : '#f5f0ff', color: view===k ? '#fff' : '#6b21a8', border:'1px solid #e9d5ff' }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {list.length===0 && (
+        <div style={s.card}><div style={{ color:'#9199ad', fontSize:13, textAlign:'center', padding:20 }}>
+          {view==='active' ? '✅ No active safety alerts.' : 'No resolved alerts yet.'}
+        </div></div>
+      )}
+
+      {list.map(a => (
+        <div key={a.id} style={{ ...s.card, borderLeft:`3px solid ${isResolved(a)?GREEN:RED}`, opacity: isResolved(a)?0.85:1 }}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
-            <span style={{ fontSize:14, fontWeight:600, color:RED }}>🆘 SOS Alert</span>
-            <span style={{ ...s.badge, background: a.status==='resolved'?'rgba(26,158,90,0.15)':'rgba(226,75,74,0.15)', color: a.status==='resolved'?GREEN:'#dc2626' }}>{a.status||'new'}</span>
+            <span style={{ fontSize:14, fontWeight:600, color: isResolved(a)?'#4b5563':RED }}>🆘 SOS Alert</span>
+            <span style={{ ...s.badge, background: isResolved(a)?'rgba(26,158,90,0.15)':'rgba(226,75,74,0.15)', color: isResolved(a)?GREEN:'#dc2626' }}>{a.status||'new'}</span>
           </div>
           <div style={{ fontSize:12, color:'#4b5563', marginBottom:3 }}>👤 {a.customerName||'—'} · 🚗 {a.driverName||'—'}</div>
           {a.location && <div style={{ fontSize:12, color:'#4b5563', marginBottom:3 }}>📍 {a.location}</div>}
-          <div style={{ fontSize:11, color:'#9199ad', marginBottom:10 }}>{a.createdAt?.seconds ? new Date(a.createdAt.seconds*1000).toLocaleString() : '—'}</div>
+          <div style={{ fontSize:11, color:'#9199ad', marginBottom:10 }}>
+            Raised {a.createdAt?.seconds ? new Date(a.createdAt.seconds*1000).toLocaleString() : '—'}
+            {isResolved(a) && a.resolvedAt?.seconds ? ` · Resolved ${new Date(a.resolvedAt.seconds*1000).toLocaleString()}` : ''}
+          </div>
           <div style={{ display:'flex', gap:8 }}>
-            {a.status!=='responding' && <button onClick={()=>setStatus(a.id,'responding')} style={{ ...s.btnApprove, background:'#f59e0b', color:'#fff' }}>Responding</button>}
-            {a.status!=='resolved' && <button onClick={()=>setStatus(a.id,'resolved')} style={s.btnApprove}>✅ Resolved</button>}
+            {!isResolved(a) && a.status!=='responding' && <button onClick={()=>setStatus(a.id,'responding')} style={{ ...s.btnApprove, background:'#f59e0b', color:'#fff' }}>Responding</button>}
+            {!isResolved(a) && <button onClick={()=>setStatus(a.id,'resolved')} style={s.btnApprove}>✅ Resolved</button>}
+            {isResolved(a)  && <button onClick={()=>reopen(a.id)} style={s.btnSuspend}>↩ Re-open</button>}
           </div>
         </div>
       ))}
