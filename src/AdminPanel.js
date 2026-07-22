@@ -179,13 +179,37 @@ function DriverEarnings({ driverId }) {
   const net = n => Math.round(n * 0.85);
   const max = Math.max(...days.map(d=>d.gross), 1);
 
+  // Today / this-month windows, for working out what to pay out.
+  const now = new Date();
+  const todayKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const todayRow  = byDay[todayKey];
+  const todayGross = todayRow ? todayRow.gross : 0;
+  const todayRides = todayRow ? todayRow.count : 0;
+  const monthDays  = days.filter(d => d.date.getFullYear()===now.getFullYear() && d.date.getMonth()===now.getMonth());
+  const monthGross = monthDays.reduce((s,d)=>s+d.gross,0);
+  const monthRides = monthDays.reduce((s,d)=>s+d.count,0);
+
+  const box = (label, gross, rides, accent) => (
+    <div style={{ flex:1, minWidth:150, background:'#fff', border:'1px solid #e5e7eb', borderRadius:10, padding:'10px 12px' }}>
+      <div style={{ fontSize:10.5, color:'#8a83a0', fontWeight:700, textTransform:'uppercase', letterSpacing:0.4 }}>{label}</div>
+      <div style={{ fontSize:18, fontWeight:800, color:accent, marginTop:3 }}>J${net(gross).toLocaleString()}</div>
+      <div style={{ fontSize:10.5, color:'#9199ad', marginTop:2 }}>payout · gross J${gross.toLocaleString()} · {rides} ride{rides!==1?'s':''}</div>
+    </div>
+  );
+
   return (
     <div style={{ padding:'4px 0 2px' }}>
-      <div style={{ display:'flex', gap:16, flexWrap:'wrap', marginBottom:10, fontSize:12 }}>
-        <span style={{ color:'#6b7280' }}>Total gross <strong style={{ color:'#1a1a2e' }}>J${grandGross.toLocaleString()}</strong></span>
-        <span style={{ color:'#6b7280' }}>Driver keeps (85%) <strong style={{ color:GREEN }}>J${net(grandGross).toLocaleString()}</strong></span>
-        <span style={{ color:'#6b7280' }}>Rides <strong style={{ color:'#1a1a2e' }}>{rides.length}</strong></span>
+      {/* Payout summary — what this driver is owed */}
+      <div style={{ display:'flex', gap:10, flexWrap:'wrap', marginBottom:12 }}>
+        {box('Today',      todayGross, todayRides, '#6b21a8')}
+        {box('This month', monthGross, monthRides, GREEN)}
+        {box('All time',   grandGross, rides.length, '#1a1a2e')}
       </div>
+      <div style={{ fontSize:11, color:'#8a83a0', marginBottom:10 }}>
+        Payout = 85% of gross fares (after the 15% platform fee).
+      </div>
+
+      <div style={{ fontSize:11, color:'#8a83a0', fontWeight:700, textTransform:'uppercase', letterSpacing:0.4, marginBottom:2 }}>Daily breakdown</div>
       <div style={{ maxHeight:260, overflowY:'auto' }}>
         {days.map(d => (
           <div key={d.key} style={{ padding:'7px 0', borderTop:'1px solid #f0f0f4' }}>
@@ -968,6 +992,7 @@ function CustomersTab() {
 function ContactsTab() {
   const [contacts, setContacts] = useState([]);
   const [loading,  setLoading]  = useState(true);
+  const [view,     setView]     = useState('new');   // new | solved
   useEffect(() => {
     const unsub = onSnapshot(collection(db,'contact_submissions'), snap => {
       const list = snap.docs.map(d => ({ id:d.id, ...d.data() }));
@@ -977,27 +1002,68 @@ function ContactsTab() {
     return () => unsub();
   }, []);
   const fmtDate = (ts) => ts?.seconds ? new Date(ts.seconds*1000).toLocaleDateString('en-JM',{day:'numeric',month:'short',year:'numeric'}) : '--';
+
+  // Marking solved moves the message into the Solved tab so the inbox only shows
+  // what still needs a reply.
+  const markSolved = async (id, solved) => {
+    try {
+      await updateDoc(doc(db,'contact_submissions',id), {
+        status: solved ? 'solved' : 'new',
+        solvedAt: solved ? serverTimestamp() : null,
+      });
+    } catch(e) { console.error('Could not update message:', e); }
+  };
+
+  const isSolved = c => c.status === 'solved';
+  const newMsgs  = contacts.filter(c => !isSolved(c));
+  const solved   = contacts.filter(isSolved);
+  const shown    = view === 'new' ? newMsgs : solved;
+
   return (
     <div>
-      <StatCard label="Total messages" value={contacts.length} sub="contact submissions"/>
-      <div style={{ marginTop:16 }}>
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(2,1fr)', gap:12, marginBottom:14 }}>
+        <StatCard label="New messages" value={newMsgs.length} color={newMsgs.length?'#b45309':GREEN} sub="awaiting reply"/>
+        <StatCard label="Solved" value={solved.length} color={GREEN} sub="closed out"/>
+      </div>
+
+      <div style={{ display:'flex', gap:8, marginBottom:14 }}>
+        {[['new',`📬 New (${newMsgs.length})`],['solved',`✅ Solved (${solved.length})`]].map(([k,label]) => (
+          <button key={k} onClick={()=>setView(k)}
+            style={{ padding:'8px 16px', borderRadius:18, fontSize:12.5, fontWeight:700, cursor:'pointer',
+              background: view===k ? '#6b21a8' : '#f5f0ff', color: view===k ? '#fff' : '#6b21a8', border:'1px solid #e9d5ff' }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div>
         {loading ? <div style={{ textAlign:'center', padding:40, color:'#9199ad' }}>Loading...</div>
-        : contacts.length === 0 ? <div style={{ textAlign:'center', padding:40, color:'#9199ad' }}>No messages yet</div>
-        : contacts.map(c => (
-          <div key={c.id} style={{ background:'#ffffff', border:'1px solid #e5e7eb', borderRadius:12, padding:'16px 18px', marginBottom:12 }}>
+        : shown.length === 0 ? <div style={{ textAlign:'center', padding:40, color:'#9199ad' }}>
+            {view==='new' ? '✅ No new messages — inbox clear.' : 'No solved messages yet.'}
+          </div>
+        : shown.map(c => (
+          <div key={c.id} style={{ background:'#ffffff', border:'1px solid #e5e7eb', borderRadius:12, padding:'16px 18px', marginBottom:12, borderLeft:`3px solid ${isSolved(c)?GREEN:'#b45309'}`, opacity:isSolved(c)?0.85:1 }}>
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
               <div>
                 <div style={{ fontSize:14, fontWeight:500, color:'#1a1a2e' }}>{c.name}</div>
                 <div style={{ fontSize:12, color:'#6b7280', marginTop:2 }}>{c.email} · {c.role==='driver'?'Driver':'Customer'}</div>
               </div>
-              <div style={{ fontSize:11, color:'#9199ad' }}>{fmtDate(c.createdAt)}</div>
+              <div style={{ fontSize:11, color:'#9199ad', textAlign:'right' }}>
+                {fmtDate(c.createdAt)}
+                {isSolved(c) && c.solvedAt?.seconds && <div style={{ color:GREEN }}>solved {fmtDate(c.solvedAt)}</div>}
+              </div>
             </div>
             <div style={{ fontSize:13, fontWeight:600, color:'#6b21a8', marginBottom:6 }}>{c.subject}</div>
             <div style={{ fontSize:13, color:'#6b7280', lineHeight:1.6, background:'#f9fafb', borderRadius:8, padding:10 }}>{c.message}</div>
-            <a href={`mailto:${c.email}?subject=Re: ${c.subject}`}
-              style={{ display:'inline-block', marginTop:10, padding:'6px 14px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:8, color:'#6b21a8', fontSize:12, textDecoration:'none' }}>
-              📧 Reply via email
-            </a>
+            <div style={{ display:'flex', gap:8, marginTop:10, flexWrap:'wrap' }}>
+              <a href={`mailto:${c.email}?subject=Re: ${c.subject}`}
+                style={{ display:'inline-block', padding:'6px 14px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:8, color:'#6b21a8', fontSize:12, textDecoration:'none' }}>
+                📧 Reply via email
+              </a>
+              {!isSolved(c)
+                ? <button onClick={()=>markSolved(c.id, true)} style={{ padding:'6px 14px', background:'#f0fdf4', border:'1px solid #86efac', borderRadius:8, color:'#166534', fontSize:12, fontWeight:700, cursor:'pointer' }}>✅ Mark solved</button>
+                : <button onClick={()=>markSolved(c.id, false)} style={{ padding:'6px 14px', background:'#fff', border:'1px solid #e5e7eb', borderRadius:8, color:'#6b7280', fontSize:12, fontWeight:600, cursor:'pointer' }}>↩ Re-open</button>}
+            </div>
           </div>
         ))}
       </div>
@@ -1818,6 +1884,7 @@ function PartnersTab() {
   const [editing,  setEditing]  = useState(null); // partner id being edited
   const [form,     setForm]     = useState({});   // working copy of that partner
   const [savedMsg, setSavedMsg] = useState('');
+  const [pFilter,  setPFilter]  = useState('pending');  // pending | approved | all
   const TOTAL_SLOTS = 10; // secret internal slot names (admin-only)
   // Load Google Places so the address box can capture real coordinates.
   useJsApiLoader({ googleMapsApiKey: GOOGLE_MAPS_KEY, libraries: MAP_LIBRARIES, id: 'villecabs-admin-map' });
@@ -1926,6 +1993,15 @@ function PartnersTab() {
   const takenSlots = {};
   partners.forEach(p => { if (p.slot && ['approved','featured'].includes((p.status||'').toLowerCase())) takenSlots[p.slot] = p.id; });
 
+  // Anything approved/featured has been actioned; everything else still needs a
+  // decision (new, pending, rejected all sit in the queue).
+  const isApproved = p => ['approved','featured'].includes((p.status||'').toLowerCase());
+  const approvedPartners = partners.filter(isApproved);
+  const pendingPartners  = partners.filter(p => !isApproved(p));
+  const shownPartners = pFilter==='approved' ? approvedPartners
+                      : pFilter==='pending'  ? pendingPartners
+                      : partners;
+
   const badge = (st) => {
     const map = { new:{bg:'#fffbeb',color:'#b45309'}, approved:{bg:'rgba(26,158,90,0.15)',color:GREEN}, featured:{bg:'rgba(107,33,168,0.2)',color:'#c9a3f5'}, changes_requested:{bg:'#eff6ff',color:'#2563eb'}, rejected:{bg:'rgba(226,75,74,0.12)',color:'#dc2626'} };
     const label = { changes_requested:'changes requested' };
@@ -1942,8 +2018,25 @@ function PartnersTab() {
         <StatCard label="Approved" value={partners.filter(p=>['approved','featured'].includes((p.status||'').toLowerCase())).length} color={GREEN}/>
         <StatCard label="Slots filled" value={`${Object.keys(takenSlots).length}/${TOTAL_SLOTS}`} color="#c9a3f5"/>
       </div>
-      {partners.length===0 && <div style={s.card}><div style={{ color:'#9199ad', fontSize:13, textAlign:'center', padding:20 }}>No partner requests yet.</div></div>}
-      {partners.map(p => (
+
+      {/* Pending / Approved split — approving a partner moves them out of Pending
+          so the queue only shows what still needs a decision. */}
+      <div style={{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap' }}>
+        {[['pending',`⏳ Pending (${pendingPartners.length})`],
+          ['approved',`✅ Approved (${approvedPartners.length})`],
+          ['all',`All (${partners.length})`]].map(([k,label]) => (
+          <button key={k} onClick={()=>setPFilter(k)}
+            style={{ padding:'8px 16px', borderRadius:18, fontSize:12.5, fontWeight:700, cursor:'pointer',
+              background: pFilter===k ? '#6b21a8' : '#f5f0ff', color: pFilter===k ? '#fff' : '#6b21a8', border:'1px solid #e9d5ff' }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {shownPartners.length===0 && <div style={s.card}><div style={{ color:'#9199ad', fontSize:13, textAlign:'center', padding:20 }}>
+        {pFilter==='pending' ? '✅ No partner requests waiting for review.' : pFilter==='approved' ? 'No approved partners yet.' : 'No partner requests yet.'}
+      </div></div>}
+      {shownPartners.map(p => (
         <div key={p.id} style={s.card}>
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
             <span style={{ fontSize:15, fontWeight:500, color:'#1a1a2e' }}>{p.bizName||p.businessName||p.name||'Business'}</span>
