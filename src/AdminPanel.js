@@ -1226,6 +1226,32 @@ function AnalyticsTab() {
 }
 
 // ── ANALYTICS: RIDE REQUEST TOGGLE (accepting vs paused) ──────────────────────
+function ForceLogoutButton() {
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const run = async () => {
+    if (!window.confirm('Log out EVERY driver and customer? They will each have to sign in again next time they open the app. Use this after suspending someone who still has an open session.')) return;
+    setBusy(true);
+    try {
+      await setDoc(doc(db,'config','app'), { forceLogoutAfter: serverTimestamp() }, { merge:true });
+      setDone(true);
+    } catch(e) { console.error(e); window.alert('Could not trigger logout. Try again.'); }
+    setBusy(false);
+  };
+  return (
+    <div style={{ ...s.card, marginTop:14, borderLeft:'3px solid #dc2626' }}>
+      <div style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginBottom:4 }}>🔒 Force logout everyone</div>
+      <div style={{ fontSize:12.5, color:'#6b7280', lineHeight:1.5, marginBottom:12 }}>
+        Signs out all drivers and customers on their next app open. Useful when a suspended account still has an open session. Active sessions end within a minute or on their next screen change.
+      </div>
+      <button onClick={run} disabled={busy}
+        style={{ padding:'10px 18px', background: done ? '#166534' : '#dc2626', color:'#fff', border:'none', borderRadius:10, fontSize:13, fontWeight:700, cursor: busy?'default':'pointer' }}>
+        {busy ? 'Working…' : done ? '✓ Logout triggered' : 'Log everyone out'}
+      </button>
+    </div>
+  );
+}
+
 function RideRequestToggle() {
   const [accepting, setAccepting] = useState(true);
   const [loaded, setLoaded] = useState(false);
@@ -1380,6 +1406,8 @@ function OverviewTab({ setTab }) {
       <div style={{ marginTop:14 }}>
         <RideRequestToggle/>
       </div>
+
+      <ForceLogoutButton/>
 
       {/* Live activity feed */}
       <LiveActivityFeed/>

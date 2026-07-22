@@ -6567,8 +6567,24 @@ function DriverDash({ go, user, setUser, setBookingId }) {
     const unsubDriver = onSnapshot(doc(db, 'drivers', user.uid), snap => {
       if (snap.exists()) {
         const d = snap.data();
+        // Enforce suspension in real time. A driver already logged in never
+        // re-hits the login-time status check, so without this an admin
+        // suspending them has no effect until they happen to log in again.
+        // The moment their status leaves 'approved', end the session.
+        if (d.status === 'suspended' || d.status === 'rejected' || d.status === 'deactivated') {
+          vcToast(d.status === 'suspended'
+            ? 'Your account has been suspended. Contact support.'
+            : 'Your account is no longer active. Contact support.', 'error');
+          signOut(auth).catch(()=>{});
+          go('driver-login');
+          return;
+        }
         setIsOnline(d.isOnline || false);
         driverProfileRef.current = d; // cache for instant ride acceptance (no extra read)
+      } else {
+        // Driver doc deleted out from under them — end the session too.
+        signOut(auth).catch(()=>{});
+        go('driver-login');
       }
     }, e => console.error('Driver load error:', e));
 
@@ -6721,8 +6737,16 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   };
   const acceptRide = async (rideId) => {
     if (!rideId || acceptingId) return;
-    setAcceptingId(rideId);
     const dData = driverProfileRef.current || {};
+    // Hard stop: a suspended/deactivated driver must not be able to take a ride,
+    // even if their screen is stale. The live listener will also bounce them.
+    if (dData.status && dData.status !== 'approved') {
+      vcToast('Your account is not active. You cannot accept rides.', 'error');
+      signOut(auth).catch(()=>{});
+      go('driver-login');
+      return;
+    }
+    setAcceptingId(rideId);
 
     try {
       // ATOMIC CLAIM: read the booking inside a transaction and only take it if
@@ -11919,6 +11943,24 @@ export default function App() {
       }
       // Logged in - restore session
       try {
+        // Global force-logout: if the admin set a cutoff, any session whose
+        // Firebase token was issued before it is signed out. Lets the admin
+        // "log everyone out" (e.g. after suspending someone with a stale tab).
+        try {
+          const cfgSnap = await getDoc(doc(db,'config','app'));
+          const cutoff = cfgSnap.exists() ? (cfgSnap.data().forceLogoutAfter?.seconds || 0) : 0;
+          if (cutoff) {
+            const tok = await fu.getIdTokenResult();
+            const authTimeSec = Math.floor(new Date(tok.authTime).getTime() / 1000);
+            if (authTimeSec < cutoff) {
+              await signOut(auth);
+              clearTimeout(safety); done = true;
+              setScreen('splash'); setTimeout(() => setLoading(false), 100);
+              return;
+            }
+          }
+        } catch(e) { /* config missing or unreadable — proceed normally */ }
+
         // Admins are handled by the dedicated /admin page — send them there
         if (['admin@villecabs.com'].includes((fu.email||'').toLowerCase())) {
           if (!window.location.pathname.startsWith('/admin')) {
