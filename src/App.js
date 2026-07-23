@@ -9002,13 +9002,28 @@ function EventFlyerCard({ p, go, setPickupData, setDropoffData }) {
       {/* Full flyer — 'contain' so every detail printed on the poster is readable */}
       {lightbox && imgs.length > 0 && (
         <div onClick={() => setLightbox(false)}
-          style={{ position:'fixed', inset:0, zIndex:1000, background:'rgba(0,0,0,0.93)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:16 }}>
-          <div style={{ color:'#fff', fontSize:15, fontWeight:700, marginBottom:4, textAlign:'center' }}>{p.bizName}</div>
-          {dateLabel && <div style={{ color:'#c4b5fd', fontSize:12.5, marginBottom:10 }}>{dateLabel}{p.eventTime ? ` · ${p.eventTime}` : ''}</div>}
-          <img src={imgs[idx]} alt={p.bizName} onClick={e => e.stopPropagation()}
-            style={{ maxWidth:'100%', maxHeight:'70vh', objectFit:'contain', borderRadius:10 }}/>
+          style={{ position:'fixed', inset:0, zIndex:1000, background:'rgba(0,0,0,0.94)', display:'flex', flexDirection:'column', padding:'10px 10px 14px', animation:'vcPop 0.18s ease-out' }}>
+          <style>{`@keyframes vcPop{from{opacity:0;transform:scale(0.94)}to{opacity:1;transform:scale(1)}}`}</style>
+
+          {/* Compact header — kept small so the flyer gets the space */}
+          <div style={{ flexShrink:0, display:'flex', alignItems:'flex-start', gap:10, padding:'4px 4px 8px' }}>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ color:'#fff', fontSize:14.5, fontWeight:700, lineHeight:1.25 }}>{p.bizName}</div>
+              {dateLabel && <div style={{ color:'#c4b5fd', fontSize:12, marginTop:2 }}>{dateLabel}{p.eventTime ? ` · ${p.eventTime}` : ''}</div>}
+            </div>
+            <button onClick={(e)=>{ e.stopPropagation(); setLightbox(false); }} aria-label="Close"
+              style={{ flexShrink:0, width:34, height:34, borderRadius:'50%', background:'rgba(255,255,255,0.16)', color:'#fff', border:'none', fontSize:16, cursor:'pointer', lineHeight:1 }}>✕</button>
+          </div>
+
+          {/* The flyer — takes every remaining pixel, never cropped */}
+          <div style={{ flex:1, minHeight:0, display:'flex', alignItems:'center', justifyContent:'center' }}
+            onClick={e => e.stopPropagation()}>
+            <img src={imgs[idx]} alt={p.bizName}
+              style={{ maxWidth:'100%', maxHeight:'100%', width:'auto', height:'auto', objectFit:'contain', borderRadius:8, display:'block' }}/>
+          </div>
+
           {imgs.length > 1 && (
-            <div style={{ display:'flex', alignItems:'center', gap:14, marginTop:12 }} onClick={e => e.stopPropagation()}>
+            <div style={{ flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', gap:14, marginTop:10 }} onClick={e => e.stopPropagation()}>
               <button onClick={() => setIdx(i => (i - 1 + imgs.length) % imgs.length)}
                 style={{ padding:'8px 15px', background:'rgba(255,255,255,0.15)', color:'#fff', border:'none', borderRadius:8, fontSize:13.5, cursor:'pointer' }}>‹ Prev</button>
               <span style={{ color:'#fff', fontSize:12 }}>{idx+1} / {imgs.length}</span>
@@ -9016,13 +9031,12 @@ function EventFlyerCard({ p, go, setPickupData, setDropoffData }) {
                 style={{ padding:'8px 15px', background:'rgba(255,255,255,0.15)', color:'#fff', border:'none', borderRadius:8, fontSize:13.5, cursor:'pointer' }}>Next ›</button>
             </div>
           )}
-          <div style={{ display:'flex', gap:10, marginTop:14 }} onClick={e => e.stopPropagation()}>
+
+          <div style={{ flexShrink:0, marginTop:10 }} onClick={e => e.stopPropagation()}>
             <button onClick={rideToEvent}
-              style={{ padding:'11px 20px', background:'linear-gradient(135deg,#6b21a8,#4c1d95)', color:'#fff', border:'none', borderRadius:10, fontSize:13.5, fontWeight:700, cursor:'pointer' }}>
+              style={{ width:'100%', padding:'13px 20px', background:'linear-gradient(135deg,#6b21a8,#4c1d95)', color:'#fff', border:'none', borderRadius:12, fontSize:14, fontWeight:800, cursor:'pointer' }}>
               🚕 Ride to this Event
             </button>
-            <button onClick={() => setLightbox(false)}
-              style={{ padding:'11px 20px', background:'#fff', color:'#2a1a4a', border:'none', borderRadius:10, fontSize:13.5, fontWeight:700, cursor:'pointer' }}>Close</button>
           </div>
         </div>
       )}
