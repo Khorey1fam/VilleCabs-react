@@ -5409,6 +5409,18 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   const [cancelling, setCancelling] = useState(false);
   const [cancelDone, setCancelDone] = useState(false);
   const [noDriverFound, setNoDriverFound] = useState(false); // set if 3 min pass with no driver
+  const [searchSecs, setSearchSecs] = useState(0);           // how long we've been searching
+
+  // Count up while we're searching, based on when the booking was created so the
+  // timer survives a refresh or the screen being backgrounded.
+  useEffect(() => {
+    if (booking?.status !== 'searching') { setSearchSecs(0); return; }
+    const startedAt = booking?.createdAt?.seconds ? booking.createdAt.seconds * 1000 : Date.now();
+    const tick = () => setSearchSecs(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
+    tick();
+    const t = setInterval(tick, 1000);
+    return () => clearInterval(t);
+  }, [booking?.status, booking?.createdAt?.seconds]);
   const [shareCopied,  setShareCopied]  = useState(false);
   const sosRef = useRef(null);
 
@@ -5847,6 +5859,78 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
     );
   }
 
+  // ── Finding a driver — full-screen on mobile ──
+  // Until a driver accepts there's nothing useful on the map, so this takes the
+  // whole screen: clearer on a phone, and it leaves exactly ONE cancel action
+  // (the old layout showed a Cancel button in the search card AND another in the
+  // bottom bar).
+  if (booking?.status === 'searching' && !cancelDone) {
+    const pickupTxt  = booking?.pickup?.address  || '—';
+    const dropoffTxt = booking?.dropoff?.address || '—';
+    return (
+      <div style={{ ...s.content, minHeight:'100vh', display:'flex', flexDirection:'column', background:'linear-gradient(170deg,#ffffff 0%,#faf7fd 55%,#f3edfb 100%)' }}>
+        <style>{`
+          @keyframes vcPulse { 0%{transform:scale(0.75);opacity:0.55} 70%{transform:scale(1.65);opacity:0} 100%{transform:scale(1.65);opacity:0} }
+          @keyframes vcBob   { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+        `}</style>
+
+        <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'32px 22px', textAlign:'center' }}>
+
+          {/* Radar */}
+          <div style={{ position:'relative', width:132, height:132, display:'flex', alignItems:'center', justifyContent:'center', marginBottom:26 }}>
+            {[0,1,2].map(i => (
+              <span key={i} style={{ position:'absolute', width:132, height:132, borderRadius:'50%', background:'rgba(107,33,168,0.16)', animation:`vcPulse 2.4s ease-out ${i*0.8}s infinite` }}/>
+            ))}
+            <div style={{ position:'relative', width:84, height:84, borderRadius:'50%', background:'linear-gradient(135deg,#6b21a8,#4c1d95)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:38, boxShadow:'0 10px 28px rgba(76,29,149,0.34)', animation:'vcBob 2.6s ease-in-out infinite' }}>🚕</div>
+          </div>
+
+          <h2 style={{ fontSize:23, fontWeight:800, color:'#2a1a4a', margin:'0 0 8px' }}>Finding your driver</h2>
+          <p style={{ fontSize:14, color:'#5b5470', lineHeight:1.6, margin:'0 0 4px', maxWidth:320 }}>
+            We're notifying drivers near you in Manchester.
+          </p>
+          <p style={{ fontSize:12.5, color:'#8a83a0', margin:'0 0 26px' }}>
+            {searchSecs > 0 ? `Searching for ${Math.floor(searchSecs/60)}:${String(searchSecs%60).padStart(2,'0')}` : 'Just a moment…'}
+          </p>
+
+          {/* Trip summary */}
+          <div style={{ width:'100%', maxWidth:400, background:'#fff', border:'1px solid #ece3f5', borderRadius:16, padding:'16px 18px', boxShadow:'0 4px 18px rgba(107,33,168,0.07)', textAlign:'left', marginBottom:14 }}>
+            <div style={{ display:'flex', gap:12 }}>
+              <div style={{ display:'flex', flexDirection:'column', alignItems:'center', paddingTop:4 }}>
+                <div style={{ width:9, height:9, borderRadius:'50%', background:'#6b21a8' }}/>
+                <div style={{ width:2, flex:1, minHeight:26, background:'#e9d5ff', margin:'3px 0' }}/>
+                <div style={{ width:9, height:9, borderRadius:'50%', background:GREEN }}/>
+              </div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ marginBottom:14 }}>
+                  <div style={{ fontSize:10.5, color:'#8a83a0', fontWeight:700, letterSpacing:0.4 }}>PICKUP</div>
+                  <div style={{ fontSize:13.5, color:'#1a1a2e', lineHeight:1.4 }}>{pickupTxt}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize:10.5, color:'#8a83a0', fontWeight:700, letterSpacing:0.4 }}>DROP-OFF</div>
+                  <div style={{ fontSize:13.5, color:'#1a1a2e', lineHeight:1.4 }}>{dropoffTxt}</div>
+                </div>
+              </div>
+            </div>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'1px solid #f2ecfa', marginTop:14, paddingTop:12 }}>
+              <span style={{ fontSize:12.5, color:'#5b5470', textTransform:'capitalize' }}>{booking?.vehicleType || 'VilleRide'} · {booking?.paymentMethod || 'cash'}</span>
+              <span style={{ fontSize:17, fontWeight:800, color:'#6b21a8' }}>J${booking?.fare?.toLocaleString() || '--'}</span>
+            </div>
+          </div>
+
+          <div style={{ fontSize:11.5, color:'#8a83a0', maxWidth:330, lineHeight:1.6, marginBottom:22 }}>
+            Keep this screen open — we'll connect you as soon as a driver accepts. If nobody accepts within 3 minutes we'll let you know.
+          </div>
+
+          {/* The single cancel action */}
+          <button onClick={cancelRide} disabled={cancelling}
+            style={{ width:'100%', maxWidth:400, padding:'14px', background:'#fff', color:'#dc2626', border:'1.5px solid #fca5a5', borderRadius:14, fontSize:14.5, fontWeight:700, cursor:cancelling?'default':'pointer', opacity:cancelling?0.6:1 }}>
+            {cancelling ? 'Cancelling…' : 'Cancel ride'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (cancelDone || booking?.status === 'cancelled') {
     return (
       <div style={{ ...s.content, display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh' }}>
@@ -6252,15 +6336,9 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
           </div>
         )}
 
-        {/* Only show back button when driver is active — not when searching */}
-        {booking?.status === 'searching' ? (
-          <button onClick={cancelRide} disabled={cancelling}
-            style={{ ...s.btnO, color:'#f09595', borderColor:'rgba(226,75,74,0.4)', marginBottom:0, opacity:cancelling?0.6:1 }}>
-            {cancelling ? 'Cancelling...' : '✕ Cancel Ride'}
-          </button>
-        ) : (
-          <button style={s.btnO} onClick={() => go('customer-dash')}>Back to Dashboard</button>
-        )}
+        {/* 'searching' has its own full-screen view above, so by here a driver
+            is assigned and the only action needed is going back. */}
+        <button style={s.btnO} onClick={() => go('customer-dash')}>Back to Dashboard</button>
       </div>
     </div>
   );
