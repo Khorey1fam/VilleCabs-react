@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { initializeApp } from 'firebase/app';
 import {
   getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword,
@@ -9000,9 +9001,14 @@ function EventFlyerCard({ p, go, setPickupData, setDropoffData }) {
       </div>
 
       {/* Full flyer — 'contain' so every detail printed on the poster is readable */}
-      {lightbox && imgs.length > 0 && (
+      {/* Rendered through a portal: the cards sit inside the auto-scrolling
+          marquee, and that CSS transform makes the strip a containing block —
+          so a position:fixed overlay would anchor to the STRIP, not the screen
+          (it ended up off-viewport, swallowing every tap). Portalling to body
+          escapes that entirely. */}
+      {lightbox && imgs.length > 0 && createPortal(
         <div onClick={() => setLightbox(false)}
-          style={{ position:'fixed', inset:0, zIndex:1000, background:'rgba(0,0,0,0.94)', display:'flex', flexDirection:'column', padding:'10px 10px 14px', animation:'vcPop 0.18s ease-out' }}>
+          style={{ position:'fixed', inset:0, zIndex:4000, background:'rgba(0,0,0,0.94)', display:'flex', flexDirection:'column', padding:'10px 10px 14px', animation:'vcPop 0.18s ease-out' }}>
           <style>{`@keyframes vcPop{from{opacity:0;transform:scale(0.94)}to{opacity:1;transform:scale(1)}}`}</style>
 
           {/* Compact header — kept small so the flyer gets the space */}
@@ -9032,13 +9038,18 @@ function EventFlyerCard({ p, go, setPickupData, setDropoffData }) {
             </div>
           )}
 
-          <div style={{ flexShrink:0, marginTop:10 }} onClick={e => e.stopPropagation()}>
+          <div style={{ flexShrink:0, marginTop:10, display:'flex', gap:10 }} onClick={e => e.stopPropagation()}>
             <button onClick={rideToEvent}
-              style={{ width:'100%', padding:'13px 20px', background:'linear-gradient(135deg,#6b21a8,#4c1d95)', color:'#fff', border:'none', borderRadius:12, fontSize:14, fontWeight:800, cursor:'pointer' }}>
+              style={{ flex:2, padding:'13px 16px', background:'linear-gradient(135deg,#6b21a8,#4c1d95)', color:'#fff', border:'none', borderRadius:12, fontSize:14, fontWeight:800, cursor:'pointer' }}>
               🚕 Ride to this Event
             </button>
+            <button onClick={() => setLightbox(false)}
+              style={{ flex:1, padding:'13px 16px', background:'#fff', color:'#2a1a4a', border:'none', borderRadius:12, fontSize:14, fontWeight:700, cursor:'pointer' }}>
+              Close
+            </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
