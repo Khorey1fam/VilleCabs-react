@@ -666,6 +666,7 @@ function etaFromDirections(dir) {
 // `user`, so it works everywhere (the dashboard's own drawer additionally
 // switches tabs, which only makes sense there).
 function AppMenu({ open, onClose, go, user }) {
+  useBodyScrollLock(open);   // stop the page scrolling behind the drawer
   if (!open) return null;
   const isDriver = user?.role === 'driver';
 
@@ -769,6 +770,35 @@ function AppMenu({ open, onClose, go, user }) {
       </div>
     </div>
   );
+}
+
+// Lock background scrolling while a full-screen overlay (lightbox, drawer,
+// modal) is open. Without this the page keeps scrolling underneath the overlay,
+// which on mobile makes the flyer look like it's sliding over the content.
+// The scroll position is preserved so closing doesn't jump the page.
+function useBodyScrollLock(active) {
+  useEffect(() => {
+    if (!active) return;
+    const y = window.scrollY || window.pageYOffset || 0;
+    const body = document.body;
+    const prev = {
+      overflow: body.style.overflow,
+      position: body.style.position,
+      top:      body.style.top,
+      width:    body.style.width,
+    };
+    body.style.overflow = 'hidden';
+    body.style.position = 'fixed';
+    body.style.top      = `-${y}px`;
+    body.style.width    = '100%';
+    return () => {
+      body.style.overflow = prev.overflow;
+      body.style.position = prev.position;
+      body.style.top      = prev.top;
+      body.style.width    = prev.width;
+      window.scrollTo(0, y);
+    };
+  }, [active]);
 }
 
 // ── SOS RATE LIMITING ─────────────────────────────────────────────────────────
@@ -5400,6 +5430,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   const [review,       setReview]       = useState('');
   const [reviewTags,   setReviewTags]   = useState([]);
   const [lightbox,     setLightbox]     = useState(null); // {url, label} for enlarged photo
+  useBodyScrollLock(!!lightbox);   // stop the page scrolling behind the overlay
   const [driverInfo,   setDriverInfo]   = useState(null);
   const [directions,   setDirections]   = useState(null);
   const [sosSent,    setSosSent]    = useState(false);
@@ -8761,6 +8792,7 @@ function FeaturedPanel({ p, go, setPickupData, setDropoffData }) {
   const imgs = (Array.isArray(p.uploads) ? p.uploads : []).filter(u => u && !u.match(/\.pdf($|\?)/i));
   const [idx, setIdx] = useState(0);
   const [lightbox, setLightbox] = useState(false); // full-size flyer view
+  useBodyScrollLock(lightbox);   // stop the page scrolling behind the overlay
   useEffect(() => {
     if (imgs.length <= 1) return;
     if (lightbox) return; // don't auto-advance while someone is reading the flyer
@@ -8897,6 +8929,7 @@ function EventFlyerCard({ p, go, setPickupData, setDropoffData }) {
   const imgs = (Array.isArray(p.uploads) ? p.uploads : []).filter(u => u && !u.match(/\.pdf($|\?)/i));
   const [idx, setIdx] = useState(0);
   const [lightbox, setLightbox] = useState(false);
+  useBodyScrollLock(lightbox);   // stop the page scrolling behind the overlay
   useEffect(() => {
     if (imgs.length <= 1 || lightbox) return;
     const t = setInterval(() => setIdx(i => (i + 1) % imgs.length), 4000);
