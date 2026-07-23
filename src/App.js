@@ -802,6 +802,23 @@ function useBodyScrollLock(active) {
   }, [active]);
 }
 
+// Shorten a full address to its street part for compact display.
+// A naive first-segment split breaks on Jamaican addresses that carry a comma
+// inside the street itself: "5,1/2 Caledonia Road, Mandeville" would render as
+// just "5". So we keep pulling in segments until there's a real word present.
+function shortAddress(addr) {
+  if (!addr) return '';
+  const parts = String(addr).split(',').map(s => s.trim()).filter(Boolean);
+  if (parts.length === 0) return '';
+  let out = parts[0];
+  let i = 1;
+  while (i < parts.length && !/[A-Za-z]{3}/.test(out)) {
+    out += ', ' + parts[i];
+    i++;
+  }
+  return out;
+}
+
 // ── SOS RATE LIMITING ─────────────────────────────────────────────────────────
 // An SOS is a safety feature, so we never take the button away entirely — but
 // unlimited presses create alert fatigue (one account sent 190), which makes a
@@ -3573,8 +3590,8 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
                 : '--';
               const time = ride.completedAt?.seconds
                 ? new Date(ride.completedAt.seconds*1000).toLocaleTimeString('en-JM',{hour:'2-digit',minute:'2-digit'}) : '';
-              const from = (ride.pickup?.address||'--').split(',')[0];
-              const to   = (ride.dropoff?.address||'--').split(',')[0];
+              const from = shortAddress(ride.pickup?.address||'--');
+              const to   = shortAddress(ride.dropoff?.address||'--');
               const canRebook = ride.pickup?.lat && ride.pickup?.lng && ride.dropoff?.lat && ride.dropoff?.lng;
               const handleBookAgain = () => {
                 if (activeRide) { vcToast('You already have an active ride in progress. Complete or cancel it before booking a new one.', 'warn'); return; }
@@ -4452,7 +4469,7 @@ function PinDropoff({ go, pickupData, dropoffData, setDropoffData, user }) {
               <div style={{ width:8, height:8, borderRadius:'50%', background:'#D4AF37', flexShrink:0, marginTop:4 }}/>
               <div>
                 <div style={{ fontSize:9, color:'#8a83a0', marginBottom:1, textTransform:'uppercase', letterSpacing:0.8 }}>TO</div>
-                <div style={{ fontSize:12, fontWeight:600, color:'#D4AF37' }}>{address.split(',')[0]}</div>
+                <div style={{ fontSize:12, fontWeight:600, color:'#D4AF37' }}>{shortAddress(address)}</div>
               </div>
             </div>
           )}
@@ -4912,7 +4929,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
         <div style={{ fontSize:56, marginBottom:14 }}>🗓️</div>
         <div style={{ fontSize:20, fontWeight:800, color:'#1a1a2e', marginBottom:8, textAlign:'center' }}>Ride Scheduled!</div>
         <div style={{ fontSize:13, color:'#555', textAlign:'center', lineHeight:1.6, marginBottom:6 }}>
-          {pickupData?.address?.split(',')[0]||'Pickup'} → {dropoffData?.address?.split(',')[0]||'Drop-off'}
+          {shortAddress(pickupData?.address)||'Pickup'} → {shortAddress(dropoffData?.address)||'Drop-off'}
         </div>
         <div style={{ fontSize:14, fontWeight:700, color:'#6b21a8', marginBottom:20 }}>{fmtScheduled(scheduledAt)}</div>
         <div style={{ fontSize:12, color:'#888', textAlign:'center', maxWidth:300, marginBottom:24, lineHeight:1.6 }}>
@@ -4937,7 +4954,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
       </div>
       <div style={{ padding:14 }}>
         <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'#6b7280', marginBottom:10 }}>
-          <span>📍 {pickupData?.address?.split(',')[0]||'Pickup'} → {dropoffData?.address?.split(',')[0]||'Destination'}</span>
+          <span>📍 {shortAddress(pickupData?.address)||'Pickup'} → {shortAddress(dropoffData?.address)||'Destination'}</span>
           <span>{dist} km</span>
         </div>
         {error && <div style={s.errBox}>⚠️ {error}</div>}
@@ -5458,8 +5475,8 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
 
   const shareRide = async () => {
     const driverName = booking?.driverName || 'A VilleCabs driver';
-    const pickup     = booking?.pickup?.address?.split(',')[0] || 'Pickup location';
-    const dropoff    = booking?.dropoff?.address?.split(',')[0] || 'Drop-off location';
+    const pickup     = shortAddress(booking?.pickup?.address) || 'Pickup location';
+    const dropoff    = shortAddress(booking?.dropoff?.address) || 'Drop-off location';
     const trackUrl   = `https://villecabs.com/track/${bookingId}`;
 
     // Make sure the public tracking doc exists before sharing the link
@@ -6896,7 +6913,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
         try {
           if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
             const newest = open[0];
-            const from = newest?.pickup?.address?.split(',')[0] || 'a rider';
+            const from = shortAddress(newest?.pickup?.address) || 'a rider';
             new Notification('🚕 New ride request!', {
               body: `${newest?.customerName || 'A rider'} needs a ride from ${from}${newest?.fare ? ` · J$${newest.fare}` : ''}`,
               icon: '/logo.png',
@@ -7344,8 +7361,8 @@ function DriverDash({ go, user, setUser, setBookingId }) {
                       <div style={{ fontSize:10, color:'#aaa' }}>Fare J${(r.fare||0).toLocaleString()}</div>
                     </div>
                   </div>
-                  <div style={{ fontSize:11, color:'#555', marginBottom:2 }}>📍 {(r.pickup?.address||'').split(',')[0]}</div>
-                  <div style={{ fontSize:11, color:'#555', marginBottom:8 }}>🏁 {(r.dropoff?.address||'').split(',')[0]}</div>
+                  <div style={{ fontSize:11, color:'#555', marginBottom:2 }}>📍 {shortAddress(r.pickup?.address||'')}</div>
+                  <div style={{ fontSize:11, color:'#555', marginBottom:8 }}>🏁 {shortAddress(r.dropoff?.address||'')}</div>
                   <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                     {r.distanceKm && <span style={{ fontSize:10, background:'#f3f4f6', color:'#555', padding:'2px 8px', borderRadius:8 }}>📏 {r.distanceKm} km</span>}
                     <span style={{ fontSize:10, background:'#f0fff4', color:'#1a9e5a', padding:'2px 8px', borderRadius:8 }}>💵 Cash</span>
@@ -10238,7 +10255,7 @@ function AdminDash({ go, user }) {
                     <span style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>{r.driverName||'Driver'} → {r.customerName||'Rider'}</span>
                     <StatusBadge status={r.status}/>
                   </div>
-                  <div style={{ fontSize:12, color:'#555' }}>{(r.pickup?.address||'—').split(',')[0]} → {(r.dropoff?.address||'—').split(',')[0]} · J${(r.fare||0).toLocaleString()}</div>
+                  <div style={{ fontSize:12, color:'#555' }}>{shortAddress(r.pickup?.address||'—')} → {shortAddress(r.dropoff?.address||'—')} · J${(r.fare||0).toLocaleString()}</div>
                   <div style={{ fontSize:11, color:'#888', marginTop:2 }}>{r.driverLocation?.lat ? '📍 Live location active' : '⏳ Awaiting driver GPS'}</div>
                 </div>
               ))}
@@ -10290,7 +10307,7 @@ function AdminDash({ go, user }) {
               {isPast(r.scheduledFor) && <div style={{ fontSize:10, color:'#dc2626', fontWeight:700, marginBottom:4 }}>⚠️ Pickup time has passed</div>}
               {isSoon(r.scheduledFor) && <div style={{ fontSize:10, color:'#b45309', fontWeight:700, marginBottom:4 }}>⏰ Within 2 hours</div>}
               <div style={{ fontSize:12, color:'#555', marginBottom:3 }}>👤 {r.customerName||'Customer'} · {r.vehicleType||'VilleRide'}</div>
-              <div style={{ fontSize:12, color:'#555', marginBottom:8 }}>{(r.pickup?.address||'—').split(',')[0]} → {(r.dropoff?.address||'—').split(',')[0]}</div>
+              <div style={{ fontSize:12, color:'#555', marginBottom:8 }}>{shortAddress(r.pickup?.address||'—')} → {shortAddress(r.dropoff?.address||'—')}</div>
               <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
                 <span style={{ fontSize:11, color:'#6b7280' }}>Driver:</span>
                 <select value={r.driverId||''} onChange={e => reassign(r.id, e.target.value)}
@@ -10707,8 +10724,8 @@ function AdminDash({ go, user }) {
                     <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>👤 {r.customer_name||'Customer'}</div>
                     <div style={{ fontSize:13, fontWeight:700, color:'#6b21a8' }}>J${(r.estimated_fare||0).toLocaleString()}</div>
                   </div>
-                  <div style={{ fontSize:11, color:'#555', marginBottom:2 }}>📍 {(r.pickup_address||'').split(',')[0]}</div>
-                  <div style={{ fontSize:11, color:'#555', marginBottom:8 }}>🏁 {(r.dropoff_address||'').split(',')[0]}</div>
+                  <div style={{ fontSize:11, color:'#555', marginBottom:2 }}>📍 {shortAddress(r.pickup_address||'')}</div>
+                  <div style={{ fontSize:11, color:'#555', marginBottom:8 }}>🏁 {shortAddress(r.dropoff_address||'')}</div>
                   <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
                     <span style={{ fontSize:10, background:'#f3f4f6', color:'#555', padding:'2px 8px', borderRadius:8 }}>🚗 {r.ride_type}</span>
                     <span style={{ fontSize:10, background:'#f3f4f6', color:'#555', padding:'2px 8px', borderRadius:8 }}>📏 {r.estimated_distance_km} km</span>
@@ -11141,11 +11158,11 @@ function DriverEarnings({ go, user }) {
                 </div>
                 <div style={{ display:'flex', gap:8, marginBottom:4, alignItems:'center' }}>
                   <div style={{ width:8, height:8, borderRadius:'50%', background:'#1a9e5a', flexShrink:0 }}/>
-                  <div style={{ fontSize:12, color:'#1a1a2e', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ride.pickup?.address?.split(',')[0]||'—'}</div>
+                  <div style={{ fontSize:12, color:'#1a1a2e', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{shortAddress(ride.pickup?.address)||'—'}</div>
                 </div>
                 <div style={{ display:'flex', gap:8, alignItems:'center' }}>
                   <div style={{ width:8, height:8, borderRadius:'50%', background:'#6A1BB9', flexShrink:0 }}/>
-                  <div style={{ fontSize:12, color:'#1a1a2e', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ride.dropoff?.address?.split(',')[0]||'—'}</div>
+                  <div style={{ fontSize:12, color:'#1a1a2e', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{shortAddress(ride.dropoff?.address)||'—'}</div>
                 </div>
                 <div style={{ display:'flex', gap:12, marginTop:8, paddingTop:8, borderTop:'1px solid #f0f0f0', flexWrap:'wrap' }}>
                   <div style={{ fontSize:11, color:'#888' }}>Fare: <span style={{ fontWeight:600, color:'#1a1a2e' }}>J${(ride.fare||0).toLocaleString()}</span></div>
@@ -11837,7 +11854,7 @@ function ScheduledRidesCard({ user, go }) {
             <div style={{ fontSize:13, fontWeight:700, color:'#1d4ed8' }}>🗓️ Scheduled — {fmtScheduled(r.scheduledFor)}</div>
             <button onClick={() => cancelRide(r.id)} style={{ background:'none', border:'none', color:'#dc2626', fontSize:11, fontWeight:700, cursor:'pointer' }}>Cancel</button>
           </div>
-          <div style={{ fontSize:12, color:'#333' }}>{r.pickup?.address?.split(',')[0]||'Pickup'} → {r.dropoff?.address?.split(',')[0]||'Drop-off'} · {r.vehicleType} · J${(r.fare||0).toLocaleString()}</div>
+          <div style={{ fontSize:12, color:'#333' }}>{shortAddress(r.pickup?.address)||'Pickup'} → {shortAddress(r.dropoff?.address)||'Drop-off'} · {r.vehicleType} · J${(r.fare||0).toLocaleString()}</div>
           <div style={{ fontSize:11, color:'#555', marginTop:4 }}>{r.driverId ? `✅ ${r.driverName||'A driver'} has accepted this ride` : '⏳ Waiting for a driver to accept'}</div>
         </div>
       ))}
@@ -11907,7 +11924,7 @@ function DriverScheduledRides({ user, go, setBookingId }) {
         return (
           <div key={r.id} style={{ background: mine ? '#eff6ff' : '#fff', border:`1px solid ${mine ? '#bfdbfe' : '#e5e7eb'}`, borderRadius:12, padding:'12px 14px', marginBottom:8 }}>
             <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:4 }}>{fmtScheduled(r.scheduledFor)} · J${(r.fare||0).toLocaleString()}</div>
-            <div style={{ fontSize:12, color:'#555', marginBottom:8 }}>{r.pickup?.address?.split(',')[0]||'Pickup'} → {r.dropoff?.address?.split(',')[0]||'Drop-off'} · {r.vehicleType} · {r.customerName||'Customer'}</div>
+            <div style={{ fontSize:12, color:'#555', marginBottom:8 }}>{shortAddress(r.pickup?.address)||'Pickup'} → {shortAddress(r.dropoff?.address)||'Drop-off'} · {r.vehicleType} · {r.customerName||'Customer'}</div>
             {!mine && <button disabled={busy===r.id} onClick={() => acceptRide(r)} style={{ padding:'8px 14px', background:'#1d4ed8', color:'#fff', border:'none', borderRadius:10, fontSize:12, fontWeight:700, cursor:'pointer' }}>{busy===r.id?'Accepting...':'✋ Accept Scheduled Ride'}</button>}
             {mine && (canStart(r)
               ? <button disabled={busy===r.id} onClick={() => startRide(r)} style={{ padding:'8px 14px', background:'#1a9e5a', color:'#fff', border:'none', borderRadius:10, fontSize:12, fontWeight:700, cursor:'pointer' }}>{busy===r.id?'Starting...':'🚗 Start This Ride Now'}</button>
