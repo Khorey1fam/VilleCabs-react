@@ -1090,6 +1090,18 @@ function RevenueTab() {
   const totalRev=periodRides.reduce((s,r)=>s+(r.fare||0),0);
   const villeCut=Math.round(totalRev*0.15);
   const driverCut=Math.round(totalRev*0.85);
+
+  // Group the period's rides by driver so the admin can see who earned what and
+  // what each payout should be (85% after the 15% platform fee).
+  const driverRows = Object.values(periodRides.reduce((acc, r) => {
+    const id = r.driverId || 'unassigned';
+    if (!acc[id]) acc[id] = { id, name: r.driverName || 'Unassigned', gross:0, count:0 };
+    acc[id].gross += (r.fare || 0);
+    acc[id].count += 1;
+    return acc;
+  }, {}))
+    .map(d => ({ ...d, fee: Math.round(d.gross*0.15), payout: Math.round(d.gross*0.85) }))
+    .sort((a,b) => b.gross - a.gross);
   const last7=Array.from({length:7},(_,i)=>{
     const d=new Date(today); d.setDate(today.getDate()-i);
     const dayRides=rides.filter(r=>{if(!r.completedAt?.seconds)return false;return new Date(r.completedAt.seconds*1000).toDateString()===d.toDateString();});
@@ -1124,6 +1136,49 @@ function RevenueTab() {
           ))}
         </div>
       </div>
+      {/* Per-driver earnings for the selected period */}
+      <div style={{ background:'#ffffff', border:'1px solid #e5e7eb', borderRadius:14, padding:20, marginBottom:20 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8, marginBottom:14 }}>
+          <div style={{ fontSize:14, fontWeight:600, color:'#1a1a2e' }}>Driver Earnings — {period==='today'?'Today':period==='week'?'Last 7 Days':'Last 30 Days'}</div>
+          <div style={{ fontSize:11.5, color:'#9199ad' }}>{driverRows.length} driver{driverRows.length!==1?'s':''} · payout = 85% of gross</div>
+        </div>
+        {driverRows.length === 0 ? (
+          <div style={{ fontSize:13, color:'#9199ad', textAlign:'center', padding:'18px 0' }}>No completed rides in this period.</div>
+        ) : (
+          <div style={{ overflowX:'auto' }}>
+            <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12.5, minWidth:520 }}>
+              <thead>
+                <tr style={{ textAlign:'left', color:'#8a83a0', fontSize:10.5, textTransform:'uppercase', letterSpacing:0.4 }}>
+                  <th style={{ padding:'6px 8px 8px 0' }}>Driver</th>
+                  <th style={{ padding:'6px 8px 8px', textAlign:'right' }}>Rides</th>
+                  <th style={{ padding:'6px 8px 8px', textAlign:'right' }}>Gross</th>
+                  <th style={{ padding:'6px 8px 8px', textAlign:'right' }}>Fee (15%)</th>
+                  <th style={{ padding:'6px 0 8px 8px', textAlign:'right' }}>Payout (85%)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {driverRows.map(d => (
+                  <tr key={d.id} style={{ borderTop:'1px solid #f0f0f4' }}>
+                    <td style={{ padding:'9px 8px 9px 0', color:'#1a1a2e', fontWeight:600 }}>{d.name}</td>
+                    <td style={{ padding:'9px 8px', textAlign:'right', color:'#6b7280' }}>{d.count}</td>
+                    <td style={{ padding:'9px 8px', textAlign:'right', color:'#1a1a2e' }}>J${d.gross.toLocaleString()}</td>
+                    <td style={{ padding:'9px 8px', textAlign:'right', color:'#b45309' }}>J${d.fee.toLocaleString()}</td>
+                    <td style={{ padding:'9px 0 9px 8px', textAlign:'right', color:GREEN, fontWeight:700 }}>J${d.payout.toLocaleString()}</td>
+                  </tr>
+                ))}
+                <tr style={{ borderTop:'2px solid #e9d5ff', fontWeight:800 }}>
+                  <td style={{ padding:'10px 8px 0 0', color:'#1a1a2e' }}>Total</td>
+                  <td style={{ padding:'10px 8px 0', textAlign:'right', color:'#6b7280' }}>{periodRides.length}</td>
+                  <td style={{ padding:'10px 8px 0', textAlign:'right', color:'#1a1a2e' }}>J${totalRev.toLocaleString()}</td>
+                  <td style={{ padding:'10px 8px 0', textAlign:'right', color:'#b45309' }}>J${villeCut.toLocaleString()}</td>
+                  <td style={{ padding:'10px 0 0 8px', textAlign:'right', color:GREEN }}>J${driverCut.toLocaleString()}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       <button onClick={()=>{
         const rows=[['Date','Customer','Driver','Vehicle','Distance','Fare','Promo','Payment']];
         rides.forEach(r=>{const date=r.completedAt?.seconds?new Date(r.completedAt.seconds*1000).toLocaleDateString():'--';rows.push([date,r.customerName||'--',r.driverName||'--',r.vehicleType||'--',r.distanceKm||'--',r.fare||0,r.promoCode||'',r.paymentMethod||'cash']);});
@@ -2021,12 +2076,15 @@ function PartnersTab() {
   const takenSlots = {};
   partners.forEach(p => { if (p.slot && ['approved','featured'].includes((p.status||'').toLowerCase())) takenSlots[p.slot] = p.id; });
 
-  // Anything approved/featured has been actioned; everything else still needs a
-  // decision (new, pending, rejected all sit in the queue).
+  // Approved/featured are live; rejected are archived; everything else (new,
+  // pending) still needs a decision and stays in the Pending queue.
   const isApproved = p => ['approved','featured'].includes((p.status||'').toLowerCase());
+  const isRejected = p => (p.status||'').toLowerCase() === 'rejected';
   const approvedPartners = partners.filter(isApproved);
-  const pendingPartners  = partners.filter(p => !isApproved(p));
+  const rejectedPartners = partners.filter(isRejected);
+  const pendingPartners  = partners.filter(p => !isApproved(p) && !isRejected(p));
   const shownPartners = pFilter==='approved' ? approvedPartners
+                      : pFilter==='rejected' ? rejectedPartners
                       : pFilter==='pending'  ? pendingPartners
                       : partners;
 
@@ -2052,6 +2110,7 @@ function PartnersTab() {
       <div style={{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap' }}>
         {[['pending',`⏳ Pending (${pendingPartners.length})`],
           ['approved',`✅ Approved (${approvedPartners.length})`],
+          ['rejected',`🚫 Rejected (${rejectedPartners.length})`],
           ['all',`All (${partners.length})`]].map(([k,label]) => (
           <button key={k} onClick={()=>setPFilter(k)}
             style={{ padding:'8px 16px', borderRadius:18, fontSize:12.5, fontWeight:700, cursor:'pointer',
@@ -2062,7 +2121,7 @@ function PartnersTab() {
       </div>
 
       {shownPartners.length===0 && <div style={s.card}><div style={{ color:'#9199ad', fontSize:13, textAlign:'center', padding:20 }}>
-        {pFilter==='pending' ? '✅ No partner requests waiting for review.' : pFilter==='approved' ? 'No approved partners yet.' : 'No partner requests yet.'}
+        {pFilter==='pending' ? '✅ No partner requests waiting for review.' : pFilter==='approved' ? 'No approved partners yet.' : pFilter==='rejected' ? 'No rejected requests.' : 'No partner requests yet.'}
       </div></div>}
       {shownPartners.map(p => (
         <div key={p.id} style={s.card}>
@@ -2281,6 +2340,109 @@ function PartnersTab() {
 }
 
 // ── SAFETY ALERTS TAB ─────────────────────────────────────────────────────────
+// ── SOS EMERGENCY OVERLAY ─────────────────────────────────────────────────────
+// An SOS is a life-safety event, so it takes over the whole admin screen with an
+// audible alarm rather than sitting quietly in a tab. Fires for any alert that
+// arrives AFTER the panel is open (not for the existing backlog on load).
+function SosEmergencyOverlay({ setTab }) {
+  const [pending, setPending] = useState([]);   // unacknowledged new alerts
+  const seededRef = useRef(false);              // ignore the initial snapshot
+  const knownRef  = useRef(new Set());
+  const audioRef  = useRef(null);               // { ctx, timer }
+
+  // Alarm generated with the Web Audio API — no audio file to host, and it
+  // keeps working offline. Two-tone siren, repeating until acknowledged.
+  const startAlarm = () => {
+    if (audioRef.current) return;
+    try {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      const beep = (freq, at, dur) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + at);
+        gain.gain.setValueAtTime(0.0001, ctx.currentTime + at);
+        gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + at + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + at + dur);
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + at); osc.stop(ctx.currentTime + at + dur + 0.02);
+      };
+      const cycle = () => { beep(880, 0, 0.35); beep(660, 0.4, 0.35); };
+      cycle();
+      const timer = setInterval(cycle, 1000);
+      audioRef.current = { ctx, timer };
+    } catch(e) { console.warn('Alarm unavailable:', e); }
+  };
+  const stopAlarm = () => {
+    if (!audioRef.current) return;
+    clearInterval(audioRef.current.timer);
+    try { audioRef.current.ctx.close(); } catch(e) {}
+    audioRef.current = null;
+  };
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db,'sos_alerts'), snap => {
+      const live = snap.docs.map(d => ({ id:d.id, ...d.data() })).filter(a => a.status !== 'resolved');
+      if (!seededRef.current) {
+        // First load — remember what already existed, don't alarm for history.
+        live.forEach(a => knownRef.current.add(a.id));
+        seededRef.current = true;
+        return;
+      }
+      const fresh = live.filter(a => !knownRef.current.has(a.id));
+      if (fresh.length) {
+        fresh.forEach(a => knownRef.current.add(a.id));
+        setPending(prev => [...prev, ...fresh]);
+      }
+    }, e => console.error('SOS listen failed:', e));
+    return () => { unsub(); stopAlarm(); };
+  }, []);
+
+  useEffect(() => {
+    if (pending.length > 0) startAlarm(); else stopAlarm();
+  }, [pending.length]);
+
+  useEffect(() => () => stopAlarm(), []);
+
+  if (pending.length === 0) return null;
+  const a = pending[0];
+
+  const dismiss = () => setPending(p => p.slice(1));
+  const goToAlerts = () => { setPending([]); stopAlarm(); setTab('alerts'); };
+
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:9999, display:'flex', alignItems:'center', justifyContent:'center', padding:20, animation:'sosFlash 1s steps(2,end) infinite' }}>
+      <style>{`@keyframes sosFlash{0%,100%{background:rgba(120,0,0,0.94)}50%{background:rgba(55,0,0,0.94)}}`}</style>
+      <div style={{ background:'#fff', borderRadius:18, maxWidth:460, width:'100%', padding:'26px 24px', textAlign:'center', boxShadow:'0 20px 60px rgba(0,0,0,0.5)' }}>
+        <div style={{ fontSize:56, marginBottom:8 }}>🆘</div>
+        <div style={{ fontSize:24, fontWeight:900, color:'#dc2626', marginBottom:6, letterSpacing:0.5 }}>SOS EMERGENCY</div>
+        <div style={{ fontSize:13.5, color:'#4b5563', marginBottom:16 }}>
+          A safety alert was just raised. Respond immediately.
+        </div>
+        <div style={{ background:'#fff5f5', border:'1px solid #fecaca', borderRadius:12, padding:'14px 16px', textAlign:'left', fontSize:13.5, color:'#1a1a2e', lineHeight:1.8, marginBottom:18 }}>
+          <div>👤 <strong>Customer:</strong> {a.customerName || '—'}</div>
+          <div>🚗 <strong>Driver:</strong> {a.driverName || '—'}</div>
+          {a.customerPhone && <div>📞 <strong>Phone:</strong> {a.customerPhone}</div>}
+          {a.location && <div>📍 <strong>Location:</strong> {a.location}</div>}
+          <div style={{ color:'#6b7280', fontSize:12 }}>🕒 {a.createdAt?.seconds ? new Date(a.createdAt.seconds*1000).toLocaleTimeString() : 'just now'}</div>
+        </div>
+        {pending.length > 1 && (
+          <div style={{ fontSize:12, color:'#b45309', fontWeight:700, marginBottom:12 }}>+{pending.length-1} more alert{pending.length-1!==1?'s':''} waiting</div>
+        )}
+        <div style={{ display:'flex', gap:10, flexWrap:'wrap', justifyContent:'center' }}>
+          {a.customerPhone && (
+            <a href={`tel:${a.customerPhone}`} style={{ flex:'1 1 140px', textDecoration:'none', padding:'13px 18px', background:GREEN, color:'#fff', borderRadius:12, fontSize:14, fontWeight:800 }}>📞 Call now</a>
+          )}
+          <button onClick={goToAlerts} style={{ flex:'1 1 140px', padding:'13px 18px', background:'#dc2626', color:'#fff', border:'none', borderRadius:12, fontSize:14, fontWeight:800, cursor:'pointer' }}>Open alerts →</button>
+          <button onClick={dismiss} style={{ flex:'1 1 100%', padding:'11px 18px', background:'#fff', color:'#6b7280', border:'1px solid #e5e7eb', borderRadius:12, fontSize:13, fontWeight:600, cursor:'pointer' }}>Silence this alert</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Active SOS alerts banner for the Overview tab ─────────────────────────────
 // Safety alerts are the one thing the admin must never miss, so they surface at
 // the very top of Overview rather than only inside the Alerts tab.
@@ -2386,6 +2548,7 @@ function AlertsTab() {
             <span style={{ ...s.badge, background: isResolved(a)?'rgba(26,158,90,0.15)':'rgba(226,75,74,0.15)', color: isResolved(a)?GREEN:'#dc2626' }}>{a.status||'new'}</span>
           </div>
           <div style={{ fontSize:12, color:'#4b5563', marginBottom:3 }}>👤 {a.customerName||'—'} · 🚗 {a.driverName||'—'}</div>
+          {a.pressCount > 1 && <div style={{ fontSize:11.5, color:'#b45309', fontWeight:700, marginBottom:3 }}>⚠️ Press #{a.pressCount} from this rider on this ride</div>}
           {a.location && <div style={{ fontSize:12, color:'#4b5563', marginBottom:3 }}>📍 {a.location}</div>}
           <div style={{ fontSize:11, color:'#9199ad', marginBottom:10 }}>
             Raised {a.createdAt?.seconds ? new Date(a.createdAt.seconds*1000).toLocaleString() : '—'}
@@ -2590,12 +2753,14 @@ export default function AdminPanel() {
       {/* ── TOP BAR ── */}
       <div style={s.topbar}>
         <img src="/logo.png" style={{ height:28, objectFit:'contain' }} alt="VilleCabs"/>
-        <span style={{ fontSize:15, fontWeight:700, color:'#6b21a8', marginLeft:2 }}>Admin Dashboard</span>
-        <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:10 }}>
+        <span style={{ fontSize:15, fontWeight:700, color:'#6b21a8', marginLeft:2 }}>Admin Dashboard</span>        <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:10 }}>
           <span style={{ fontSize:12, color:'#888', display:'none' }} className="admin-email">{adminUser.email}</span>
           <button onClick={handleLogout} style={{ padding:'6px 12px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:10, color:'#6b21a8', fontSize:11, fontWeight:600, cursor:'pointer' }}>Logout</button>
         </div>
       </div>
+
+      {/* Emergency SOS takeover — sits above every tab */}
+      <SosEmergencyOverlay setTab={setTab}/>
 
       {/* ── SCROLLING TAB STRIP ── */}
       <div style={s.tabstrip}>

@@ -771,7 +771,57 @@ function AppMenu({ open, onClose, go, user }) {
   );
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── SOS RATE LIMITING ─────────────────────────────────────────────────────────
+// An SOS is a safety feature, so we never take the button away entirely — but
+// unlimited presses create alert fatigue (one account sent 190), which makes a
+// REAL emergency easier to miss. So we throttle how many alerts reach the admin
+// while always keeping a route to help on screen.
+//   • max 5 alerts per rolling minute
+//   • max 15 alerts per ride
+// Past the cap we stop creating new documents and tell the user they've been
+// logged and that admin will make contact — plus we always show 119 (police).
+const SOS_PER_MINUTE = 5;
+const SOS_MAX_TOTAL  = 15;
+const SOS_KEY = 'vc_sos_log';
+
+function sosReadLog(rideKey) {
+  try {
+    const all = JSON.parse(localStorage.getItem(SOS_KEY) || '{}');
+    return Array.isArray(all[rideKey]) ? all[rideKey] : [];
+  } catch(e) { return []; }
+}
+function sosWriteLog(rideKey, stamps) {
+  try {
+    const all = JSON.parse(localStorage.getItem(SOS_KEY) || '{}');
+    all[rideKey] = stamps;
+    // keep the store small — only track the 5 most recent rides
+    const keys = Object.keys(all);
+    if (keys.length > 5) keys.slice(0, keys.length - 5).forEach(k => delete all[k]);
+    localStorage.setItem(SOS_KEY, JSON.stringify(all));
+  } catch(e) {}
+}
+// Returns { allowed, reason } — reason explains the block for the UI.
+function sosCheckLimit(rideKey) {
+  const now = Date.now();
+  const stamps = sosReadLog(rideKey);
+  if (stamps.length >= SOS_MAX_TOTAL) {
+    return { allowed:false, reason:'max', count:stamps.length };
+  }
+  const lastMinute = stamps.filter(t => now - t < 60000);
+  if (lastMinute.length >= SOS_PER_MINUTE) {
+    const waitMs = 60000 - (now - lastMinute[0]);
+    return { allowed:false, reason:'rate', waitSec: Math.max(1, Math.ceil(waitMs/1000)), count:stamps.length };
+  }
+  return { allowed:true, count:stamps.length };
+}
+function sosRecord(rideKey) {
+  const stamps = sosReadLog(rideKey);
+  stamps.push(Date.now());
+  sosWriteLog(rideKey, stamps);
+  return stamps.length;
+}
+
+
 function TopBar({ title, onBack, go, user, showMenu, hideMenu }) {
   const [menuOpen, setMenuOpen] = useState(false);
   return (
@@ -5353,6 +5403,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   const [driverInfo,   setDriverInfo]   = useState(null);
   const [directions,   setDirections]   = useState(null);
   const [sosSent,    setSosSent]    = useState(false);
+  const [sosBlocked, setSosBlocked] = useState('');   // rate-limit message, if any
   const [sosHolding, setSosHolding] = useState(false);
   const [sosCount,   setSosCount]   = useState(5);
   const [cancelling, setCancelling] = useState(false);
@@ -5633,7 +5684,25 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
 
   const triggerSOS = async () => {
     setSosHolding(false);
+    // Throttle how many alerts reach the admin — but never leave the user
+    // without a route to help (we always surface the police number).
+    const rideKey = bookingId || user?.uid || 'anon';
+    const gate = sosCheckLimit(rideKey);
+    if (!gate.allowed) {
+      setSosSent(true);
+      if (gate.reason === 'max') {
+        setSosBlocked('Your alerts have been logged and an admin will contact you. If you are in immediate danger, call the police on 119 now.');
+      } else {
+        setSosBlocked(`Alert already sent — please wait ${gate.waitSec}s before sending another. If you are in immediate danger, call the police on 119 now.`);
+        // Re-arm once the window clears so a real emergency isn't permanently
+        // locked out by the throttle.
+        setTimeout(() => { setSosSent(false); setSosBlocked(''); }, gate.waitSec * 1000);
+      }
+      return;
+    }
+    setSosBlocked('');
     setSosSent(true);
+    const pressCount = sosRecord(rideKey);
     try {
       let lat = booking?.pickup?.lat || 18.0416;
       let lng = booking?.pickup?.lng || -77.5036;
@@ -5658,6 +5727,8 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
         lat, lng,
         mapsLink:     `https://maps.google.com/?q=${lat},${lng}`,
         status:       'ACTIVE',
+        pressCount,
+        customerPhone: user?.phone || booking?.customerPhone || '',
         createdAt:    serverTimestamp(),
       });
     } catch(err) { console.error('SOS error:', err); }
@@ -6159,9 +6230,12 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
         {sosSent ? (
           <div style={{ background:'rgba(226,75,74,0.2)', border:'1.5px solid rgba(226,75,74,0.5)', borderRadius:12, padding:'12px 16px', marginBottom:12, display:'flex', alignItems:'center', gap:10 }}>
             <div style={{ fontSize:24 }}>🚨</div>
-            <div>
-              <div style={{ fontSize:13, fontWeight:500, color:'#f09595' }}>SOS Alert Sent!</div>
-              <div style={{ fontSize:11, color:'#6b6b80', marginTop:2 }}>Admin notified with your location</div>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:13, fontWeight:500, color:'#f09595' }}>{sosBlocked ? 'Alert limit reached' : 'SOS Alert Sent!'}</div>
+              <div style={{ fontSize:11, color:'#6b6b80', marginTop:2, lineHeight:1.5 }}>{sosBlocked || 'Admin notified with your location'}</div>
+              {sosBlocked && (
+                <a href="tel:119" style={{ display:'inline-block', marginTop:8, padding:'8px 16px', background:'#dc2626', color:'#fff', borderRadius:8, fontSize:12, fontWeight:800, textDecoration:'none' }}>📞 Call 119 (Police)</a>
+              )}
             </div>
           </div>
         ) : (
@@ -7270,6 +7344,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
   const [arrived,       setArrived]       = useState(false);
   const [enroute,       setEnroute]       = useState(false);
   const [sosSent,       setSosSent]       = useState(false);
+  const [sosBlocked,    setSosBlocked]    = useState('');   // rate-limit message
   const [sosHolding,    setSosHolding]    = useState(false);
   const [sosCount,      setSosCount]      = useState(5);
   const [directions, setDirections] = useState(null);
@@ -7448,7 +7523,24 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
   };
 
   const triggerSOS = async () => {
-    setSosHolding(false); setSosSent(true);
+    setSosHolding(false);
+    const rideKey = booking?.id || user?.uid || 'anon';
+    const gate = sosCheckLimit(rideKey);
+    if (!gate.allowed) {
+      setSosSent(true);
+      if (gate.reason === 'max') {
+        setSosBlocked('Your alerts have been logged and an admin will contact you. If you are in immediate danger, call the police on 119 now.');
+      } else {
+        setSosBlocked(`Alert already sent — please wait ${gate.waitSec}s before sending another. If you are in immediate danger, call the police on 119 now.`);
+        // Re-arm once the window clears so a real emergency isn't permanently
+        // locked out by the throttle.
+        setTimeout(() => { setSosSent(false); setSosBlocked(''); }, gate.waitSec * 1000);
+      }
+      return;
+    }
+    setSosBlocked('');
+    setSosSent(true);
+    const pressCount = sosRecord(rideKey);
     try {
       let lat = booking?.pickup?.lat || 18.0416;
       let lng = booking?.pickup?.lng || -77.5036;
@@ -7466,7 +7558,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
         licensePlate: booking?.licensePlate||'',
         pickup: booking?.pickup?.address||'--', dropoff: booking?.dropoff?.address||'--',
         lat, lng, mapsLink:`https://maps.google.com/?q=${lat},${lng}`,
-        status:'ACTIVE', createdAt:serverTimestamp(),
+        status:'ACTIVE', pressCount, createdAt:serverTimestamp(),
       });
     } catch(err) { console.error('SOS error:', err); }
   };
@@ -7740,9 +7832,12 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
             {sosSent ? (
               <div style={{ background:'rgba(226,75,74,0.2)', border:'1.5px solid rgba(226,75,74,0.5)', borderRadius:12, padding:'12px 16px', marginBottom:12, display:'flex', alignItems:'center', gap:10 }}>
                 <div style={{ fontSize:24 }}>🚨</div>
-                <div>
-                  <div style={{ fontSize:13, fontWeight:500, color:'#f09595' }}>SOS Alert Sent!</div>
-                  <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2 }}>Admin notified with your location</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13, fontWeight:500, color:'#f09595' }}>{sosBlocked ? 'Alert limit reached' : 'SOS Alert Sent!'}</div>
+                  <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2, lineHeight:1.5 }}>{sosBlocked || 'Admin notified with your location'}</div>
+                  {sosBlocked && (
+                    <a href="tel:119" style={{ display:'inline-block', marginTop:8, padding:'8px 16px', background:'#dc2626', color:'#fff', borderRadius:8, fontSize:12, fontWeight:800, textDecoration:'none' }}>📞 Call 119 (Police)</a>
+                  )}
                 </div>
               </div>
             ) : (
