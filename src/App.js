@@ -1032,7 +1032,7 @@ function Footer({ go }) {
         <div style={{ borderTop:'1px solid #efe6f4', paddingTop:20, display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:10 }}>
           <p style={{ fontSize:11, color:'#a9a3ba', margin:0 }}>© 2026 VilleCabs · Mandeville, Manchester, Jamaica</p>
           <div style={{ display:'flex', gap:16 }}>
-            <a href="https://wa.me/18765158113+1876-515-8113" target="_blank" rel="noopener noreferrer" style={{ fontSize:12, color:'#8a83a0', textDecoration:'none' }}
+            <a href="https://wa.me/18765158113" target="_blank" rel="noopener noreferrer" style={{ fontSize:12, color:'#8a83a0', textDecoration:'none' }}
               onMouseEnter={e => e.target.style.color=linkHover} onMouseLeave={e => e.target.style.color='#8a83a0'}>
               💬 WhatsApp
             </a>
@@ -1579,15 +1579,15 @@ function LoginChoice({ go, user }) {
       <div style={{ ...s.center, padding:'0 24px' }}>
         <div style={{ width:'100%', maxWidth:360, textAlign:'center' }}>
           <div style={{ fontSize:40, marginBottom:16 }}>👋</div>
-          <h2 style={{ fontSize:22, fontWeight:600, color:WHITE, marginBottom:8 }}>Welcome back!</h2>
-          <p style={{ fontSize:14, color:'rgba(255,255,255,0.5)', marginBottom:40 }}>How would you like to log in?</p>
+          <h2 style={{ fontSize:22, fontWeight:600, color:'#2a1a4a', marginBottom:8 }}>Welcome back!</h2>
+          <p style={{ fontSize:14, color:'#5b5470', marginBottom:40 }}>How would you like to log in?</p>
 
           <div onClick={() => go('login')}
             style={{ background:'rgba(232,180,0,0.08)', border:'1.5px solid rgba(232,180,0,0.3)', borderRadius:16, padding:24, marginBottom:14, cursor:'pointer', textAlign:'left', transition:'all 0.2s' }}
             onMouseEnter={e => e.currentTarget.style.borderColor='rgba(232,180,0,0.7)'}
             onMouseLeave={e => e.currentTarget.style.borderColor='rgba(232,180,0,0.3)'}>
             <div style={{ fontSize:28, marginBottom:8 }}>🚕</div>
-            <div style={{ fontSize:16, fontWeight:600, color:WHITE, marginBottom:4 }}>Customer Login</div>
+            <div style={{ fontSize:16, fontWeight:600, color:'#2a1a4a', marginBottom:4 }}>Customer Login</div>
             <div style={{ fontSize:13, color:'#6b7280' }}>Book rides in Manchester, Jamaica</div>
           </div>
 
@@ -1596,11 +1596,11 @@ function LoginChoice({ go, user }) {
             onMouseEnter={e => e.currentTarget.style.borderColor='rgba(26,158,90,0.6)'}
             onMouseLeave={e => e.currentTarget.style.borderColor='rgba(26,158,90,0.25)'}>
             <div style={{ fontSize:28, marginBottom:8 }}>🚗</div>
-            <div style={{ fontSize:16, fontWeight:600, color:WHITE, marginBottom:4 }}>Driver Login</div>
+            <div style={{ fontSize:16, fontWeight:600, color:'#2a1a4a', marginBottom:4 }}>Driver Login</div>
             <div style={{ fontSize:13, color:'#6b7280' }}>Access your driver dashboard</div>
           </div>
 
-          <p style={{ fontSize:13, color:'rgba(255,255,255,0.35)', marginTop:24 }}>
+          <p style={{ fontSize:13, color:'#8a83a0', marginTop:24 }}>
             New to VilleCabs? <span onClick={() => go('role')} style={{ color:YELLOW, cursor:'pointer' }}>Sign up</span>
           </p>
         </div>
@@ -1733,7 +1733,7 @@ function CustomerSignup({ go, setUser, user }) {
       <TopBar title="Create Account" go={go} user={user}/>
       <div style={{ padding:'24px 20px', maxWidth:420, margin:'0 auto' }}>
         <h2 style={{ fontSize:20, fontWeight:500, marginBottom:4 }}>Welcome to VilleCabs</h2>
-        <p style={{ color:'rgba(255,255,255,0.5)', fontSize:13, marginBottom:20 }}>Create your rider account</p>
+        <p style={{ color:'#5b5470', fontSize:13, marginBottom:20 }}>Create your rider account</p>
         {error && <div style={s.errBox}>⚠️ {error}</div>}
         <GoogleBtn onClick={handleGoogle} loading={loading}/>
         <Divider/>
@@ -1777,7 +1777,7 @@ function OTPScreen({ go, user }) {
       <div style={{ ...s.center, paddingTop:40 }}>
         <div style={{ fontSize:56, marginBottom:16 }}>📧</div>
         <h2 style={{ fontSize:20, fontWeight:500, marginBottom:6 }}>Check your inbox</h2>
-        <p style={{ color:'rgba(255,255,255,0.5)', fontSize:13, marginBottom:8, textAlign:'center' }}>We sent a verification link to</p>
+        <p style={{ color:'#5b5470', fontSize:13, marginBottom:8, textAlign:'center' }}>We sent a verification link to</p>
         <p style={{ color:YELLOW, fontSize:14, fontWeight:500, marginBottom:28 }}>{user?.email||'your email'}</p>
         {resent && <div style={s.successBox}>✅ Verification email sent! Check your inbox and spam folder.</div>}
         {error  && <div style={s.errBox}>⚠️ {error}</div>}
@@ -1800,7 +1800,7 @@ function OTPScreen({ go, user }) {
             disabled={cooldown>0}>
             {cooldown > 0 ? `Resend available in ${cooldown}s` : 'Resend verification email'}
           </button>
-          <p style={{ color:'rgba(255,255,255,0.3)', fontSize:11, textAlign:'center', marginTop:8 }}>
+          <p style={{ color:'#8a83a0', fontSize:11, textAlign:'center', marginTop:8 }}>
             Also check your spam or junk folder
           </p>
         </div>
@@ -1985,7 +1985,7 @@ function CustomerLogin({ go, setUser, user }) {
       <TopBar title="Log In" go={go} user={user} hideMenu/>
       <div style={{ padding:'32px 20px', maxWidth:420, margin:'0 auto' }}>
         <h2 style={{ fontSize:22, fontWeight:800, color:"#1a1a2e", marginBottom:4 }}>Welcome back</h2>
-        <p style={{ color:'rgba(255,255,255,0.5)', fontSize:13, marginBottom:20 }}>Log in to book a VilleCabs ride</p>
+        <p style={{ color:'#5b5470', fontSize:13, marginBottom:20 }}>Log in to book a VilleCabs ride</p>
         {error && <div style={s.errBox}>⚠️ {error}</div>}
         <GoogleBtn onClick={handleGoogle} loading={loading}/>
         <Divider/>
@@ -2327,12 +2327,12 @@ function DriverPending({ go, user }) {
           <div style={{ background:'rgba(232,180,0,0.1)', border:'1.5px solid rgba(232,180,0,0.4)', borderRadius:16, padding:24, textAlign:'center', marginBottom:20 }}>
             <div style={{ fontSize:48, marginBottom:12 }}>⏳</div>
             <div style={{ fontSize:17, fontWeight:500, marginBottom:8 }}>Pending Admin Approval</div>
-            <div style={{ fontSize:13, color:'rgba(255,255,255,0.6)', lineHeight:1.6 }}>Our team in Manchester will review your documents and activate your account within 24–48 hours.</div>
+            <div style={{ fontSize:13, color:'#5b5470', lineHeight:1.6 }}>Our team in Manchester will review your documents and activate your account within 24–48 hours.</div>
           </div>
           <div style={{ background:'rgba(15,20,40,0.65)', border:'0.5px solid rgba(255,255,255,0.1)', borderRadius:14, padding:16, marginBottom:20 }}>
             <div style={{ fontSize:13, fontWeight:500, marginBottom:10 }}>What happens next?</div>
             {['Admin reviews your documents','Background check completed','Account activated via SMS','Start accepting rides in Manchester'].map((t,i) => (
-              <div key={i} style={{ fontSize:12, color:'rgba(255,255,255,0.6)', marginBottom:8, display:'flex', gap:8 }}>
+              <div key={i} style={{ fontSize:12, color:'#5b5470', marginBottom:8, display:'flex', gap:8 }}>
                 <span style={{ color:YELLOW }}>0{i+1}</span>{t}
               </div>
             ))}
@@ -2554,7 +2554,7 @@ function AboutUs({ go, user }) {
         <div style={{ background:'#ffffff', border:'0.5px solid #e5e7eb', borderRadius:12, padding:14, fontSize:13, color:'#4b5563', lineHeight:2 }}>
           <div>📍 Serving Mandeville & Manchester, Jamaica</div>
           <div>🌐 villecabs.com</div>
-          <div>📞 Call / WhatsApp: <a href="https://wa.me/18765158113+1876-515-8113" style={{ color:'#6b21a8', textDecoration:'none' }}>+1876-515-8113</a></div>
+          <div>📞 Call / WhatsApp: <a href="https://wa.me/18765158113" style={{ color:'#6b21a8', textDecoration:'none' }}>+1876-515-8113</a></div>
         </div>
       </div>
       <Footer go={go}/>
@@ -2618,7 +2618,7 @@ function ContactUs({ go, user }) {
       <div style={{ padding:'14px 16px 0' }}>
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
           {[
-            ['💬','WhatsApp',  () => window.open('https://wa.me/18765158113+1876-515-8113','_blank')],
+            ['💬','WhatsApp',  () => window.open('https://wa.me/18765158113','_blank')],
             ['📧','Email',     () => window.open('mailto:admin@villecabs.com','_blank')],
             ['🚨','Safety',    () => { document.getElementById('subj-inp')?.focus?.(); }],
             ['🚗','Ride Issue',() => { document.getElementById('subj-inp')?.focus?.(); }],
@@ -2636,7 +2636,7 @@ function ContactUs({ go, user }) {
           <span style={{ fontSize:28 }}>💬</span>
           <div>
             <div style={{ fontSize:13, color:'#1a1a2e', fontWeight:500 }}>WhatsApp us directly</div>
-            <a href="https://wa.me/18765158113+1876-515-8113" target="_blank" rel="noopener noreferrer"
+            <a href="https://wa.me/18765158113" target="_blank" rel="noopener noreferrer"
               style={{ fontSize:13, color:'#6b21a8', textDecoration:'none' }}>+1876-515-8113</a>
           </div>
         </div>
@@ -4586,6 +4586,9 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
   const [directions, setDirections] = useState(null);
   const [completed,  setCompleted]  = useState(false);
   const [promoCode,  setPromoCode]  = useState('');
+  const [referralMsg,   setReferralMsg]   = useState(null); // { text, ok }
+  const [referralDocId, setReferralDocId] = useState(null); // referrer's customer id, once validated
+  const [referralChecking, setReferralChecking] = useState(false);
   const [promoMsg,   setPromoMsg]   = useState('');
   const [promoData,  setPromoData]  = useState(null); // { id, discount, code }
   const [promoLoading, setPromoLoading] = useState(false);
@@ -4883,6 +4886,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
           originalFare:    price,
           surgeMultiplier: SURGE_MULT > 1 ? SURGE_MULT : null,
           promoCode:       promoData?.code || null,
+          referredBy:      referralDocId || null,
           promoDiscount:   promoData?.discount || null,
           distanceKm:      dist,
           status:          'scheduled',
@@ -4917,6 +4921,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
         originalFare: price,
         surgeMultiplier: SURGE_MULT > 1 ? SURGE_MULT : null,
         promoCode:    promoData?.code || null,
+        referredBy:   referralDocId || null,
         promoDiscount:promoData?.discount || null,
         distanceKm:   dist,
         status:       'searching',
@@ -5067,30 +5072,33 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
         ); })()}
         {/* Referral Code */}
         <div style={{ background:'#ffffff', border:'1px solid #e0d3f5', borderRadius:12, padding:12, marginBottom:10 }}>
-          <div style={{ fontSize:12, color:'rgba(168,139,250,0.9)', marginBottom:8, fontWeight:500 }}>🎁 Have a referral code?</div>
+          <div style={{ fontSize:12, color:'#7c3aed', marginBottom:8, fontWeight:600 }}>🎁 Have a referral code?</div>
           <input
-            style={{ width:'100%', padding:'9px 12px', background:'#f6f2fb', border:'1px solid #d8b4fe', borderRadius:8, color:'#2a1a4a', fontSize:13, outline:'none', boxSizing:'border-box' }}
+            style={{ width:'100%', padding:'9px 12px', background:'#f6f2fb', border:`1px solid ${referralMsg ? (referralMsg.ok ? '#1a9e5a' : '#e24b4a') : '#d8b4fe'}`, borderRadius:8, color:'#2a1a4a', fontSize:13, outline:'none', boxSizing:'border-box' }}
             placeholder="Enter referral code e.g. VCABC12"
             onChange={async (e) => {
               const code = e.target.value.toUpperCase().trim();
-              if (code.length >= 7) {
+              if (code.length < 7) { setReferralMsg(null); setReferralDocId(null); return; }
+              setReferralChecking(true);
+              try {
                 const snap = await getDocs(query(collection(db,'customers'), where('referralCode','==',code)));
                 if (!snap.empty && snap.docs[0].id !== user.uid) {
-                  // Valid referral - store for use
-                  e.target.style.borderColor = '#1a9e5a';
-                  e.target.nextSibling.textContent = '✅ Valid referral code — 20% off your first ride!';
-                  e.target.nextSibling.style.color = '#9fe1cb';
-                  window._referralDoc = snap.docs[0].id;
+                  setReferralDocId(snap.docs[0].id);
+                  setReferralMsg({ text:'✅ Valid referral code — 20% off your first ride!', ok:true });
                 } else {
-                  e.target.style.borderColor = 'rgba(226,75,74,0.4)';
-                  e.target.nextSibling.textContent = code.length >= 7 ? '❌ Invalid referral code' : '';
-                  e.target.nextSibling.style.color = '#f09595';
-                  window._referralDoc = null;
+                  setReferralDocId(null);
+                  setReferralMsg({ text:'❌ Invalid referral code', ok:false });
                 }
+              } catch (err) {
+                setReferralDocId(null);
+                setReferralMsg({ text:'Could not check that code — try again.', ok:false });
               }
+              setReferralChecking(false);
             }}
           />
-          <div style={{ fontSize:12, marginTop:6, color:'#8a83a0' }}></div>
+          <div style={{ fontSize:12, marginTop:6, color: referralMsg ? (referralMsg.ok ? '#1a9e5a' : '#dc2626') : '#8a83a0' }}>
+            {referralChecking ? 'Checking…' : (referralMsg?.text || '')}
+          </div>
         </div>
 
         {/* Promo Code */}
@@ -5514,6 +5522,9 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   }, [bookingId, booking?.status, booking?.driverId]);
   const [rating,       setRating]       = useState(0);
   const [rated,        setRated]        = useState(false);
+  // If this ride was already rated (e.g. page refresh after rating), reflect it
+  // so the form doesn't offer a second submission.
+  useEffect(() => { if (booking?.customerRating) setRated(true); }, [booking?.customerRating]);
   const [review,       setReview]       = useState('');
   const [reviewTags,   setReviewTags]   = useState([]);
   const [lightbox,     setLightbox]     = useState(null); // {url, label} for enlarged photo
@@ -5866,11 +5877,23 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
 
   const submitRating = async () => {
     if (!rating || !bookingId) return;
+    // Guard against double-submission: if this booking already carries a rating
+    // (e.g. the user refreshed the completed screen and rated again), do nothing.
+    // Otherwise the driver's ratingTotal/ratingCount get incremented twice and
+    // their average is inflated.
+    if (booking?.customerRating) { setRated(true); return; }
     try {
+      // Re-read the booking to catch a rating written since this screen loaded,
+      // then only proceed if it's still unrated. This is the closest we can get
+      // to atomicity without a Cloud Function.
+      const freshSnap = await getDoc(doc(db,'bookings',bookingId));
+      if (freshSnap.exists() && freshSnap.data().customerRating) { setRated(true); return; }
+
       await updateDoc(doc(db,'bookings',bookingId), {
         customerRating: rating,
         customerReview: review.trim() || null,
         reviewTags: reviewTags.length ? reviewTags : null,
+        ratedAt: serverTimestamp(),
       });
       if (booking?.driverId) {
         const driverRef  = doc(db,'drivers',booking.driverId);
@@ -6647,7 +6670,7 @@ function DriverAboutUs({ go, user }) {
         <div style={{ background:'#ffffff', border:'0.5px solid #e5e7eb', borderRadius:12, padding:14, fontSize:13, color:'#4b5563', lineHeight:2 }}>
           <div>📍 Serving Mandeville & Manchester, Jamaica</div>
           <div>🌐 villecabs.com</div>
-          <div>📞 Call / WhatsApp: <a href="https://wa.me/18765158113+1876-515-8113" style={{ color:'#6b21a8', textDecoration:'none' }}>+1876-515-8113</a></div>
+          <div>📞 Call / WhatsApp: <a href="https://wa.me/18765158113" style={{ color:'#6b21a8', textDecoration:'none' }}>+1876-515-8113</a></div>
         </div>
       </div>
       <Footer go={go}/>
@@ -6693,7 +6716,7 @@ function DriverContactUs({ go, user }) {
           <span style={{ fontSize:28 }}>💬</span>
           <div>
             <div style={{ fontSize:13, color:'#1a1a2e', fontWeight:500 }}>WhatsApp us directly</div>
-            <a href="https://wa.me/18765158113+1876-515-8113" target="_blank" rel="noopener noreferrer" style={{ fontSize:13, color:'#6b21a8', textDecoration:'none' }}>+1876-515-8113</a>
+            <a href="https://wa.me/18765158113" target="_blank" rel="noopener noreferrer" style={{ fontSize:13, color:'#6b21a8', textDecoration:'none' }}>+1876-515-8113</a>
           </div>
         </div>
         {error   && <div style={s.errBox}>⚠️ {error}</div>}
