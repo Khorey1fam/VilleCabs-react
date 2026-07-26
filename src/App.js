@@ -597,6 +597,30 @@ function stripPlusCode(address) {
   return address.replace(PLUS_CODE_RE, '').replace(/^[\s,]+/, '').trim();
 }
 
+// Google frequently drops a leading house/unit number for addresses it doesn't
+// have on file (common in Jamaica): the user types "32 Cedar Garden Road" but
+// the resolved address comes back "Cedar Garden Road, Mandeville". If the user
+// typed a leading number and the resolved address begins with the SAME street
+// (just without that number), prepend it so the driver still sees "32".
+function preserveHouseNumber(typed, resolved) {
+  if (!typed || !resolved) return resolved;
+  // Leading number, optionally with a unit letter/fraction (e.g. "32", "5B", "5,1/2")
+  const m = String(typed).trim().match(/^(\d+[a-zA-Z]?(?:\s*[,/]\s*\d+(?:\/\d+)?)?)\s+(.*)$/);
+  if (!m) return resolved;
+  const num = m[1].trim();
+  const restTyped = m[2].trim().toLowerCase();
+  // Only prepend if the resolved address doesn't already start with that number,
+  // and the street the user typed actually appears in the resolved address (so we
+  // don't staple a number onto an unrelated place).
+  const resLower = resolved.toLowerCase();
+  if (resLower.startsWith(num.toLowerCase())) return resolved;   // already there
+  const firstStreetWord = restTyped.split(/[\s,]/)[0];
+  if (firstStreetWord && firstStreetWord.length >= 3 && resLower.includes(firstStreetWord)) {
+    return `${num} ${resolved}`;
+  }
+  return resolved;
+}
+
 function geocodeLatLng(lat, lng) {
   return new Promise((resolve) => {
     const geocoder = new window.google.maps.Geocoder();
@@ -4124,6 +4148,7 @@ function AddressAutocompleteInput({ value, defaultValue, onChange, onPlaceSelect
   const handleSelect = async (s) => {
     const pred = s.placePrediction;
     const main = pred.mainText?.text || pred.text?.text || '';
+    const typed = query;   // what the user actually typed before selecting
     setQuery(main); setOpen(false); setPreds([]);
     if (onChange) onChange(main);
     try {
@@ -4143,6 +4168,12 @@ function AddressAutocompleteInput({ value, defaultValue, onChange, onPlaceSelect
       } else {
         addr = stripPlusCode(fmt) || stripPlusCode(named) || main;  // last resort
       }
+      // Google often drops the house number for Jamaican addresses it doesn't
+      // have on file — "32 Cedar Garden Road" resolves to just "Cedar Garden
+      // Road". If the user typed a leading number/unit and the resolved address
+      // starts with the same street (minus that number), prepend it back so the
+      // driver still sees "32".
+      addr = preserveHouseNumber(typed, addr);
       setQuery(addr); if (onChange) onChange(addr);
       if (onPlaceSelect) onPlaceSelect({
         name: place.displayName,
