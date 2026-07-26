@@ -462,7 +462,6 @@ function VilleMap({ height = 620, center = MANCHESTER_CENTER, zoom = 14, onClick
 
   // Keep a handle on the map instance so we can imperatively pan/zoom
   const mapRef = useRef(null);
-  const didInitialFit = useRef(false);
   const onMapLoad = (map) => {
     mapRef.current = map;
     // Set the starting camera once.
@@ -478,12 +477,24 @@ function VilleMap({ height = 620, center = MANCHESTER_CENTER, zoom = 14, onClick
     try { mapRef.current.panTo(followCenter); } catch(e) {}
   }, [followCenter?.lat, followCenter?.lng]);
 
-  // When a brand-new route arrives, frame it ONCE (not on every render).
+  // Frame the route when it arrives, and re-frame it whenever the route itself
+  // changes (e.g. the customer picks a different destination). We track the last
+  // bounds we fit to, so we don't re-fit on unrelated re-renders — only when the
+  // actual geometry changes.
+  const lastFitKey = useRef(null);
   useEffect(() => {
     if (!mapRef.current) return;
-    if (fitRoute && directions?.routes?.[0]?.bounds && !didInitialFit.current) {
-      try { mapRef.current.fitBounds(directions.routes[0].bounds, 60); didInitialFit.current = true; } catch(e) {}
-    }
+    if (!fitRoute) return;
+    const b = directions?.routes?.[0]?.bounds;
+    if (!b) return;
+    // A stable signature of the route's extent.
+    let key;
+    try {
+      const ne = b.getNorthEast(), sw = b.getSouthWest();
+      key = `${ne.lat().toFixed(5)},${ne.lng().toFixed(5)},${sw.lat().toFixed(5)},${sw.lng().toFixed(5)}`;
+    } catch(e) { key = String(Date.now()); }
+    if (key === lastFitKey.current) return;   // same route already framed
+    try { mapRef.current.fitBounds(b, 60); lastFitKey.current = key; } catch(e) {}
   }, [directions, fitRoute]);
 
   // Allow an explicit, intentional zoom-in (e.g. right after the driver accepts).
@@ -1715,7 +1726,8 @@ function CustomerSignup({ go, setUser, user }) {
       const r = await signInWithPopup(auth, googleProvider);
       const snap = await getDoc(doc(db,'customers',r.user.uid));
       if (!snap.exists()) {
-        await setDoc(doc(db,'customers',r.user.uid), { name:r.user.displayName, email:r.user.email, role:'customer', createdAt:serverTimestamp() });
+        const refCode = 'VC' + Math.random().toString(36).substring(2,7).toUpperCase();
+        await setDoc(doc(db,'customers',r.user.uid), { name:r.user.displayName, email:r.user.email, role:'customer', referralCode:refCode, referralCount:0, createdAt:serverTimestamp() });
         setUser({ uid:r.user.uid, name:r.user.displayName, email:r.user.email, role:'customer' });
         go('complete-profile');
       } else {
@@ -1969,7 +1981,7 @@ function CustomerLogin({ go, setUser, user }) {
     try {
       const r = await signInWithPopup(auth, googleProvider);
       const snap = await getDoc(doc(db,'customers',r.user.uid));
-      if (!snap.exists()) await setDoc(doc(db,'customers',r.user.uid), { name:r.user.displayName, email:r.user.email, role:'customer', createdAt:serverTimestamp() });
+      if (!snap.exists()) await setDoc(doc(db,'customers',r.user.uid), { name:r.user.displayName, email:r.user.email, role:'customer', referralCode:'VC' + Math.random().toString(36).substring(2,7).toUpperCase(), referralCount:0, createdAt:serverTimestamp() });
       const data = snap.exists() ? snap.data() : {};
       setUser({ uid:r.user.uid, name:data.name||r.user.displayName, email:r.user.email, role:'customer' });
       if (!data.phone) go('complete-profile');
@@ -3071,10 +3083,16 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
   // back button, etc). Bounce them back to the verify screen. Google accounts
   // are inherently verified and skip this.
   useEffect(() => {
-    const fu = auth.currentUser;
-    if (fu && !fu.emailVerified && fu.providerData?.[0]?.providerId === 'password') {
-      go('otp');
-    }
+    // Wait for auth to actually resolve before deciding — reading
+    // auth.currentUser once on mount can see null if auth is still initialising,
+    // which would let an unverified user slip through. onAuthStateChanged fires
+    // with the settled user.
+    const unsub = onAuthStateChanged(auth, (fu) => {
+      if (fu && !fu.emailVerified && fu.providerData?.[0]?.providerId === 'password') {
+        go('otp');
+      }
+    });
+    return () => unsub();
   }, []);
 
   const [tab,        setTab]        = useState('book');
@@ -3664,14 +3682,19 @@ function CustomerReferral({ go, user }) {
 
   useEffect(() => {
     if (!user?.uid) return;
-    // Generate deterministic referral code from uid
-    const refCode = 'VILLE' + user.uid.substring(0, 5).toUpperCase();
-    setCode(refCode);
-    // Read the referral tally from the customer's OWN document. We no longer
-    // scan every booking for this code — that required reading other customers'
-    // bookings, which is both a privacy leak and blocked by the security rules.
-    getDoc(doc(db,'customers',user.uid)).then(snap => {
+    // Show the referral code that's ACTUALLY stored on the customer document —
+    // that's the one referral lookups match against. A derived code (from the
+    // uid) would display something that isn't in Firestore, so a friend entering
+    // it would always fail. If the account somehow has no stored code (older
+    // Google signups), generate one and save it now so it becomes real.
+    getDoc(doc(db,'customers',user.uid)).then(async snap => {
       const d = snap.exists() ? snap.data() : {};
+      let refCode = d.referralCode;
+      if (!refCode) {
+        refCode = 'VC' + Math.random().toString(36).substring(2,7).toUpperCase();
+        try { await updateDoc(doc(db,'customers',user.uid), { referralCode: refCode }); } catch(e) {}
+      }
+      setCode(refCode);
       const used = d.referralCount || 0;
       setStats({ used, earned: used * 200 }); // J$200 per referral
       setLoading(false);
