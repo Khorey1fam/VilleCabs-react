@@ -4189,6 +4189,43 @@ function PinPickup({ go, setPickupData, user }) {
   const [note,        setNote]        = useState('');
   const [loading,     setLoading]     = useState(false);
   const [passengers,  setPassengers]  = useState(1);
+  const [locating,    setLocating]    = useState(false);
+
+  // Read the phone's GPS and drop the pin exactly there. This is the most
+  // accurate pickup a customer can give — far better than tapping a rough spot
+  // on the map — so it's offered as a one-tap option right on the search bar.
+  const useMyLocation = () => {
+    if (!navigator.geolocation) {
+      vcToast('Location is not available on this device.', 'error');
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setPinPos({ lat, lng });
+        setMapZoom(17);
+        const addr = await geocodeLatLng(lat, lng);
+        if (addr) {
+          setAddress(addr);
+        } else {
+          // No street match (e.g. only a Plus Code) — still keep the precise pin,
+          // and let them add a note so the driver can find them.
+          setAddress('My current location');
+          vcToast('Pin set to your exact location. Add a landmark below so your driver can spot you.', 'info');
+        }
+        setLocating(false);
+      },
+      (err) => {
+        setLocating(false);
+        vcToast(err.code === 1
+          ? 'Location permission denied. Allow location access, or tap the map to set your pickup.'
+          : 'Could not get your location. Tap the map to set your pickup instead.', 'error');
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  };
 
   useEffect(() => {
     if (window.google?.maps?.places) { setMapsReady(true); return; }
@@ -4241,6 +4278,10 @@ function PinPickup({ go, setPickupData, user }) {
           onPlaceSelect={handlePlaceSelect}
           placeholder="Where should we pick you up?"
         />
+        <button onClick={useMyLocation} disabled={locating}
+          style={{ marginTop:10, width:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:8, padding:'11px', background: locating ? '#f3eefb' : 'linear-gradient(135deg,#6b21a8,#4c1d95)', color: locating ? '#6b21a8' : '#fff', border:'none', borderRadius:10, fontSize:13.5, fontWeight:700, cursor: locating ? 'default' : 'pointer' }}>
+          {locating ? '📡 Getting your location…' : '📍 Use my current location'}
+        </button>
       </div>
 
       {/* ── MAP ── */}
@@ -5443,6 +5484,34 @@ function SearchingAnimation({ onCancel }) {
 function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, dropoffData }) {
   const [forceUpdate,  setForceUpdate]  = useState(0);
   const [booking,      setBooking]      = useState(null);
+
+  // Share the customer's live location with the driver while the driver is on
+  // the way. Deliberately NOT during 'searching' — an unassigned open ride is
+  // readable by any online driver, so we don't broadcast the rider's live GPS
+  // until a specific driver has claimed the trip. Stops once the ride ends.
+  useEffect(() => {
+    const shareStatuses = ['active','enroute','arrived'];
+    const st = booking?.status;
+    const hasDriver = !!booking?.driverId;
+    if (!bookingId || !hasDriver || !st || !shareStatuses.includes(st) || !navigator.geolocation) return;
+    let cancelled = false;
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        if (cancelled) return;
+        updateDoc(doc(db,'bookings',bookingId), {
+          customerLocation: {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            accuracy: pos.coords.accuracy || null,
+            at: Date.now(),
+          },
+        }).catch(()=>{});
+      },
+      () => {}, // permission denied / unavailable — driver simply won't see the live dot
+      { enableHighAccuracy: true, maximumAge: 8000, timeout: 20000 }
+    );
+    return () => { cancelled = true; try { navigator.geolocation.clearWatch(watchId); } catch(e){} };
+  }, [bookingId, booking?.status, booking?.driverId]);
   const [rating,       setRating]       = useState(0);
   const [rated,        setRated]        = useState(false);
   const [review,       setReview]       = useState('');
@@ -7822,6 +7891,25 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
   const markers = arrived
     ? (dropoffCoords ? [{ position: dropoffCoords, label:'B', title:'Drop-off' }] : [])
     : (pickupCoords  ? [{ position: pickupCoords,  label:'A', title:'Pickup'   }] : []);
+
+  // Show the rider's LIVE phone location (a blue dot) on top of the pinned
+  // pickup, so before arrival the driver can see where the customer actually is.
+  // Only meaningful on the way TO the rider, and only if it's reasonably fresh.
+  const custLoc = booking?.customerLocation;
+  if (!arrived && custLoc?.lat && custLoc?.lng && (Date.now() - (custLoc.at || 0) < 120000)) {
+    markers.push({
+      position: { lat: custLoc.lat, lng: custLoc.lng },
+      title: 'Customer (live)',
+      icon: {
+        path: (window.google?.maps?.SymbolPath?.CIRCLE) ?? 0,
+        scale: 8,
+        fillColor: '#2563eb',
+        fillOpacity: 1,
+        strokeColor: '#ffffff',
+        strokeWeight: 3,
+      },
+    });
+  }
 
   const fare = booking?.fare || 0;
   const fee  = Math.round(fare * 0.15);
