@@ -57,9 +57,9 @@ const sendWelcomeEmail = async (toEmail, toName, role = 'customer') => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        service_id:  'service_8fp53l4',
+        service_id:  EMAILJS_SERVICE,
         template_id: templateId,
-        user_id:     'NYE1IvkRipsFf-pQg',
+        user_id:     EMAILJS_USER,
         template_params: {
           to_email:  toEmail,
           to_name:   toName,
@@ -88,9 +88,9 @@ const sendReplyEmail = async (toEmail, toName, subject, replyText) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        service_id:  'service_8fp53l4',
+        service_id:  EMAILJS_SERVICE,
         template_id: 'template_ss6rofa',
-        user_id:     'NYE1IvkRipsFf-pQg',
+        user_id:     EMAILJS_USER,
         template_params: {
           to_email:   toEmail,
           to_name:    toName || 'VilleCabs Customer',
@@ -298,9 +298,9 @@ const sendRideReceipt = async (booking, customerEmail, customerName) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        service_id:  'service_8fp53l4',
+        service_id:  EMAILJS_SERVICE,
         template_id: 'template_ride_receipt',
-        user_id:     'NYE1IvkRipsFf-pQg',
+        user_id:     EMAILJS_USER,
         template_params: {
           to_email:     customerEmail,
           to_name:      customerName,
@@ -322,6 +322,12 @@ const sendRideReceipt = async (booking, customerEmail, customerName) => {
   } catch(e) { console.warn('Receipt email error:', e); }
 };
 const GOOGLE_MAPS_KEY = process.env.REACT_APP_GOOGLE_MAPS_KEY || '';
+// EmailJS identifiers. The user_id is EmailJS's PUBLIC key (safe to ship — it
+// only works from allow-listed domains configured in the EmailJS dashboard).
+// Kept in env so they're overridable and stay out of the public repo; set
+// REACT_APP_EMAILJS_SERVICE / REACT_APP_EMAILJS_USER in Vercel to override.
+const EMAILJS_SERVICE = process.env.REACT_APP_EMAILJS_SERVICE || 'service_8fp53l4';
+const EMAILJS_USER    = process.env.REACT_APP_EMAILJS_USER    || 'NYE1IvkRipsFf-pQg';
 
 
 // Dark map style matching VilleCabs theme
@@ -2602,9 +2608,9 @@ function ContactUs({ go, user }) {
         method: 'POST',
         headers: { 'Content-Type':'application/json' },
         body: JSON.stringify({
-          service_id:  'service_8fp53l4',
+          service_id:  EMAILJS_SERVICE,
           template_id: 'template_ss6rofa',
-          user_id:     'NYE1IvkRipsFf-pQg',
+          user_id:     EMAILJS_USER,
           template_params: {
             to_email:  'daviskeneile@gmail.com',
             to_name:   'VilleCabs Admin',
@@ -3971,7 +3977,6 @@ function CustomerSettings({ go, user, setUser }) {
 
   const handleLogout = async () => {
     try {
-      setMenuOpen(false);
       _manualNavDone = false;
       await signOut(auth);
       setUser(null);
@@ -6721,7 +6726,7 @@ function DriverContactUs({ go, user }) {
       await fetch('https://api.emailjs.com/api/v1.0/email/send', {
         method:'POST', headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
-          service_id:'service_8fp53l4', template_id:'template_ss6rofa', user_id:'NYE1IvkRipsFf-pQg',
+          service_id:EMAILJS_SERVICE, template_id:'template_ss6rofa', user_id:EMAILJS_USER,
           template_params:{ to_email:'daviskeneile@gmail.com', to_name:'VilleCabs Admin', from_name:form.name, from_email:form.email, subject:form.subject, otp_code:`Driver message from: ${form.name} (${form.email})\\n\\nSubject: ${form.subject}\\n\\n${form.message}` },
         }),
       });
@@ -7061,8 +7066,8 @@ function DriverDash({ go, user, setUser, setBookingId }) {
         fetch('https://api.emailjs.com/api/v1.0/email/send', {
           method:'POST', headers:{'Content-Type':'application/json'},
           body: JSON.stringify({
-            service_id:'service_8fp53l4', template_id:'template_low_driver_alert',
-            user_id:'NYE1IvkRipsFf-pQg',
+            service_id:EMAILJS_SERVICE, template_id:'template_low_driver_alert',
+            user_id:EMAILJS_USER,
             template_params:{
               to_email:'admin@villecabs.com', to_name:'Admin', from_name:'VilleCabs System',
               reply_to:'admin@villecabs.com',
@@ -8427,7 +8432,6 @@ function DriverSettings({ go, user, setUser }) {
 
   const handleLogout = async () => {
     try {
-      setMenuOpen(false);
       _manualNavDone = false;
       await signOut(auth);
       setUser(null);
@@ -9553,7 +9557,7 @@ function CharterPage({ go, user }) {
         const lines = days.map((d,i)=>`${d.date} · ${d.hours}h · ${d.purpose} · ${Math.round(d.route?.km||0)}km · J$${(dayResults[i]?.subtotal||0).toLocaleString()}`).join(' | ');
         await fetch('https://api.emailjs.com/api/v1.0/email/send', {
           method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ service_id:'service_8fp53l4', template_id:'template_ss6rofa', user_id:'NYE1IvkRipsFf-pQg',
+          body: JSON.stringify({ service_id:EMAILJS_SERVICE, template_id:'template_ss6rofa', user_id:EMAILJS_USER,
             template_params:{ to_email:'admin@villecabs.com', to_name:'VilleCabs Admin', from_name:'VilleCabs Charter',
               subject:`New Charter Request — ${name.trim()}`,
               message:`Charter from ${name.trim()} (${phone.trim()}${email.trim()?', '+email.trim():''}).\nDays (${dayCount}): ${lines}\nTotal distance ${Math.round(totalKm)}km. TOTAL J$${total.toLocaleString()}${discount?` (incl. -J$${discount.toLocaleString()} multi-day)`:''}` } }),
