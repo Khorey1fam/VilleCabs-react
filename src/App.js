@@ -452,6 +452,78 @@ function GlobalStyles() {
 
 function MapBg() { return null; }
 
+// Great-circle distance in metres between two lat/lng points.
+function haversineM(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// A marker that GLIDES to each new position instead of teleporting. Two jobs:
+//  1. Smooth motion — animate from the current spot to the new GPS point over a
+//     short window (requestAnimationFrame), so the car slides along the road
+//     rather than jumping every update.
+//  2. Glitch rejection — GPS occasionally reports a wildly wrong point (network
+//     hiccup, tunnel). If a new point is implausibly far from the last good one
+//     for the time elapsed (i.e. it implies an impossible speed), we ignore it
+//     and keep the car where it was until a sane fix arrives.
+function SmoothMarker({ position, title, icon }) {
+  const markerRef = useRef(null);
+  const rafRef    = useRef(null);
+  const curRef    = useRef(position ? { ...position } : null);   // where the marker is now
+  const lastGoodRef = useRef(position ? { lat:position.lat, lng:position.lng, t:Date.now() } : null);
+
+  const onLoad = (marker) => { markerRef.current = marker; };
+  const onUnmount = () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); markerRef.current = null; };
+
+  useEffect(() => {
+    if (!position?.lat || !markerRef.current) return;
+    const now = Date.now();
+    const prev = lastGoodRef.current;
+
+    // Distance (metres) from the last accepted point.
+    const dist = prev ? haversineM(prev.lat, prev.lng, position.lat, position.lng) : 0;
+    if (prev) {
+      const dtSec = Math.max(0.5, (now - prev.t) / 1000);
+      const impliedSpeed = dist / dtSec;          // m/s
+      // Reject only clear teleports: a big jump AND an impossible speed
+      // (>60 m/s ≈ 216 km/h). Small jitter and normal driving pass through.
+      if (dist > 150 && impliedSpeed > 60) {
+        return; // treat as a GPS glitch — hold position
+      }
+    }
+    lastGoodRef.current = { lat:position.lat, lng:position.lng, t:now };
+
+    const start = curRef.current || { lat:position.lat, lng:position.lng };
+    const target = { lat:position.lat, lng:position.lng };
+    // If it's the very first fix or a tiny move, just set it.
+    if (!curRef.current || dist < 1) {
+      curRef.current = target;
+      try { markerRef.current.setPosition(target); } catch(e) {}
+      return;
+    }
+    // Animate start → target. Longer moves get a bit more time, capped.
+    const duration = Math.min(1500, Math.max(400, dist * 8));
+    const t0 = performance.now();
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    const step = (t) => {
+      const p = Math.min(1, (t - t0) / duration);
+      const ease = p < 0.5 ? 2*p*p : 1 - Math.pow(-2*p+2, 2)/2;   // easeInOutQuad
+      const lat = start.lat + (target.lat - start.lat) * ease;
+      const lng = start.lng + (target.lng - start.lng) * ease;
+      curRef.current = { lat, lng };
+      try { markerRef.current && markerRef.current.setPosition({ lat, lng }); } catch(e) {}
+      if (p < 1) rafRef.current = requestAnimationFrame(step);
+    };
+    rafRef.current = requestAnimationFrame(step);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [position?.lat, position?.lng]);
+
+  return <Marker position={curRef.current || position} title={title} icon={icon} onLoad={onLoad} onUnmount={onUnmount}/>;
+}
+
 function VilleMap({ height = 620, center = MANCHESTER_CENTER, zoom = 14, onClick, markers = [], directions = null, children, expandable = false, followCenter = null, focusZoom = null, fitRoute = true }) {
   const [expanded, setExpanded] = useState(false);
   const { isLoaded } = useJsApiLoader({
@@ -536,7 +608,9 @@ function VilleMap({ height = 620, center = MANCHESTER_CENTER, zoom = 14, onClick
       options={{ styles:MAP_STYLE, disableDefaultUI:true, zoomControl:true, gestureHandling:'greedy' }}
     >
       {markers.map((m, i) => (
-        <Marker key={i} position={m.position} label={m.label} title={m.title} icon={m.icon}/>
+        m.smooth
+          ? <SmoothMarker key={m.key || i} position={m.position} title={m.title} icon={m.icon}/>
+          : <Marker key={m.key || i} position={m.position} label={m.label} title={m.title} icon={m.icon}/>
       ))}
       {directions && (
         <>
@@ -6327,7 +6401,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
               icon={{ url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><circle cx="14" cy="14" r="11" fill="#e8b400" stroke="white" stroke-width="2.5"/></svg>'), scaledSize:{width:28,height:28} }}/>
           )}
           {driverCoords && (
-            <Marker position={driverCoords} title="Your driver"
+            <SmoothMarker position={driverCoords} title="Your driver"
               icon={{ url:carIconSVG(driverBearing, '#e8b400'), scaledSize:{width:44,height:44}, anchor:{x:22,y:22} }}/>
           )}
         </VilleMap>
@@ -8043,11 +8117,11 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
         )}
         <VilleMap height={typeof window!=='undefined'?Math.max(560,window.innerHeight*0.80):640} center={driverCoords||pickupCoords} zoom={14} markers={markers} directions={directions} expandable={true} followCenter={driverCoords} focusZoom={driverFocus} fitRoute={false}>
           {driverCoords && !directions && (
-            <Marker position={driverCoords} title="Your location"
+            <SmoothMarker position={driverCoords} title="Your location"
               icon={{ url:carIconSVG(driverBearing, '#e8b400'), scaledSize:{width:36,height:36}, anchor:{x:18,y:18} }}/>
           )}
           {driverCoords && directions && (
-            <Marker position={driverCoords} title="You"
+            <SmoothMarker position={driverCoords} title="You"
               icon={{ url:carIconSVG(driverBearing, '#e8b400'), scaledSize:{width:40,height:40}, anchor:{x:20,y:20} }}/>
           )}
         </VilleMap>
