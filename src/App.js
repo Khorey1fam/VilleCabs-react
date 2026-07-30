@@ -661,6 +661,22 @@ function VilleMap({ height = 620, center = MANCHESTER_CENTER, zoom = 14, onClick
 // to a driver trying to find a rider, so we detect and reject them.
 // Plus Code alphabet is: 23456789CFGHJMPQRVWX
 const PLUS_CODE_RE = /(^|\s)[23456789CFGHJMPQRVWX]{4,8}\+[23456789CFGHJMPQRVWX]{2,3}\b/i;
+// Normalise a phone number for a tel: link. Strips spaces, dashes, parens and any
+// other characters that make the href look like "encrypted code" once the browser
+// percent-encodes them, leaving only a leading + and digits. Adds Jamaica's +1
+// country code for local 876 numbers so the dialer gets a complete number.
+function telNumber(raw) {
+  if (!raw) return '';
+  let n = String(raw).trim();
+  const hasPlus = n.startsWith('+');
+  n = n.replace(/[^\d]/g, '');           // digits only
+  if (!hasPlus) {
+    if (n.length === 7) n = '1876' + n;                            // bare local 7-digit
+    else if (n.length === 10 && n.startsWith('876')) n = '1' + n;  // 876XXXXXXX
+  }
+  return '+' + n;                        // E.164-style: +1876XXXXXXX
+}
+
 function isPlusCode(address) {
   if (!address || typeof address !== 'string') return false;
   return PLUS_CODE_RE.test(address.trim());
@@ -4956,9 +4972,11 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
       // ── CUSTOMER SUSPENSION / BAN CHECK ──────────────────────────────
       // Fail-CLOSED: if we can't confirm the account is in good standing, we
       // don't book. A stale session on a banned account must not slip through.
+      let myPhone = '';
       try {
         const meSnap = await getDoc(doc(db,'customers',user.uid));
         const st = meSnap.exists() ? meSnap.data().status : null;
+        myPhone = (meSnap.exists() && meSnap.data().phone) || '';
         if (['banned','suspended','deactivated'].includes(st)) {
           setChecking(false); setLoading(false);
           setError('Your account has been suspended from booking rides. Please contact admin@villecabs.com.');
@@ -5011,6 +5029,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
         await addDoc(collection(db,'bookings'), {
           customerId:      user.uid,
           customerName:    user.name,
+          customerPhone:   myPhone,
           passengers:      pickupData?.passengers || 1,
           pickup:          { address: pickupData?.address||'Manchester, Jamaica', lat: pickupData?.coords?.lat||MANCHESTER_CENTER.lat, lng: pickupData?.coords?.lng||MANCHESTER_CENTER.lng },
           dropoff:         { address: dropoffData?.address||'Destination', lat: dropoffData?.coords?.lat||18.02, lng: dropoffData?.coords?.lng||-77.48 },
@@ -5046,6 +5065,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
       const ref = await addDoc(collection(db,'bookings'), {
         customerId:   user.uid,
         customerName: user.name,
+        customerPhone: myPhone,
         passengers:   pickupData?.passengers || 1,
         pickup:       { address: pickupData?.address||'Manchester, Jamaica', lat: pickupData?.coords?.lat||MANCHESTER_CENTER.lat, lng: pickupData?.coords?.lng||MANCHESTER_CENTER.lng },
         dropoff:      { address: dropoffData?.address||'Destination', lat: dropoffData?.coords?.lat||18.02, lng: dropoffData?.coords?.lng||-77.48 },
@@ -6441,10 +6461,18 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
                   </div>
                 </div>
                 <div style={{ display:'flex', gap:8 }}>
-                  <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, cursor:'pointer' }}>
-                    <div style={{ width:38, height:38, borderRadius:'50%', background:GREEN, display:'flex', alignItems:'center', justifyContent:'center', fontSize:17 }}>📞</div>
-                    <span style={{ fontSize:9, color:'#8a83a0' }}>Call</span>
-                  </div>
+                  {(booking.driverPhone || driverInfo?.phone) ? (
+                    <a href={`tel:${telNumber(booking.driverPhone || driverInfo?.phone)}`}
+                      style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, textDecoration:'none' }}>
+                      <div style={{ width:38, height:38, borderRadius:'50%', background:GREEN, display:'flex', alignItems:'center', justifyContent:'center', fontSize:17 }}>📞</div>
+                      <span style={{ fontSize:9, color:'#8a83a0' }}>Call</span>
+                    </a>
+                  ) : (
+                    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, opacity:0.4 }}>
+                      <div style={{ width:38, height:38, borderRadius:'50%', background:'#cbd5e1', display:'flex', alignItems:'center', justifyContent:'center', fontSize:17 }}>📞</div>
+                      <span style={{ fontSize:9, color:'#8a83a0' }}>Call</span>
+                    </div>
+                  )}
                   <ChatButton bookingId={booking?.id||bookingId} user={user} onClick={() => go('chat')} labelColor="#6b21a8"/>
                 </div>
               </div>
@@ -7223,6 +7251,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
         tx.update(ref, {
           driverId:     user.uid,
           driverName:   user.name || dData.name || 'Driver',
+          driverPhone:  dData.phone || user.phone || '',
           vehicleMake:  dData.vehicleMake  || '',
           vehicleModel: dData.vehicleModel || '',
           vehicleColor: dData.vehicleColor || '',
@@ -8179,13 +8208,9 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
                   <div style={{ fontSize:11, color:'rgba(255,255,255,0.45)' }}>Verified rider · 👥 {booking.passengers||1} passenger{(booking.passengers||1)>1?'s':''}</div>
                 </div>
                 <div style={{ display:'flex', gap:8 }}>
-                  <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, cursor:'pointer' }}>
-                    <div style={{ width:40, height:40, borderRadius:'50%', background:GREEN, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>📞</div>
-                    <span style={{ fontSize:9, color:'rgba(255,255,255,0.45)' }}>Call</span>
-                  </div>
                   <ChatButton bookingId={booking?.id||bookingId} user={user} onClick={() => { setBookingId(booking?.id||bookingId); go('chat'); }} labelColor="#6b21a8"/>
                   {booking?.customerPhone && (
-                    <a href={`tel:${booking.customerPhone}`} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, textDecoration:'none' }}>
+                    <a href={`tel:${telNumber(booking.customerPhone)}`} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, textDecoration:'none' }}>
                       <div style={{ width:40, height:40, borderRadius:'50%', background:'rgba(26,158,90,0.2)', border:'1.5px solid #1a9e5a', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>📞</div>
                       <span style={{ fontSize:9, color:'#1a9e5a' }}>Call</span>
                     </a>
