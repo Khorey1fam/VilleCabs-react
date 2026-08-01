@@ -3273,6 +3273,7 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
   const [tab,        setTab]        = useState('book');
   const [menuOpen,   setMenuOpen]   = useState(false);
   const [history,    setHistory]    = useState([]);
+  const [receiptRide, setReceiptRide] = useState(null);  // ride whose receipt is open
   const [loadingH,   setLoadingH]   = useState(true);
   const [activeRide, setActiveRide] = useState(null);
   const [rideNotif, setRideNotif] = useState(null);
@@ -3830,12 +3831,18 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
                       <span style={{ background:'#f0fff4', color:GREEN, borderRadius:20, padding:'2px 8px', fontSize:10, fontWeight:600 }}>✓ Done</span>
                     </div>
                   </div>
-                  {canRebook && (
-                    <button onClick={handleBookAgain}
-                      style={{ width:'100%', padding:'10px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:10, color:'#6b21a8', fontSize:12, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
-                      🔁 Book Again — Same Trip
+                  <div style={{ display:'flex', gap:8 }}>
+                    <button onClick={() => setReceiptRide(ride)}
+                      style={{ flex:1, padding:'10px', background:'#fff', border:'1px solid #d0d3e0', borderRadius:10, color:'#5b5470', fontSize:12, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+                      🧾 Receipt
                     </button>
-                  )}
+                    {canRebook && (
+                      <button onClick={handleBookAgain}
+                        style={{ flex:2, padding:'10px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:10, color:'#6b21a8', fontSize:12, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+                        🔁 Book Again — Same Trip
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}
@@ -3844,6 +3851,9 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
         </div>
       )}
       <Footer go={go}/>
+      {receiptRide && (
+        <RideReceiptModal ride={receiptRide} user={user} onClose={() => setReceiptRide(null)}/>
+      )}
     </div>
   );
 }
@@ -5738,6 +5748,116 @@ function SafetyHelpSheet({ onClose, onPick }) {
         <button onClick={onClose}
           style={{ width:'100%', marginTop:10, padding:'12px', background:'#fff', border:'1px solid #e5e7eb', borderRadius:12, fontSize:13, fontWeight:700, color:'#6b7280', cursor:'pointer' }}>
           Cancel
+        </button>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// Full ride receipt, viewable any time from Ride History. Mirrors the receipt
+// shown right after a ride completes, so a customer can pull it up again days
+// later for expenses or reimbursement.
+function RideReceiptModal({ ride, user, onClose }) {
+  useBodyScrollLock(true);
+  const [sending, setSending] = useState(false);
+  const [sent, setSent]       = useState('');
+
+  const secs = ride?.completedAt?.seconds || ride?.createdAt?.seconds;
+  const when = secs ? new Date(secs * 1000) : null;
+  const dateStr = when ? when.toLocaleDateString('en-JM',{ weekday:'long', day:'numeric', month:'long', year:'numeric' }) : '—';
+  const timeStr = when ? when.toLocaleTimeString('en-JM',{ hour:'2-digit', minute:'2-digit' }) : '';
+  const vehicle = `${ride?.vehicleMake||''} ${ride?.vehicleModel||''} ${ride?.licensePlate?`· ${ride.licensePlate}`:''}`.trim();
+
+  const resend = async () => {
+    if (sending) return;
+    setSending(true); setSent('');
+    try {
+      // Prefer the email on the account; fall back to the auth email.
+      let email = user?.email || '';
+      if (user?.uid) {
+        try {
+          const snap = await getDoc(doc(db,'customers',user.uid));
+          if (snap.exists() && snap.data().email) email = snap.data().email;
+        } catch(e) {}
+      }
+      if (!email) { setSent('No email on your account. Add one in Settings.'); setSending(false); return; }
+      await sendRideReceipt({ ...ride, id: ride.id }, email, user?.name || 'Customer');
+      setSent(`Receipt sent to ${email}`);
+    } catch(e) {
+      setSent('Could not send the receipt. Please try again.');
+    }
+    setSending(false);
+  };
+
+  const row = (label, value) => (
+    <div style={{ display:'flex', justifyContent:'space-between', gap:12, fontSize:12.5, color:'#5b5470', marginBottom:7 }}>
+      <span style={{ color:'#8a83a0' }}>{label}</span>
+      <span style={{ color:'#1a1a2e', fontWeight:600, textAlign:'right' }}>{value}</span>
+    </div>
+  );
+
+  return createPortal(
+    <div onClick={onClose}
+      style={{ position:'fixed', inset:0, zIndex:4000, background:'rgba(0,0,0,0.55)', display:'flex', alignItems:'center', justifyContent:'center', padding:16 }}>
+      <div onClick={e => e.stopPropagation()}
+        style={{ background:'#fff', borderRadius:18, width:'100%', maxWidth:400, maxHeight:'88vh', overflowY:'auto', padding:'20px 20px 22px' }}>
+
+        <div style={{ textAlign:'center', marginBottom:16, paddingBottom:14, borderBottom:'1px dashed #e0d3f5' }}>
+          <div style={{ fontSize:11, color:'#8a83a0', letterSpacing:1, textTransform:'uppercase', marginBottom:4 }}>VilleCabs Receipt</div>
+          <div style={{ fontSize:12.5, color:'#5b5470' }}>{dateStr}</div>
+          {timeStr && <div style={{ fontSize:11, color:'#9199ad' }}>{timeStr}</div>}
+        </div>
+
+        {/* Route */}
+        <div style={{ display:'flex', gap:10, marginBottom:14 }}>
+          <div style={{ display:'flex', flexDirection:'column', alignItems:'center', paddingTop:4 }}>
+            <div style={{ width:9, height:9, borderRadius:'50%', background:GREEN }}/>
+            <div style={{ width:2, flex:1, minHeight:22, background:'#e9d5ff', margin:'3px 0' }}/>
+            <div style={{ width:9, height:9, borderRadius:'50%', background:'#6b21a8' }}/>
+          </div>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ marginBottom:12 }}>
+              <div style={{ fontSize:10, color:'#8a83a0', fontWeight:700 }}>PICKUP</div>
+              <div style={{ fontSize:12.5, color:'#1a1a2e', lineHeight:1.4 }}>{ride?.pickup?.address || '—'}</div>
+            </div>
+            <div>
+              <div style={{ fontSize:10, color:'#8a83a0', fontWeight:700 }}>DROP-OFF</div>
+              <div style={{ fontSize:12.5, color:'#1a1a2e', lineHeight:1.4 }}>{ride?.dropoff?.address || '—'}</div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ borderTop:'1px solid #f0f0f4', paddingTop:12, marginBottom:12 }}>
+          {row('Driver', ride?.driverName || '—')}
+          {vehicle && row('Vehicle', vehicle)}
+          {row('Service', ride?.vehicleType || 'VilleRide')}
+          {ride?.distanceKm && row('Distance', `${ride.distanceKm} km`)}
+          {ride?.passengers && row('Passengers', ride.passengers)}
+          {row('Payment', ride?.paymentMethod || 'Cash')}
+          {ride?.promoCode && row('Promo', ride.promoCode)}
+        </div>
+
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'2px solid #e9d5ff', paddingTop:12, marginBottom:16 }}>
+          <span style={{ fontSize:14, fontWeight:800, color:'#2a1a4a' }}>Total paid</span>
+          <span style={{ fontSize:22, fontWeight:800, color:'#6b21a8' }}>J${(ride?.fare||0).toLocaleString()}</span>
+        </div>
+
+        <div style={{ fontSize:10, color:'#9199ad', textAlign:'center', marginBottom:14 }}>
+          Ride ID: {ride?.id || '—'}
+        </div>
+
+        {sent && (
+          <div style={{ fontSize:12, color: sent.startsWith('Receipt sent') ? GREEN : '#b45309', textAlign:'center', marginBottom:10 }}>{sent}</div>
+        )}
+
+        <button onClick={resend} disabled={sending}
+          style={{ width:'100%', padding:'12px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, color:'#6b21a8', fontSize:13, fontWeight:700, cursor: sending?'default':'pointer', marginBottom:8 }}>
+          {sending ? 'Sending…' : '📧 Email me this receipt'}
+        </button>
+        <button onClick={onClose}
+          style={{ width:'100%', padding:'12px', background:'#fff', border:'1px solid #e5e7eb', borderRadius:12, color:'#6b7280', fontSize:13, fontWeight:700, cursor:'pointer' }}>
+          Close
         </button>
       </div>
     </div>,
