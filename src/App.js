@@ -950,7 +950,62 @@ function shortAddress(addr) {
   return out;
 }
 
-// ── SOS RATE LIMITING ─────────────────────────────────────────────────────────
+// ── SAFETY RESPONSE TIERS ─────────────────────────────────────────────────────
+// Three levels of response. The big red panic button ALWAYS fires Level 3 — a
+// person in real danger must never have to pick from a menu under duress.
+// Levels 1 and 2 are reachable from a calmer "Get help" sheet, for situations
+// the user can think about (breakdown, feeling uneasy).
+//
+// NOTE ON WORDING: until the security partner is contracted with a staffed
+// dispatch desk, in-app copy must NOT promise that responders are on the way.
+// It says what actually happens — the alert reaches the VilleCabs team — and
+// always surfaces 119 for immediate danger. Flip SECURITY_PARTNER_ACTIVE to
+// true once the partner and 24/7 desk are genuinely live.
+const SECURITY_PARTNER_ACTIVE = false;
+
+const SOS_LEVELS = {
+  1: {
+    id: 1,
+    key: 'support',
+    label: 'Customer Support',
+    emoji: '🟢',
+    color: '#1a9e5a',
+    bg: '#f0fdf4',
+    blurb: 'Flat tire, breakdown, or you need a hand',
+    examples: ['Flat tire', 'Vehicle breakdown', 'Driver needs assistance'],
+    // What the user is told after sending
+    sent: 'Our team has been notified and will contact you shortly.',
+    urgent: false,
+  },
+  2: {
+    id: 2,
+    key: 'welfare',
+    label: 'Welfare Check',
+    emoji: '🟠',
+    color: '#b45309',
+    bg: '#fffbeb',
+    blurb: "Something feels off, but you're not in danger",
+    examples: ['Passenger feels uncomfortable', 'Suspicious behaviour', 'Want the ride monitored'],
+    sent: 'Our team will call both you and the driver, and monitor this ride.',
+    urgent: false,
+  },
+  3: {
+    id: 3,
+    key: 'emergency',
+    label: 'Emergency SOS',
+    emoji: '🔴',
+    color: '#dc2626',
+    bg: '#fff5f5',
+    blurb: 'You are in danger right now',
+    examples: ['Assault', 'Robbery', 'Medical emergency'],
+    sent: SECURITY_PARTNER_ACTIVE
+      ? 'Emergency alert sent. Our security partner has been dispatched.'
+      : 'Emergency alert sent with your live location. If you are in danger, call 119 now.',
+    urgent: true,
+  },
+};
+
+
 // An SOS is a safety feature, so we never take the button away entirely — but
 // unlimited presses create alert fatigue (one account sent 190), which makes a
 // REAL emergency easier to miss. So we throttle how many alerts reach the admin
@@ -5642,6 +5697,54 @@ function SearchingAnimation({ onCancel }) {
   );
 }
 
+// Calm, non-emergency help chooser (Levels 1 and 2). Deliberately does NOT offer
+// Level 3 as a menu item — the panic button covers that, so nobody in real
+// danger has to read options. Level 3 is still reachable here as a shortcut to
+// the police number.
+function SafetyHelpSheet({ onClose, onPick }) {
+  useBodyScrollLock(true);
+  return createPortal(
+    <div onClick={onClose}
+      style={{ position:'fixed', inset:0, zIndex:4000, background:'rgba(0,0,0,0.55)', display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
+      <div onClick={e => e.stopPropagation()}
+        style={{ background:'#fff', width:'100%', maxWidth:460, borderRadius:'18px 18px 0 0', padding:'18px 18px 24px', maxHeight:'85vh', overflowY:'auto' }}>
+        <div style={{ width:38, height:4, background:'#e5e7eb', borderRadius:2, margin:'0 auto 14px' }}/>
+        <div style={{ fontSize:17, fontWeight:800, color:'#2a1a4a', marginBottom:4 }}>How can we help?</div>
+        <div style={{ fontSize:12.5, color:'#8a83a0', marginBottom:16, lineHeight:1.5 }}>
+          Pick what fits. If you're in danger right now, close this and hold the SOS button instead.
+        </div>
+
+        {[1,2].map(lvl => {
+          const t = SOS_LEVELS[lvl];
+          return (
+            <button key={lvl} onClick={() => onPick(lvl)}
+              style={{ width:'100%', textAlign:'left', background:t.bg, border:`1.5px solid ${t.color}44`, borderRadius:14, padding:'14px 16px', marginBottom:10, cursor:'pointer' }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+                <span style={{ fontSize:16 }}>{t.emoji}</span>
+                <span style={{ fontSize:14.5, fontWeight:800, color:t.color }}>{t.label}</span>
+              </div>
+              <div style={{ fontSize:12.5, color:'#5b5470', marginBottom:6 }}>{t.blurb}</div>
+              <div style={{ fontSize:11.5, color:'#8a83a0' }}>{t.examples.join(' · ')}</div>
+            </button>
+          );
+        })}
+
+        {/* Always-available route to real emergency services */}
+        <a href="tel:119"
+          style={{ display:'block', textAlign:'center', marginTop:6, padding:'13px', background:'#dc2626', color:'#fff', borderRadius:12, fontSize:13.5, fontWeight:800, textDecoration:'none' }}>
+          📞 In danger now? Call 119 (Police)
+        </a>
+
+        <button onClick={onClose}
+          style={{ width:'100%', marginTop:10, padding:'12px', background:'#fff', border:'1px solid #e5e7eb', borderRadius:12, fontSize:13, fontWeight:700, color:'#6b7280', cursor:'pointer' }}>
+          Cancel
+        </button>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, dropoffData }) {
   const [forceUpdate,  setForceUpdate]  = useState(0);
   const [booking,      setBooking]      = useState(null);
@@ -5686,6 +5789,8 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   const [directions,   setDirections]   = useState(null);
   const [sosSent,    setSosSent]    = useState(false);
   const [sosBlocked, setSosBlocked] = useState('');   // rate-limit message, if any
+  const [sosLevel,   setSosLevel]   = useState(3);    // which tier was sent
+  const [helpOpen,   setHelpOpen]   = useState(false); // calm "Get help" sheet (L1/L2)
   const [sosHolding, setSosHolding] = useState(false);
   const [sosCount,   setSosCount]   = useState(5);
   const [cancelling, setCancelling] = useState(false);
@@ -5961,7 +6066,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
       setSosCount(prev => {
         if (prev <= 1) {
           clearInterval(sosRef.current);
-          triggerSOS();
+          triggerSOS(3);   // panic button is ALWAYS Level 3 — no menu under duress
           return 0;
         }
         return prev - 1;
@@ -5976,26 +6081,28 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
     clearInterval(sosRef.current);
   };
 
-  const triggerSOS = async () => {
+  const triggerSOS = async (level = 3) => {
     setSosHolding(false);
-    // Throttle how many alerts reach the admin — but never leave the user
-    // without a route to help (we always surface the police number).
+    const tier = SOS_LEVELS[level] || SOS_LEVELS[3];
+    // Throttle how many alerts reach the team — but never leave someone without
+    // a route to help. Level 3 is a genuine emergency, so it is NEVER hard-
+    // blocked: past the cap we still write the alert (flagged as over-limit) so
+    // the team sees it. Levels 1-2 are throttled normally.
     const rideKey = bookingId || user?.uid || 'anon';
     const gate = sosCheckLimit(rideKey);
-    if (!gate.allowed) {
+    if (!gate.allowed && !tier.urgent) {
       setSosSent(true);
       if (gate.reason === 'max') {
-        setSosBlocked('Your alerts have been logged and an admin will contact you. If you are in immediate danger, call the police on 119 now.');
+        setSosBlocked('Your alerts have been logged and our team will contact you. If you are in immediate danger, call the police on 119 now.');
       } else {
         setSosBlocked(`Alert already sent — please wait ${gate.waitSec}s before sending another. If you are in immediate danger, call the police on 119 now.`);
-        // Re-arm once the window clears so a real emergency isn't permanently
-        // locked out by the throttle.
         setTimeout(() => { setSosSent(false); setSosBlocked(''); }, gate.waitSec * 1000);
       }
       return;
     }
     setSosBlocked('');
     setSosSent(true);
+    setSosLevel(level);
     const pressCount = sosRecord(rideKey);
     try {
       let lat = booking?.pickup?.lat || 18.0416;
@@ -6007,11 +6114,16 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
         ));
       }
       await addDoc(collection(db,'sos_alerts'), {
+        level,                          // 1 = support, 2 = welfare, 3 = emergency
+        levelKey:     tier.key,
+        levelLabel:   tier.label,
+        overLimit:    !gate.allowed,    // urgent alert that bypassed the throttle
         userId:       user?.uid || '',
         userName:     user?.name || 'Customer',
         userRole:     'customer',
         bookingId:    bookingId,
         driverName:   booking?.driverName || '--',
+        driverPhone:  booking?.driverPhone || '',
         customerName: booking?.customerName || '--',
         vehicleMake:  booking?.vehicleMake || '',
         vehicleModel: booking?.vehicleModel || '',
@@ -6612,30 +6724,56 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
           </div>
         )}
 
-        {/* SOS Button */}
+        {/* Safety controls */}
         {sosSent ? (
-          <div style={{ background:'rgba(226,75,74,0.2)', border:'1.5px solid rgba(226,75,74,0.5)', borderRadius:12, padding:'12px 16px', marginBottom:12, display:'flex', alignItems:'center', gap:10 }}>
-            <div style={{ fontSize:24 }}>🚨</div>
-            <div style={{ flex:1 }}>
-              <div style={{ fontSize:13, fontWeight:500, color:'#f09595' }}>{sosBlocked ? 'Alert limit reached' : 'SOS Alert Sent!'}</div>
-              <div style={{ fontSize:11, color:'#6b6b80', marginTop:2, lineHeight:1.5 }}>{sosBlocked || 'Admin notified with your location'}</div>
-              {sosBlocked && (
-                <a href="tel:119" style={{ display:'inline-block', marginTop:8, padding:'8px 16px', background:'#dc2626', color:'#fff', borderRadius:8, fontSize:12, fontWeight:800, textDecoration:'none' }}>📞 Call 119 (Police)</a>
-              )}
-            </div>
-          </div>
+          (() => {
+            const t = SOS_LEVELS[sosLevel] || SOS_LEVELS[3];
+            return (
+              <div style={{ background:sosBlocked?'rgba(226,75,74,0.2)':t.bg, border:`1.5px solid ${sosBlocked?'rgba(226,75,74,0.5)':t.color}55`, borderRadius:12, padding:'12px 16px', marginBottom:12, display:'flex', alignItems:'flex-start', gap:10 }}>
+                <div style={{ fontSize:24 }}>{sosBlocked ? '🚨' : t.emoji}</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:13, fontWeight:700, color:sosBlocked?'#f09595':t.color }}>
+                    {sosBlocked ? 'Alert limit reached' : `${t.label} alert sent`}
+                  </div>
+                  <div style={{ fontSize:11.5, color:'#5b5470', marginTop:3, lineHeight:1.55 }}>
+                    {sosBlocked || t.sent}
+                  </div>
+                  {/* Always give a route to real help on the urgent tier */}
+                  {(sosBlocked || t.urgent) && (
+                    <a href="tel:119" style={{ display:'inline-block', marginTop:9, padding:'9px 16px', background:'#dc2626', color:'#fff', borderRadius:8, fontSize:12.5, fontWeight:800, textDecoration:'none' }}>📞 Call 119 (Police)</a>
+                  )}
+                </div>
+              </div>
+            );
+          })()
         ) : (
-          <div
-            onMouseDown={startSOS} onMouseUp={cancelSOS} onMouseLeave={cancelSOS}
-            onTouchStart={startSOS} onTouchEnd={cancelSOS}
-            style={{ background:sosHolding?'rgba(226,75,74,0.35)':'rgba(226,75,74,0.12)', border:`1.5px solid ${sosHolding?'#e24b4a':'rgba(226,75,74,0.4)'}`, borderRadius:12, padding:'12px 16px', display:'flex', alignItems:'center', gap:12, cursor:'pointer', marginBottom:12, userSelect:'none' }}>
-            <div style={{ fontSize:26 }}>🆘</div>
-            <div style={{ flex:1 }}>
-              <div style={{ fontSize:13, fontWeight:700, color:'#f09595' }}>{sosHolding ? `Sending SOS in ${sosCount}s...` : 'SOS Emergency'}</div>
-              <div style={{ fontSize:11, color:'#8a83a0', marginTop:2 }}>{sosHolding ? 'Release to cancel' : 'Hold 5 seconds to send emergency alert'}</div>
+          <>
+            {/* Panic button — always Level 3, no menu under duress */}
+            <div
+              onMouseDown={startSOS} onMouseUp={cancelSOS} onMouseLeave={cancelSOS}
+              onTouchStart={startSOS} onTouchEnd={cancelSOS}
+              style={{ background:sosHolding?'rgba(226,75,74,0.35)':'rgba(226,75,74,0.12)', border:`1.5px solid ${sosHolding?'#e24b4a':'rgba(226,75,74,0.4)'}`, borderRadius:12, padding:'12px 16px', display:'flex', alignItems:'center', gap:12, cursor:'pointer', marginBottom:8, userSelect:'none' }}>
+              <div style={{ fontSize:26 }}>🆘</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:'#f09595' }}>{sosHolding ? `Sending SOS in ${sosCount}s...` : 'Emergency SOS'}</div>
+                <div style={{ fontSize:11, color:'#8a83a0', marginTop:2 }}>{sosHolding ? 'Release to cancel' : 'Hold 5 seconds — assault, robbery, medical'}</div>
+              </div>
+              {sosHolding && <div style={{ width:34, height:34, borderRadius:'50%', border:'3px solid #e24b4a', display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, fontWeight:700, color:'#f09595' }}>{sosCount}</div>}
             </div>
-            {sosHolding && <div style={{ width:34, height:34, borderRadius:'50%', border:'3px solid #e24b4a', display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, fontWeight:700, color:'#f09595' }}>{sosCount}</div>}
-          </div>
+
+            {/* Calmer, non-emergency help — Levels 1 and 2 */}
+            <button onClick={() => setHelpOpen(true)}
+              style={{ width:'100%', padding:'11px 16px', background:'#fff', border:'1px solid #d0d3e0', borderRadius:12, fontSize:12.5, fontWeight:700, color:'#5b5470', cursor:'pointer', marginBottom:12, textAlign:'left' }}>
+              🛟 Need help but not an emergency?
+            </button>
+          </>
+        )}
+
+        {helpOpen && (
+          <SafetyHelpSheet
+            onClose={() => setHelpOpen(false)}
+            onPick={(lvl) => { setHelpOpen(false); triggerSOS(lvl); }}
+          />
         )}
 
         {/* 'searching' has its own full-screen view above, so by here a driver
@@ -7726,6 +7864,8 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
   const [enroute,       setEnroute]       = useState(false);
   const [sosSent,       setSosSent]       = useState(false);
   const [sosBlocked,    setSosBlocked]    = useState('');   // rate-limit message
+  const [sosLevel,      setSosLevel]      = useState(3);    // which tier was sent
+  const [helpOpen,      setHelpOpen]      = useState(false); // calm help sheet (L1/L2)
   const [sosHolding,    setSosHolding]    = useState(false);
   const [sosCount,      setSosCount]      = useState(5);
   const [directions, setDirections] = useState(null);
@@ -7891,7 +8031,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     setSosHolding(true); setSosCount(5);
     sosRef.current = setInterval(() => {
       setSosCount(prev => {
-        if (prev <= 1) { clearInterval(sosRef.current); triggerSOS(); return 0; }
+        if (prev <= 1) { clearInterval(sosRef.current); triggerSOS(3); return 0; }  // panic = always L3
         return prev - 1;
       });
     }, 1000);
@@ -7903,24 +8043,26 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     clearInterval(sosRef.current);
   };
 
-  const triggerSOS = async () => {
+  const triggerSOS = async (level = 3) => {
     setSosHolding(false);
+    const tier = SOS_LEVELS[level] || SOS_LEVELS[3];
     const rideKey = booking?.id || user?.uid || 'anon';
     const gate = sosCheckLimit(rideKey);
-    if (!gate.allowed) {
+    // Level 3 is never hard-blocked by the throttle — a real emergency must get
+    // through. Levels 1-2 are throttled normally.
+    if (!gate.allowed && !tier.urgent) {
       setSosSent(true);
       if (gate.reason === 'max') {
-        setSosBlocked('Your alerts have been logged and an admin will contact you. If you are in immediate danger, call the police on 119 now.');
+        setSosBlocked('Your alerts have been logged and our team will contact you. If you are in immediate danger, call the police on 119 now.');
       } else {
         setSosBlocked(`Alert already sent — please wait ${gate.waitSec}s before sending another. If you are in immediate danger, call the police on 119 now.`);
-        // Re-arm once the window clears so a real emergency isn't permanently
-        // locked out by the throttle.
         setTimeout(() => { setSosSent(false); setSosBlocked(''); }, gate.waitSec * 1000);
       }
       return;
     }
     setSosBlocked('');
     setSosSent(true);
+    setSosLevel(level);
     const pressCount = sosRecord(rideKey);
     try {
       let lat = booking?.pickup?.lat || 18.0416;
@@ -7932,6 +8074,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
         ));
       }
       await addDoc(collection(db,'sos_alerts'), {
+        level, levelKey: tier.key, levelLabel: tier.label, overLimit: !gate.allowed,
         userId: user?.uid, userName: user?.name||'Driver', userRole:'driver',
         bookingId: booking?.id, driverName: user?.name||'--',
         customerName: booking?.customerName||'--',
@@ -8224,30 +8367,51 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
               <div style={{ fontSize:14, fontWeight:500, color:GREEN }}>J${booking.fare?.toLocaleString()}</div>
             </div>
 
-            {/* SOS Button */}
+            {/* Safety controls */}
             {sosSent ? (
-              <div style={{ background:'rgba(226,75,74,0.2)', border:'1.5px solid rgba(226,75,74,0.5)', borderRadius:12, padding:'12px 16px', marginBottom:12, display:'flex', alignItems:'center', gap:10 }}>
-                <div style={{ fontSize:24 }}>🚨</div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:13, fontWeight:500, color:'#f09595' }}>{sosBlocked ? 'Alert limit reached' : 'SOS Alert Sent!'}</div>
-                  <div style={{ fontSize:11, color:'rgba(255,255,255,0.5)', marginTop:2, lineHeight:1.5 }}>{sosBlocked || 'Admin notified with your location'}</div>
-                  {sosBlocked && (
-                    <a href="tel:119" style={{ display:'inline-block', marginTop:8, padding:'8px 16px', background:'#dc2626', color:'#fff', borderRadius:8, fontSize:12, fontWeight:800, textDecoration:'none' }}>📞 Call 119 (Police)</a>
-                  )}
-                </div>
-              </div>
+              (() => {
+                const t = SOS_LEVELS[sosLevel] || SOS_LEVELS[3];
+                return (
+                  <div style={{ background:'rgba(255,255,255,0.06)', border:`1.5px solid ${sosBlocked?'rgba(226,75,74,0.5)':t.color}`, borderRadius:12, padding:'12px 16px', marginBottom:12, display:'flex', alignItems:'flex-start', gap:10 }}>
+                    <div style={{ fontSize:24 }}>{sosBlocked ? '🚨' : t.emoji}</div>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:13, fontWeight:700, color:sosBlocked?'#f09595':t.color }}>
+                        {sosBlocked ? 'Alert limit reached' : `${t.label} alert sent`}
+                      </div>
+                      <div style={{ fontSize:11.5, color:'rgba(255,255,255,0.6)', marginTop:3, lineHeight:1.55 }}>{sosBlocked || t.sent}</div>
+                      {(sosBlocked || t.urgent) && (
+                        <a href="tel:119" style={{ display:'inline-block', marginTop:9, padding:'9px 16px', background:'#dc2626', color:'#fff', borderRadius:8, fontSize:12.5, fontWeight:800, textDecoration:'none' }}>📞 Call 119 (Police)</a>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()
             ) : (
-              <div
-                onMouseDown={startSOS} onMouseUp={cancelSOS} onMouseLeave={cancelSOS}
-                onTouchStart={startSOS} onTouchEnd={cancelSOS}
-                style={{ background:sosHolding?'rgba(226,75,74,0.35)':'rgba(226,75,74,0.12)', border:`1.5px solid ${sosHolding?'#e24b4a':'rgba(226,75,74,0.4)'}`, borderRadius:12, padding:'12px 16px', display:'flex', alignItems:'center', gap:12, cursor:'pointer', marginBottom:14, userSelect:'none' }}>
-                <div style={{ fontSize:26 }}>🆘</div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:13, fontWeight:700, color:'#f09595' }}>{sosHolding?`Sending SOS in ${sosCount}s...`:'SOS Emergency'}</div>
-                  <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:2 }}>{sosHolding?'Release to cancel':'Hold 5 seconds to send emergency alert'}</div>
+              <>
+                <div
+                  onMouseDown={startSOS} onMouseUp={cancelSOS} onMouseLeave={cancelSOS}
+                  onTouchStart={startSOS} onTouchEnd={cancelSOS}
+                  style={{ background:sosHolding?'rgba(226,75,74,0.35)':'rgba(226,75,74,0.12)', border:`1.5px solid ${sosHolding?'#e24b4a':'rgba(226,75,74,0.4)'}`, borderRadius:12, padding:'12px 16px', display:'flex', alignItems:'center', gap:12, cursor:'pointer', marginBottom:8, userSelect:'none' }}>
+                  <div style={{ fontSize:26 }}>🆘</div>
+                  <div style={{ flex:1 }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:'#f09595' }}>{sosHolding?`Sending SOS in ${sosCount}s...`:'Emergency SOS'}</div>
+                    <div style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:2 }}>{sosHolding?'Release to cancel':'Hold 5 seconds — assault, robbery, medical'}</div>
+                  </div>
+                  {sosHolding && <div style={{ width:34, height:34, borderRadius:'50%', border:'3px solid #e24b4a', display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, fontWeight:700, color:'#f09595' }}>{sosCount}</div>}
                 </div>
-                {sosHolding && <div style={{ width:34, height:34, borderRadius:'50%', border:'3px solid #e24b4a', display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, fontWeight:700, color:'#f09595' }}>{sosCount}</div>}
-              </div>
+
+                <button onClick={() => setHelpOpen(true)}
+                  style={{ width:'100%', padding:'11px 16px', background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.15)', borderRadius:12, fontSize:12.5, fontWeight:700, color:'rgba(255,255,255,0.75)', cursor:'pointer', marginBottom:14, textAlign:'left' }}>
+                  🛟 Breakdown or need assistance?
+                </button>
+              </>
+            )}
+
+            {helpOpen && (
+              <SafetyHelpSheet
+                onClose={() => setHelpOpen(false)}
+                onPick={(lvl) => { setHelpOpen(false); triggerSOS(lvl); }}
+              />
             )}
 
             {/* Start Trip / En route button */}

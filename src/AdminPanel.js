@@ -2340,6 +2340,14 @@ function PartnersTab() {
 }
 
 // ── SAFETY ALERTS TAB ─────────────────────────────────────────────────────────
+// Safety response tiers — must mirror SOS_LEVELS in App.js.
+const ADMIN_SOS_LEVELS = {
+  1: { label:'Customer Support', emoji:'🟢', color:'#1a9e5a', bg:'#f0fdf4', action:'Contact the driver.' },
+  2: { label:'Welfare Check',    emoji:'🟠', color:'#b45309', bg:'#fffbeb', action:'Call BOTH parties and monitor this ride.' },
+  3: { label:'Emergency SOS',    emoji:'🔴', color:'#dc2626', bg:'#fff5f5', action:'Dispatch security partner. Notify emergency services if appropriate.' },
+};
+const sosTier = (a) => ADMIN_SOS_LEVELS[a?.level] || ADMIN_SOS_LEVELS[3];  // legacy alerts had no level
+
 // ── SOS EMERGENCY OVERLAY ─────────────────────────────────────────────────────
 // An SOS is a life-safety event, so it takes over the whole admin screen with an
 // audible alarm rather than sitting quietly in a tab. Fires for any alert that
@@ -2384,7 +2392,10 @@ function SosEmergencyOverlay({ setTab }) {
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db,'sos_alerts'), snap => {
-      const live = snap.docs.map(d => ({ id:d.id, ...d.data() })).filter(a => a.status !== 'resolved');
+      // Only Level 3 takes over the screen with the alarm. Levels 1-2 appear in
+      // the Alerts tab and the Overview banner, but must not trigger the siren.
+      const live = snap.docs.map(d => ({ id:d.id, ...d.data() }))
+        .filter(a => a.status !== 'resolved' && (a.level === undefined || a.level === 3));
       if (!seededRef.current) {
         // First load — remember what already existed, don't alarm for history.
         live.forEach(a => knownRef.current.add(a.id));
@@ -2542,12 +2553,27 @@ function AlertsTab() {
       )}
 
       {list.map(a => (
-        <div key={a.id} style={{ ...s.card, borderLeft:`3px solid ${isResolved(a)?GREEN:RED}`, opacity: isResolved(a)?0.85:1 }}>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
-            <span style={{ fontSize:14, fontWeight:600, color: isResolved(a)?'#4b5563':RED }}>🆘 SOS Alert</span>
+        <div key={a.id} style={{ ...s.card, borderLeft:`3px solid ${isResolved(a)?GREEN:sosTier(a).color}`, opacity: isResolved(a)?0.85:1 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6, gap:8, flexWrap:'wrap' }}>
+            <span style={{ fontSize:14, fontWeight:700, color: isResolved(a)?'#4b5563':sosTier(a).color }}>
+              {sosTier(a).emoji} Level {a.level || 3} · {sosTier(a).label}
+            </span>
             <span style={{ ...s.badge, background: isResolved(a)?'rgba(26,158,90,0.15)':'rgba(226,75,74,0.15)', color: isResolved(a)?GREEN:'#dc2626' }}>{a.status||'new'}</span>
           </div>
+          {/* What the ops team is expected to DO for this tier */}
+          {!isResolved(a) && (
+            <div style={{ fontSize:11.5, fontWeight:700, color:sosTier(a).color, background:sosTier(a).bg, border:`1px solid ${sosTier(a).color}33`, borderRadius:8, padding:'7px 10px', marginBottom:8 }}>
+              ➡️ {sosTier(a).action}
+            </div>
+          )}
+          {a.overLimit && <div style={{ fontSize:11, color:'#b45309', fontWeight:700, marginBottom:4 }}>⚠️ Sent past the alert limit — treat with care, may be repeated presses</div>}
           <div style={{ fontSize:12, color:'#4b5563', marginBottom:3 }}>👤 {a.customerName||'—'} · 🚗 {a.driverName||'—'}</div>
+          {(a.customerPhone || a.driverPhone) && (
+            <div style={{ fontSize:12, color:'#4b5563', marginBottom:3, display:'flex', gap:10, flexWrap:'wrap' }}>
+              {a.customerPhone && <a href={`tel:${a.customerPhone}`} style={{ color:GREEN, fontWeight:700, textDecoration:'none' }}>📞 Rider</a>}
+              {a.driverPhone && <a href={`tel:${a.driverPhone}`} style={{ color:GREEN, fontWeight:700, textDecoration:'none' }}>📞 Driver</a>}
+            </div>
+          )}
           {a.pressCount > 1 && <div style={{ fontSize:11.5, color:'#b45309', fontWeight:700, marginBottom:3 }}>⚠️ Press #{a.pressCount} from this rider on this ride</div>}
           {a.location && <div style={{ fontSize:12, color:'#4b5563', marginBottom:3 }}>📍 {a.location}</div>}
           <div style={{ fontSize:11, color:'#9199ad', marginBottom:10 }}>
