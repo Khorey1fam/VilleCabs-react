@@ -5038,10 +5038,16 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
       // Fail-CLOSED: if we can't confirm the account is in good standing, we
       // don't book. A stale session on a banned account must not slip through.
       let myPhone = '';
+      let myEmail = '';
       try {
         const meSnap = await getDoc(doc(db,'customers',user.uid));
         const st = meSnap.exists() ? meSnap.data().status : null;
         myPhone = (meSnap.exists() && meSnap.data().phone) || '';
+        // Capture the email on the BOOKING so the driver's app can send the
+        // receipt without reading the customer's profile — drivers are not
+        // allowed to read customer documents, and that denial was silently
+        // killing the automatic receipt.
+        myEmail = (meSnap.exists() && meSnap.data().email) || user?.email || '';
         if (['banned','suspended','deactivated'].includes(st)) {
           setChecking(false); setLoading(false);
           setError('Your account has been suspended from booking rides. Please contact admin@villecabs.com.');
@@ -5095,6 +5101,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
           customerId:      user.uid,
           customerName:    user.name,
           customerPhone:   myPhone,
+          customerEmail:   myEmail,
           passengers:      pickupData?.passengers || 1,
           pickup:          { address: pickupData?.address||'Manchester, Jamaica', lat: pickupData?.coords?.lat||MANCHESTER_CENTER.lat, lng: pickupData?.coords?.lng||MANCHESTER_CENTER.lng },
           dropoff:         { address: dropoffData?.address||'Destination', lat: dropoffData?.coords?.lat||18.02, lng: dropoffData?.coords?.lng||-77.48 },
@@ -5131,6 +5138,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
         customerId:   user.uid,
         customerName: user.name,
         customerPhone: myPhone,
+        customerEmail: myEmail,
         passengers:   pickupData?.passengers || 1,
         pickup:       { address: pickupData?.address||'Manchester, Jamaica', lat: pickupData?.coords?.lat||MANCHESTER_CENTER.lat, lng: pickupData?.coords?.lng||MANCHESTER_CENTER.lng },
         dropoff:      { address: dropoffData?.address||'Destination', lat: dropoffData?.coords?.lat||18.02, lng: dropoffData?.coords?.lng||-77.48 },
@@ -8276,14 +8284,16 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
         lastOnline:      serverTimestamp(),
       });
     } catch(e) {}
-    // Send receipt email to customer (non-critical — never blocks completion)
+    // Send receipt email to customer (non-critical — never blocks completion).
+    // Uses the email stored ON THE BOOKING: drivers are not permitted to read
+    // customer profiles, so the old profile lookup was always denied here and
+    // the receipt silently never sent.
     try {
-      if (booking?.customerId) {
-        const custSnap = await getDoc(doc(db,'customers',booking.customerId));
-        if (custSnap.exists()) {
-          const cust = custSnap.data();
-          sendRideReceipt(booking, cust.email, cust.name);
-        }
+      const custEmail = booking?.customerEmail || '';
+      if (custEmail) {
+        sendRideReceipt(booking, custEmail, booking?.customerName || 'Customer');
+      } else {
+        console.warn('No customerEmail on booking — receipt not sent (pre-update ride?)');
       }
     } catch(e) { console.warn('Could not send receipt:', e); }
     // Show completion summary before going back
