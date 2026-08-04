@@ -4828,14 +4828,14 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
   ];
 
   // ── VilleCabs Fare Formula ──────────────────────────────────────────────────
-  // Band fares (0.1–1.0 km), then J$751 + J$10.44 per 100m beyond 1km
+  // Band fares (0.1–1.0 km), then J$751 + J$12.56 per 100m beyond 1km
   const FARE_BANDS = [
     [0.1, 0.2, 500], [0.2, 0.3, 525], [0.3, 0.4, 550], [0.4, 0.5, 575],
     [0.5, 0.6, 600], [0.6, 0.7, 650], [0.7, 0.8, 700], [0.8, 0.9, 725],
     [0.9, 1.0, 751],
   ];
   const OVER_1KM_BASE = 751;
-  const OVER_1KM_PER_100M = 10.44;
+  const OVER_1KM_PER_100M = 12.56;
 
   // ── Surcharge Logic (highest only, no stacking) ───────────────────────────
   const getSurcharge = () => {
@@ -4870,10 +4870,10 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
   };
 
   // ── Long-distance pricing ───────────────────────────────────────────────────
-  // ≤10km: local fare. 10–30km: +J$180/km. >30km: +J$220/km beyond 30 + J$1,500 out-of-town surcharge.
-  const LONGDIST_MID_PER_KM = 180;   // per km for 10–30km
-  const LONGDIST_FAR_PER_KM = 220;   // per km beyond 30km
-  const OUT_OF_TOWN_SURCHARGE = 1500;
+  // ≤10km: local fare. 10–30km: +J$210/km. >30km: +J$280/km beyond 30 + J$5,000 out-of-town surcharge.
+  const LONGDIST_MID_PER_KM = 210;   // per km for 10–30km
+  const LONGDIST_FAR_PER_KM = 280;   // per km beyond 30km
+  const OUT_OF_TOWN_SURCHARGE = 5000;
 
   // Detailed long-distance breakdown (before vehicle multiplier / surcharges)
   const distanceBreakdown = (km) => {
@@ -9672,7 +9672,7 @@ function EventMonthRow({ title, subtitle, events, go, setPickupData, setDropoffD
 //   • 1st hour            J$1,500
 //   • hours 2–8           J$1,000 each
 //   • hours 9+            J$1,500 each
-const CHARTER_PRICING_VERSION = 'v3-2026-07'; // bump when rates change; stored on each booking
+const CHARTER_PRICING_VERSION = 'v4-2026-08'; // bump when rates change; stored on each booking
 
 // ══════════════════════════════════════════════════════════════════════════════
 // SHARED RIDE FARE ENGINE
@@ -9689,10 +9689,10 @@ const RIDE_FARE_BANDS = [
   [0.9, 1.0, 751],
 ];
 const RIDE_OVER_1KM_BASE = 751;
-const RIDE_OVER_1KM_PER_100M = 10.44;
-const RIDE_LONGDIST_MID_PER_KM = 180;   // per km 10–30km
-const RIDE_LONGDIST_FAR_PER_KM = 220;   // per km beyond 30km
-const RIDE_OUT_OF_TOWN_SURCHARGE = 1500;
+const RIDE_OVER_1KM_PER_100M = 12.56;
+const RIDE_LONGDIST_MID_PER_KM = 210;   // per km 10–30km
+const RIDE_LONGDIST_FAR_PER_KM = 280;   // per km beyond 30km
+const RIDE_OUT_OF_TOWN_SURCHARGE = 5000;
 
 function rideLocalFare(km) {
   if (km < 0.1) return 500;
