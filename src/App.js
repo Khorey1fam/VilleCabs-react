@@ -5240,60 +5240,18 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
             <div style={{ fontSize:15, fontWeight:700, color:'#6b21a8' }}>J${calcPrice(veh).toLocaleString()}</div>
           </div>
         ))}
-        {surcharge && (
-          <div style={{ background:'#fff0f0', border:'1.5px solid #fca5a5', borderRadius:10, padding:'10px 14px', marginBottom:10, display:'flex', alignItems:'center', gap:8 }}>
-            <span style={{ fontSize:18 }}>{surcharge.key==='night'?'🌙':surcharge.key==='holiday'?'🎉':'⚡'}</span>
-            <div>
-              <div style={{ fontSize:13, fontWeight:600, color:'#dc2626' }}>{surcharge.label}</div>
-              <div style={{ fontSize:11, color:'#6b6b80', marginTop:2 }}>Added to your estimated fare</div>
-            </div>
-          </div>
-        )}
         {(() => { const bd = fareBreakdown(v); return (
-          <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:12, padding:14, margin:'10px 0' }}>
-            <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'#6b7280', marginBottom:6 }}>
-              <span>Base Fare{bd.isLong ? ' (first 10 km)' : ` (${dist} km)`}</span>
-              <span style={{ color:'#1a1a2e', fontWeight:500 }}>J${bd.localBase.toLocaleString()}</span>
+          <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:12, padding:'16px 16px', margin:'10px 0' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <div>
+                <div style={{ fontSize:12, color:'#8a83a0', fontWeight:700, textTransform:'uppercase', letterSpacing:0.5 }}>Your fare</div>
+                <div style={{ fontSize:11.5, color:'#8a83a0', marginTop:3 }}>{dist} km · all charges included</div>
+              </div>
+              <div style={{ fontSize:26, fontWeight:800, color:'#6b21a8' }}>J${bd.total.toLocaleString()}</div>
             </div>
-            {bd.midCharge > 0 && (
-              <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'#6b7280', marginBottom:6 }}>
-                <span>Distance Charge (10–{Math.min(dist,30)} km)</span>
-                <span style={{ color:'#1a1a2e', fontWeight:500 }}>+J${bd.midCharge.toLocaleString()}</span>
-              </div>
-            )}
-            {bd.farCharge > 0 && (
-              <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'#6b7280', marginBottom:6 }}>
-                <span>Long-Distance Charge (30+ km)</span>
-                <span style={{ color:'#1a1a2e', fontWeight:500 }}>+J${bd.farCharge.toLocaleString()}</span>
-              </div>
-            )}
-            {bd.outOfTown > 0 && (
-              <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:6 }}>
-                <span style={{ color:'#b45309' }}>Out-of-Town Surcharge</span>
-                <span style={{ color:'#b45309', fontWeight:600 }}>+J${bd.outOfTown.toLocaleString()}</span>
-              </div>
-            )}
-            {bd.surchargeAmt > 0 && (
-              <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:6 }}>
-                <span style={{ color:'#f09595' }}>{bd.surchargeLabel}</span>
-                <span style={{ color:'#f09595', fontWeight:500 }}>+J${bd.surchargeAmt.toLocaleString()}</span>
-              </div>
-            )}
-            {bd.surgeAmt > 0 && (
-              <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, marginBottom:6 }}>
-                <span style={{ color:'#f09595' }}>Surge Pricing ({SURGE_MULT}x)</span>
-                <span style={{ color:'#f09595', fontWeight:500 }}>+J${bd.surgeAmt.toLocaleString()}</span>
-              </div>
-            )}
-            <div style={{ display:'flex', justifyContent:'space-between', fontSize:15, fontWeight:700, color:'#6b21a8', borderTop:'1px solid #e0d3f5', paddingTop:8, marginTop:4 }}>
-              <span>Final Estimated Fare</span>
-              <span>J${bd.total.toLocaleString()}</span>
+            <div style={{ fontSize:11, color:'#8a83a0', lineHeight:1.5, marginTop:12, paddingTop:10, borderTop:'1px dashed #e0d3f5' }}>
+              Price is confirmed upfront. Final fare may vary if the route, waiting time, tolls, or number of stops changes.
             </div>
-            {bd.isFar && (
-              <div style={{ fontSize:11, color:'#8a83a0', lineHeight:1.5, marginTop:10, paddingTop:8, borderTop:'1px dashed #e0d3f5' }}>
-                Long-distance fare applied. Final fare may vary based on route, traffic, waiting time, tolls, or additional stops.
-              </div>
-            )}
           </div>
         ); })()}
         {/* Referral Code */}
@@ -5364,14 +5322,6 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
               <div style={{ fontSize:15, fontWeight:700, color:GREEN }}>J${calcFinalPrice(v).toLocaleString()} after {promoData.discount}% off</div>
             </div>
             <div style={{ fontSize:22 }}>🎉</div>
-          </div>
-        )}
-
-        {/* ── Surge pricing banner (Feature: Surge Pricing) ── */}
-        {SURGE_MULT > 1 && (
-          <div style={{ background:'rgba(232,180,0,0.12)', border:'0.5px solid rgba(232,180,0,0.4)', borderRadius:10, padding:'10px 14px', marginBottom:10, display:'flex', gap:10, alignItems:'center' }}>
-            <span style={{ fontSize:18 }}>⚡</span>
-            <div style={{ fontSize:12, color:'#b45309', fontWeight:600 }}>Surge pricing active — fares are {SURGE_MULT}x due to high demand</div>
           </div>
         )}
 
@@ -5447,10 +5397,6 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
           </div>
         </div>
 
-        <div style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:16, padding:'18px', marginBottom:14, boxShadow:'0 2px 8px rgba(0,0,0,0.05)' }}>
-          <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:10 }}>⚡ Surge Pricing Explained</div>
-          <div style={{ fontSize:12, color:'#666888', lineHeight:1.7 }}>Between <strong>5pm and 8pm</strong> peak hours, fares may be slightly higher due to high demand. Book early or travel off-peak to get the best rates.</div>
-        </div>
       </div>
 
       {/* ── NO DRIVERS AVAILABLE MODAL ── */}
