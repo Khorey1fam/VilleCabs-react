@@ -461,6 +461,59 @@ function haversineM(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
 
+// ── Route snapping ────────────────────────────────────────────────────────────
+// Project a GPS point onto the nearest point of the driving route, so the car
+// icon rides the highlighted road line instead of drifting off it. GPS on a
+// phone is accurate to maybe 5-20m, which is enough to sit visibly beside the
+// road; snapping hides that noise the way Google Maps does.
+//
+// If the driver is genuinely far from the route (they took a different turn),
+// we DON'T snap — we let the real position show, and the app's existing route
+// recalculation will redraw the path to match.
+const SNAP_TOLERANCE_M = 60;   // beyond this, treat it as a real route change
+
+// Approximate local metres-per-degree, good enough over a city.
+function metersPerDeg(lat) {
+  return { x: 111320 * Math.cos(lat * Math.PI / 180), y: 110540 };
+}
+
+// Closest point on segment A→B to point P, in lat/lng.
+function projectOnSegment(p, a, b) {
+  const m = metersPerDeg(p.lat);
+  const ax = a.lng * m.x, ay = a.lat * m.y;
+  const bx = b.lng * m.x, by = b.lat * m.y;
+  const px = p.lng * m.x, py = p.lat * m.y;
+  const dx = bx - ax, dy = by - ay;
+  const len2 = dx*dx + dy*dy;
+  if (len2 === 0) return { lat:a.lat, lng:a.lng, dist: Math.hypot(px-ax, py-ay) };
+  let t = ((px-ax)*dx + (py-ay)*dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  const cx = ax + t*dx, cy = ay + t*dy;
+  return { lat: cy / m.y, lng: cx / m.x, dist: Math.hypot(px-cx, py-cy) };
+}
+
+// Snap a point to the nearest position along a route path (array of {lat,lng}).
+// Returns null when the point is further than SNAP_TOLERANCE_M from the route.
+function snapToRoute(point, path) {
+  if (!point || !Array.isArray(path) || path.length < 2) return null;
+  let best = null;
+  for (let i = 0; i < path.length - 1; i++) {
+    const c = projectOnSegment(point, path[i], path[i+1]);
+    if (!best || c.dist < best.dist) best = c;
+  }
+  if (!best || best.dist > SNAP_TOLERANCE_M) return null;   // genuinely off-route
+  return { lat: best.lat, lng: best.lng };
+}
+
+// Pull a plain lat/lng array out of a Google DirectionsResult.
+function routePathFrom(directions) {
+  try {
+    const p = directions?.routes?.[0]?.overview_path;
+    if (!p || !p.length) return null;
+    return p.map(ll => ({ lat: ll.lat(), lng: ll.lng() }));
+  } catch(e) { return null; }
+}
+
 // A marker that GLIDES to each new position instead of teleporting. Two jobs:
 //  1. Smooth motion — animate from the current spot to the new GPS point over a
 //     short window (requestAnimationFrame), so the car slides along the road
@@ -469,11 +522,13 @@ function haversineM(lat1, lng1, lat2, lng2) {
 //     hiccup, tunnel). If a new point is implausibly far from the last good one
 //     for the time elapsed (i.e. it implies an impossible speed), we ignore it
 //     and keep the car where it was until a sane fix arrives.
-function SmoothMarker({ position, title, icon }) {
+function SmoothMarker({ position, title, icon, routePath = null }) {
   const markerRef = useRef(null);
   const rafRef    = useRef(null);
   const curRef    = useRef(position ? { ...position } : null);   // where the marker is now
   const lastGoodRef = useRef(position ? { lat:position.lat, lng:position.lng, t:Date.now() } : null);
+  const pathRef   = useRef(routePath);
+  pathRef.current = routePath;   // always animate against the latest route
 
   const onLoad = (marker) => { markerRef.current = marker; };
   const onUnmount = () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); markerRef.current = null; };
@@ -483,36 +538,52 @@ function SmoothMarker({ position, title, icon }) {
     const now = Date.now();
     const prev = lastGoodRef.current;
 
-    // Distance (metres) from the last accepted point.
-    const dist = prev ? haversineM(prev.lat, prev.lng, position.lat, position.lng) : 0;
+    // Reject clear GPS teleports: a big jump AND an impossible speed.
+    const rawDist = prev ? haversineM(prev.lat, prev.lng, position.lat, position.lng) : 0;
     if (prev) {
       const dtSec = Math.max(0.5, (now - prev.t) / 1000);
-      const impliedSpeed = dist / dtSec;          // m/s
-      // Reject only clear teleports: a big jump AND an impossible speed
-      // (>60 m/s ≈ 216 km/h). Small jitter and normal driving pass through.
-      if (dist > 150 && impliedSpeed > 60) {
-        return; // treat as a GPS glitch — hold position
-      }
+      if (rawDist > 150 && (rawDist / dtSec) > 60) return;   // hold position
     }
     lastGoodRef.current = { lat:position.lat, lng:position.lng, t:now };
 
-    const start = curRef.current || { lat:position.lat, lng:position.lng };
-    const target = { lat:position.lat, lng:position.lng };
-    // If it's the very first fix or a tiny move, just set it.
-    if (!curRef.current || dist < 1) {
+    // Snap onto the highlighted route so the car rides the road. If the driver
+    // is genuinely off-route (took a different turn), snapping returns null and
+    // we use the true GPS point — the app then redraws the route to match.
+    const snapped = snapToRoute(position, pathRef.current) || { lat:position.lat, lng:position.lng };
+
+    const start = curRef.current || snapped;
+    const target = snapped;
+    const moveDist = haversineM(start.lat, start.lng, target.lat, target.lng);
+
+    if (!curRef.current || moveDist < 0.5) {
       curRef.current = target;
       try { markerRef.current.setPosition(target); } catch(e) {}
       return;
     }
-    // Animate start → target. Longer moves get a bit more time, capped.
-    const duration = Math.min(1500, Math.max(400, dist * 8));
+
+    // Move at a steady pace so it reads as continuous driving. We aim to arrive
+    // just as the next fix lands (~1s apart with high-accuracy GPS), so the car
+    // keeps rolling instead of easing to a halt between updates.
+    const duration = Math.min(2000, Math.max(300, moveDist * 12));
     const t0 = performance.now();
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
+
     const step = (t) => {
       const p = Math.min(1, (t - t0) / duration);
-      const ease = p < 0.5 ? 2*p*p : 1 - Math.pow(-2*p+2, 2)/2;   // easeInOutQuad
-      const lat = start.lat + (target.lat - start.lat) * ease;
-      const lng = start.lng + (target.lng - start.lng) * ease;
+      let lat, lng;
+      const path = pathRef.current;
+      if (path && path.length > 1) {
+        // Interpolate straight toward the target, then re-snap each frame so the
+        // car follows the curve of the road rather than cutting corners.
+        const rawLat = start.lat + (target.lat - start.lat) * p;
+        const rawLng = start.lng + (target.lng - start.lng) * p;
+        const s = snapToRoute({ lat:rawLat, lng:rawLng }, path);
+        lat = s ? s.lat : rawLat;
+        lng = s ? s.lng : rawLng;
+      } else {
+        lat = start.lat + (target.lat - start.lat) * p;
+        lng = start.lng + (target.lng - start.lng) * p;
+      }
       curRef.current = { lat, lng };
       try { markerRef.current && markerRef.current.setPosition({ lat, lng }); } catch(e) {}
       if (p < 1) rafRef.current = requestAnimationFrame(step);
@@ -526,6 +597,8 @@ function SmoothMarker({ position, title, icon }) {
 
 function VilleMap({ height = 620, center = MANCHESTER_CENTER, zoom = 14, onClick, markers = [], directions = null, children, expandable = false, followCenter = null, focusZoom = null, fitRoute = true }) {
   const [expanded, setExpanded] = useState(false);
+  // Path of the drawn route, so smooth markers can ride the highlighted road.
+  const routePath = useMemo(() => routePathFrom(directions), [directions]);
   const { isLoaded } = useJsApiLoader({
     googleMapsApiKey: GOOGLE_MAPS_KEY,
     libraries: LIBRARIES,
@@ -609,7 +682,7 @@ function VilleMap({ height = 620, center = MANCHESTER_CENTER, zoom = 14, onClick
     >
       {markers.map((m, i) => (
         m.smooth
-          ? <SmoothMarker key={m.key || i} position={m.position} title={m.title} icon={m.icon}/>
+          ? <SmoothMarker key={m.key || i} position={m.position} title={m.title} icon={m.icon} routePath={routePath}/>
           : <Marker key={m.key || i} position={m.position} label={m.label} title={m.title} icon={m.icon}/>
       ))}
       {directions && (
@@ -6607,7 +6680,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
               icon={{ url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><circle cx="14" cy="14" r="11" fill="#e8b400" stroke="white" stroke-width="2.5"/></svg>'), scaledSize:{width:28,height:28} }}/>
           )}
           {driverCoords && (
-            <SmoothMarker position={driverCoords} title="Your driver"
+            <SmoothMarker position={driverCoords} title="Your driver" routePath={routePathFrom(directions)}
               icon={{ url:carIconSVG(driverBearing, '#e8b400'), scaledSize:{width:44,height:44}, anchor:{x:22,y:22} }}/>
           )}
         </VilleMap>
@@ -8068,20 +8141,27 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
         // Permission granted - start watching
         setLocationStatus('tracking');
         watchRef.current = navigator.geolocation.watchPosition(
-          async (pos) => {
+          (pos) => {
             const { latitude: lat, longitude: lng } = pos.coords;
             const rideId = bookingIdRef.current;
-            // Always write the location straight to the booking so the customer's
-            // live map (and shared tracking link) update reliably.
-            try {
-              if (rideId) await updateDoc(doc(db,'bookings',rideId), { driverLocation:{ lat, lng, updatedAt: Date.now() } });
-              await updateDoc(doc(db,'drivers',user.uid), { currentLocation:{ lat, lng, updatedAt: Date.now() } });
-            } catch(e) { console.error('Location write failed:', e); }
-            // Also notify the cloud function (for ETA/analytics), but don't depend on it.
-            if (rideId) { try { await updateDriverLocationFn({ lat, lng, bookingId: rideId }); } catch(err) {} }
+            // Fire the writes immediately and DON'T await them in sequence —
+            // awaiting chained writes (especially the cloud function) delayed the
+            // next position by hundreds of ms and made tracking feel laggy.
+            if (rideId) {
+              updateDoc(doc(db,'bookings',rideId), {
+                driverLocation:{ lat, lng, heading: pos.coords.heading ?? null, speed: pos.coords.speed ?? null, updatedAt: Date.now() },
+              }).catch(()=>{});
+            }
+            updateDoc(doc(db,'drivers',user.uid), { currentLocation:{ lat, lng, updatedAt: Date.now() } }).catch(()=>{});
+            // Analytics/ETA — fire and forget, never block live tracking on it.
+            if (rideId) { try { updateDriverLocationFn({ lat, lng, bookingId: rideId }); } catch(err) {} }
           },
           (err) => { if (!cancelled) setLocationStatus(err.code===1?'denied':'idle'); },
-          { enableHighAccuracy:false, maximumAge:10000, timeout:15000 }
+          // TRUE GPS, no cached positions. The old settings (enableHighAccuracy
+          // false + maximumAge 10s) used coarse cell/wifi positioning and served
+          // positions up to ten seconds stale — that is what made the car jump
+          // around and lag behind the real vehicle.
+          { enableHighAccuracy:true, maximumAge:0, timeout:15000 }
         );
       },
       (err) => {
@@ -8089,7 +8169,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
         console.warn('Location permission denied:', err);
         setLocationStatus('denied');
       },
-      { enableHighAccuracy:false, timeout:10000 }
+      { enableHighAccuracy:true, timeout:10000 }
     );
     return () => {
       cancelled = true;
@@ -8365,11 +8445,11 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
         )}
         <VilleMap height={typeof window!=='undefined'?Math.max(560,window.innerHeight*0.80):640} center={driverCoords||pickupCoords} zoom={14} markers={markers} directions={directions} expandable={true} followCenter={driverCoords} focusZoom={driverFocus} fitRoute={false}>
           {driverCoords && !directions && (
-            <SmoothMarker position={driverCoords} title="Your location"
+            <SmoothMarker position={driverCoords} title="Your location" routePath={routePathFrom(directions)}
               icon={{ url:carIconSVG(driverBearing, '#e8b400'), scaledSize:{width:36,height:36}, anchor:{x:18,y:18} }}/>
           )}
           {driverCoords && directions && (
-            <SmoothMarker position={driverCoords} title="You"
+            <SmoothMarker position={driverCoords} title="You" routePath={routePathFrom(directions)}
               icon={{ url:carIconSVG(driverBearing, '#e8b400'), scaledSize:{width:40,height:40}, anchor:{x:20,y:20} }}/>
           )}
         </VilleMap>
