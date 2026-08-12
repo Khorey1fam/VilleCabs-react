@@ -1794,8 +1794,12 @@ function Splash({ go }) {
             {livePromos.map((p) => (
               <div key={p.id} style={{ flexShrink:0, width:210, background:'rgba(107,33,168,0.4)', border:'1px solid rgba(167,139,250,0.3)', borderRadius:14, padding:16 }}>
                 <div style={{ fontSize:12, color:'#d8b4fe', fontWeight:800, letterSpacing:1, marginBottom:6 }}>🎟️ {p.code}</div>
-                <div style={{ fontSize:22, fontWeight:800, color:'#fff', marginBottom:6 }}>{p.discount}% OFF</div>
-                <div style={{ fontSize:11.5, color:'rgba(255,255,255,0.7)', lineHeight:1.5 }}>{p.description || `${p.discount}% off your ride`}</div>
+                <div style={{ fontSize:22, fontWeight:800, color:'#fff', marginBottom:6 }}>
+                  {p.discountType === 'fixed' ? `J$${(p.discount||0).toLocaleString()} OFF` : `${p.discount}% OFF`}
+                </div>
+                <div style={{ fontSize:11.5, color:'rgba(255,255,255,0.7)', lineHeight:1.5 }}>
+                  {p.description || (p.discountType === 'fixed' ? `J$${(p.discount||0).toLocaleString()} off your ride` : `${p.discount}% off your ride`)}
+                </div>
                 {p.expiry && <div style={{ fontSize:10, color:'rgba(255,255,255,0.45)', marginTop:8 }}>Valid until {new Date(p.expiry).toLocaleDateString('en-JM',{day:'numeric',month:'short',year:'numeric'})}</div>}
               </div>
             ))}
@@ -5039,7 +5043,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
       if (pd.expiry && new Date(pd.expiry) < new Date()) { setPromoMsg('❌ This promo code has expired.'); setPromoLoading(false); return; }
       if (pd.usedBy && pd.usedBy.includes(user.uid)) { setPromoMsg('❌ You have already used this promo code.'); setPromoLoading(false); return; }
       setPromoData(pd);
-      setPromoMsg(`✅ "${pd.code}" applied — ${pd.discount}% off!`);
+      setPromoMsg(`✅ "${pd.code}" applied — ${pd.discountType === 'fixed' ? `J$${(pd.discount||0).toLocaleString()}` : `${pd.discount}%`} off!`);
     } catch(err) { setPromoMsg('❌ Error applying code. Try again.'); }
     setPromoLoading(false);
   };
@@ -5049,7 +5053,19 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
   const calcFinalPrice = (v) => {
     const base = calcPrice(v);
     if (!promoData) return base;
+    // Codes are either a percentage off or a flat J$ amount off. Older codes
+    // have no discountType and are treated as percent for backwards compatibility.
+    if (promoData.discountType === 'fixed') {
+      return Math.max(0, base - Math.round(promoData.discount));   // never below zero
+    }
     return Math.round(base * (1 - promoData.discount / 100));
+  };
+  // Human-readable label for the applied discount.
+  const promoLabel = () => {
+    if (!promoData) return '';
+    return promoData.discountType === 'fixed'
+      ? `J$${(promoData.discount||0).toLocaleString()} off`
+      : `${promoData.discount}% off`;
   };
 
   const saveUnfulfilledRequest = async (v, price, dist) => {
@@ -5185,6 +5201,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
           promoCode:       promoData?.code || null,
           referredBy:      referralDocId || null,
           promoDiscount:   promoData?.discount || null,
+          promoType:       promoData?.discountType || 'percent',
           distanceKm:      dist,
           status:          'scheduled',
           scheduledFor:    when,
@@ -5222,6 +5239,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
         promoCode:    promoData?.code || null,
         referredBy:   referralDocId || null,
         promoDiscount:promoData?.discount || null,
+        promoType:    promoData?.discountType || 'percent',
         distanceKm:   dist,
         status:       'searching',
         createdAt:    serverTimestamp(),
@@ -5379,7 +5397,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
               <div>
                 <span style={{ color:GREEN, fontWeight:600 }}>{promoData.code}</span>
-                <span style={{ color:'#6b6b80', fontSize:12, marginLeft:8 }}>{promoData.discount}% off applied</span>
+                <span style={{ color:'#6b6b80', fontSize:12, marginLeft:8 }}>{promoLabel()} applied</span>
               </div>
               <button onClick={removePromo} style={{ background:'none', border:'none', color:'#f09595', cursor:'pointer', fontSize:12 }}>✕ Remove</button>
             </div>
@@ -5392,7 +5410,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
           <div style={{ background:'rgba(26,158,90,0.1)', border:'0.5px solid rgba(26,158,90,0.3)', borderRadius:10, padding:'10px 14px', marginBottom:10, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
             <div>
               <div style={{ fontSize:12, color:'#6b7280', textDecoration:'line-through' }}>J${calcPrice(v).toLocaleString()}</div>
-              <div style={{ fontSize:15, fontWeight:700, color:GREEN }}>J${calcFinalPrice(v).toLocaleString()} after {promoData.discount}% off</div>
+              <div style={{ fontSize:15, fontWeight:700, color:GREEN }}>J${calcFinalPrice(v).toLocaleString()} after {promoLabel()}</div>
             </div>
             <div style={{ fontSize:22 }}>🎉</div>
           </div>

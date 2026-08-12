@@ -230,6 +230,113 @@ function DriverEarnings({ driverId }) {
   );
 }
 
+// Full ride history for one driver, with search and filtering. Loads only when
+// the row is expanded so we aren't querying every driver's history on page load.
+function DriverRideHistory({ driverId }) {
+  const [rides,   setRides]   = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search,  setSearch]  = useState('');
+  const [status,  setStatus]  = useState('all');   // all | completed | cancelled
+  const [period,  setPeriod]  = useState('all');   // all | today | week | month
+
+  useEffect(() => {
+    if (!driverId) return;
+    const q = query(collection(db,'bookings'), where('driverId','==',driverId));
+    const unsub = onSnapshot(q,
+      snap => { setRides(snap.docs.map(d => ({ id:d.id, ...d.data() }))); setLoading(false); },
+      e => { console.error('Ride history load failed:', e); setLoading(false); });
+    return () => unsub();
+  }, [driverId]);
+
+  const rideTime = (r) => (r.completedAt?.seconds || r.createdAt?.seconds || 0) * 1000;
+
+  const now = Date.now();
+  const cutoff = period === 'today' ? new Date(new Date().setHours(0,0,0,0)).getTime()
+               : period === 'week'  ? now - 7  * 86400000
+               : period === 'month' ? now - 30 * 86400000
+               : 0;
+
+  const term = search.trim().toLowerCase();
+  const shown = rides
+    .filter(r => (status === 'all' ? true : (r.status || '') === status))
+    .filter(r => rideTime(r) >= cutoff)
+    .filter(r => {
+      if (!term) return true;
+      const hay = [
+        r.customerName, r.pickup?.address, r.dropoff?.address,
+        r.vehicleType, r.paymentMethod, r.promoCode, r.id,
+      ].filter(Boolean).join(' ').toLowerCase();
+      return hay.includes(term);
+    })
+    .sort((a,b) => rideTime(b) - rideTime(a));
+
+  const totalFare = shown.reduce((s,r) => s + (r.status === 'completed' ? (r.fare||0) : 0), 0);
+  const fmt = (ms) => ms ? new Date(ms).toLocaleString('en-JM',{ day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' }) : '—';
+
+  const pill = (val, cur, setter, label) => (
+    <button key={val} onClick={() => setter(val)}
+      style={{ padding:'5px 11px', borderRadius:14, fontSize:11.5, fontWeight:600, cursor:'pointer',
+        background: cur===val ? '#6b21a8' : '#f5f0ff', color: cur===val ? '#fff' : '#6b21a8', border:'1px solid #e9d5ff' }}>
+      {label}
+    </button>
+  );
+
+  if (loading) return <div style={{ fontSize:12, color:'#9199ad', padding:'10px 0' }}>Loading ride history…</div>;
+
+  return (
+    <div style={{ padding:'4px 0 2px' }}>
+      {/* Search */}
+      <input value={search} onChange={e => setSearch(e.target.value)}
+        placeholder="Search customer, pickup, drop-off, ride ID…"
+        style={{ width:'100%', padding:'9px 12px', border:'1px solid #d0d3e0', borderRadius:9, fontSize:12.5, marginBottom:9, boxSizing:'border-box' }}/>
+
+      {/* Filters */}
+      <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:6 }}>
+        {[['all','All'],['completed','Completed'],['cancelled','Cancelled']].map(([v,l]) => pill(v, status, setStatus, l))}
+      </div>
+      <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:10 }}>
+        {[['all','All time'],['today','Today'],['week','7 days'],['month','30 days']].map(([v,l]) => pill(v, period, setPeriod, l))}
+      </div>
+
+      <div style={{ fontSize:11.5, color:'#6b7280', marginBottom:8 }}>
+        {shown.length} ride{shown.length!==1?'s':''}
+        {totalFare > 0 && <> · completed gross <strong style={{ color:'#1a1a2e' }}>J${totalFare.toLocaleString()}</strong> · payout <strong style={{ color:GREEN }}>J${Math.round(totalFare*0.85).toLocaleString()}</strong></>}
+      </div>
+
+      {shown.length === 0 ? (
+        <div style={{ fontSize:12.5, color:'#9199ad', textAlign:'center', padding:'16px 0' }}>No rides match these filters.</div>
+      ) : (
+        <div style={{ maxHeight:340, overflowY:'auto' }}>
+          {shown.map(r => {
+            const done = r.status === 'completed';
+            return (
+              <div key={r.id} style={{ borderTop:'1px solid #f0f0f4', padding:'9px 0' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', gap:10, alignItems:'flex-start' }}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontSize:12.5, fontWeight:700, color:'#1a1a2e' }}>{r.customerName || 'Customer'}</div>
+                    <div style={{ fontSize:11.5, color:'#6b7280', lineHeight:1.5, marginTop:2 }}>
+                      🟢 {r.pickup?.address || '—'}<br/>
+                      🏁 {r.dropoff?.address || '—'}
+                    </div>
+                    <div style={{ fontSize:10.5, color:'#9199ad', marginTop:3 }}>
+                      {fmt(rideTime(r))}{r.vehicleType ? ` · ${r.vehicleType}` : ''}{r.paymentMethod ? ` · ${r.paymentMethod}` : ''}
+                    </div>
+                  </div>
+                  <div style={{ textAlign:'right', flexShrink:0 }}>
+                    <div style={{ fontSize:13.5, fontWeight:800, color: done ? '#1a1a2e' : '#9199ad' }}>J${(r.fare||0).toLocaleString()}</div>
+                    <div style={{ fontSize:10, fontWeight:700, color: done ? GREEN : (r.status==='cancelled' ? '#dc2626' : '#b45309'), textTransform:'uppercase' }}>{r.status || '—'}</div>
+                    {r.customerRating && <div style={{ fontSize:10.5, color:'#b45309', marginTop:2 }}>★ {r.customerRating}</div>}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DriversTab() {
   const [drivers, setDrivers]   = useState([]);
   const [filter,  setFilter]    = useState('pending');
@@ -237,6 +344,7 @@ function DriversTab() {
   const [confirm, setConfirm]   = useState(null);
   const [search,  setSearch]    = useState('');
   const [earnOpen, setEarnOpen] = useState(null);   // driver id whose earnings are expanded
+  const [histOpen, setHistOpen] = useState(null);   // driver id whose ride history is expanded
 
   useEffect(() => {
     const q = (filter === 'all' || filter === 'reuploads')
@@ -533,10 +641,19 @@ function DriversTab() {
                   style={{ marginLeft:'auto', padding:'7px 14px', background:'#f5f0ff', color:'#6b21a8', border:'1px solid #e9d5ff', borderRadius:8, fontSize:12, fontWeight:700, cursor:'pointer' }}>
                   💰 {earnOpen === driver.id ? 'Hide earnings' : 'Earnings by day'}
                 </button>
+                <button onClick={() => setHistOpen(histOpen === driver.id ? null : driver.id)}
+                  style={{ padding:'7px 14px', background:'#fff', color:'#5b5470', border:'1px solid #d0d3e0', borderRadius:8, fontSize:12, fontWeight:700, cursor:'pointer' }}>
+                  🧾 {histOpen === driver.id ? 'Hide rides' : 'Ride history'}
+                </button>
               </div>
               {earnOpen === driver.id && (
                 <div style={{ marginTop:10, background:'#fafafc', border:'1px solid #eee', borderRadius:10, padding:'10px 12px' }}>
                   <DriverEarnings driverId={driver.id}/>
+                </div>
+              )}
+              {histOpen === driver.id && (
+                <div style={{ marginTop:10, background:'#fafafc', border:'1px solid #eee', borderRadius:10, padding:'10px 12px' }}>
+                  <DriverRideHistory driverId={driver.id}/>
                 </div>
               )}
             </div>
@@ -781,7 +898,7 @@ function RidesTab() {
 function PromoCodesTab() {
   const [promos,  setPromos]  = useState([]);
   const [loading, setLoading] = useState(true);
-  const [form,    setForm]    = useState({ code:'', discount:'', expiry:'', description:'' });
+  const [form,    setForm]    = useState({ code:'', discount:'', discountType:'percent', expiry:'', description:'' });
   const [saving,  setSaving]  = useState(false);
   const [error,   setError]   = useState('');
   const [success, setSuccess] = useState('');
@@ -799,16 +916,21 @@ function PromoCodesTab() {
   const handleCreate = async () => {
     setError(''); setSuccess('');
     if (!form.code.trim()) { setError('Please enter a promo code.'); return; }
-    if (!form.discount || isNaN(form.discount) || +form.discount <= 0 || +form.discount > 100) { setError('Discount must be between 1 and 100%.'); return; }
+    const isFixed = form.discountType === 'fixed';
+    if (!form.discount || isNaN(form.discount) || +form.discount <= 0) { setError('Please enter a valid discount amount.'); return; }
+    if (!isFixed && +form.discount > 100) { setError('Percentage discount must be between 1 and 100%.'); return; }
     if (!form.expiry) { setError('Please set an expiry date.'); return; }
     // Check duplicate
     if (promos.find(p => p.code.toUpperCase() === form.code.toUpperCase())) { setError('That code already exists.'); return; }
     setSaving(true);
     try {
       await addDoc(collection(db,'promo_codes'), {
-        code:        form.code.toUpperCase().trim(),
-        discount:    +form.discount,
-        description: form.description.trim() || `${form.discount}% off`,
+        code:         form.code.toUpperCase().trim(),
+        discount:     +form.discount,
+        // 'percent' = % off the fare, 'fixed' = flat J$ off. Older codes have no
+        // discountType and are treated as percent for backwards compatibility.
+        discountType: form.discountType,
+        description:  form.description.trim() || (isFixed ? `J$${(+form.discount).toLocaleString()} off` : `${form.discount}% off`),
         expiry:      form.expiry,
         active:      true,
         usedBy:      [],
@@ -816,7 +938,7 @@ function PromoCodesTab() {
         createdAt:   serverTimestamp(),
       });
       setSuccess(`Promo code "${form.code.toUpperCase()}" created!`);
-      setForm({ code:'', discount:'', expiry:'', description:'' });
+      setForm({ code:'', discount:'', discountType:'percent', expiry:'', description:'' });
     } catch(err) { setError(err.message); }
     setSaving(false);
   };
@@ -845,8 +967,18 @@ function PromoCodesTab() {
             <input style={s.inp} placeholder="e.g. VILLE20" value={form.code} onChange={e => set('code', e.target.value.toUpperCase())}/>
           </div>
           <div>
-            <label style={s.lbl}>Discount (%)</label>
-            <input style={s.inp} type="number" placeholder="e.g. 20" min="1" max="100" value={form.discount} onChange={e => set('discount', e.target.value)}/>
+            <label style={s.lbl}>Discount Type</label>
+            <select style={s.inp} value={form.discountType} onChange={e => set('discountType', e.target.value)}>
+              <option value="percent">Percentage (% off)</option>
+              <option value="fixed">Fixed amount (J$ off)</option>
+            </select>
+          </div>
+          <div>
+            <label style={s.lbl}>{form.discountType === 'fixed' ? 'Amount off (J$)' : 'Discount (%)'}</label>
+            <input style={s.inp} type="number"
+              placeholder={form.discountType === 'fixed' ? 'e.g. 500' : 'e.g. 20'}
+              min="1" max={form.discountType === 'fixed' ? undefined : '100'}
+              value={form.discount} onChange={e => set('discount', e.target.value)}/>
           </div>
           <div>
             <label style={s.lbl}>Expiry Date</label>
@@ -889,7 +1021,9 @@ function PromoCodesTab() {
                 <div style={{ fontSize:13, color:'#6b7280' }}>{p.description}</div>
               </div>
               <div style={{ textAlign:'right' }}>
-                <div style={{ fontSize:22, fontWeight:700, color:GREEN }}>{p.discount}% off</div>
+                <div style={{ fontSize:22, fontWeight:700, color:GREEN }}>
+                  {p.discountType === 'fixed' ? `J$${(p.discount||0).toLocaleString()} off` : `${p.discount}% off`}
+                </div>
                 <div style={{ fontSize:11, color:'#9199ad', marginTop:2 }}>Used {p.usageCount||0} time{p.usageCount!==1?'s':''}</div>
               </div>
             </div>
