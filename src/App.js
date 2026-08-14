@@ -613,20 +613,41 @@ function VilleMap({ height = 620, center = MANCHESTER_CENTER, zoom = 14, onClick
 
   // Keep a handle on the map instance so we can imperatively pan/zoom
   const mapRef = useRef(null);
+  // The map follows the driver until the user touches it. After ANY manual pan
+  // or zoom the camera is theirs — we stop auto-recentring so they can look
+  // around freely (e.g. a driver zooming out to see the customer's area).
+  // A "Recentre" button appears so they can opt back in.
+  const [userMovedMap, setUserMovedMap] = useState(false);
+  const programmaticRef = useRef(false);   // ignore camera moves WE caused
+
   const onMapLoad = (map) => {
     mapRef.current = map;
     // Set the starting camera once.
     if (center) map.setCenter(center);
     if (typeof zoom === 'number') map.setZoom(expanded ? zoom + 1 : zoom);
+    // Only a real gesture releases the camera. 'dragstart' fires on pan;
+    // for pinch/scroll zoom we check that the change wasn't ours.
+    map.addListener('dragstart', () => setUserMovedMap(true));
+    map.addListener('zoom_changed', () => {
+      if (!programmaticRef.current) setUserMovedMap(true);
+    });
   };
 
-  // Follow a moving target (e.g. the driver) WITHOUT stealing the user's manual
-  // zoom/pan. We only pan when followCenter is provided, and we NEVER reset zoom
-  // here — so pinch-zoom sticks instead of snapping back every GPS update.
+  // Move the camera without it counting as a user gesture.
+  const moveCamera = (fn) => {
+    programmaticRef.current = true;
+    try { fn(); } catch(e) {}
+    // Release on the next tick, after Google has fired its events.
+    setTimeout(() => { programmaticRef.current = false; }, 350);
+  };
+
+  // Follow a moving target (e.g. the driver) — but ONLY until the user takes
+  // control of the map themselves.
   useEffect(() => {
     if (!mapRef.current || !followCenter?.lat) return;
-    try { mapRef.current.panTo(followCenter); } catch(e) {}
-  }, [followCenter?.lat, followCenter?.lng]);
+    if (userMovedMap) return;   // user is driving the camera now — leave it alone
+    moveCamera(() => mapRef.current.panTo(followCenter));
+  }, [followCenter?.lat, followCenter?.lng, userMovedMap]);
 
   // Frame the route when it arrives, and re-frame it whenever the route itself
   // changes (e.g. the customer picks a different destination). We track the last
@@ -645,16 +666,20 @@ function VilleMap({ height = 620, center = MANCHESTER_CENTER, zoom = 14, onClick
       key = `${ne.lat().toFixed(5)},${ne.lng().toFixed(5)},${sw.lat().toFixed(5)},${sw.lng().toFixed(5)}`;
     } catch(e) { key = String(Date.now()); }
     if (key === lastFitKey.current) return;   // same route already framed
-    try { mapRef.current.fitBounds(b, 60); lastFitKey.current = key; } catch(e) {}
+    if (userMovedMap) { lastFitKey.current = key; return; }   // don't yank a camera the user is using
+    moveCamera(() => mapRef.current.fitBounds(b, 60));
+    lastFitKey.current = key;
   }, [directions, fitRoute]);
 
   // Allow an explicit, intentional zoom-in (e.g. right after the driver accepts).
   useEffect(() => {
     if (!mapRef.current || !focusZoom) return;
-    try {
+    // An explicit focus request (e.g. right after accepting) re-arms following.
+    setUserMovedMap(false);
+    moveCamera(() => {
       if (focusZoom.center) mapRef.current.panTo(focusZoom.center);
       if (typeof focusZoom.zoom === 'number') mapRef.current.setZoom(focusZoom.zoom);
-    } catch(e) {}
+    });
   }, [focusZoom?.token]);
 
   // Use window height for mobile-aware sizing (allow the map to fill most of the screen)
@@ -721,6 +746,16 @@ function VilleMap({ height = 620, center = MANCHESTER_CENTER, zoom = 14, onClick
         <button onClick={() => setExpanded(true)}
           style={{ position:'absolute', top:10, right:10, background:'rgba(10,15,35,0.85)', border:'0.5px solid rgba(255,255,255,0.2)', borderRadius:8, color:WHITE, fontSize:11, padding:'6px 10px', cursor:'pointer', backdropFilter:'blur(8px)', display:'flex', alignItems:'center', gap:4 }}>
           ⛶ Expand
+        </button>
+      )}
+      {/* Re-centre — only shown once the user has moved the map themselves */}
+      {userMovedMap && followCenter?.lat && (
+        <button onClick={() => {
+            setUserMovedMap(false);
+            moveCamera(() => { mapRef.current && mapRef.current.panTo(followCenter); });
+          }}
+          style={{ position:'absolute', bottom:16, right:12, background:'#ffffff', border:'1px solid #d0d3e0', borderRadius:22, color:'#6b21a8', fontSize:12.5, fontWeight:700, padding:'9px 15px', cursor:'pointer', boxShadow:'0 3px 10px rgba(0,0,0,0.18)', display:'flex', alignItems:'center', gap:6 }}>
+          ◎ Re-centre
         </button>
       )}
     </div>
@@ -6388,12 +6423,27 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   //  • after 'start journey' (enroute): driver → dropoff, recomputed as the
   //    driver moves, so the customer sees the car advancing along live roads
   //    instead of a frozen pickup→dropoff line.
+  const custRouteRef = useRef({ at: 0, leg: null });
   useEffect(() => {
     if (!window.google?.maps?.DirectionsService) return;
     const enroute     = booking?.enrouteToDropoff;
     const origin      = driverCoords || pickupCoords;            // always anchor on the driver
     const destination = enroute ? dropoffCoords : pickupCoords;
     if (!origin?.lat || !destination?.lat) { return; }           // keep last route rather than blanking
+
+    // Only refetch when it actually matters: the leg changed, the driver left
+    // the drawn route (took a different road), or the route is stale. Refetching
+    // on every GPS ping burns Directions quota and gets throttled — which is why
+    // the route stopped updating at all.
+    const leg = enroute ? 'dropoff' : 'pickup';
+    const now = Date.now();
+    const path = routePathFrom(directions);
+    const offRoute = path ? !snapToRoute({ lat: origin.lat, lng: origin.lng }, path) : true;
+    const legChanged = custRouteRef.current.leg !== leg;
+    const stale = now - custRouteRef.current.at > 25000;
+    if (!legChanged && !offRoute && !stale) return;
+    custRouteRef.current = { at: now, leg };
+
     const svc = new window.google.maps.DirectionsService();
     svc.route({
       origin:      { lat: origin.lat, lng: origin.lng },
@@ -8115,30 +8165,49 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     return () => unsub();
   }, [bookingId, user]);
 
-  // Fetch route: driver → pickup (before arrived), pickup → dropoff (after arrived)
+  // Route + ETA, recalculated as the driver actually drives.
+  //
+  // Two things this has to get right:
+  //  1. ALWAYS route from the driver's CURRENT position (before AND after
+  //     pickup). It previously drew pickup→dropoff after arrival, so it never
+  //     reflected the road the driver actually took.
+  //  2. Re-route when they deviate. We don't refetch on every GPS ping (that
+  //     would be a Directions call per second and get throttled); we refetch
+  //     when they leave the drawn route, when the leg changes, or every 25s as
+  //     a safety net so the ETA stays fresh.
+  const lastRouteRef = useRef({ at: 0, leg: null });
   useEffect(() => {
     if (!booking?.pickup || !window.google) return;
-    const fetchRoute = async () => {
-      if (!arrived) {
-        // Route from driver location to pickup
-        const origin = booking.driverLocation
-          ? { lat: booking.driverLocation.lat, lng: booking.driverLocation.lng }
-          : null;
-        if (!origin) return;
-        const result = await getDirections(origin, { lat: booking.pickup.lat, lng: booking.pickup.lng });
-        if (result) setDirections(result);
-      } else {
-        // Route from pickup to dropoff
-        if (!booking.dropoff) return;
-        const result = await getDirections(
-          { lat: booking.pickup.lat, lng: booking.pickup.lng },
-          { lat: booking.dropoff.lat, lng: booking.dropoff.lng }
-        );
-        if (result) setDirections(result);
+    const drv = booking.driverLocation;
+    if (!drv?.lat) return;
+
+    const leg = arrived ? 'dropoff' : 'pickup';
+    const dest = arrived
+      ? (booking.dropoff ? { lat: booking.dropoff.lat, lng: booking.dropoff.lng } : null)
+      : { lat: booking.pickup.lat, lng: booking.pickup.lng };
+    if (!dest) return;
+
+    const now = Date.now();
+    const legChanged = lastRouteRef.current.leg !== leg;
+    // Are they still on the route we drew? snapToRoute returns null once they're
+    // further than the tolerance — that's a genuine turn onto another road.
+    const path = routePathFrom(directions);
+    const offRoute = path ? !snapToRoute({ lat: drv.lat, lng: drv.lng }, path) : true;
+    const stale = now - lastRouteRef.current.at > 25000;
+
+    if (!legChanged && !offRoute && !stale) return;   // still on track — keep current route
+
+    lastRouteRef.current = { at: now, leg };
+    let cancelled = false;
+    (async () => {
+      const result = await getDirections({ lat: drv.lat, lng: drv.lng }, dest);
+      if (!cancelled && result) {
+        setDirections(result);
+        // ETA updates automatically — etaFromDirections() derives it from this.
       }
-    };
-    fetchRoute();
-  }, [booking?.driverLocation?.lat, booking?.driverLocation?.lng, arrived, booking?.pickup?.lat]);
+    })();
+    return () => { cancelled = true; };
+  }, [booking?.driverLocation?.lat, booking?.driverLocation?.lng, arrived, booking?.pickup?.lat, booking?.dropoff?.lat]);
 
   // Keep the live booking id in a ref so the geolocation callback below always
   // writes to the CURRENT ride without needing to re-subscribe the watch.
