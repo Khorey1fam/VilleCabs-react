@@ -7535,6 +7535,15 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   }, [user]);
 
   const goOnline = async () => {
+    // Only an APPROVED driver may go online. A pending driver shouldn't reach
+    // this screen at all, but guard here too — otherwise their isOnline flag
+    // gets set and they show up as available in the admin's live map.
+    const st = driverProfileRef.current?.status;
+    if (st && st !== 'approved') {
+      vcToast('Your account is still being reviewed. You cannot go online yet.', 'error');
+      setIsOnline(false);
+      return;
+    }
     setIsOnline(true);
     // Clear any stale ride reference so an interrupted old ride doesn't mark us busy
     try { await updateDoc(doc(db,'drivers',user.uid), { isOnline:true, currentRideId:null, lastOnline:serverTimestamp() }); } catch(e) {}

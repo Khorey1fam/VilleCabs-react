@@ -368,12 +368,14 @@ function DriversTab() {
   };
 
   const reject = async (id, reason = '') => {
-    await updateDoc(doc(db,'drivers',id), { status:'rejected', rejectionReason:reason, rejectedAt:serverTimestamp() });
+    // Clear isOnline too — a rejected driver must not linger on the live map.
+    await updateDoc(doc(db,'drivers',id), { status:'rejected', rejectionReason:reason, rejectedAt:serverTimestamp(), isOnline:false, currentLocation:null });
     setConfirm(null);
   };
 
   const suspend = async (id) => {
-    await updateDoc(doc(db,'drivers',id), { status:'suspended', suspendedAt:serverTimestamp() });
+    // Clear isOnline so they drop off the live map immediately.
+    await updateDoc(doc(db,'drivers',id), { status:'suspended', suspendedAt:serverTimestamp(), isOnline:false, currentLocation:null });
   };
 
   // Recognition tier (Founding Driver, New Driver, …). Purely a label for now.
@@ -1624,7 +1626,11 @@ function LiveMapTab() {
 
   const nowMs = Date.now();
   const isFresh = (loc) => loc?.lat && (!loc.updatedAt?.seconds || (nowMs - loc.updatedAt.seconds*1000) < 5*60*1000);
-  const onlineDrivers   = drivers.filter(d => d.isOnline);
+  // Only APPROVED drivers count as online. A pending/rejected/suspended driver
+  // can still have isOnline set on their document (e.g. the flag was written
+  // before approval), but they cannot take rides — so showing them on the live
+  // map is misleading.
+  const onlineDrivers   = drivers.filter(d => d.isOnline && d.status === 'approved');
   const locatedDrivers  = onlineDrivers.filter(d => isFresh(d.currentLocation));
 
   // Build clickable markers: available drivers (green) + active-ride drivers (purple).
