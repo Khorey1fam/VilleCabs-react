@@ -4425,15 +4425,23 @@ function AddressAutocompleteInput({ value, defaultValue, onChange, onPlaceSelect
       // formattedAddress when a place has no street address. That's useless to a
       // driver, so prefer the place's NAME, and strip any leading Plus Code off
       // the formatted string before falling back to it.
-      const fmt  = place.formattedAddress || '';
-      const named = place.displayName || '';
+      const fmt   = place.formattedAddress || '';
+      const named = place.displayName || main || '';
+      // SHOW WHAT THE CUSTOMER PICKED. Google's formattedAddress for a Jamaican
+      // landmark is often just the district — selecting "HEART Trust NTA New
+      // Port" resolves to "Knockpatrick, Jamaica", which loses the actual
+      // destination and leaves the driver guessing. So we lead with the place
+      // NAME the customer chose, then append the area as context:
+      //   "HEART Trust NTA New Port, Knockpatrick, Jamaica"
+      const cleanFmt = isPlusCode(fmt) ? stripPlusCode(fmt) : fmt;
       let addr;
-      if (fmt && !isPlusCode(fmt)) {
-        addr = fmt;                                   // real street address — best
-      } else if (named && !isPlusCode(named)) {
-        addr = named;                                 // fall back to the place name
+      if (named && !isPlusCode(named)) {
+        // Does the formatted address already begin with this name? If so it's a
+        // plain street address and needs no prefixing.
+        const alreadyNamed = cleanFmt.toLowerCase().startsWith(named.toLowerCase());
+        addr = (cleanFmt && !alreadyNamed) ? `${named}, ${cleanFmt}` : (cleanFmt || named);
       } else {
-        addr = stripPlusCode(fmt) || stripPlusCode(named) || main;  // last resort
+        addr = cleanFmt || stripPlusCode(named) || main;
       }
       // Google often drops the house number for Jamaican addresses it doesn't
       // have on file — "32 Cedar Garden Road" resolves to just "Cedar Garden
@@ -4443,7 +4451,7 @@ function AddressAutocompleteInput({ value, defaultValue, onChange, onPlaceSelect
       addr = preserveHouseNumber(typed, addr);
       setQuery(addr); if (onChange) onChange(addr);
       if (onPlaceSelect) onPlaceSelect({
-        name: place.displayName,
+        name: named,
         formattedAddress: addr,
         lat: place.location.lat(),
         lng: place.location.lng(),
