@@ -2569,8 +2569,12 @@ function SosEmergencyOverlay({ setTab }) {
       <div style={{ background:'#fff', borderRadius:18, maxWidth:460, width:'100%', padding:'26px 24px', textAlign:'center', boxShadow:'0 20px 60px rgba(0,0,0,0.5)' }}>
         <div style={{ fontSize:56, marginBottom:8 }}>🆘</div>
         <div style={{ fontSize:24, fontWeight:900, color:'#dc2626', marginBottom:6, letterSpacing:0.5 }}>SOS EMERGENCY</div>
+        <div style={{ fontSize:15, fontWeight:800, color: a.userRole === 'driver' ? '#0369a1' : '#6b21a8', marginBottom:4 }}>
+          {a.userRole === 'driver' ? '🚗 DRIVER pressed SOS' : '🧍 CUSTOMER pressed SOS'}
+          {a.level ? ` · Level ${a.level}` : ''}
+        </div>
         <div style={{ fontSize:13.5, color:'#4b5563', marginBottom:16 }}>
-          A safety alert was just raised. Respond immediately.
+          {a.userName ? `${a.userName} needs help. ` : ''}Respond immediately.
         </div>
         <div style={{ background:'#fff5f5', border:'1px solid #fecaca', borderRadius:12, padding:'14px 16px', textAlign:'left', fontSize:13.5, color:'#1a1a2e', lineHeight:1.8, marginBottom:18 }}>
           <div>👤 <strong>Customer:</strong> {a.customerName || '—'}</div>
@@ -2584,7 +2588,10 @@ function SosEmergencyOverlay({ setTab }) {
         )}
         <div style={{ display:'flex', gap:10, flexWrap:'wrap', justifyContent:'center' }}>
           {a.customerPhone && (
-            <a href={`tel:${a.customerPhone}`} style={{ flex:'1 1 140px', textDecoration:'none', padding:'13px 18px', background:GREEN, color:'#fff', borderRadius:12, fontSize:14, fontWeight:800 }}>📞 Call now</a>
+            <a href={`tel:${a.customerPhone}`} style={{ flex:'1 1 130px', textDecoration:'none', padding:'13px 14px', background:GREEN, color:'#fff', borderRadius:12, fontSize:13.5, fontWeight:800 }}>📞 Customer</a>
+          )}
+          {a.driverPhone && (
+            <a href={`tel:${a.driverPhone}`} style={{ flex:'1 1 130px', textDecoration:'none', padding:'13px 14px', background:'#0369a1', color:'#fff', borderRadius:12, fontSize:13.5, fontWeight:800 }}>📞 Driver</a>
           )}
           <button onClick={goToAlerts} style={{ flex:'1 1 140px', padding:'13px 18px', background:'#dc2626', color:'#fff', border:'none', borderRadius:12, fontSize:14, fontWeight:800, cursor:'pointer' }}>Open alerts →</button>
           <button onClick={dismiss} style={{ flex:'1 1 100%', padding:'11px 18px', background:'#fff', color:'#6b7280', border:'1px solid #e5e7eb', borderRadius:12, fontSize:13, fontWeight:600, cursor:'pointer' }}>Silence this alert</button>
@@ -2694,11 +2701,24 @@ function AlertsTab() {
 
       {list.map(a => (
         <div key={a.id} style={{ ...s.card, borderLeft:`3px solid ${isResolved(a)?GREEN:sosTier(a).color}`, opacity: isResolved(a)?0.85:1 }}>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6, gap:8, flexWrap:'wrap' }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8, gap:8, flexWrap:'wrap' }}>
             <span style={{ fontSize:14, fontWeight:700, color: isResolved(a)?'#4b5563':sosTier(a).color }}>
               {sosTier(a).emoji} Level {a.level || 3} · {sosTier(a).label}
             </span>
             <span style={{ ...s.badge, background: isResolved(a)?'rgba(26,158,90,0.15)':'rgba(226,75,74,0.15)', color: isResolved(a)?GREEN:'#dc2626' }}>{a.status||'new'}</span>
+          </div>
+
+          {/* WHO pressed it — the first thing the responder needs to know */}
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8, padding:'8px 11px', borderRadius:9,
+            background: a.userRole === 'driver' ? '#eff6ff' : '#f5f0ff',
+            border: `1px solid ${a.userRole === 'driver' ? '#bfdbfe' : '#e9d5ff'}` }}>
+            <span style={{ fontSize:19 }}>{a.userRole === 'driver' ? '🚗' : '🧍'}</span>
+            <div>
+              <div style={{ fontSize:13, fontWeight:800, color: a.userRole === 'driver' ? '#0369a1' : '#6b21a8' }}>
+                {a.userRole === 'driver' ? 'DRIVER raised this alert' : 'CUSTOMER raised this alert'}
+              </div>
+              <div style={{ fontSize:12, color:'#4b5563' }}>{a.userName || '—'}</div>
+            </div>
           </div>
           {/* What the ops team is expected to DO for this tier */}
           {!isResolved(a) && (
@@ -2707,13 +2727,33 @@ function AlertsTab() {
             </div>
           )}
           {a.overLimit && <div style={{ fontSize:11, color:'#b45309', fontWeight:700, marginBottom:4 }}>⚠️ Sent past the alert limit — treat with care, may be repeated presses</div>}
-          <div style={{ fontSize:12, color:'#4b5563', marginBottom:3 }}>👤 {a.customerName||'—'} · 🚗 {a.driverName||'—'}</div>
-          {(a.customerPhone || a.driverPhone) && (
-            <div style={{ fontSize:12, color:'#4b5563', marginBottom:3, display:'flex', gap:10, flexWrap:'wrap' }}>
-              {a.customerPhone && <a href={`tel:${a.customerPhone}`} style={{ color:GREEN, fontWeight:700, textDecoration:'none' }}>📞 Rider</a>}
-              {a.driverPhone && <a href={`tel:${a.driverPhone}`} style={{ color:GREEN, fontWeight:700, textDecoration:'none' }}>📞 Driver</a>}
-            </div>
-          )}
+          {/* Contact card — both parties, one tap to reach either */}
+          <div style={{ border:'1px solid #e5e7eb', borderRadius:10, overflow:'hidden', marginBottom:8 }}>
+            {[
+              { role:'customer', label:'Customer', name:a.customerName, phone:a.customerPhone, icon:'🧍' },
+              { role:'driver',   label:'Driver',   name:a.driverName,   phone:a.driverPhone,   icon:'🚗' },
+            ].map(p => (
+              <div key={p.role} style={{ display:'flex', alignItems:'center', gap:9, padding:'9px 11px',
+                borderTop: p.role==='driver' ? '1px solid #f0f0f4' : 'none',
+                background: a.userRole === p.role ? '#fffbeb' : '#fff' }}>
+                <span style={{ fontSize:15 }}>{p.icon}</span>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:10.5, color:'#8a83a0', fontWeight:700, textTransform:'uppercase', letterSpacing:0.3 }}>
+                    {p.label}{a.userRole === p.role ? ' · pressed SOS' : ''}
+                  </div>
+                  <div style={{ fontSize:13, fontWeight:600, color:'#1a1a2e' }}>{p.name || '—'}</div>
+                  <div style={{ fontSize:11.5, color:'#6b7280' }}>{p.phone || 'no number on file'}</div>
+                </div>
+                {p.phone && (
+                  <div style={{ display:'flex', gap:6 }}>
+                    <a href={`tel:${p.phone}`} style={{ textDecoration:'none', padding:'7px 11px', background:GREEN, color:'#fff', borderRadius:7, fontSize:11.5, fontWeight:700 }}>📞 Call</a>
+                    <a href={`https://wa.me/${String(p.phone).replace(/[^0-9]/g,'')}`} target="_blank" rel="noopener noreferrer"
+                      style={{ textDecoration:'none', padding:'7px 11px', background:'#25D366', color:'#fff', borderRadius:7, fontSize:11.5, fontWeight:700 }}>💬</a>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
           {a.pressCount > 1 && <div style={{ fontSize:11.5, color:'#b45309', fontWeight:700, marginBottom:3 }}>⚠️ Press #{a.pressCount} from this rider on this ride</div>}
           {a.location && <div style={{ fontSize:12, color:'#4b5563', marginBottom:3 }}>📍 {a.location}</div>}
           <div style={{ fontSize:11, color:'#9199ad', marginBottom:10 }}>

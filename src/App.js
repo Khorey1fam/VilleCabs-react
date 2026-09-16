@@ -255,28 +255,47 @@ const normalizeJmPhone = (raw) => {
 // public/firebase-messaging-sw.js and a Cloud Function that sends to
 // customers/{uid}.fcmToken when the driver is ~2 min away. This stores the
 // token so that function can target this customer.
-const registerCustomerPushToken = async (uid) => {
-  try {
-    if (!messaging || !uid) return;
-    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
-    const vapid = process.env.REACT_APP_FIREBASE_VAPID_KEY;
-    if (!vapid) return;
-    const token = await getToken(messaging, { vapidKey: vapid });
-    if (token) await updateDoc(doc(db,'customers',uid), { fcmToken: token });
-  } catch(e) { console.warn('Customer push token skipped:', e.message); }
+// Register the FCM service worker. WITHOUT THIS, push only arrives while the
+// app is open — the in-page onMessage listener fires, but there is no
+// background handler, so a closed or backgrounded app receives nothing.
+// getToken() must also be handed this registration or it silently falls back
+// to a default scope that never matches our worker.
+let swRegPromise = null;
+const getSwRegistration = () => {
+  if (swRegPromise) return swRegPromise;
+  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return Promise.resolve(null);
+  swRegPromise = navigator.serviceWorker
+    .register('/firebase-messaging-sw.js')
+    .then(reg => navigator.serviceWorker.ready.then(() => reg))
+    .catch(e => { console.warn('SW registration failed:', e); return null; });
+  return swRegPromise;
 };
 
-// Register a driver's push token so a Cloud Function can push new-ride alerts
-const registerDriverPushToken = async (uid) => {
+// Shared token registration for both roles.
+const registerPushToken = async (uid, collectionName) => {
   try {
     if (!messaging || !uid) return;
-    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    if (typeof Notification === 'undefined') return;
+    if (Notification.permission !== 'granted') return;
     const vapid = process.env.REACT_APP_FIREBASE_VAPID_KEY;
-    if (!vapid) return;
-    const token = await getToken(messaging, { vapidKey: vapid });
-    if (token) await updateDoc(doc(db,'drivers',uid), { fcmToken: token });
-  } catch(e) { console.warn('Driver push token skipped:', e.message); }
+    if (!vapid) { console.warn('No VAPID key set — push disabled'); return; }
+    const swReg = await getSwRegistration();
+    if (!swReg) { console.warn('No service worker — background push unavailable'); return; }
+    const token = await getToken(messaging, {
+      vapidKey: vapid,
+      serviceWorkerRegistration: swReg,
+    });
+    if (token) {
+      await updateDoc(doc(db, collectionName, uid), { fcmToken: token, pushUpdatedAt: Date.now() });
+      console.log('Push token registered for', collectionName);
+    }
+  } catch(e) { console.warn('Push token skipped:', e.message); }
 };
+
+const registerCustomerPushToken = async (uid) => registerPushToken(uid, 'customers');
+
+// Register a driver's push token so a Cloud Function can push new-ride alerts
+const registerDriverPushToken = async (uid) => registerPushToken(uid, 'drivers');
 
 // ── Format a scheduled ride time (Feature: Scheduled Rides) ──────────────────
 const fmtScheduled = (val) => {
@@ -8334,6 +8353,8 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
       await addDoc(collection(db,'sos_alerts'), {
         level, levelKey: tier.key, levelLabel: tier.label, overLimit: !gate.allowed,
         userId: user?.uid, userName: user?.name||'Driver', userRole:'driver',
+        driverPhone: driverProfileRef.current?.phone || user?.phone || '',
+        customerPhone: booking?.customerPhone || '',
         bookingId: booking?.id, driverName: user?.name||'--',
         customerName: booking?.customerName||'--',
         vehicleMake: booking?.vehicleMake||'', vehicleModel: booking?.vehicleModel||'',
