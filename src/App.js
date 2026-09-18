@@ -2267,6 +2267,37 @@ function CustomerLogin({ go, setUser, user }) {
         setLoading(false);
         return;
       }
+
+      // No customer record? They may be a DRIVER signing in on the wrong screen,
+      // or an account whose signup failed partway. Either way, don't drop them
+      // into the app as a ghost with no record — work out which and handle it.
+      if (!data.name && !data.phone) {
+        let isDriver = false;
+        try {
+          const dSnap = await getDoc(doc(db,'drivers',cred.user.uid));
+          isDriver = dSnap.exists();
+        } catch(e) {}
+        if (isDriver) {
+          await signOut(auth).catch(()=>{});
+          setError('This is a driver account. Please use the Driver Login.');
+          setLoading(false);
+          return;
+        }
+        // Genuinely no record anywhere — create one so they exist in the system
+        // rather than roaming the app invisibly.
+        try {
+          await setDoc(doc(db,'customers',cred.user.uid), {
+            name: cred.user.displayName || '',
+            email: cred.user.email || email,
+            role: 'customer',
+            referralCode: 'VC' + Math.random().toString(36).substring(2,7).toUpperCase(),
+            referralCount: 0,
+            createdAt: serverTimestamp(),
+            recoveredAt: serverTimestamp(),   // signup had failed; record rebuilt at login
+          }, { merge: true });
+        } catch(e) { console.warn('Could not create customer record:', e); }
+      }
+
       setUser({ uid:cred.user.uid, name:data.name||cred.user.displayName||email, email:cred.user.email, role:'customer' });
       if (!data.termsAccepted) go('terms');
       else if (!data.tipsSeen) go('welcome-tips');
@@ -2462,6 +2493,21 @@ function DriverSignup({ go, user }) {
       }
       setError('Creating your account...');
       const cred = await createUserWithEmailAndPassword(auth, form.email, form.password);
+
+      // WRITE THE DRIVER RECORD FIRST, before touching Storage.
+      // Previously the 5 document uploads ran between account creation and this
+      // write — so if Storage failed (outage, quota, bad connection) the person
+      // ended up with a working login and NO driver record anywhere. They then
+      // appeared as a ghost: able to sign in, invisible to the admin panel.
+      // Creating the record first means a failed upload leaves a recoverable
+      // application instead of an orphaned account.
+      await setDoc(doc(db,'drivers',cred.user.uid), {
+        name:form.name, trn:form.trn, dob:form.dob, phone:form.phone, email:form.email,
+        vehicleMake:form.make, vehicleModel:form.model, vehicleColor:form.color, licensePlate:form.plate,
+        status:'pending', role:'driver', createdAt:serverTimestamp(),
+        documentsComplete: false,   // flipped true once uploads succeed
+      });
+
       const uploadFile = async (file, name, label) => {
         if (!file) return null;
         setError('Uploading ' + label + '...');
@@ -2469,19 +2515,36 @@ function DriverSignup({ go, user }) {
         const snap = await uploadBytes(r, file, { contentType: file.type || 'application/octet-stream' });
         return await getDownloadURL(snap.ref);
       };
-      const licenseUrl      = await uploadFile(docs.license,       'license',       "Driver's Licence");
-      const fitnessUrl      = await uploadFile(docs.fitness,       'fitness',       'Fitness Certificate');
-      const registrationUrl = await uploadFile(docs.registration,  'registration',  'Vehicle Registration');
-      const profilePhotoUrl = await uploadFile(docs.profilePhoto,  'profilePhoto',  'Profile Photo');
-      const vehiclePhotoUrl = await uploadFile(docs.vehiclePhoto,  'vehiclePhoto',  'Vehicle Photo');
-      setError('Saving your profile...');
-      await setDoc(doc(db,'drivers',cred.user.uid), {
-        name:form.name, trn:form.trn, dob:form.dob, phone:form.phone, email:form.email,
-        vehicleMake:form.make, vehicleModel:form.model, vehicleColor:form.color, licensePlate:form.plate,
-        status:'pending', role:'driver', createdAt:serverTimestamp(),
-        profilePhotoUrl, vehiclePhotoUrl,
-        docs:{ license:licenseUrl, fitness:fitnessUrl, registration:registrationUrl, profilePhoto:profilePhotoUrl, vehiclePhoto:vehiclePhotoUrl },
-      });
+
+      try {
+        const licenseUrl      = await uploadFile(docs.license,       'license',       "Driver's Licence");
+        const fitnessUrl      = await uploadFile(docs.fitness,       'fitness',       'Fitness Certificate');
+        const registrationUrl = await uploadFile(docs.registration,  'registration',  'Vehicle Registration');
+        const profilePhotoUrl = await uploadFile(docs.profilePhoto,  'profilePhoto',  'Profile Photo');
+        const vehiclePhotoUrl = await uploadFile(docs.vehiclePhoto,  'vehiclePhoto',  'Vehicle Photo');
+        setError('Saving your profile...');
+        await updateDoc(doc(db,'drivers',cred.user.uid), {
+          profilePhotoUrl, vehiclePhotoUrl,
+          docs:{ license:licenseUrl, fitness:fitnessUrl, registration:registrationUrl, profilePhoto:profilePhotoUrl, vehiclePhoto:vehiclePhotoUrl },
+          documentsComplete: true,
+        });
+      } catch (upErr) {
+        // Application is saved; only the documents are missing. Flag it so the
+        // admin can see it and ask the driver to re-upload, rather than losing
+        // the applicant entirely.
+        console.error('Document upload failed:', upErr);
+        try {
+          await updateDoc(doc(db,'drivers',cred.user.uid), {
+            documentsComplete: false,
+            uploadError: String(upErr?.code || upErr?.message || 'upload failed'),
+          });
+        } catch(e2) {}
+        setError('');
+        vcToast('Account created, but your documents did not upload. Please sign in and try uploading again.', 'error');
+        go('driver-pending');
+        return;
+      }
+
       setError('');
       sendWelcomeEmail(form.email, form.name, 'driver');
       go('driver-pending');
