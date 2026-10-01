@@ -297,6 +297,22 @@ const registerCustomerPushToken = async (uid) => registerPushToken(uid, 'custome
 // Register a driver's push token so a Cloud Function can push new-ride alerts
 const registerDriverPushToken = async (uid) => registerPushToken(uid, 'drivers');
 
+// ── Ride type badge ───────────────────────────────────────────────────────────
+// Drivers need to tell at a glance whether a job is an immediate ride, a
+// pre-booked scheduled trip, or a Charter day-hire — they behave very
+// differently and a driver accepting a multi-day charter thinking it is a
+// 10-minute ride is a real problem.
+function rideKind(r) {
+  if (!r) return { key:'now', label:'Ride Now', emoji:'\u26a1', color:'#1a9e5a', bg:'#f0fdf4' };
+  if (r.isCharter || r.type === 'charter' || r.charterId) {
+    return { key:'charter', label:'Charter', emoji:'\ud83d\ude98', color:'#6b21a8', bg:'#f5f0ff' };
+  }
+  if (r.status === 'scheduled' || r.scheduledFor) {
+    return { key:'scheduled', label:'Scheduled', emoji:'\ud83d\udcc5', color:'#b45309', bg:'#fffbeb' };
+  }
+  return { key:'now', label:'Ride Now', emoji:'\u26a1', color:'#1a9e5a', bg:'#f0fdf4' };
+}
+
 // ── Format a scheduled ride time (Feature: Scheduled Rides) ──────────────────
 const fmtScheduled = (val) => {
   try {
@@ -7419,6 +7435,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   const [isOnline,     setIsOnline]     = useState(false);
   const [earnings,     setEarnings]     = useState({ today:0, week:0, total:0, todayRides:0, weekRides:0, totalRides:0, history:[] });
   const [pendingRides, setPendingRides] = useState([]);
+  const [myCharters,   setMyCharters]   = useState([]);   // charter jobs assigned to this driver
   const [nowTick, setNowTick] = useState(Date.now()); // drives the live "requested X ago" age
   const [loading,      setLoading]      = useState(true);
   const [activeRideId, setActiveRideId] = useState(null);
@@ -7623,6 +7640,22 @@ function DriverDash({ go, user, setUser, setBookingId }) {
     }, e => console.warn('Ride snapshot error:', e.message));
     return () => unsub();
   }, [user]);
+
+  // Charter jobs assigned to this driver by the admin. Charters are arranged
+  // off-app (admin confirms with the customer), so the driver doesn't accept
+  // them — they just need to SEE the job, the itinerary and who to contact.
+  useEffect(() => {
+    if (!user?.uid) return;
+    const q = query(
+      collection(db,'charterRequests'),
+      where('assignedDriverId','==',user.uid),
+      where('status','in',['driverAssigned','inProgress'])
+    );
+    const unsub = onSnapshot(q,
+      snap => setMyCharters(snap.docs.map(d => ({ id:d.id, ...d.data() }))),
+      e => console.warn('Charter listen error:', e.message));
+    return () => unsub();
+  }, [user?.uid]);
 
   const goOnline = async () => {
     // Only an APPROVED driver may go online. A pending driver shouldn't reach
@@ -7930,6 +7963,66 @@ function DriverDash({ go, user, setUser, setBookingId }) {
           </div>
 
           {/* ── INCOMING RIDE REQUESTS (shown when online) ── */}
+          {/* Charter jobs assigned to this driver */}
+          {myCharters.length > 0 && (
+            <div style={{ marginBottom:18 }}>
+              <div style={{ fontSize:13, fontWeight:800, color:'#6b21a8', marginBottom:10, display:'flex', alignItems:'center', gap:7 }}>
+                🚘 {myCharters.length} Charter Job{myCharters.length>1?'s':''} Assigned
+              </div>
+              {myCharters.map(c => {
+                const days = c.days || [];
+                const first = days[0] || {};
+                return (
+                  <div key={c.id} style={{ background:'#fff', border:'2px solid #c4b5fd', borderRadius:16, padding:16, marginBottom:12, boxShadow:'0 4px 16px rgba(107,33,168,0.1)' }}>
+                    <div style={{ display:'inline-flex', alignItems:'center', gap:5, background:'#f5f0ff', border:'1.5px solid #6b21a8', color:'#6b21a8',
+                      fontSize:10.5, fontWeight:800, textTransform:'uppercase', letterSpacing:0.7, padding:'3px 9px', borderRadius:11, marginBottom:8 }}>
+                      🚘 Charter · {days.length} day{days.length!==1?'s':''}
+                    </div>
+                    <div style={{ fontSize:16, fontWeight:700, color:'#1a1a2e' }}>{c.name || 'Charter customer'}</div>
+                    <div style={{ fontSize:12, color:'#6b7280', marginTop:3 }}>
+                      {first.date || '—'}{first.startTime ? ` · starts ${first.startTime}` : ''}{first.hours ? ` · ${first.hours}h reserved` : ''}
+                    </div>
+                    {first.purpose && <div style={{ fontSize:12, color:'#6b7280', marginTop:2 }}>Purpose: {first.purpose}</div>}
+
+                    {/* Itinerary for each day */}
+                    <div style={{ marginTop:10, borderTop:'1px solid #f0f0f4', paddingTop:10 }}>
+                      {days.map((d, di) => (
+                        <div key={di} style={{ marginBottom: di < days.length-1 ? 10 : 0 }}>
+                          {days.length > 1 && <div style={{ fontSize:11, fontWeight:800, color:'#6b21a8', marginBottom:3 }}>Day {di+1} · {d.date}{d.startTime?` · ${d.startTime}`:''}</div>}
+                          <div style={{ fontSize:12.5, color:'#374151', lineHeight:1.65 }}>
+                            <div>🟢 {d.start || '—'}</div>
+                            {(d.stops||[]).map((sp,x)=><div key={x}>📍 {sp}</div>)}
+                            <div>🏁 {d.destination || '—'}</div>
+                            {d.returnTo && <div>↩️ {d.returnTo}</div>}
+                          </div>
+                          {d.driverNotes && <div style={{ fontSize:11.5, color:'#6b7280', fontStyle:'italic', marginTop:3 }}>📝 {d.driverNotes}</div>}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'1px solid #f0f0f4', marginTop:10, paddingTop:10 }}>
+                      <span style={{ fontSize:12, color:'#6b7280' }}>{Math.round(c.totalKm||0)} km total</span>
+                      <span style={{ fontSize:17, fontWeight:800, color:'#6b21a8' }}>J${(c.adjustedTotal || c.total || 0).toLocaleString()}</span>
+                    </div>
+
+                    <div style={{ display:'flex', gap:8, marginTop:10, flexWrap:'wrap' }}>
+                      {c.phone && (
+                        <a href={`tel:${telNumber(c.phone)}`} style={{ flex:1, textAlign:'center', textDecoration:'none', padding:'11px', background:GREEN, color:'#fff', borderRadius:10, fontSize:13, fontWeight:700 }}>📞 Call customer</a>
+                      )}
+                      {c.phone && (
+                        <a href={`https://wa.me/${String(c.phone).replace(/[^0-9]/g,'')}`} target="_blank" rel="noopener noreferrer"
+                          style={{ flex:1, textAlign:'center', textDecoration:'none', padding:'11px', background:'#25D366', color:'#fff', borderRadius:10, fontSize:13, fontWeight:700 }}>💬 WhatsApp</a>
+                      )}
+                    </div>
+                    <div style={{ fontSize:11, color:'#8a83a0', marginTop:8, textAlign:'center' }}>
+                      Arranged by VilleCabs. Contact the customer to confirm pickup details.
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {isOnline && pendingRides.length > 0 && (
             <div style={{ padding:'0 14px 14px' }}>
               <div style={{ fontSize:11, fontWeight:700, color:'#6b21a8', textTransform:'uppercase', letterSpacing:0.8, marginBottom:10 }}>
@@ -7939,7 +8032,12 @@ function DriverDash({ go, user, setUser, setBookingId }) {
                 <div key={r.id||i} style={{ background:'#fff', border:'2px solid #e9d5ff', borderRadius:16, padding:16, marginBottom:12, boxShadow:'0 4px 16px rgba(107,33,168,0.1)' }}>
                   <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
                     <div>
-                      <div style={{ fontSize:10, color:'#6b21a8', fontWeight:700, textTransform:'uppercase', letterSpacing:1, marginBottom:4 }}>🔔 New Ride Request</div>
+                      {(() => { const k = rideKind(r); return (
+                        <div style={{ display:'inline-flex', alignItems:'center', gap:5, background:k.bg, border:`1.5px solid ${k.color}`, color:k.color,
+                          fontSize:10.5, fontWeight:800, textTransform:'uppercase', letterSpacing:0.7, padding:'3px 9px', borderRadius:11, marginBottom:6 }}>
+                          {k.emoji} {k.label}
+                        </div>
+                      ); })()}
                       <div style={{ fontSize:16, fontWeight:700, color:'#1a1a2e' }}>{r.customerName||'Passenger'}</div>
                       <div style={{ fontSize:11, color:'#888', marginTop:2 }}>✓ Verified · 👥 {r.passengers||1} passenger{(r.passengers||1)>1?'s':''}</div>
                       {(() => {

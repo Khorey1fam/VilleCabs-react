@@ -1212,6 +1212,8 @@ function RevenueTab() {
   const [rides,   setRides]   = useState([]);
   const [loading, setLoading] = useState(true);
   const [period,  setPeriod]  = useState('month');
+  const [fromDate, setFromDate] = useState('');   // custom range start (YYYY-MM-DD)
+  const [toDate,   setToDate]   = useState('');   // custom range end
   useEffect(() => {
     const unsub = onSnapshot(query(collection(db,'bookings'), where('status','==','completed')), snap => {
       setRides(snap.docs.map(d => ({ id:d.id, ...d.data() }))); setLoading(false);
@@ -1221,8 +1223,23 @@ function RevenueTab() {
   const now=new Date(), today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
   const week=new Date(today); week.setDate(today.getDate()-7);
   const month=new Date(today); month.setDate(today.getDate()-30);
-  const inRange=(r,from)=>r.completedAt?.seconds?new Date(r.completedAt.seconds*1000)>=from:false;
-  const periodRides=rides.filter(r=>inRange(r,period==='today'?today:period==='week'?week:month));
+  const rideDate = (r) => r.completedAt?.seconds ? new Date(r.completedAt.seconds*1000) : null;
+  const inRange=(r,from)=>{ const d=rideDate(r); return d ? d>=from : false; };
+
+  // A custom date range overrides the quick-period pills. The end date is taken
+  // as inclusive — picking 1st to 7th includes everything on the 7th.
+  const customActive = period === 'custom' && fromDate && toDate;
+  const periodRides = customActive
+    ? (() => {
+        const from = new Date(fromDate + 'T00:00:00');
+        const to   = new Date(toDate   + 'T23:59:59');
+        return rides.filter(r => { const d = rideDate(r); return d && d >= from && d <= to; });
+      })()
+    : rides.filter(r=>inRange(r,period==='today'?today:period==='week'?week:month));
+
+  const periodLabel = customActive
+    ? `${new Date(fromDate+'T00:00:00').toLocaleDateString('en-JM',{day:'numeric',month:'short',year:'numeric'})} – ${new Date(toDate+'T00:00:00').toLocaleDateString('en-JM',{day:'numeric',month:'short',year:'numeric'})}`
+    : period==='today' ? 'Today' : period==='week' ? 'Last 7 Days' : 'Last 30 Days';
   const totalRev=periodRides.reduce((s,r)=>s+(r.fare||0),0);
   const villeCut=Math.round(totalRev*0.15);
   const driverCut=Math.round(totalRev*0.85);
@@ -1246,14 +1263,42 @@ function RevenueTab() {
   const maxVal=Math.max(...last7.map(d=>d.total),1);
   return (
     <div>
-      <div style={{ display:'flex', gap:8, marginBottom:20, flexWrap:'wrap' }}>
-        {[['today','Today'],['week','7 Days'],['month','30 Days']].map(([k,l])=>(
+      <div style={{ display:'flex', gap:8, marginBottom:12, flexWrap:'wrap' }}>
+        {[['today','Today'],['week','7 Days'],['month','30 Days'],['custom','📅 Date range']].map(([k,l])=>(
           <button key={k} onClick={()=>setPeriod(k)}
             style={{ padding:'7px 16px', borderRadius:20, fontSize:13, border:'1px solid #e5e7eb', background:period===k?'#6b21a8':'#f3f4f6', color:period===k?'#fff':'#555', cursor:'pointer', fontWeight:period===k?600:400 }}>
             {l}
           </button>
         ))}
       </div>
+
+      {period === 'custom' && (
+        <div style={{ background:'#faf7fd', border:'1px solid #e9d5ff', borderRadius:12, padding:'14px 16px', marginBottom:20 }}>
+          <div style={{ display:'flex', gap:12, flexWrap:'wrap', alignItems:'flex-end' }}>
+            <div style={{ flex:'1 1 150px' }}>
+              <div style={{ fontSize:11, color:'#8a83a0', fontWeight:700, marginBottom:4 }}>FROM</div>
+              <input type="date" value={fromDate} max={toDate || undefined} onChange={e=>setFromDate(e.target.value)}
+                style={{ width:'100%', padding:'9px 11px', border:'1px solid #d0d3e0', borderRadius:9, fontSize:13, boxSizing:'border-box' }}/>
+            </div>
+            <div style={{ flex:'1 1 150px' }}>
+              <div style={{ fontSize:11, color:'#8a83a0', fontWeight:700, marginBottom:4 }}>TO</div>
+              <input type="date" value={toDate} min={fromDate || undefined} onChange={e=>setToDate(e.target.value)}
+                style={{ width:'100%', padding:'9px 11px', border:'1px solid #d0d3e0', borderRadius:9, fontSize:13, boxSizing:'border-box' }}/>
+            </div>
+            {(fromDate || toDate) && (
+              <button onClick={()=>{ setFromDate(''); setToDate(''); }}
+                style={{ padding:'9px 15px', background:'#fff', border:'1px solid #d0d3e0', borderRadius:9, fontSize:12.5, fontWeight:700, color:'#6b7280', cursor:'pointer' }}>
+                Clear
+              </button>
+            )}
+          </div>
+          <div style={{ fontSize:11.5, color:'#8a83a0', marginTop:9 }}>
+            {customActive
+              ? `Showing ${periodRides.length} completed ride${periodRides.length!==1?'s':''} · ${periodLabel}`
+              : 'Pick a start and end date. Both dates are included.'}
+          </div>
+        </div>
+      )}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12, marginBottom:20 }}>
         <StatCard label="Total revenue" value={`J$${totalRev.toLocaleString()}`} color="#b45309" sub={`${periodRides.length} rides`}/>
         <StatCard label="VilleCabs (15%)" value={`J$${villeCut.toLocaleString()}`} color={GREEN} sub="platform fee"/>
@@ -1275,7 +1320,7 @@ function RevenueTab() {
       {/* Per-driver earnings for the selected period */}
       <div style={{ background:'#ffffff', border:'1px solid #e5e7eb', borderRadius:14, padding:20, marginBottom:20 }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8, marginBottom:14 }}>
-          <div style={{ fontSize:14, fontWeight:600, color:'#1a1a2e' }}>Driver Earnings — {period==='today'?'Today':period==='week'?'Last 7 Days':'Last 30 Days'}</div>
+          <div style={{ fontSize:14, fontWeight:600, color:'#1a1a2e' }}>Driver Earnings — {periodLabel}</div>
           <div style={{ fontSize:11.5, color:'#9199ad' }}>{driverRows.length} driver{driverRows.length!==1?'s':''} · payout = 85% of gross</div>
         </div>
         {driverRows.length === 0 ? (
