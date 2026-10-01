@@ -1971,7 +1971,6 @@ function CharterTab() {
   const [drivers, setDrivers] = useState([]);
   const [openId, setOpenId]   = useState(null);
   const [filter, setFilter]   = useState('all');
-  const [adjust, setAdjust]   = useState({}); // { [id]: { amount, reason } }
 
   useEffect(() => {
     const u1 = onSnapshot(query(collection(db,'charterRequests'), orderBy('createdAt','desc')),
@@ -1996,20 +1995,6 @@ function CharterTab() {
       });
     } catch(e){ console.error(e); }
   };
-  const saveAdjustment = async (id) => {
-    const a = adjust[id] || {};
-    const amount = Number(a.amount);
-    if (!amount || amount <= 0) { window.alert('Enter a valid adjusted amount.'); return; }
-    if (!a.reason || !a.reason.trim()) { window.alert('Please record a reason for the price adjustment.'); return; }
-    try {
-      await updateDoc(doc(db,'charterRequests',id), {
-        adjustedTotal: amount, adjustmentReason: a.reason.trim(),
-        quotedTotal: amount, updatedAt: serverTimestamp(),
-      });
-      setAdjust(prev => ({ ...prev, [id]: { amount:'', reason:'' } }));
-    } catch(e){ console.error(e); window.alert('Could not save adjustment.'); }
-  };
-
   const shown = filter==='all' ? rows : rows.filter(r => (r.status||'pending')===filter);
   const money = n => 'J$' + (n||0).toLocaleString();
   const fmtDate = ts => ts?.seconds ? new Date(ts.seconds*1000).toLocaleString('en-JM',{ dateStyle:'medium', timeStyle:'short' }) : '—';
@@ -2056,6 +2041,11 @@ function CharterTab() {
                 <span style={{ display:'inline-block', fontSize:11, fontWeight:700, color:meta.color, background:meta.bg, border:`1px solid ${meta.color}33`, padding:'3px 10px', borderRadius:12 }}>{meta.label}</span>
                 <div style={{ fontSize:17, fontWeight:800, color:'#6b21a8', marginTop:6 }}>{money(finalAmount)}</div>
                 {r.adjustedTotal && <div style={{ fontSize:10.5, color:'#9199ad', textDecoration:'line-through' }}>{money(r.total)}</div>}
+                {r.assignedDriverName && (
+                  <div style={{ fontSize:10.5, color: r.claimedAt ? '#1a9e5a' : '#6b7280', marginTop:3, fontWeight:600 }}>
+                    {r.claimedAt ? '✓ Taken by ' : 'Assigned to '}{r.assignedDriverName}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -2091,9 +2081,7 @@ function CharterTab() {
                   {r.airportFee>0 && <div style={{ display:'flex', justifyContent:'space-between' }}><span>Airport fee</span><span>{money(r.airportFee)}</span></div>}
                   {r.surcharge>0 && <div style={{ display:'flex', justifyContent:'space-between', color:'#b45309' }}><span>Long-distance surcharge</span><span>{money(r.surcharge)}</span></div>}
                   {r.discount>0 && <div style={{ display:'flex', justifyContent:'space-between', color:'#1a9e5a' }}><span>Multi-day discount</span><span>−{money(r.discount)}</span></div>}
-                  <div style={{ display:'flex', justifyContent:'space-between', fontWeight:800, color:'#2a1a4a', borderTop:'1px solid #e9d5ff', marginTop:6, paddingTop:6 }}><span>System estimate</span><span>{money(r.total)}</span></div>
-                  {r.adjustedTotal && <div style={{ display:'flex', justifyContent:'space-between', fontWeight:800, color:'#6b21a8', marginTop:4 }}><span>Adjusted price</span><span>{money(r.adjustedTotal)}</span></div>}
-                  {r.adjustmentReason && <div style={{ fontSize:11, color:'#9199ad', marginTop:4, fontStyle:'italic' }}>Reason: {r.adjustmentReason}</div>}
+                  <div style={{ display:'flex', justifyContent:'space-between', fontWeight:800, color:'#2a1a4a', borderTop:'1px solid #e9d5ff', marginTop:6, paddingTop:6 }}><span>Estimated total</span><span>{money(r.total)}</span></div>
                 </div>
 
                 {/* admin controls */}
@@ -2111,20 +2099,6 @@ function CharterTab() {
                       {drivers.map(dr=><option key={dr.id} value={dr.id}>{dr.name||dr.email}</option>)}
                     </select>
                   </div>
-                </div>
-
-                {/* price adjustment */}
-                <div style={{ background:'#fff', border:'1px solid #e5e7eb', borderRadius:10, padding:'10px 12px', marginBottom:10 }}>
-                  <div style={{ fontSize:11.5, fontWeight:700, color:'#6b21a8', marginBottom:8 }}>Adjust quoted price</div>
-                  <div style={{ display:'flex', gap:8, marginBottom:8 }}>
-                    <input type="number" placeholder="New amount (J$)" value={(adjust[r.id]?.amount)||''}
-                      onChange={e=>setAdjust(p=>({ ...p, [r.id]:{ ...(p[r.id]||{}), amount:e.target.value } }))}
-                      style={{ ...s.inp, marginBottom:0, flex:1 }}/>
-                    <button onClick={()=>saveAdjustment(r.id)} style={{ padding:'0 16px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:8, fontSize:12.5, fontWeight:700, cursor:'pointer' }}>Save</button>
-                  </div>
-                  <input placeholder="Reason for adjustment (recorded)" value={(adjust[r.id]?.reason)||''}
-                    onChange={e=>setAdjust(p=>({ ...p, [r.id]:{ ...(p[r.id]||{}), reason:e.target.value } }))}
-                    style={{ ...s.inp, marginBottom:0 }}/>
                 </div>
 
                 {/* actions */}

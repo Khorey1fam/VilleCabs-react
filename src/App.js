@@ -7436,6 +7436,8 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   const [earnings,     setEarnings]     = useState({ today:0, week:0, total:0, todayRides:0, weekRides:0, totalRides:0, history:[] });
   const [pendingRides, setPendingRides] = useState([]);
   const [myCharters,   setMyCharters]   = useState([]);   // charter jobs assigned to this driver
+  const [openCharters, setOpenCharters] = useState([]);  // confirmed charters any driver can claim
+  const [claimingId,   setClaimingId]   = useState(null);
   const [nowTick, setNowTick] = useState(Date.now()); // drives the live "requested X ago" age
   const [loading,      setLoading]      = useState(true);
   const [activeRideId, setActiveRideId] = useState(null);
@@ -7656,6 +7658,56 @@ function DriverDash({ go, user, setUser, setBookingId }) {
       e => console.warn('Charter listen error:', e.message));
     return () => unsub();
   }, [user?.uid]);
+
+  // New charter requests, straight from the customer. Any approved driver can
+  // take one; the final price is agreed between the driver and the customer
+  // after acceptance, so no admin review step gates this.
+  useEffect(() => {
+    if (!user?.uid) return;
+    const q = query(collection(db,'charterRequests'), where('status','==','pending'));
+    const unsub = onSnapshot(q,
+      snap => setOpenCharters(
+        snap.docs.map(d => ({ id:d.id, ...d.data() })).filter(c => !c.assignedDriverId)
+      ),
+      e => console.warn('Open charter listen error:', e.message));
+    return () => unsub();
+  }, [user?.uid]);
+
+  // Claim a charter. Transactional so two drivers tapping at the same moment
+  // can't both take it — exactly like the ride-accept race guard.
+  const claimCharter = async (charterId) => {
+    if (!charterId || claimingId) return;
+    const dData = driverProfileRef.current || {};
+    if (dData.status && dData.status !== 'approved') {
+      vcToast('Your account is not active. You cannot take charters.', 'error');
+      return;
+    }
+    setClaimingId(charterId);
+    try {
+      await runTransaction(db, async (tx) => {
+        const ref = doc(db,'charterRequests',charterId);
+        const snap = await tx.get(ref);
+        if (!snap.exists()) throw new Error('GONE');
+        const data = snap.data();
+        if (data.assignedDriverId) throw new Error('TAKEN');
+        if (data.status !== 'pending') throw new Error('TAKEN');
+        tx.update(ref, {
+          assignedDriverId:   user.uid,
+          assignedDriverName: user.name || dData.name || 'Driver',
+          status:             'driverAssigned',
+          claimedAt:          serverTimestamp(),
+          updatedAt:          serverTimestamp(),
+        });
+      });
+      vcToast('Charter accepted. Contact the customer to confirm details.', 'success');
+    } catch (e) {
+      const msg = e?.message === 'TAKEN' ? 'Another driver just took this charter.'
+                : e?.message === 'GONE'  ? 'That charter is no longer available.'
+                : 'Could not accept the charter. Please try again.';
+      vcToast(msg, 'error');
+    }
+    setClaimingId(null);
+  };
 
   const goOnline = async () => {
     // Only an APPROVED driver may go online. A pending driver shouldn't reach
@@ -7963,6 +8015,70 @@ function DriverDash({ go, user, setUser, setBookingId }) {
           </div>
 
           {/* ── INCOMING RIDE REQUESTS (shown when online) ── */}
+          {/* AVAILABLE charters — confirmed by admin, not yet claimed */}
+          {openCharters.length > 0 && (
+            <div style={{ marginBottom:18 }}>
+              <div style={{ fontSize:13, fontWeight:800, color:'#6b21a8', marginBottom:10, display:'flex', alignItems:'center', gap:7 }}>
+                🚘 {openCharters.length} Charter Job{openCharters.length>1?'s':''} Available
+              </div>
+              {openCharters.map(c => {
+                const days = c.days || [];
+                const first = days[0] || {};
+                return (
+                  <div key={c.id} style={{ background:'#fff', border:'2px dashed #c4b5fd', borderRadius:16, padding:16, marginBottom:12, boxShadow:'0 4px 16px rgba(107,33,168,0.08)' }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8, flexWrap:'wrap' }}>
+                      <div style={{ display:'inline-flex', alignItems:'center', gap:5, background:'#f5f0ff', border:'1.5px solid #6b21a8', color:'#6b21a8',
+                        fontSize:10.5, fontWeight:800, textTransform:'uppercase', letterSpacing:0.7, padding:'3px 9px', borderRadius:11, marginBottom:8 }}>
+                        🚘 Charter · {days.length} day{days.length!==1?'s':''}
+                      </div>
+                      <div style={{ fontSize:19, fontWeight:800, color:'#6b21a8' }}>J${(c.adjustedTotal || c.total || 0).toLocaleString()}</div>
+                    </div>
+
+                    <div style={{ fontSize:15.5, fontWeight:700, color:'#1a1a2e' }}>{c.name || 'Charter customer'}</div>
+                    <div style={{ fontSize:12, color:'#6b7280', marginTop:3 }}>
+                      {first.date || '—'}{first.startTime ? ` · starts ${first.startTime}` : ''}{first.hours ? ` · ${first.hours}h reserved` : ''}
+                    </div>
+                    {first.purpose && <div style={{ fontSize:12, color:'#6b7280', marginTop:2 }}>Purpose: {first.purpose}</div>}
+
+                    {/* Full itinerary so the driver knows what they're taking on */}
+                    <div style={{ marginTop:10, background:'#faf7fd', border:'1px solid #ece3f5', borderRadius:10, padding:'11px 13px' }}>
+                      {days.map((d, di) => (
+                        <div key={di} style={{ marginBottom: di < days.length-1 ? 10 : 0 }}>
+                          {days.length > 1 && <div style={{ fontSize:11, fontWeight:800, color:'#6b21a8', marginBottom:3 }}>Day {di+1} · {d.date}{d.startTime?` · ${d.startTime}`:''}{d.hours?` · ${d.hours}h`:''}</div>}
+                          <div style={{ fontSize:12.5, color:'#374151', lineHeight:1.65 }}>
+                            <div>🟢 {d.start || '—'}</div>
+                            {(d.stops||[]).map((sp,x)=><div key={x}>📍 {sp}</div>)}
+                            <div>🏁 {d.destination || '—'}</div>
+                            {d.returnTo && <div>↩️ {d.returnTo}</div>}
+                            {d.airport && <div style={{ color:'#b45309' }}>✈️ {d.airport}</div>}
+                          </div>
+                          {d.driverNotes && <div style={{ fontSize:11.5, color:'#6b7280', fontStyle:'italic', marginTop:3 }}>📝 {d.driverNotes}</div>}
+                          <div style={{ fontSize:11, color:'#9199ad', marginTop:4 }}>{Math.round(d.km||0)} km · {d.mins||0} min driving</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'#6b7280', marginTop:9 }}>
+                      <span>{Math.round(c.totalKm||0)} km total</span>
+                      <span>{c.totalReservedHours || 0}h reserved</span>
+                    </div>
+                    {c.notes && <div style={{ fontSize:12, color:'#6b7280', fontStyle:'italic', marginTop:6 }}>Customer note: {c.notes}</div>}
+
+                    <button onClick={() => claimCharter(c.id)} disabled={claimingId === c.id}
+                      style={{ width:'100%', marginTop:12, padding:'14px', background: claimingId===c.id ? '#c4b5fd' : 'linear-gradient(135deg,#6b21a8,#4c1d95)',
+                        color:'#fff', border:'none', borderRadius:12, fontSize:14.5, fontWeight:800, cursor: claimingId===c.id ? 'default' : 'pointer' }}>
+                      {claimingId===c.id ? 'Accepting…' : '🚘 Accept this charter'}
+                    </button>
+                    <div style={{ fontSize:10.5, color:'#8a83a0', marginTop:7, textAlign:'center', lineHeight:1.5 }}>
+                      Price shown is an estimate — agree the final amount with the customer.<br/>
+                      Check you're free for the full booking before accepting.
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {/* Charter jobs assigned to this driver */}
           {myCharters.length > 0 && (
             <div style={{ marginBottom:18 }}>
@@ -8014,8 +8130,8 @@ function DriverDash({ go, user, setUser, setBookingId }) {
                           style={{ flex:1, textAlign:'center', textDecoration:'none', padding:'11px', background:'#25D366', color:'#fff', borderRadius:10, fontSize:13, fontWeight:700 }}>💬 WhatsApp</a>
                       )}
                     </div>
-                    <div style={{ fontSize:11, color:'#8a83a0', marginTop:8, textAlign:'center' }}>
-                      Arranged by VilleCabs. Contact the customer to confirm pickup details.
+                    <div style={{ fontSize:11, color:'#8a83a0', marginTop:8, textAlign:'center', lineHeight:1.5 }}>
+                      Contact the customer to confirm pickup details and agree the final price.
                     </div>
                   </div>
                 );
@@ -10280,9 +10396,7 @@ function CharterPage({ go, user }) {
         subtotal,
         discount,
         total,                       // customer-facing estimated total
-        quotedTotal:    total,       // may be adjusted by admin
-        adjustedTotal:  null,        // admin override, if any
-        adjustmentReason: null,
+        quotedTotal:    total,       // estimate; final price agreed with the driver
         pricingVersion: CHARTER_PRICING_VERSION,
         status:'pending',            // pending → underReview → confirmed → driverAssigned → inProgress → completed / cancelled / rejected
         assignedDriverId: null,
@@ -10344,16 +10458,13 @@ function CharterPage({ go, user }) {
           </p>
         </div>
 
-        {/* Rate card */}
-        <div style={{ background:'linear-gradient(135deg,#2a1a4a,#4c1d95)', borderRadius:16, padding:'18px 20px', marginBottom:20, color:'#fff' }}>
-          <div style={{ fontSize:12, fontWeight:700, letterSpacing:0.8, textTransform:'uppercase', color:'#c4b5fd', marginBottom:10 }}>How pricing works</div>
-          <div style={{ display:'flex', flexDirection:'column', gap:6, fontSize:13 }}>
-            <div style={{ display:'flex', justifyContent:'space-between' }}><span>First hour · then to 8 hrs · beyond 8</span><span style={{ fontWeight:700 }}>$1,500 · $1,000 · $1,500</span></div>
-            <div style={{ display:'flex', justifyContent:'space-between' }}><span>First 15 km each day</span><span style={{ fontWeight:700 }}>Included</span></div>
-            <div style={{ display:'flex', justifyContent:'space-between' }}><span>Each km beyond 15</span><span style={{ fontWeight:700 }}>J$80</span></div>
-            <div style={{ display:'flex', justifyContent:'space-between' }}><span>Airport pickup / drop-off</span><span style={{ fontWeight:700 }}>+J$1,500</span></div>
-            <div style={{ display:'flex', justifyContent:'space-between', paddingTop:8, marginTop:4, borderTop:'1px solid rgba(255,255,255,0.15)', color:'#a7f3d0' }}><span>6+ days booked</span><span style={{ fontWeight:800 }}>10% OFF</span></div>
+        {/* Multi-day discount */}
+        <div style={{ background:'linear-gradient(135deg,#2a1a4a,#4c1d95)', borderRadius:16, padding:'16px 20px', marginBottom:20, color:'#fff', display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap' }}>
+          <div>
+            <div style={{ fontSize:14.5, fontWeight:800 }}>Booking 6 days or more?</div>
+            <div style={{ fontSize:12.5, color:'#c4b5fd', marginTop:3 }}>A discount is applied automatically to your quote.</div>
           </div>
+          <div style={{ fontSize:22, fontWeight:900, color:'#a7f3d0' }}>10% OFF</div>
         </div>
 
         <div style={{ fontSize:13, fontWeight:800, color:'#2a1a4a', textTransform:'uppercase', letterSpacing:0.6, marginBottom:10 }}>Your charter days</div>
@@ -10496,7 +10607,7 @@ function CharterPage({ go, user }) {
 
         {/* Pricing disclaimer */}
         <div style={{ fontSize:11.5, color:'#8a83a0', lineHeight:1.6, background:'#fafafc', border:'1px solid #eee', borderRadius:10, padding:'10px 12px', marginBottom:20 }}>
-          <strong style={{ color:'#5b5470' }}>Please note:</strong> Final pricing may change if the itinerary, waiting time, route, or number of stops changes. Tolls, parking fees, accommodation, and other extraordinary expenses may be charged separately where applicable.
+          <strong style={{ color:'#5b5470' }}>Please note:</strong> This is an estimate. You can discuss and agree the final price directly with your driver once they accept your charter. Pricing may vary with the itinerary, waiting time, route, or number of stops, and tolls, parking, accommodation and other extraordinary expenses may be charged separately.
         </div>
 
         <div style={{ fontSize:13, fontWeight:800, color:'#2a1a4a', textTransform:'uppercase', letterSpacing:0.6, marginBottom:10 }}>Your details</div>
