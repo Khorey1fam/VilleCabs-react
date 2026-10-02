@@ -7773,7 +7773,14 @@ function DriverDash({ go, user, setUser, setBookingId }) {
       go('driver-active');
     } catch (e) {
       console.error('Could not start charter day:', e);
-      vcToast('Could not start this trip. Please try again.', 'error');
+      // Name the actual problem — a generic retry message sends the driver in
+      // circles when the real cause is a permission or connection issue.
+      const msg = e?.code === 'permission-denied'
+        ? 'You do not have permission to start this charter. Make sure it is still assigned to you.'
+        : (e?.code === 'unavailable' || e?.message?.includes('network'))
+          ? 'No connection. Check your signal and try again.'
+          : 'Could not start this trip. Please try again.';
+      vcToast(msg, 'error');
     }
     setStartingDay(null);
   };
