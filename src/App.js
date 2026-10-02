@@ -7429,6 +7429,14 @@ function DriverReviews({ user }) {
 }
 
 function DriverDash({ go, user, setUser, setBookingId }) {
+  // No <VilleMap> on this screen, so nothing else loads the Google Maps API —
+  // without this, geocoding a charter's addresses silently does nothing and
+  // starting a charter day fails with "could not locate the addresses".
+  useJsApiLoader({
+    googleMapsApiKey: GOOGLE_MAPS_KEY,
+    libraries: LIBRARIES,
+    version: 'weekly',
+  });
   const [rides,        setRides]        = useState([]);
   const [driverTab,    setDriverTab]    = useState('home');
   const [menuOpen,     setMenuOpen]     = useState(false);
@@ -7688,6 +7696,12 @@ function DriverDash({ go, user, setUser, setBookingId }) {
     try {
       // Fall back to geocoding for charters booked before coordinates were saved.
       let pickup = d.startCoords, dropoff = d.destCoords;
+      // Maps may still be initialising — wait briefly rather than giving up.
+      if (!pickup || !dropoff) {
+        for (let i = 0; i < 20 && !window.google?.maps?.Geocoder; i++) {
+          await new Promise(r => setTimeout(r, 250));
+        }
+      }
       if ((!pickup || !dropoff) && window.google?.maps) {
         const geo = new window.google.maps.Geocoder();
         const lookup = (addr) => new Promise(res => {
@@ -7699,10 +7713,13 @@ function DriverDash({ go, user, setUser, setBookingId }) {
         if (!pickup)  pickup  = await lookup(d.start);
         if (!dropoff) dropoff = await lookup(d.destination);
       }
+      // If geocoding still can't resolve them, don't block the driver — start the
+      // trip anchored on the town centre and warn them. The addresses are shown
+      // as text throughout, and they have the customer's number.
       if (!pickup || !dropoff) {
-        vcToast('Could not locate the addresses for this day. Call the customer to confirm.', 'error');
-        setStartingDay(null);
-        return;
+        pickup  = pickup  || MANCHESTER_CENTER;
+        dropoff = dropoff || MANCHESTER_CENTER;
+        vcToast('Could not pin these addresses on the map — use the written addresses and call the customer if unsure.', 'error');
       }
 
       const dData = driverProfileRef.current || {};
