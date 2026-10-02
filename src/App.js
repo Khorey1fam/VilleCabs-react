@@ -5673,13 +5673,13 @@ function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, 
   const searchStartRef = useRef(null);
 
   // Safety net: if the customer sits on this confirm screen while the ride is
-  // searching and nobody accepts within 3 minutes, expire it and show a message.
+  // searching and nobody accepts within 10 minutes, expire it and show a message.
   useEffect(() => {
     if (!bookingId || booking?.status !== 'searching') { searchStartRef.current = null; return; }
     if (searchStartRef.current === null) {
       searchStartRef.current = booking?.createdAt?.seconds ? booking.createdAt.seconds * 1000 : Date.now();
     }
-    const deadline = searchStartRef.current + 3*60*1000;
+    const deadline = searchStartRef.current + 10*60*1000;
     const fire = async () => {
       try {
         const snap = await getDoc(doc(db,'bookings',bookingId));
@@ -6101,7 +6101,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   const [sosCount,   setSosCount]   = useState(5);
   const [cancelling, setCancelling] = useState(false);
   const [cancelDone, setCancelDone] = useState(false);
-  const [noDriverFound, setNoDriverFound] = useState(false); // set if 3 min pass with no driver
+  const [noDriverFound, setNoDriverFound] = useState(false); // set if 10 min pass with no driver
   const [searchSecs, setSearchSecs] = useState(0);           // how long we've been searching
 
   // Count up while we're searching, based on when the booking was created so the
@@ -6191,7 +6191,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   };
 
   // ── 3-MINUTE NO-DRIVER TIMEOUT ──────────────────────────────────────────────
-  // If nobody accepts within 3 minutes, expire the ride, free it from the driver
+  // If nobody accepts within 10 minutes, expire the ride, free it from the driver
   // queue, and tell the customer to try again shortly. We anchor the deadline to
   // the booking's createdAt when available, else to when we first saw 'searching'
   // (stored in a ref so snapshot updates don't keep resetting the clock).
@@ -6207,7 +6207,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
         ? booking.createdAt.seconds * 1000
         : Date.now();
     }
-    const deadline = searchStartRef.current + 3 * 60 * 1000;
+    const deadline = searchStartRef.current + 10 * 60 * 1000;
 
     const fire = async () => {
       try {
@@ -6224,7 +6224,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
     // Instead of ONE long setTimeout (which mobile browsers freeze when the app
     // is backgrounded or the screen locks), we poll every 10s AND re-check when
     // the tab regains focus. This computes elapsed time from a fixed deadline,
-    // so it fires correctly even if the device slept through the 3 minutes.
+    // so it fires correctly even if the device slept through the 10 minutes.
     const check = () => { if (Date.now() >= deadline) fire(); };
     check(); // immediate check on mount (covers reopening an old searching ride)
     const iv = setInterval(check, 10000);
@@ -6562,7 +6562,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   }, [driverCoords?.lat, driverCoords?.lng, dropoffCoords?.lat, pickupCoords?.lat, booking?.enrouteToDropoff]);
 
   // ── Cancelled screen ──
-  // ── No driver found within 3 minutes ──
+  // ── No driver found within 10 minutes ──
   if (noDriverFound || booking?.status === 'expired') {
     return (
       <div style={{ ...s.content, display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh' }}>
@@ -6645,7 +6645,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
           </div>
 
           <div style={{ fontSize:11.5, color:'#8a83a0', maxWidth:330, lineHeight:1.6, marginBottom:22 }}>
-            Keep this screen open — we'll connect you as soon as a driver accepts. If nobody accepts within 3 minutes we'll let you know.
+            Keep this screen open — we'll connect you as soon as a driver accepts. If nobody accepts within 10 minutes we'll let you know.
           </div>
 
           {/* The single cancel action */}
@@ -7600,11 +7600,11 @@ function DriverDash({ go, user, setUser, setBookingId }) {
       const open = snap.docs
         .map(d => ({ id:d.id, ...d.data() }))
         .filter(r => !r.driverId && !(r.declinedBy||[]).includes(user.uid))
-        // Safety net: never show a request older than 3 minutes, even if the
+        // Safety net: never show a request older than 10 minutes, even if the
         // customer's app died before it could self-expire. Keeps the queue clean.
         .filter(r => {
           const created = r.createdAt?.seconds ? r.createdAt.seconds * 1000 : null;
-          return !created || (Date.now() - created) < 3 * 60 * 1000;
+          return !created || (Date.now() - created) < 10 * 60 * 1000;
         })
         .sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
       // Play sound when new ride arrives
@@ -7672,6 +7672,94 @@ function DriverDash({ go, user, setUser, setBookingId }) {
       e => console.warn('Open charter listen error:', e.message));
     return () => unsub();
   }, [user?.uid]);
+
+  // Start a charter day as a live trip.
+  // Rather than build a parallel ride flow for charters, we create a real
+  // booking for the day's route and hand it to the existing driver trip screen.
+  // That reuses the whole tested flow — map, live route, arrived, en route,
+  // complete — and the trip is tagged so it still reads as a Charter throughout.
+  const [startingDay, setStartingDay] = useState(null);
+  const startCharterDay = async (charter, dayIndex) => {
+    const key = `${charter.id}-${dayIndex}`;
+    if (startingDay) return;
+    const d = (charter.days || [])[dayIndex];
+    if (!d) return;
+    setStartingDay(key);
+    try {
+      // Fall back to geocoding for charters booked before coordinates were saved.
+      let pickup = d.startCoords, dropoff = d.destCoords;
+      if ((!pickup || !dropoff) && window.google?.maps) {
+        const geo = new window.google.maps.Geocoder();
+        const lookup = (addr) => new Promise(res => {
+          if (!addr) { res(null); return; }
+          geo.geocode({ address: addr + ', Jamaica' }, (r, st) => {
+            res(st === 'OK' && r?.[0] ? { lat:r[0].geometry.location.lat(), lng:r[0].geometry.location.lng() } : null);
+          });
+        });
+        if (!pickup)  pickup  = await lookup(d.start);
+        if (!dropoff) dropoff = await lookup(d.destination);
+      }
+      if (!pickup || !dropoff) {
+        vcToast('Could not locate the addresses for this day. Call the customer to confirm.', 'error');
+        setStartingDay(null);
+        return;
+      }
+
+      const dData = driverProfileRef.current || {};
+      const ref = await addDoc(collection(db,'bookings'), {
+        // Charter identity — keeps the badge and context through the whole trip
+        isCharter:      true,
+        charterId:      charter.id,
+        charterDay:     dayIndex + 1,
+        charterDayCount: (charter.days || []).length,
+        charterStops:   d.stops || [],
+        charterNotes:   d.driverNotes || '',
+        charterPurpose: d.purpose || '',
+        charterHours:   d.hours || null,
+
+        customerId:     charter.customerId || null,
+        customerName:   charter.name || 'Charter customer',
+        customerPhone:  charter.phone || '',
+        customerEmail:  charter.email || '',
+
+        pickup:  { address: d.start || 'Charter start', lat: pickup.lat, lng: pickup.lng },
+        dropoff: { address: d.destination || 'Charter destination', lat: dropoff.lat, lng: dropoff.lng },
+
+        driverId:       user.uid,
+        driverName:     user.name || dData.name || 'Driver',
+        driverPhone:    dData.phone || '',
+        vehicleMake:    dData.vehicleMake  || '',
+        vehicleModel:   dData.vehicleModel || '',
+        vehicleColor:   dData.vehicleColor || '',
+        licensePlate:   dData.licensePlate || '',
+        rating:         dData.rating || 5.0,
+
+        fare:           charter.adjustedTotal || charter.total || 0,
+        vehicleType:    'VilleCabs Charter',
+        paymentMethod:  'Cash',
+        distanceKm:     Math.round(d.km || 0),
+        status:         'active',
+        createdAt:      serverTimestamp(),
+        startedAt:      serverTimestamp(),
+      });
+
+      // Mark the charter in progress so the admin can see it running.
+      try {
+        await updateDoc(doc(db,'charterRequests',charter.id), {
+          status: 'inProgress',
+          driverStartedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      } catch(e) {}
+
+      setBookingId(ref.id);
+      go('driver-active');
+    } catch (e) {
+      console.error('Could not start charter day:', e);
+      vcToast('Could not start this trip. Please try again.', 'error');
+    }
+    setStartingDay(null);
+  };
 
   // Claim a charter. Transactional so two drivers tapping at the same moment
   // can't both take it — exactly like the ride-accept race guard.
@@ -8103,7 +8191,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
                     {/* Itinerary for each day */}
                     <div style={{ marginTop:10, borderTop:'1px solid #f0f0f4', paddingTop:10 }}>
                       {days.map((d, di) => (
-                        <div key={di} style={{ marginBottom: di < days.length-1 ? 10 : 0 }}>
+                        <div key={di} style={{ marginBottom:12, paddingBottom: di < days.length-1 ? 12 : 0, borderBottom: di < days.length-1 ? '1px dashed #ece3f5' : 'none' }}>
                           {days.length > 1 && <div style={{ fontSize:11, fontWeight:800, color:'#6b21a8', marginBottom:3 }}>Day {di+1} · {d.date}{d.startTime?` · ${d.startTime}`:''}</div>}
                           <div style={{ fontSize:12.5, color:'#374151', lineHeight:1.65 }}>
                             <div>🟢 {d.start || '—'}</div>
@@ -8112,6 +8200,11 @@ function DriverDash({ go, user, setUser, setBookingId }) {
                             {d.returnTo && <div>↩️ {d.returnTo}</div>}
                           </div>
                           {d.driverNotes && <div style={{ fontSize:11.5, color:'#6b7280', fontStyle:'italic', marginTop:3 }}>📝 {d.driverNotes}</div>}
+                          <button onClick={() => startCharterDay(c, di)} disabled={startingDay === `${c.id}-${di}`}
+                            style={{ width:'100%', marginTop:9, padding:'12px', background: startingDay===`${c.id}-${di}` ? '#c4b5fd' : 'linear-gradient(135deg,#6b21a8,#4c1d95)',
+                              color:'#fff', border:'none', borderRadius:10, fontSize:13.5, fontWeight:800, cursor: startingDay===`${c.id}-${di}` ? 'default' : 'pointer' }}>
+                            {startingDay===`${c.id}-${di}` ? 'Starting…' : (days.length > 1 ? `▶ Start day ${di+1}` : '▶ Start this charter')}
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -8712,6 +8805,19 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
         lastOnline:      serverTimestamp(),
       });
     } catch(e) {}
+    // If this was a charter day, mark the charter complete when it was the last
+    // day — otherwise leave it in progress for the remaining days.
+    if (booking?.isCharter && booking?.charterId) {
+      try {
+        const isLastDay = (booking.charterDay || 1) >= (booking.charterDayCount || 1);
+        await updateDoc(doc(db,'charterRequests', booking.charterId), {
+          status: isLastDay ? 'completed' : 'inProgress',
+          ...(isLastDay ? { driverCompletedAt: serverTimestamp() } : {}),
+          updatedAt: serverTimestamp(),
+        });
+      } catch(e) { console.warn('Could not update charter status:', e); }
+    }
+
     // Send receipt email to customer (non-critical — never blocks completion).
     // Uses the email stored ON THE BOOKING: drivers are not permitted to read
     // customer profiles, so the old profile lookup was always denied here and
@@ -8777,6 +8883,25 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
   const markers = arrived
     ? (dropoffCoords ? [{ position: dropoffCoords, label:'B', title:'Drop-off' }] : [])
     : (pickupCoords  ? [{ position: pickupCoords,  label:'A', title:'Pickup'   }] : []);
+
+  // Charter banner — keeps the driver aware this is a day-hire with stops,
+  // not an ordinary point-to-point ride.
+  const charterBanner = booking?.isCharter ? (
+    <div style={{ background:'#f5f0ff', border:'1.5px solid #c4b5fd', borderRadius:12, padding:'11px 13px', margin:'0 0 12px' }}>
+      <div style={{ fontSize:11.5, fontWeight:800, color:'#6b21a8', textTransform:'uppercase', letterSpacing:0.6 }}>
+        🚘 Charter{booking.charterDayCount > 1 ? ` · Day ${booking.charterDay} of ${booking.charterDayCount}` : ''}
+        {booking.charterHours ? ` · ${booking.charterHours}h reserved` : ''}
+      </div>
+      {booking.charterPurpose && <div style={{ fontSize:12, color:'#5b5470', marginTop:3 }}>{booking.charterPurpose}</div>}
+      {(booking.charterStops || []).length > 0 && (
+        <div style={{ fontSize:12, color:'#374151', marginTop:6, lineHeight:1.6 }}>
+          <div style={{ fontSize:10.5, color:'#8a83a0', fontWeight:700 }}>STOPS ALONG THE WAY</div>
+          {booking.charterStops.map((sp, i) => <div key={i}>📍 {sp}</div>)}
+        </div>
+      )}
+      {booking.charterNotes && <div style={{ fontSize:11.5, color:'#6b7280', fontStyle:'italic', marginTop:6 }}>📝 {booking.charterNotes}</div>}
+    </div>
+  ) : null;
 
   // Show the rider's LIVE phone location (a blue dot) on top of the pinned
   // pickup, so before arrival the driver can see where the customer actually is.
@@ -8857,6 +8982,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
         </VilleMap>
       </div>
       <div style={{ padding:14 }}>
+        {charterBanner}
         {booking ? (
           <>
             <div style={{ background:'rgba(232,180,0,0.1)', border:'1.5px solid rgba(232,180,0,0.4)', borderRadius:12, padding:14, marginBottom:12 }}>
@@ -10374,6 +10500,11 @@ function CharterPage({ go, user }) {
           stops:(d.stops||[]).filter(Boolean).map(sp=>sp.address),
           destination:d.destination?.address||'',
           returnTo: d.hasReturn ? (d.returnTo?.address || d.start?.address || '') : '',
+          // Coordinates too — the driver's ride flow needs real lat/lng to draw
+          // the route and navigate, not just address text.
+          startCoords: d.start?.lat ? { lat:d.start.lat, lng:d.start.lng } : null,
+          destCoords:  d.destination?.lat ? { lat:d.destination.lat, lng:d.destination.lng } : null,
+          stopCoords:  (d.stops||[]).filter(Boolean).map(sp => sp?.lat ? { lat:sp.lat, lng:sp.lng } : null),
           airport: detectAirport(d.destination) || ((d.stops||[]).map(detectAirport).find(Boolean)) || null,
           km: Math.round((d.route?.km||0)*10)/10,
           mins: d.route?.mins||0,
