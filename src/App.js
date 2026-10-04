@@ -297,6 +297,36 @@ const registerCustomerPushToken = async (uid) => registerPushToken(uid, 'custome
 // Register a driver's push token so a Cloud Function can push new-ride alerts
 const registerDriverPushToken = async (uid) => registerPushToken(uid, 'drivers');
 
+// ── Driver job alert ──────────────────────────────────────────────────────────
+// Sound + vibration + a browser notification for any new work arriving in the
+// driver's queue. Scheduled rides and charters previously appeared silently —
+// a driver only found them by chance, which loses jobs.
+function driverJobAlert({ title, body, tag }) {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) {
+      const ctx = new AC();
+      // Two-tone chime so it is distinguishable from the single-tone ride ping.
+      [[660,0],[880,0.22]].forEach(([freq, at]) => {
+        const osc = ctx.createOscillator(); const g = ctx.createGain();
+        osc.connect(g); g.connect(ctx.destination);
+        osc.frequency.value = freq; osc.type = 'sine';
+        g.gain.setValueAtTime(0.0001, ctx.currentTime + at);
+        g.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + at + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + at + 0.45);
+        osc.start(ctx.currentTime + at); osc.stop(ctx.currentTime + at + 0.5);
+      });
+      setTimeout(() => ctx.close(), 1200);
+    }
+  } catch(e) {}
+  try { if (navigator.vibrate) navigator.vibrate([200,100,200,100,200]); } catch(e) {}
+  try {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      new Notification(title, { body, icon:'/logo.png', tag });
+    }
+  } catch(e) {}
+}
+
 // ── Ride type badge ───────────────────────────────────────────────────────────
 // Drivers need to tell at a glance whether a job is an immediate ride, a
 // pre-booked scheduled trip, or a Charter day-hire — they behave very
@@ -7446,6 +7476,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   const [myCharters,   setMyCharters]   = useState([]);   // charter jobs assigned to this driver
   const [openCharters, setOpenCharters] = useState([]);  // confirmed charters any driver can claim
   const [claimingId,   setClaimingId]   = useState(null);
+  const charterSeenRef = useRef(null);   // seeded on first snapshot so the backlog stays silent
   const [nowTick, setNowTick] = useState(Date.now()); // drives the live "requested X ago" age
   const [loading,      setLoading]      = useState(true);
   const [activeRideId, setActiveRideId] = useState(null);
@@ -7673,11 +7704,32 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   useEffect(() => {
     if (!user?.uid) return;
     const q = query(collection(db,'charterRequests'), where('status','==','pending'));
-    const unsub = onSnapshot(q,
-      snap => setOpenCharters(
-        snap.docs.map(d => ({ id:d.id, ...d.data() })).filter(c => !c.assignedDriverId)
-      ),
-      e => console.warn('Open charter listen error:', e.message));
+    const unsub = onSnapshot(q, snap => {
+      const list = snap.docs.map(d => ({ id:d.id, ...d.data() })).filter(c => !c.assignedDriverId);
+
+      // Alert on new charter requests. First snapshot seeds silently so the
+      // existing backlog doesn't fire an alarm every time the app opens.
+      if (charterSeenRef.current === null) {
+        charterSeenRef.current = new Set(list.map(c => c.id));
+      } else {
+        const fresh = list.filter(c => !charterSeenRef.current.has(c.id));
+        fresh.forEach(c => charterSeenRef.current.add(c.id));
+        if (fresh.length) {
+          const c = fresh[0];
+          const days = c.days || [];
+          const d0 = days[0] || {};
+          const when = d0.date ? `${d0.date}${d0.startTime ? ` ${d0.startTime}` : ''}` : 'date TBC';
+          const dayTxt = days.length > 1 ? `${days.length} days` : `${d0.hours || '?'}h`;
+          driverJobAlert({
+            title: '🚘 New charter request',
+            body: `${when} · ${dayTxt} · ${shortAddress(d0.start) || 'pickup'} → ${shortAddress(d0.destination) || 'destination'}${c.total ? ` · J$${c.total.toLocaleString()}` : ''}`,
+            tag: 'new-charter',
+          });
+          vcToast(`🚘 New charter request — ${when}`, 'info');
+        }
+      }
+      setOpenCharters(list);
+    }, e => console.warn('Open charter listen error:', e.message));
     return () => unsub();
   }, [user?.uid]);
 
@@ -13006,13 +13058,36 @@ function ScheduledRidesCard({ user, go }) {
 function DriverScheduledRides({ user, go, setBookingId }) {
   const [scheduled, setScheduled] = useState([]);
   const [busy,      setBusy]      = useState('');
+  const seenRef = useRef(null);   // null until the first snapshot is seeded
   useEffect(() => {
     if (!user?.uid) return;
     const q = query(collection(db,'bookings'), where('status','==','scheduled'));
     const unsub = onSnapshot(q, snap => {
-      setScheduled(snap.docs.map(d=>({id:d.id,...d.data()}))
+      const list = snap.docs.map(d=>({id:d.id,...d.data()}))
         .filter(r => !r.driverId || r.driverId === user.uid)
-        .sort((a,b)=>(a.scheduledFor?.seconds||0)-(b.scheduledFor?.seconds||0)));
+        .sort((a,b)=>(a.scheduledFor?.seconds||0)-(b.scheduledFor?.seconds||0));
+
+      // Alert on genuinely NEW scheduled rides. The first snapshot is seeded
+      // silently so we don't fire for the existing backlog on app open.
+      if (seenRef.current === null) {
+        seenRef.current = new Set(list.map(r => r.id));
+      } else {
+        const fresh = list.filter(r => !seenRef.current.has(r.id) && !r.driverId);
+        fresh.forEach(r => seenRef.current.add(r.id));
+        if (fresh.length) {
+          const r = fresh[0];
+          const when = r.scheduledFor?.seconds
+            ? new Date(r.scheduledFor.seconds*1000).toLocaleString('en-JM',{ weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })
+            : 'a scheduled time';
+          driverJobAlert({
+            title: '📅 New scheduled ride',
+            body: `${when} · ${shortAddress(r.pickup?.address) || 'pickup'} → ${shortAddress(r.dropoff?.address) || 'drop-off'}${r.fare ? ` · J$${r.fare.toLocaleString()}` : ''}`,
+            tag: 'new-scheduled',
+          });
+          vcToast(`📅 New scheduled ride for ${when}`, 'info');
+        }
+      }
+      setScheduled(list);
     }, ()=>{});
     return () => unsub();
   }, [user]);
@@ -13063,6 +13138,10 @@ function DriverScheduledRides({ user, go, setBookingId }) {
         const mine = r.driverId === user.uid;
         return (
           <div key={r.id} style={{ background: mine ? '#eff6ff' : '#fff', border:`1px solid ${mine ? '#bfdbfe' : '#e5e7eb'}`, borderRadius:12, padding:'12px 14px', marginBottom:8 }}>
+            <div style={{ display:'inline-flex', alignItems:'center', gap:5, background:'#fffbeb', border:'1.5px solid #b45309', color:'#b45309',
+              fontSize:10, fontWeight:800, textTransform:'uppercase', letterSpacing:0.6, padding:'2px 8px', borderRadius:10, marginBottom:6 }}>
+              📅 Scheduled
+            </div>
             <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:4 }}>{fmtScheduled(r.scheduledFor)} · J${(r.fare||0).toLocaleString()}</div>
             <div style={{ fontSize:12, color:'#555', marginBottom:8 }}>{shortAddress(r.pickup?.address)||'Pickup'} → {shortAddress(r.dropoff?.address)||'Drop-off'} · {r.vehicleType} · {r.customerName||'Customer'}</div>
             {!mine && <button disabled={busy===r.id} onClick={() => acceptRide(r)} style={{ padding:'8px 14px', background:'#1d4ed8', color:'#fff', border:'none', borderRadius:10, fontSize:12, fontWeight:700, cursor:'pointer' }}>{busy===r.id?'Accepting...':'✋ Accept Scheduled Ride'}</button>}
