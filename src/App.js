@@ -5051,6 +5051,8 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
   const [referralMsg,   setReferralMsg]   = useState(null); // { text, ok }
   const [referralDocId, setReferralDocId] = useState(null); // referrer's customer id, once validated
   const [referralChecking, setReferralChecking] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);   // final review before the booking is created
+  useBodyScrollLock(confirmOpen);
   const [promoMsg,   setPromoMsg]   = useState('');
   const [promoData,  setPromoData]  = useState(null); // { id, discount, code }
   const [promoLoading, setPromoLoading] = useState(false);
@@ -5622,13 +5624,92 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
               setError('Please pick a date and time for your ride first.');
               return;
             }
-            handleBook();
+            // Open a final review instead of booking straight away. Creating the
+            // booking here put it in every driver's queue before the customer
+            // had really committed — so a driver could accept a ride the
+            // customer was still only pricing up.
+            setConfirmOpen(true);
           }} disabled={loading}
           style={{ width:'100%', padding:'16px', background:loading?'#2a2a2a':'linear-gradient(135deg,#6A1BB9,#4c1d95)', color:loading?'rgba(255,255,255,0.3)':'#ffffff', border:'none', borderRadius:14, fontSize:15, fontWeight:700, cursor:loading?'default':'pointer', boxShadow:loading?'none':'0 4px 20px rgba(106,27,185,0.5)', letterSpacing:0.3, marginTop:4 }}>
           {loading
             ? (rideTime==='later' ? 'Scheduling ride...' : 'Creating booking...')
-            : (rideTime==='later' ? '🗓️ Schedule Ride — J$' : 'Book Ride — J$') + calcFinalPrice(v).toLocaleString()}
+            : (rideTime==='later' ? '🗓️ Review & Schedule — J$' : 'Review & Book — J$') + calcFinalPrice(v).toLocaleString()}
         </button>
+
+        {/* Final review — nothing is sent to drivers until this is confirmed */}
+        {confirmOpen && createPortal(
+          <div onClick={() => !loading && setConfirmOpen(false)}
+            style={{ position:'fixed', inset:0, zIndex:4000, background:'rgba(0,0,0,0.55)', display:'flex', alignItems:'flex-end', justifyContent:'center' }}>
+            <div onClick={e => e.stopPropagation()}
+              style={{ background:'#fff', width:'100%', maxWidth:460, borderRadius:'18px 18px 0 0', padding:'18px 18px 24px', maxHeight:'88vh', overflowY:'auto' }}>
+              <div style={{ width:38, height:4, background:'#e5e7eb', borderRadius:2, margin:'0 auto 14px' }}/>
+              <div style={{ fontSize:17, fontWeight:800, color:'#2a1a4a', marginBottom:4 }}>
+                {rideTime==='later' ? 'Confirm your scheduled ride' : 'Confirm your ride'}
+              </div>
+              <div style={{ fontSize:12.5, color:'#8a83a0', marginBottom:16, lineHeight:1.5 }}>
+                We'll start looking for a driver once you confirm.
+              </div>
+
+              {/* Route */}
+              <div style={{ display:'flex', gap:10, marginBottom:14 }}>
+                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', paddingTop:4 }}>
+                  <div style={{ width:9, height:9, borderRadius:'50%', background:GREEN }}/>
+                  <div style={{ width:2, flex:1, minHeight:24, background:'#e9d5ff', margin:'3px 0' }}/>
+                  <div style={{ width:9, height:9, borderRadius:'50%', background:'#6b21a8' }}/>
+                </div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ marginBottom:12 }}>
+                    <div style={{ fontSize:10, color:'#8a83a0', fontWeight:700 }}>PICKUP</div>
+                    <div style={{ fontSize:13, color:'#1a1a2e', lineHeight:1.4 }}>{pickupData?.address || '—'}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize:10, color:'#8a83a0', fontWeight:700 }}>DROP-OFF</div>
+                    <div style={{ fontSize:13, color:'#1a1a2e', lineHeight:1.4 }}>{dropoffData?.address || '—'}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ borderTop:'1px solid #f0f0f4', paddingTop:12, marginBottom:12, fontSize:13 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:7 }}>
+                  <span style={{ color:'#8a83a0' }}>Vehicle</span>
+                  <span style={{ color:'#1a1a2e', fontWeight:600 }}>{v?.name} · {pickupData?.passengers || 1} passenger{(pickupData?.passengers||1)!==1?'s':''}</span>
+                </div>
+                {rideTime==='later' && scheduledAt && (
+                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:7 }}>
+                    <span style={{ color:'#8a83a0' }}>When</span>
+                    <span style={{ color:'#1a1a2e', fontWeight:600 }}>{new Date(scheduledAt).toLocaleString('en-JM',{ weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })}</span>
+                  </div>
+                )}
+                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:7 }}>
+                  <span style={{ color:'#8a83a0' }}>Payment</span>
+                  <span style={{ color:'#1a1a2e', fontWeight:600 }}>Cash to your driver</span>
+                </div>
+                {promoData && (
+                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:7, color:GREEN }}>
+                    <span>Promo {promoData.code}</span><span style={{ fontWeight:700 }}>{promoLabel()}</span>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', borderTop:'2px solid #e9d5ff', paddingTop:12, marginBottom:16 }}>
+                <span style={{ fontSize:14, fontWeight:800, color:'#2a1a4a' }}>Total</span>
+                <span style={{ fontSize:23, fontWeight:800, color:'#6b21a8' }}>J${calcFinalPrice(v).toLocaleString()}</span>
+              </div>
+
+              {error && <div style={{ ...s.errBox, marginBottom:12 }}>⚠️ {error}</div>}
+
+              <button onClick={() => { setConfirmOpen(false); handleBook(); }} disabled={loading}
+                style={{ width:'100%', padding:'15px', background: loading ? '#c4b5fd' : 'linear-gradient(135deg,#6A1BB9,#4c1d95)', color:'#fff', border:'none', borderRadius:13, fontSize:15, fontWeight:800, cursor: loading?'default':'pointer', marginBottom:9 }}>
+                {loading ? 'Please wait…' : (rideTime==='later' ? '🗓️ Confirm scheduled ride' : '✓ Confirm — find me a driver')}
+              </button>
+              <button onClick={() => setConfirmOpen(false)} disabled={loading}
+                style={{ width:'100%', padding:'13px', background:'#fff', border:'1px solid #e5e7eb', borderRadius:13, fontSize:13.5, fontWeight:700, color:'#6b7280', cursor:'pointer' }}>
+                Go back and change
+              </button>
+            </div>
+          </div>,
+          document.body
+        )}
       </div>
 
       {/* ── CHOOSE RIDE BANNERS ── */}
