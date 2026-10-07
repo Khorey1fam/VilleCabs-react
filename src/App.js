@@ -7539,6 +7539,254 @@ function DriverReviews({ user }) {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  DRIVER "BUSY TIMES"
+//
+//  Reads the snapshot the admin publishes at config/demandSchedule (built in
+//  AdminPanel.js from completed rides + requests that found no driver) and
+//  shows drivers when it is actually worth being online.
+//
+//  This component deliberately contains NO demand maths and NO hardcoded time
+//  blocks — the block boundaries and labels travel inside the published doc, so
+//  there is only ever one definition of them, in the admin panel. If the admin
+//  has not published, or the data is still too thin to be trustworthy, this
+//  shows an honest note rather than inventing a rush hour. A driver who waits
+//  around for a peak that was never real stops believing the app.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const DEMAND_JAM_OFFSET_MS = 5 * 3600 * 1000;      // Jamaica is UTC-5, no DST
+const DEMAND_DAY_NAMES  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const DEMAND_DAY_SHORT  = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+const DEMAND_LEVEL_STYLE = {
+  peak:   { bg:'#6b21a8', fg:'#fff',    name:'Peak' },
+  busy:   { bg:'#a855f7', fg:'#fff',    name:'Busy' },
+  steady: { bg:'#e9d5ff', fg:'#5b1a94', name:'Steady' },
+  quiet:  { bg:'#f6f3fb', fg:'#9199ad', name:'Quiet' },
+  thin:   { bg:'#f3f4f6', fg:'#b0b4c0', name:'Not enough data' },
+};
+
+// Where are we right now, in Jamaica?
+function demandNowJam() {
+  const d = new Date(Date.now() - DEMAND_JAM_OFFSET_MS);
+  return { day: d.getUTCDay(), hour: d.getUTCHours() };
+}
+
+// Which published block does this hour fall in? Boundaries come from the doc.
+function demandBlockForHour(blocks, hour) {
+  if (!blocks || !blocks.length) return -1;
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i];
+    if (b.start == null || b.end == null) continue;
+    // A block whose end is <= its start wraps past midnight (e.g. 11pm–5am)
+    const wraps = b.end <= b.start;
+    if (wraps ? (hour >= b.start || hour < b.end) : (hour >= b.start && hour < b.end)) return i;
+  }
+  return -1;
+}
+
+function DriverBusyTimes() {
+  const [sched, setSched] = useState(null);
+  const [open,  setOpen]  = useState(false);
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'config', 'demandSchedule'),
+      snap => setSched(snap.exists() ? snap.data() : null),
+      () => setSched(null));
+    return () => unsub();
+  }, []);
+
+  // Nothing published at all, or the admin hid it — show nothing.
+  if (!sched || sched.hidden) return null;
+
+  const blocks = Array.isArray(sched.blocks) ? sched.blocks : [];
+  const cells  = sched.cells || {};
+  const cellAt = (day, blockKey) => cells[`${day}-${blockKey}`] || null;
+  const levelOf = (day, blockKey) => {
+    const c = cellAt(day, blockKey);
+    return c ? (c.level || 'quiet') : 'quiet';
+  };
+
+  // ── Published, but the pattern isn't trustworthy yet. Say so plainly. ──
+  if (!sched.ready) {
+    return (
+      <div style={{ margin:'0 14px 12px', background:'#f9fafb', border:'1px solid #e5e7eb',
+        borderRadius:14, padding:'13px 15px', display:'flex', gap:11, alignItems:'flex-start' }}>
+        <span style={{ fontSize:19, lineHeight:1 }}>📅</span>
+        <div>
+          <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:3 }}>Busy times — still learning</div>
+          <div style={{ fontSize:11, color:'#6b7280', lineHeight:1.6 }}>
+            There aren't enough completed rides yet to say which days and times are reliably busy.
+            We'd rather tell you nothing than send you out for a rush that isn't real. Check back soon.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const now   = demandNowJam();
+  const nowBi = demandBlockForHour(blocks, now.hour);
+  const nowBlock = nowBi >= 0 ? blocks[nowBi] : null;
+  const nowLevel = nowBlock ? levelOf(now.day, nowBlock.key) : 'quiet';
+  const nowBusy  = nowLevel === 'peak' || nowLevel === 'busy';
+
+  // Next peak/busy window within the coming week, starting from the next block.
+  let next = null;
+  if (blocks.length) {
+    for (let step = 0; step < 7 * blocks.length; step++) {
+      const absolute = (nowBi >= 0 ? nowBi : 0) + step + 1;
+      const day = (now.day + Math.floor(absolute / blocks.length)) % 7;
+      const bi  = absolute % blocks.length;
+      const lv  = levelOf(day, blocks[bi].key);
+      if (lv === 'peak' || lv === 'busy') {
+        const inDays = Math.floor(absolute / blocks.length);
+        next = {
+          day, block: blocks[bi], level: lv,
+          when: inDays === 0 ? 'Today' : inDays === 1 ? 'Tomorrow' : DEMAND_DAY_NAMES[day],
+        };
+        break;
+      }
+    }
+  }
+
+  const todayBlocks = blocks.map(b => ({ ...b, level: levelOf(now.day, b.key) }));
+  const stamp = sched.generatedAt?.seconds
+    ? new Date(sched.generatedAt.seconds * 1000).toLocaleDateString('en-JM', { day:'numeric', month:'short' })
+    : null;
+
+  return (
+    <div style={{ margin:'0 14px 12px', background:'#fff', border:'1px solid #e9d5ff',
+      borderRadius:14, overflow:'hidden', boxShadow:'0 2px 10px rgba(107,33,168,0.07)' }}>
+
+      {/* ── RIGHT NOW ── */}
+      <div style={{ padding:'13px 15px',
+        background: nowBusy ? 'linear-gradient(135deg,#6b21a8,#4c1d95)' : '#faf8fe' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+          <span style={{ fontSize:20, lineHeight:1 }}>{nowBusy ? '⚡' : '📅'}</span>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontSize:13, fontWeight:800, color: nowBusy ? '#fff' : '#1a1a2e', marginBottom:2 }}>
+              {nowBusy
+                ? `Busy right now — ${nowBlock.label}`
+                : nowLevel === 'thin'
+                  ? 'No clear pattern for right now'
+                  : `${nowLevel === 'steady' ? 'Steady' : 'Quiet'} right now`}
+            </div>
+            <div style={{ fontSize:11, color: nowBusy ? 'rgba(255,255,255,0.8)' : '#6b7280' }}>
+              {nowBusy
+                ? 'Riders usually requesting trips at this time'
+                : next
+                  ? `Next rush: ${next.when} · ${next.block.label} (${next.block.range})`
+                  : 'No busy window identified yet'}
+            </div>
+          </div>
+          <button onClick={() => setOpen(o => !o)} style={{
+            background: nowBusy ? 'rgba(255,255,255,0.18)' : '#f5f0ff',
+            border: `1px solid ${nowBusy ? 'rgba(255,255,255,0.3)' : '#e9d5ff'}`,
+            color: nowBusy ? '#fff' : '#6b21a8',
+            borderRadius:18, padding:'5px 12px', fontSize:11, fontWeight:700,
+            cursor:'pointer', flexShrink:0 }}>
+            {open ? 'Hide' : 'Week'}
+          </button>
+        </div>
+      </div>
+
+      {/* ── TODAY, BLOCK BY BLOCK ── */}
+      <div style={{ padding:'12px 15px', borderTop:'1px solid #f3f0f8' }}>
+        <div style={{ fontSize:10, color:'#8a83a0', fontWeight:700, textTransform:'uppercase',
+          letterSpacing:0.4, marginBottom:8 }}>{DEMAND_DAY_NAMES[now.day]}</div>
+        <div style={{ display:'flex', gap:5, overflowX:'auto', paddingBottom:2 }}>
+          {todayBlocks.map((b, i) => {
+            const st = DEMAND_LEVEL_STYLE[b.level] || DEMAND_LEVEL_STYLE.quiet;
+            const isNow = i === nowBi;
+            return (
+              <div key={b.key} style={{
+                flexShrink:0, minWidth:68, textAlign:'center', borderRadius:10,
+                padding:'7px 8px', background:st.bg, color:st.fg,
+                border: isNow ? '2px solid #1a1a2e' : '1px solid transparent' }}>
+                <div style={{ fontSize:11, fontWeight:800 }}>{b.label}</div>
+                <div style={{ fontSize:9, opacity:0.85, marginTop:1 }}>{b.range}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── FULL WEEK (expandable) ── */}
+      {open && (
+        <div style={{ padding:'12px 15px', borderTop:'1px solid #f3f0f8', background:'#fcfbfe' }}>
+          <div style={{ overflowX:'auto' }}>
+            <table style={{ borderCollapse:'separate', borderSpacing:3, minWidth:300, width:'100%' }}>
+              <thead>
+                <tr>
+                  <th/>
+                  {blocks.map(b => (
+                    <th key={b.key} style={{ fontSize:8, color:'#8a83a0', fontWeight:700, paddingBottom:4 }}>
+                      {b.label.replace('Late Night','Late').replace('Early AM','Early')}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {DEMAND_DAY_SHORT.map((dn, di) => (
+                  <tr key={dn}>
+                    <td style={{ fontSize:10, fontWeight:700, color: di === now.day ? '#6b21a8' : '#1a1a2e',
+                      paddingRight:5, whiteSpace:'nowrap' }}>{dn}</td>
+                    {blocks.map(b => {
+                      const lv = levelOf(di, b.key);
+                      const st = DEMAND_LEVEL_STYLE[lv] || DEMAND_LEVEL_STYLE.quiet;
+                      return (
+                        <td key={b.key} style={{ background:st.bg, color:st.fg, borderRadius:6,
+                          height:22, textAlign:'center', fontSize:9, fontWeight:800 }}>
+                          {lv === 'peak' ? '🔥' : lv === 'busy' ? '•' : lv === 'thin' ? '?' : ''}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {Array.isArray(sched.topHours) && sched.topHours.length > 0 && (
+            <div style={{ marginTop:12 }}>
+              <div style={{ fontSize:10, color:'#8a83a0', fontWeight:700, textTransform:'uppercase',
+                letterSpacing:0.4, marginBottom:6 }}>Most-requested hours</div>
+              <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                {sched.topHours.map(h => (
+                  <span key={h.hour} style={{ background:'#f5f0ff', border:'1px solid #e9d5ff',
+                    color:'#5b1a94', borderRadius:14, padding:'4px 11px', fontSize:11, fontWeight:700 }}>
+                    {h.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div style={{ display:'flex', flexWrap:'wrap', gap:10, marginTop:12, paddingTop:10,
+            borderTop:'1px solid #f0edf6' }}>
+            {['peak','busy','steady','quiet','thin'].map(k => (
+              <span key={k} style={{ display:'inline-flex', alignItems:'center', gap:4 }}>
+                <span style={{ width:11, height:11, borderRadius:3,
+                  background:DEMAND_LEVEL_STYLE[k].bg, border:'1px solid #e5e7eb', display:'inline-block' }}/>
+                <span style={{ fontSize:9, color:'#8a83a0' }}>{DEMAND_LEVEL_STYLE[k].name}</span>
+              </span>
+            ))}
+          </div>
+
+          {/* Sample size stays visible — a driver deserves to know how much
+              history this is built on before they plan their week around it. */}
+          <div style={{ fontSize:9, color:'#9199ad', marginTop:10, lineHeight:1.6 }}>
+            Based on {sched.totalRides || 0} completed ride{sched.totalRides === 1 ? '' : 's'}
+            {sched.totalUnmet ? ` and ${sched.totalUnmet} request${sched.totalUnmet === 1 ? '' : 's'} with no driver available` : ''}
+            {sched.daysOfData ? ` over ${sched.daysOfData} day${sched.daysOfData === 1 ? '' : 's'}` : ''}
+            {stamp ? ` · updated ${stamp}` : ''}. A guide, not a guarantee.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DriverDash({ go, user, setUser, setBookingId }) {
   // No <VilleMap> on this screen, so nothing else loads the Google Maps API —
   // without this, geocoding a charter's addresses silently does nothing and
@@ -7703,13 +7951,6 @@ function DriverDash({ go, user, setUser, setBookingId }) {
       }
     }, ()=>{});
     return () => unsub();
-    // Load driver rating
-    getDoc(doc(db,'drivers',user.uid)).then(snap => {
-      if (snap.exists()) {
-        const d = snap.data();
-        setDriverRating({ avg: d.rating || 5.0, count: d.ratingCount || 0 });
-      }
-    }).catch(()=>{});
   }, [user]);
 
   // ── Listen for incoming ride requests ─────────────────────────────────────
@@ -8229,16 +8470,10 @@ function DriverDash({ go, user, setUser, setBookingId }) {
           {/* Scheduled rides for drivers (Feature: Scheduled Rides) */}
           <DriverScheduledRides user={user} go={go} setBookingId={setBookingId}/>
 
-          {/* Peak hours banner */}
-          {(() => { const h=new Date().getHours(),d=new Date().getDay(); return d>=1&&d<=5&&h>=17&&h<19 ? (
-            <div style={{ margin:'0 14px 12px', background:'#fefce8', border:'1px solid #fde047', borderRadius:12, padding:'10px 14px', display:'flex', gap:10, alignItems:'center' }}>
-              <span style={{ fontSize:20 }}>⚡</span>
-              <div>
-                <div style={{ fontSize:13, fontWeight:700, color:'#854d0e' }}>Peak Hours Active</div>
-                <div style={{ fontSize:11, color:'#92400e' }}>More riders requesting trips right now</div>
-              </div>
-            </div>
-          ) : null; })()}
+          {/* Busy times — driven by real completed rides, published by admin.
+              (This replaced a hardcoded "Peak Hours Active" banner that claimed
+              Mon-Fri 5-7pm was busy regardless of whether it actually was.) */}
+          <DriverBusyTimes/>
 
           {/* Go Online / Offline */}
           <div style={{ padding:'0 14px 14px' }}>
@@ -8652,6 +8887,17 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
   const watchRef = useRef(null);
   const sosRef   = useRef(null);
 
+  // The driver's own phone, for the SOS alert's contact card. The signed-in
+  // user object only carries uid/name/email/role, so it has to be read from
+  // the driver record (a driver may always read their own).
+  const [myDriverPhone, setMyDriverPhone] = useState('');
+  useEffect(() => {
+    if (!user?.uid) return;
+    getDoc(doc(db, 'drivers', user.uid))
+      .then(snap => { if (snap.exists()) setMyDriverPhone(snap.data().phone || ''); })
+      .catch(() => {});
+  }, [user?.uid]);
+
   // Block browser back button during active ride
   useEffect(() => {
     const handlePopState = (e) => {
@@ -8880,7 +9126,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
       await addDoc(collection(db,'sos_alerts'), {
         level, levelKey: tier.key, levelLabel: tier.label, overLimit: !gate.allowed,
         userId: user?.uid, userName: user?.name||'Driver', userRole:'driver',
-        driverPhone: driverProfileRef.current?.phone || user?.phone || '',
+        driverPhone: myDriverPhone || user?.phone || '',
         customerPhone: booking?.customerPhone || '',
         bookingId: booking?.id, driverName: user?.name||'--',
         customerName: booking?.customerName||'--',

@@ -2913,6 +2913,579 @@ function BroadcastTab() {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  DEMAND SCHEDULE — "when is it busy?"
+//
+//  Turns completed rides + unmet ride requests into a 7-day × 7-block picture
+//  of when people actually ask for rides, so drivers know when to be online.
+//
+//  Honesty rules (the whole point — a fake peak costs a driver their evening):
+//    • Nothing is published until there are DEMAND_MIN_TOTAL rides overall.
+//    • A single day+block is only called "busy" once it has
+//      DEMAND_MIN_CELL_RIDES rides spread over DEMAND_MIN_CELL_DATES separate
+//      dates. One busy Tuesday is not a Tuesday pattern.
+//    • Anything below that shows as "thin" (grey, "?") — visible to the admin,
+//      never sold to drivers as a peak.
+//  Raise these numbers as ride volume grows; they are the only tuning knobs.
+//
+//  Jamaica is UTC-05:00 all year (no daylight saving), so buckets are computed
+//  against a fixed offset rather than the admin's browser clock. If the admin
+//  ever opens the panel from another timezone the numbers stay correct.
+// ═══════════════════════════════════════════════════════════════════════════
+
+const DEMAND_MIN_TOTAL      = 40;  // rides needed before any pattern is published
+const DEMAND_MIN_CELL_RIDES = 3;   // rides in one day+block before it can rank
+const DEMAND_MIN_CELL_DATES = 2;   // ...spread over at least this many dates
+const DEMAND_MIN_SPREAD     = 7;   // baseline floor: one slot per day of the week
+const JAM_OFFSET_MS         = 5 * 3600 * 1000;   // UTC-5, no DST
+
+const DEMAND_DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const DEMAND_DAYS_SHORT = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+const DEMAND_BLOCKS = [
+  { key:'earlyam',   label:'Early AM',   range:'5am – 8am',   start:5,  end:8  },
+  { key:'morning',   label:'Morning',    range:'8am – 11am',  start:8,  end:11 },
+  { key:'midday',    label:'Midday',     range:'11am – 2pm',  start:11, end:14 },
+  { key:'afternoon', label:'Afternoon',  range:'2pm – 5pm',   start:14, end:17 },
+  { key:'evening',   label:'Evening',    range:'5pm – 8pm',   start:17, end:20 },
+  { key:'night',     label:'Night',      range:'8pm – 11pm',  start:20, end:23 },
+  { key:'latenight', label:'Late Night', range:'11pm – 5am',  start:23, end:5  },
+];
+
+function demandBlockIndex(hour) {
+  if (hour >= 23 || hour < 5) return 6;            // late night wraps midnight
+  for (let i = 0; i < 6; i++) {
+    if (hour >= DEMAND_BLOCKS[i].start && hour < DEMAND_BLOCKS[i].end) return i;
+  }
+  return 6;
+}
+
+const DEMAND_LEVELS = {
+  peak:   { label:'Peak',   bg:'#6b21a8', fg:'#fff',     dot:'🔥' },
+  busy:   { label:'Busy',   bg:'#a855f7', fg:'#fff',     dot:'' },
+  steady: { label:'Steady', bg:'#e9d5ff', fg:'#5b1a94',  dot:'' },
+  quiet:  { label:'Quiet',  bg:'#f6f3fb', fg:'#9199ad',  dot:'' },
+  thin:   { label:'Too few rides to call', bg:'#f3f4f6', fg:'#b0b4c0', dot:'?' },
+};
+
+// Hour label for humans: 0 -> 12am, 13 -> 1pm
+function demandHourLabel(h) {
+  const hr = h % 12 === 0 ? 12 : h % 12;
+  return `${hr}${h < 12 ? 'am' : 'pm'}`;
+}
+
+// Break a timestamp into Jamaica-local day / hour / calendar date.
+function demandJamParts(ms) {
+  const d = new Date(ms - JAM_OFFSET_MS);
+  return { day: d.getUTCDay(), hour: d.getUTCHours(), dateKey: d.toISOString().slice(0, 10) };
+}
+
+// Pull a millisecond timestamp off a Firestore doc, whatever shape it arrived in.
+function demandMs(v) {
+  if (!v) return 0;
+  if (typeof v === 'number') return v;
+  if (typeof v.seconds === 'number') return v.seconds * 1000;
+  if (typeof v.toDate === 'function') { try { return v.toDate().getTime(); } catch(e) { return 0; } }
+  const t = new Date(v).getTime();
+  return isNaN(t) ? 0 : t;
+}
+
+/**
+ * Build the demand picture.
+ *
+ * @param bookings  all booking docs
+ * @param unmet     all unfulfilled_ride_requests docs
+ * @param windowDays  0 = all time, else only the last N days
+ * @param countUnmet  include requests that found no driver as demand
+ */
+function computeDemand(bookings, unmet, windowDays, countUnmet) {
+  const cutoff = windowDays > 0 ? Date.now() - windowDays * 86400000 : 0;
+
+  // cells keyed "day-blockKey"; hours keyed day*24+hour
+  const cells = {};
+  const hourTotals = new Array(24).fill(0);
+  const dayTotals  = new Array(7).fill(0);
+  const allDates   = new Set();
+  // 7 days × 24 hours, flat (day * 24 + hour) — used by the "By hour" view.
+  const dayHour    = new Array(7 * 24).fill(0);
+  let totalRides = 0, totalUnmet = 0;
+
+  const touch = (day, hour, dateKey, kind) => {
+    const bi  = demandBlockIndex(hour);
+    const key = `${day}-${DEMAND_BLOCKS[bi].key}`;
+    const c = cells[key] || (cells[key] = { day, block: DEMAND_BLOCKS[bi].key, blockIndex: bi, rides: 0, unmet: 0, dates: new Set() });
+    if (kind === 'unmet') { c.unmet++; totalUnmet++; }
+    else                  { c.rides++; totalRides++; hourTotals[hour]++; dayTotals[day]++; }
+    dayHour[day * 24 + hour]++;
+    c.dates.add(dateKey);
+    allDates.add(dateKey);
+  };
+
+  // ── Completed rides: the pickup time is when the customer wanted the car,
+  //    which for a scheduled ride is scheduledFor, otherwise when they booked.
+  (bookings || []).forEach(b => {
+    if (b.status !== 'completed') return;
+    const ms = demandMs(b.scheduledFor) || demandMs(b.createdAt);
+    if (!ms || ms < cutoff) return;
+    const p = demandJamParts(ms);
+    touch(p.day, p.hour, p.dateKey, 'ride');
+  });
+
+  // ── Requests that found no driver. Real demand VilleCabs failed to serve —
+  //    the strongest signal of where another online driver would have earned.
+  if (countUnmet) {
+    (unmet || []).forEach(u => {
+      const ms = demandMs(u.created_at) || demandMs(u.createdAt);
+      if (!ms || ms < cutoff) return;
+      const p = demandJamParts(ms);
+      touch(p.day, p.hour, p.dateKey, 'unmet');
+    });
+  }
+
+  // Weeks of history: distinct calendar dates seen, over 7.
+  const list = Object.values(cells).map(c => ({
+    day: c.day, block: c.block, blockIndex: c.blockIndex,
+    rides: c.rides, unmet: c.unmet,
+    dateCount: c.dates.size,
+    demand: c.rides + c.unmet,
+    confident: c.rides + c.unmet >= DEMAND_MIN_CELL_RIDES && c.dates.size >= DEMAND_MIN_CELL_DATES,
+  }));
+
+  const confident = list.filter(c => c.confident);
+
+  // ── The baseline: what does a typical slot look like?
+  //
+  //  Averaging over populated slots only looks right but is badly wrong. If all
+  //  the week's demand sits in two slots, those two ARE the average, so neither
+  //  can ever stand out and a real rush gets labelled "steady". Averaging over
+  //  all 49 slots is wrong the other way: at low volume most are empty, the
+  //  baseline collapses toward zero, and every slot with a couple of rides
+  //  looks like a peak.
+  //
+  //  So: total demand spread across the slots that actually see demand, floored
+  //  at DEMAND_MIN_SPREAD. The floor is what makes concentration legible —
+  //  demand packed into fewer than one slot per day is concentrated by
+  //  definition, and the floor stops those few slots from becoming their own
+  //  baseline. Spread wider than the floor and it has no effect at all.
+  const activeSlots = Math.max(DEMAND_MIN_SPREAD, list.filter(c => c.demand > 0).length);
+  const mean = totalRides + totalUnmet > 0
+    ? list.reduce((sum, c) => sum + c.demand, 0) / activeSlots
+    : 0;
+
+  list.forEach(c => {
+    if (!c.confident)        c.level = 'thin';
+    else if (!mean)          c.level = 'steady';
+    else {
+      const r = c.demand / mean;
+      c.level = r >= 1.6 ? 'peak' : r >= 1.15 ? 'busy' : r >= 0.6 ? 'steady' : 'quiet';
+    }
+  });
+
+  const totalDemand = totalRides + (countUnmet ? totalUnmet : 0);
+  const daysOfData  = allDates.size;
+  const ready       = totalRides >= DEMAND_MIN_TOTAL && confident.length > 0;
+
+  const note = !totalRides
+    ? 'No completed rides in this window yet.'
+    : totalRides < DEMAND_MIN_TOTAL
+      ? `Only ${totalRides} completed ride${totalRides === 1 ? '' : 's'} so far — ${DEMAND_MIN_TOTAL - totalRides} more needed before a weekly pattern is trustworthy enough to show drivers.`
+      : !confident.length
+        ? `${totalRides} rides, but they are spread too thin — no single day and time slot has repeated across ${DEMAND_MIN_CELL_DATES} separate dates yet.`
+        : `Based on ${totalRides} completed ride${totalRides === 1 ? '' : 's'}${countUnmet && totalUnmet ? ` and ${totalUnmet} request${totalUnmet === 1 ? '' : 's'} with no driver available` : ''} across ${daysOfData} day${daysOfData === 1 ? '' : 's'} of operation.`;
+
+  // "Busiest windows" means busiest — only peak and busy slots qualify. With low
+  // volume the confident set can be small enough that a merely steady or even
+  // quiet cell would otherwise rank third and read as a recommendation. If
+  // nothing clears the bar the section simply doesn't render, which is the
+  // honest answer: no rush hour has emerged yet.
+  const topSlots = confident
+    .filter(c => c.level === 'peak' || c.level === 'busy')
+    .slice().sort((a, b) => b.demand - a.demand).slice(0, 6)
+    .map(c => ({
+      day: c.day, dayName: DEMAND_DAYS[c.day],
+      block: c.block,
+      blockLabel: DEMAND_BLOCKS[c.blockIndex].label,
+      range: DEMAND_BLOCKS[c.blockIndex].range,
+      rides: c.rides, unmet: c.unmet, level: c.level,
+    }));
+
+  // Coverage gaps: slots where people asked and nobody was there.
+  const gaps = list.filter(c => c.unmet > 0)
+    .slice().sort((a, b) => b.unmet - a.unmet).slice(0, 5)
+    .map(c => ({
+      day: c.day, dayName: DEMAND_DAYS[c.day],
+      blockLabel: DEMAND_BLOCKS[c.blockIndex].label,
+      range: DEMAND_BLOCKS[c.blockIndex].range,
+      unmet: c.unmet,
+    }));
+
+  // Most-requested hours overall — the direct answer to "what time is busiest".
+  const maxHour = Math.max(0, ...hourTotals);
+  const topHours = hourTotals
+    .map((rides, hour) => ({ hour, rides }))
+    .filter(h => h.rides >= DEMAND_MIN_CELL_RIDES)
+    .sort((a, b) => b.rides - a.rides).slice(0, 5)
+    .map(h => ({ hour: h.hour, label: demandHourLabel(h.hour), rides: h.rides }));
+
+  return {
+    list, cells: list, mean, ready, note,
+    totalRides, totalUnmet, totalDemand, daysOfData,
+    weeksOfData: Math.max(1, Math.round(daysOfData / 7)),
+    confidentCount: confident.length,
+    topSlots, gaps, topHours, hourTotals, dayTotals, dayHour, maxHour,
+  };
+}
+
+// Look up one cell quickly when drawing the grid.
+function demandCellAt(list, day, blockIndex) {
+  return list.find(c => c.day === day && c.blockIndex === blockIndex) || null;
+}
+
+// ── ADMIN: DEMAND TAB ─────────────────────────────────────────────────────────
+function DemandTab() {
+  const [bookings, setBookings] = useState([]);
+  const [unmet,    setUnmet]    = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [windowDays, setWindowDays] = useState(60);
+  const [countUnmet, setCountUnmet] = useState(true);
+  const [view,     setView]     = useState('blocks');     // blocks | hours
+  const [published, setPublished] = useState(null);
+  const [saving,   setSaving]   = useState('');
+
+  useEffect(() => {
+    const u1 = onSnapshot(collection(db, 'bookings'),
+      snap => { setBookings(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLoading(false); },
+      () => setLoading(false));
+    const u2 = onSnapshot(collection(db, 'unfulfilled_ride_requests'),
+      snap => setUnmet(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+      () => {});
+    const u3 = onSnapshot(doc(db, 'config', 'demandSchedule'),
+      snap => setPublished(snap.exists() ? snap.data() : null),
+      () => {});
+    return () => { u1(); u2(); u3(); };
+  }, []);
+
+  const d = computeDemand(bookings, unmet, windowDays, countUnmet);
+
+  // ── Publish: write one small doc drivers can read (config is world-readable,
+  //    admin-write). Firestore cannot store an array of arrays, so the grid is
+  //    flattened into a map keyed "day-blockKey" with empty cells left out.
+  const publish = async () => {
+    setSaving('saving');
+    try {
+      const cellMap = {};
+      d.list.forEach(c => {
+        cellMap[`${c.day}-${c.block}`] = {
+          rides: c.rides, unmet: c.unmet, level: c.level, confident: !!c.confident,
+        };
+      });
+      await setDoc(doc(db, 'config', 'demandSchedule'), {
+        version:     1,
+        ready:       d.ready,
+        note:        d.note,
+        windowDays,
+        countUnmet,
+        totalRides:  d.totalRides,
+        totalUnmet:  d.totalUnmet,
+        daysOfData:  d.daysOfData,
+        // Block boundaries travel WITH the published doc so the driver app never
+        // hardcodes its own copy of them — one definition, here, full stop.
+        blocks:      DEMAND_BLOCKS.map(b => ({ key: b.key, label: b.label, range: b.range, start: b.start, end: b.end })),
+        cells:       cellMap,
+        topSlots:    d.topSlots,
+        topHours:    d.topHours,
+        generatedAt: serverTimestamp(),
+      });
+      setSaving('saved');
+      setTimeout(() => setSaving(''), 2500);
+    } catch (e) {
+      console.error('Publish demand schedule failed', e);
+      setSaving('error');
+    }
+  };
+
+  const unpublish = async () => {
+    if (!window.confirm('Hide the busy-times schedule from all drivers?')) return;
+    setSaving('saving');
+    try {
+      await setDoc(doc(db, 'config', 'demandSchedule'), {
+        version: 1, ready: false, hidden: true, note: 'Schedule hidden by admin.',
+        cells: {}, topSlots: [], topHours: [],
+        blocks: DEMAND_BLOCKS.map(b => ({ key: b.key, label: b.label, range: b.range, start: b.start, end: b.end })),
+        generatedAt: serverTimestamp(),
+      });
+      setSaving('saved'); setTimeout(() => setSaving(''), 2500);
+    } catch (e) { setSaving('error'); }
+  };
+
+  if (loading) return <div style={{ ...s.card, textAlign:'center', color:'#9199ad' }}>Loading demand data…</div>;
+
+  const pill = (active) => ({
+    padding:'6px 13px', borderRadius:18, border:'none', cursor:'pointer',
+    fontSize:12, fontWeight:700,
+    background: active ? '#6b21a8' : '#f3f4f6',
+    color: active ? '#fff' : '#555',
+  });
+
+  const liveStamp = published?.generatedAt?.seconds
+    ? new Date(published.generatedAt.seconds * 1000).toLocaleString('en-JM',
+        { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })
+    : null;
+
+  return (
+    <div>
+      {/* ── READINESS BANNER — the honesty gate ── */}
+      <div style={{ ...s.card,
+        background: d.ready ? '#f0fff4' : '#fffbeb',
+        border: `1px solid ${d.ready ? '#86efac' : '#fcd34d'}` }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+          <span style={{ fontSize:18 }}>{d.ready ? '✅' : '⏳'}</span>
+          <span style={{ fontSize:14, fontWeight:800, color: d.ready ? '#166534' : '#92400e' }}>
+            {d.ready ? 'Pattern is reliable enough to share' : 'Not enough data yet'}
+          </span>
+        </div>
+        <div style={{ fontSize:13, color:'#4b5563', lineHeight:1.6 }}>{d.note}</div>
+        {!d.ready && (
+          <div style={{ fontSize:12, color:'#92400e', marginTop:8, lineHeight:1.6 }}>
+            You can still publish — drivers will see an honest "still learning" note instead of
+            invented peak times. A made-up rush that drivers wait around for is worse than no schedule.
+          </div>
+        )}
+      </div>
+
+      {/* ── CONTROLS ── */}
+      <div style={{ ...s.card, display:'flex', flexWrap:'wrap', gap:16, alignItems:'center' }}>
+        <div>
+          <div style={s.lbl}>Window</div>
+          <div style={{ display:'flex', gap:6 }}>
+            {[30, 60, 90, 0].map(n => (
+              <button key={n} onClick={() => setWindowDays(n)} style={pill(windowDays === n)}>
+                {n === 0 ? 'All time' : `${n} days`}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <div style={s.lbl}>View</div>
+          <div style={{ display:'flex', gap:6 }}>
+            <button onClick={() => setView('blocks')} style={pill(view === 'blocks')}>Time blocks</button>
+            <button onClick={() => setView('hours')}  style={pill(view === 'hours')}>By hour</button>
+          </div>
+        </div>
+        <div>
+          <div style={s.lbl}>Count missed requests</div>
+          <button onClick={() => setCountUnmet(v => !v)} style={pill(countUnmet)}>
+            {countUnmet ? `Yes — ${d.totalUnmet} included` : 'No — completed rides only'}
+          </button>
+        </div>
+      </div>
+
+      {/* ── HEADLINE NUMBERS ── */}
+      <div style={{ ...s.statgrid, gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))' }}>
+        {[
+          { l:'Completed rides', v:d.totalRides },
+          { l:'No driver available', v:d.totalUnmet },
+          { l:'Days of data', v:d.daysOfData },
+          { l:'Reliable slots', v:d.confidentCount },
+        ].map(x => (
+          <div key={x.l} style={s.stat}>
+            <div style={{ fontSize:22, fontWeight:800, color:'#6b21a8' }}>{x.v}</div>
+            <div style={{ fontSize:11, color:'#8a83a0', fontWeight:700, textTransform:'uppercase', letterSpacing:0.4 }}>{x.l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── MOST-REQUESTED HOURS ── */}
+      {d.topHours.length > 0 && (
+        <div style={s.card}>
+          <div style={{ fontSize:14, fontWeight:800, marginBottom:4 }}>⏰ Most-requested pickup hours</div>
+          <div style={{ fontSize:12, color:'#8a83a0', marginBottom:12 }}>Across the whole week, regardless of day.</div>
+          <div style={{ display:'flex', flexWrap:'wrap', gap:9 }}>
+            {d.topHours.map((h, i) => (
+              <div key={h.hour} style={{
+                padding:'9px 15px', borderRadius:12,
+                background: i === 0 ? '#6b21a8' : '#f5f0ff',
+                border: `1px solid ${i === 0 ? '#6b21a8' : '#e9d5ff'}`,
+                color: i === 0 ? '#fff' : '#5b1a94' }}>
+                <div style={{ fontSize:15, fontWeight:800 }}>{h.label}</div>
+                <div style={{ fontSize:11, opacity:0.85 }}>{h.rides} ride{h.rides === 1 ? '' : 's'}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── THE GRID ── */}
+      <div style={s.card}>
+        <div style={{ fontSize:14, fontWeight:800, marginBottom:4 }}>📅 Weekly demand pattern</div>
+        <div style={{ fontSize:12, color:'#8a83a0', marginBottom:14 }}>
+          Jamaica time. Grey cells marked <strong>?</strong> have too few rides to call either way.
+        </div>
+
+        {view === 'blocks' ? (
+          <div style={{ overflowX:'auto' }}>
+            <table style={{ borderCollapse:'separate', borderSpacing:4, minWidth:620 }}>
+              <thead>
+                <tr>
+                  <th/>
+                  {DEMAND_BLOCKS.map(b => (
+                    <th key={b.key} style={{ fontSize:10, color:'#8a83a0', fontWeight:700, padding:'0 2px 6px', whiteSpace:'nowrap' }}>
+                      <div>{b.label}</div>
+                      <div style={{ fontWeight:500, opacity:0.75 }}>{b.range}</div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {DEMAND_DAYS.map((dayName, di) => (
+                  <tr key={dayName}>
+                    <td style={{ fontSize:12, fontWeight:700, color:'#1a1a2e', paddingRight:8, whiteSpace:'nowrap' }}>{DEMAND_DAYS_SHORT[di]}</td>
+                    {DEMAND_BLOCKS.map((b, bi) => {
+                      const c = demandCellAt(d.list, di, bi);
+                      const lv = DEMAND_LEVELS[c ? c.level : 'quiet'];
+                      return (
+                        <td key={b.key} title={c
+                            ? `${dayName} ${b.label} (${b.range})\n${c.rides} completed, ${c.unmet} with no driver\nSeen on ${c.dateCount} separate date${c.dateCount === 1 ? '' : 's'}`
+                            : `${dayName} ${b.label} — no rides`}
+                          style={{
+                            background: c ? lv.bg : '#fafafa',
+                            color: c ? lv.fg : '#d1d5db',
+                            borderRadius:9, textAlign:'center', padding:'9px 6px',
+                            minWidth:62, cursor:'default',
+                            border: c && c.level === 'peak' ? '2px solid #4c1d95' : '1px solid transparent' }}>
+                          <div style={{ fontSize:14, fontWeight:800 }}>
+                            {c ? (c.rides + c.unmet) : '·'}{c && c.level === 'thin' ? ' ?' : ''}
+                          </div>
+                          {c && c.level === 'peak' && <div style={{ fontSize:9, fontWeight:700 }}>PEAK</div>}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div style={{ overflowX:'auto' }}>
+            <div style={{ minWidth:620 }}>
+              {DEMAND_DAYS.map((dayName, di) => {
+                const perHour = d.dayHour.slice(di * 24, di * 24 + 24);
+                const dayMax  = Math.max(1, ...perHour);
+                return (
+                  <div key={dayName} style={{ display:'flex', alignItems:'center', gap:6, marginBottom:5 }}>
+                    <div style={{ width:34, fontSize:11, fontWeight:700, color:'#1a1a2e' }}>{DEMAND_DAYS_SHORT[di]}</div>
+                    {perHour.map((n, h) => (
+                      <div key={h} title={`${dayName} ${demandHourLabel(h)} — ${n} request${n === 1 ? '' : 's'}`}
+                        style={{ flex:1, height:26, borderRadius:5,
+                          background: n === 0 ? '#fafafa'
+                            : `rgba(107,33,168,${0.18 + 0.82 * (n / dayMax)})`,
+                          display:'flex', alignItems:'center', justifyContent:'center',
+                          fontSize:9, fontWeight:700,
+                          color: n / dayMax > 0.45 ? '#fff' : '#6b21a8' }}>
+                        {n || ''}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+              <div style={{ display:'flex', gap:6, marginTop:6 }}>
+                <div style={{ width:34 }}/>
+                {Array.from({ length:24 }, (_, h) => (
+                  <div key={h} style={{ flex:1, textAlign:'center', fontSize:8, color:'#9199ad' }}>
+                    {h % 3 === 0 ? demandHourLabel(h) : ''}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* legend */}
+        <div style={{ display:'flex', flexWrap:'wrap', gap:12, marginTop:14, paddingTop:12, borderTop:'1px solid #f0f0f4' }}>
+          {['peak','busy','steady','quiet','thin'].map(k => (
+            <div key={k} style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <div style={{ width:14, height:14, borderRadius:4, background:DEMAND_LEVELS[k].bg, border:'1px solid #e5e7eb' }}/>
+              <span style={{ fontSize:11, color:'#6b7280' }}>{DEMAND_LEVELS[k].label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── TOP SLOTS ── */}
+      {d.topSlots.length > 0 && (
+        <div style={s.card}>
+          <div style={{ fontSize:14, fontWeight:800, marginBottom:12 }}>🔥 Busiest windows</div>
+          {d.topSlots.map((t, i) => (
+            <div key={`${t.day}-${t.block}`} style={{
+              display:'flex', alignItems:'center', gap:11, padding:'10px 0',
+              borderBottom: i < d.topSlots.length - 1 ? '1px solid #f0f0f4' : 'none' }}>
+              <div style={{ width:26, height:26, borderRadius:'50%', background:'#f5f0ff', color:'#6b21a8',
+                display:'flex', alignItems:'center', justifyContent:'center', fontSize:12, fontWeight:800, flexShrink:0 }}>{i + 1}</div>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>{t.dayName} · {t.blockLabel}</div>
+                <div style={{ fontSize:11, color:'#8a83a0' }}>{t.range}</div>
+              </div>
+              <div style={{ textAlign:'right' }}>
+                <div style={{ fontSize:14, fontWeight:800, color:'#6b21a8' }}>{t.rides + t.unmet}</div>
+                <div style={{ fontSize:10, color:'#8a83a0' }}>
+                  {t.rides} ride{t.rides === 1 ? '' : 's'}{t.unmet ? ` + ${t.unmet} missed` : ''}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── COVERAGE GAPS ── */}
+      {d.gaps.length > 0 && (
+        <div style={{ ...s.card, background:'#fff7ed', border:'1px solid #fdba74' }}>
+          <div style={{ fontSize:14, fontWeight:800, marginBottom:4, color:'#9a3412' }}>📍 Money you missed</div>
+          <div style={{ fontSize:12, color:'#9a3412', marginBottom:12, lineHeight:1.6 }}>
+            Customers booked at these times and no driver was online. Get coverage here first.
+          </div>
+          {d.gaps.map(g => (
+            <div key={`${g.day}-${g.blockLabel}`} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'7px 0' }}>
+              <span style={{ fontSize:13, color:'#1a1a2e' }}>
+                <strong>{g.dayName}</strong> · {g.blockLabel} <span style={{ color:'#8a83a0', fontSize:11 }}>({g.range})</span>
+              </span>
+              <span style={{ ...s.badge, background:'#fed7aa', color:'#9a3412' }}>{g.unmet} lost</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── PUBLISH ── */}
+      <div style={s.card}>
+        <div style={{ fontSize:14, fontWeight:800, marginBottom:4 }}>📢 Share with drivers</div>
+        <div style={{ fontSize:12, color:'#8a83a0', marginBottom:14, lineHeight:1.6 }}>
+          Publishing saves a snapshot that every driver sees on their dashboard as "Busy times".
+          It does not update on its own — come back and publish again as the pattern changes.
+        </div>
+        {liveStamp && (
+          <div style={{ fontSize:12, color:'#4b5563', marginBottom:12, padding:'9px 12px', background:'#f9fafb', borderRadius:9, border:'1px solid #e5e7eb' }}>
+            Drivers currently see: <strong>{published?.ready ? 'the weekly pattern' : 'a "still learning" note'}</strong>
+            {' '}· published {liveStamp}
+            {published?.totalRides != null && ` · from ${published.totalRides} rides`}
+          </div>
+        )}
+        <div style={{ display:'flex', gap:9, flexWrap:'wrap', alignItems:'center' }}>
+          <button onClick={publish} disabled={saving === 'saving'} style={{
+            background:'#6b21a8', color:'#fff', border:'none', borderRadius:10,
+            padding:'11px 22px', fontSize:13, fontWeight:700,
+            cursor: saving === 'saving' ? 'default' : 'pointer', opacity: saving === 'saving' ? 0.6 : 1 }}>
+            {saving === 'saving' ? 'Publishing…' : liveStamp ? 'Publish update' : 'Publish to drivers'}
+          </button>
+          {liveStamp && published?.ready !== false && (
+            <button onClick={unpublish} style={s.btnSuspend}>Hide from drivers</button>
+          )}
+          {saving === 'saved' && <span style={{ fontSize:12, color:'#166534', fontWeight:700 }}>✓ Published</span>}
+          {saving === 'error' && <span style={{ fontSize:12, color:'#dc2626', fontWeight:700 }}>Could not publish — check your connection</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminPanel() {
   const [adminUser, setAdminUser] = useState(null);
   const [loading,   setLoading]   = useState(true);
@@ -2962,6 +3535,7 @@ export default function AdminPanel() {
     { id:'customers', label:'Customers',   icon:'👥' },
     { id:'revenue',   label:'Revenue',     icon:'💰' },
     { id:'performance',label:'Performance',icon:'📈' },
+    { id:'demand',    label:'Demand',      icon:'📅' },
     { id:'partners',  label:'Partners',    icon:'🤝' },
     { id:'charter',   label:'Charter',     icon:'🚘' },
     { id:'contacts',  label:'Messages',    icon:'📬' },
@@ -2999,7 +3573,7 @@ export default function AdminPanel() {
       {/* ── CONTENT ── */}
       <div style={s.main}>
         <div style={{ fontSize:18, fontWeight:800, marginBottom:16, color:'#1a1a2e' }}>
-          {tab==='overview'?'📊 Dashboard Overview':tab==='analytics'?'📉 Analytics':tab==='drivers'?'🚗 Driver Management':tab==='rides'?'🚕 Ride Management':tab==='livemap'?'🗺️ Live Operations Map':tab==='scheduled'?'🗓️ Scheduled Rides':tab==='customers'?'👥 Customers':tab==='revenue'?'💰 Revenue':tab==='performance'?'📈 Driver Performance':tab==='partners'?'🤝 Partner Requests':tab==='charter'?'🚘 Charter Bookings':tab==='contacts'?'📬 Messages':tab==='alerts'?'🆘 Safety Alerts':tab==='unfulfilled'?'📍 No Driver Available':tab==='broadcast'?'📢 Broadcast to Drivers':'🎟️ Promo Codes'}
+          {tab==='overview'?'📊 Dashboard Overview':tab==='analytics'?'📉 Analytics':tab==='drivers'?'🚗 Driver Management':tab==='rides'?'🚕 Ride Management':tab==='livemap'?'🗺️ Live Operations Map':tab==='scheduled'?'🗓️ Scheduled Rides':tab==='customers'?'👥 Customers':tab==='revenue'?'💰 Revenue':tab==='demand'?'📅 Demand Schedule':tab==='performance'?'📈 Driver Performance':tab==='partners'?'🤝 Partner Requests':tab==='charter'?'🚘 Charter Bookings':tab==='contacts'?'📬 Messages':tab==='alerts'?'🆘 Safety Alerts':tab==='unfulfilled'?'📍 No Driver Available':tab==='broadcast'?'📢 Broadcast to Drivers':'🎟️ Promo Codes'}
         </div>
         {tab === 'overview'  && <OverviewTab setTab={setTab}/>}
         {tab === 'analytics' && <AnalyticsTab/>}
@@ -3010,6 +3584,7 @@ export default function AdminPanel() {
         {tab === 'customers' && <CustomersTab/>}
         {tab === 'revenue'   && <RevenueTab/>}
         {tab === 'performance' && <PerformanceTab/>}
+        {tab === 'demand'    && <DemandTab/>}
         {tab === 'partners'  && <PartnersTab/>}
         {tab === 'charter'   && <CharterTab/>}
         {tab === 'contacts'  && <ContactsTab/>}
