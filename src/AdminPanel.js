@@ -516,7 +516,7 @@ function DriversTab() {
 
           {/* Pending re-uploaded documents/photos awaiting review */}
           {(() => {
-            const labels = { licence:'Driver Licence', license:'Driver Licence', fitness:'Vehicle Fitness', registration:'Vehicle Registration', insurance:'Insurance', vehiclePhoto:'Vehicle Photo', profilePhoto:'Profile Photo' };
+            const labels = { licence:'Driver Licence — Front', license:'Driver Licence — Front', licenceBack:'Driver Licence — Back', licenseBack:'Driver Licence — Back', fitness:'Vehicle Fitness', registration:'Vehicle Registration', insurance:'Insurance', vehiclePhoto:'Vehicle Photo', profilePhoto:'Profile Photo' };
             const pendingDocs = Object.entries(driver.documents || {}).filter(([, d]) => d && d.status === 'pending');
             if (pendingDocs.length === 0) return null;
             return (
@@ -569,14 +569,14 @@ function DriversTab() {
           <div style={{ marginBottom:12 }}>
             <div style={{ fontSize:11, color:'#9199ad', marginBottom:8, textTransform:'uppercase', letterSpacing:0.5 }}>Documents</div>
             <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-              {[['license',"Driver's License"],['fitness','Fitness Certificate'],['registration','Registration']].map(([docType,docLabel]) => {
+              {[['license',"Licence (front)"],['licenseBack',"Licence (back)"],['insurance','Insurance'],['fitness','Fitness Certificate'],['registration','Registration']].map(([docType,docLabel]) => {
                 const url = driver.docs?.[docType];
                 const uploaded = url && url !== 'pending_upload';
                 return (
                   <div key={docType}>
                     {uploaded ? (
                       <a href={url} target="_blank" rel="noopener noreferrer"
-                        style={{ ...s.badge, background:'rgba(26,158,90,0.15)', color:'#9fe1cb', fontSize:11, textDecoration:'none', cursor:'pointer', padding:'5px 10px' }}>
+                        style={{ ...s.badge, background:'rgba(26,158,90,0.15)', color:'#0f7a43', fontSize:11, textDecoration:'none', cursor:'pointer', padding:'5px 10px' }}>
                         📄 View {docLabel}
                       </a>
                     ) : (
@@ -667,6 +667,59 @@ function DriversTab() {
 }
 
 // ── RIDES TAB ─────────────────────────────────────────────────────────────────
+
+// Trim an address to its first meaningful part. NOT a bare split(',')[0]:
+// "5,1/2 Caledonia Road, Mandeville" must not collapse to "5". Mirrors
+// shortAddress() in App.js — keep the two in step if either changes.
+function adminShortAddress(addr) {
+  if (!addr) return '';
+  const parts = String(addr).split(',').map(x => x.trim()).filter(Boolean);
+  if (!parts.length) return '';
+  let out = parts[0], i = 1;
+  while (i < parts.length && !/[A-Za-z]{3}/.test(out)) { out += ', ' + parts[i]; i++; }
+  return out;
+}
+
+// ── RIDE STATUS — one shared definition ───────────────────────────────────────
+//  The booking lifecycle, in the order it actually happens:
+//    searching → a rider has committed, no driver has taken it yet
+//    active    → a driver accepted and is driving to the pickup
+//    arrived   → the driver is at the pickup, waiting for the rider
+//    enroute   → the rider is in the car, heading to the drop-off
+//    completed / cancelled / expired
+//  Labels are written for someone glancing at a dashboard, not for a developer.
+//  Anything unknown is shown AS IT IS rather than mapped to a plausible-looking
+//  status — a wrong label that looks right is worse than an unfamiliar one.
+const RIDE_STATUS = {
+  searching: { text:'Finding driver',  bg:'rgba(232,180,0,0.15)',  color:'#b45309' },
+  scheduled: { text:'Scheduled',       bg:'rgba(29,78,216,0.12)',  color:'#1d4ed8' },
+  active:    { text:'To pickup',       bg:'rgba(107,33,168,0.13)', color:'#6b21a8' },
+  arrived:   { text:'At pickup',       bg:'rgba(168,85,247,0.16)', color:'#7e22ce' },
+  enroute:   { text:'To drop-off',     bg:'rgba(26,158,90,0.15)',  color:'#0f7a43' },
+  completed: { text:'Completed',       bg:'#f3f4f6',               color:'#6b7280' },
+  cancelled: { text:'Cancelled',       bg:'rgba(226,75,74,0.12)',  color:'#dc2626' },
+  expired:   { text:'No driver found', bg:'rgba(180,83,9,0.14)',   color:'#b45309' },
+};
+// A ride that is underway — a driver is committed to it right now.
+const RIDE_IN_PROGRESS = ['active','arrived','enroute'];
+function rideStatusMeta(status) {
+  return RIDE_STATUS[status] || { text: status || 'Unknown', bg:'#f3f4f6', color:'#6b7280' };
+}
+// Says, in one line, what the driver is doing and where that leg ends.
+function rideLegLabel(r) {
+  const short = (a) => adminShortAddress(a) || 'destination';
+  if (r.status === 'active')    return `Driving to pick up — ${short(r.pickup?.address)}`;
+  if (r.status === 'arrived')   return `Waiting at pickup — ${short(r.pickup?.address)}`;
+  if (r.status === 'enroute')   return `Rider on board, heading to ${short(r.dropoff?.address)}`;
+  if (r.status === 'searching') return 'Waiting for a driver to accept';
+  if (r.status === 'scheduled') return 'Booked for later';
+  return rideStatusMeta(r.status).text;
+}
+function RideStatusBadge({ status }) {
+  const m = rideStatusMeta(status);
+  return <span style={{ ...s.badge, background:m.bg, color:m.color }}>{m.text}</span>;
+}
+
 function RidesTab() {
   const [rides,   setRides]   = useState([]);
   const [filter,  setFilter]  = useState('all');
@@ -686,17 +739,7 @@ function RidesTab() {
     return () => unsub();
   }, [filter]);
 
-  const statusBadge = (status) => {
-    const map = {
-      searching: { bg:'rgba(232,180,0,0.15)',  color:'#e8b400',  text:'Searching' },
-      active:    { bg:'rgba(26,158,90,0.15)',  color:'#1a9e5a',  text:'Active'    },
-      completed: { bg:'#f3f4f6',color:'#6b7280', text:'Completed' },
-      cancelled: { bg:'rgba(226,75,74,0.12)', color:'#dc2626',  text:'Cancelled' },
-      expired:   { bg:'rgba(180,83,9,0.14)',  color:'#b45309',  text:'No Driver' },
-    };
-    const m = map[status] || map.searching;
-    return <span style={{ ...s.badge, background:m.bg, color:m.color }}>{m.text}</span>;
-  };
+  const statusBadge = (status) => <RideStatusBadge status={status}/>;
 
   // ── Search + date-range filtering (client-side over the live list) ──
   const q = search.trim().toLowerCase();
@@ -731,7 +774,7 @@ function RidesTab() {
   const filtersActive = !!(search || dateFrom || dateTo);
 
   const total = visible.reduce((sum, r) => sum + (r.fare||0), 0);
-  const filters = ['all','searching','active','completed','cancelled','expired'];
+  const filters = ['all','searching','scheduled','active','arrived','enroute','completed','cancelled','expired'];
 
   const fmtDateTime = (ts) => {
     if (!ts?.seconds) return '--';
@@ -754,14 +797,14 @@ function RidesTab() {
       <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:12, marginBottom:20 }}>
         <StatCard label="Total rides"   value={visible.length} sub={filtersActive ? 'matching filters' : 'in current filter'}/>
         <StatCard label="Total revenue" value={`J$${total.toLocaleString()}`} color="#b45309" sub={filtersActive ? 'matching filters' : 'all rides'}/>
-        <StatCard label="Active now"    value={visible.filter(r=>r.status==='active').length} color={GREEN} sub="in progress"/>
+        <StatCard label="Active now"    value={visible.filter(r=>RIDE_IN_PROGRESS.includes(r.status)).length} color={GREEN} sub="driver assigned"/>
       </div>
 
       <div style={{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap' }}>
         {filters.map(f => (
           <button key={f} onClick={() => setFilter(f)}
-            style={{ padding:'7px 16px', borderRadius:20, fontSize:13, border:'1px solid #e5e7eb', background:filter===f?'#6b21a8':'#f3f4f6', color:filter===f?'#fff':'#555', cursor:'pointer', textTransform:'capitalize', fontWeight:filter===f?600:400 }}>
-            {f === 'all' ? 'All rides' : f === 'expired' ? '🚫 No Driver' : f}
+            style={{ padding:'7px 16px', borderRadius:20, fontSize:13, border:'1px solid #e5e7eb', background:filter===f?'#6b21a8':'#f3f4f6', color:filter===f?'#fff':'#555', cursor:'pointer', fontWeight:filter===f?600:400 }}>
+            {f === 'all' ? 'All rides' : rideStatusMeta(f).text}
           </button>
         ))}
       </div>
@@ -870,8 +913,8 @@ function RidesTab() {
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr 80px', gap:8, alignItems:'center' }}>
             <div>
               <div style={{ fontSize:10, color:'#9199ad', marginBottom:4 }}>Route</div>
-              <div style={{ fontSize:12, color:'#6b7280' }}><span style={{ color:GREEN }}>●</span> {r.pickup?.address?.split(',')[0]||'--'}</div>
-              <div style={{ fontSize:12, color:'#6b7280', marginTop:2 }}><span style={{ color:'#6b21a8' }}>●</span> {r.dropoff?.address?.split(',')[0]||'--'}</div>
+              <div style={{ fontSize:12, color:'#6b7280' }}><span style={{ color:GREEN }}>●</span> {adminShortAddress(r.pickup?.address)||'--'}</div>
+              <div style={{ fontSize:12, color:'#6b7280', marginTop:2 }}><span style={{ color:'#6b21a8' }}>●</span> {adminShortAddress(r.dropoff?.address)||'--'}</div>
             </div>
             <div>
               <div style={{ fontSize:10, color:'#9199ad', marginBottom:4 }}>Driver</div>
@@ -900,7 +943,7 @@ function RidesTab() {
 function PromoCodesTab() {
   const [promos,  setPromos]  = useState([]);
   const [loading, setLoading] = useState(true);
-  const [form,    setForm]    = useState({ code:'', discount:'', discountType:'percent', expiry:'', description:'' });
+  const [form,    setForm]    = useState({ code:'', discount:'', discountType:'percent', expiry:'', description:'', firstRideOnly:false });
   const [saving,  setSaving]  = useState(false);
   const [error,   setError]   = useState('');
   const [success, setSuccess] = useState('');
@@ -934,13 +977,16 @@ function PromoCodesTab() {
         discountType: form.discountType,
         description:  form.description.trim() || (isFixed ? `J$${(+form.discount).toLocaleString()} off` : `${form.discount}% off`),
         expiry:      form.expiry,
+        // When true the app refuses the code for anyone who already has a
+        // completed ride — so a code advertised as "first ride" actually is one.
+        firstRideOnly: !!form.firstRideOnly,
         active:      true,
         usedBy:      [],
         usageCount:  0,
         createdAt:   serverTimestamp(),
       });
       setSuccess(`Promo code "${form.code.toUpperCase()}" created!`);
-      setForm({ code:'', discount:'', discountType:'percent', expiry:'', description:'' });
+      setForm({ code:'', discount:'', discountType:'percent', expiry:'', description:'', firstRideOnly:false });
     } catch(err) { setError(err.message); }
     setSaving(false);
   };
@@ -989,6 +1035,21 @@ function PromoCodesTab() {
           <div>
             <label style={s.lbl}>Description (optional)</label>
             <input style={s.inp} placeholder="e.g. Launch promo" value={form.description} onChange={e => set('description', e.target.value)}/>
+            <label onClick={() => set('firstRideOnly', !form.firstRideOnly)}
+              style={{ display:'flex', alignItems:'flex-start', gap:10, cursor:'pointer',
+                background: form.firstRideOnly ? '#f5f0ff' : '#f9fafb',
+                border:`1px solid ${form.firstRideOnly ? '#d8b4fe' : '#e5e7eb'}`,
+                borderRadius:10, padding:'11px 13px', marginBottom:12 }}>
+              <input type="checkbox" readOnly checked={!!form.firstRideOnly}
+                style={{ width:17, height:17, accentColor:'#6b21a8', marginTop:1, cursor:'pointer' }}/>
+              <span>
+                <span style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>First ride only</span>
+                <span style={{ display:'block', fontSize:11, color:'#6b7280', marginTop:2, lineHeight:1.5 }}>
+                  Rejects the code for anyone who has already completed a ride. Leave off for a
+                  general promo any customer can use once.
+                </span>
+              </span>
+            </label>
           </div>
         </div>
         <button onClick={handleCreate} disabled={saving}
@@ -1018,6 +1079,11 @@ function PromoCodesTab() {
               <div>
                 <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:4 }}>
                   <span style={{ fontSize:18, fontWeight:700, color:'#6b21a8', letterSpacing:2 }}>{p.code}</span>
+                  {p.firstRideOnly && (
+                    <span style={{ ...s.badge, background:'#f5f0ff', color:'#6b21a8', border:'1px solid #e9d5ff', fontSize:10 }}>
+                      First ride only
+                    </span>
+                  )}
                   <span style={{ background:`${statusColor}22`, color:statusColor, borderRadius:20, padding:'2px 10px', fontSize:11, fontWeight:500, textTransform:'uppercase' }}>{status}</span>
                 </div>
                 <div style={{ fontSize:13, color:'#6b7280' }}>{p.description}</div>
@@ -1391,7 +1457,7 @@ function AnalyticsTab() {
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const ts = (r, f='createdAt') => r[f]?.seconds ? new Date(r[f].seconds*1000) : null;
-  const areaOf = (addr) => (addr || '').split(',')[0].trim() || 'Unknown';
+  const areaOf = (addr) => adminShortAddress(addr) || 'Unknown';
 
   // Busiest hour today (by ride creation)
   const todays = rides.filter(r => { const d = ts(r); return d && d >= todayStart; });
@@ -1750,8 +1816,9 @@ function LiveMapTab() {
                   ) : (
                     <>
                       <div style={{ fontWeight:700, color:'#1a1a2e' }}>{selected.data.driverName||'Driver'} → {selected.data.customerName||'Rider'}</div>
-                      <div style={{ color:'#6b7280' }}>{(selected.data.pickup?.address||'—').split(',')[0]} → {(selected.data.dropoff?.address||'—').split(',')[0]}</div>
-                      <div style={{ color:'#6b21a8', fontWeight:600, marginTop:2 }}>🚕 {selected.data.status} · J${(selected.data.fare||0).toLocaleString()}</div>
+                      <div style={{ color:'#6b7280' }}>{adminShortAddress(selected.data.pickup?.address)||'—'} → {adminShortAddress(selected.data.dropoff?.address)||'—'}</div>
+                      <div style={{ color:'#6b21a8', fontWeight:600, marginTop:2 }}>🚕 {rideStatusMeta(selected.data.status).text} · J${(selected.data.fare||0).toLocaleString()}</div>
+                      <div style={{ color:'#6b7280', marginTop:1 }}>{rideLegLabel(selected.data)}</div>
                     </>
                   )}
                 </div>
@@ -1771,11 +1838,14 @@ function LiveMapTab() {
         {rides.length === 0 && <div style={{ color:'#9199ad', fontSize:13 }}>No rides in progress right now.</div>}
         {rides.map(r => (
           <div key={r.id} style={{ padding:'12px 0', borderBottom:'1px solid #f0f0f0' }}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4, gap:8 }}>
               <span style={{ fontSize:14, fontWeight:500, color:'#1a1a2e' }}>{r.driverName||'Driver'} → {r.customerName||'Rider'}</span>
-              <span style={{ ...s.badge, background:'rgba(26,158,90,0.15)', color:GREEN }}>{r.status}</span>
+              <RideStatusBadge status={r.status}/>
             </div>
-            <div style={{ fontSize:12, color:'#6b7280' }}>{(r.pickup?.address||'—').split(',')[0]} → {(r.dropoff?.address||'—').split(',')[0]} · J${(r.fare||0).toLocaleString()}</div>
+            {/* Which leg they are on, and where that leg ends — the question an
+                admin is actually asking when they look at this list. */}
+            <div style={{ fontSize:12, color:'#1a1a2e', fontWeight:600, marginBottom:2 }}>{rideLegLabel(r)}</div>
+            <div style={{ fontSize:12, color:'#6b7280' }}>{adminShortAddress(r.pickup?.address)||'—'} → {adminShortAddress(r.dropoff?.address)||'—'} · J${(r.fare||0).toLocaleString()}</div>
             <div style={{ fontSize:11, color:r.driverLocation?.lat?GREEN:'#9199ad', marginTop:3 }}>{r.driverLocation?.lat ? '📍 Live GPS active' : '⏳ Awaiting driver GPS'}</div>
           </div>
         ))}
@@ -1844,7 +1914,7 @@ function ScheduledTab() {
       {isPast(r.scheduledFor) && <div style={{ fontSize:11, color:'#dc2626', marginBottom:4 }}>⚠️ Pickup time has passed</div>}
       {isSoon(r.scheduledFor) && <div style={{ fontSize:11, color:'#b45309', marginBottom:4 }}>⏰ Within 2 hours</div>}
       <div style={{ fontSize:12, color:'#4b5563', marginBottom:3 }}>👤 {r.customerName||'Customer'} · {r.vehicleType||'VilleRide'}</div>
-      <div style={{ fontSize:12, color:'#4b5563', marginBottom:10 }}>{(r.pickup?.address||'—').split(',')[0]} → {(r.dropoff?.address||'—').split(',')[0]}</div>
+      <div style={{ fontSize:12, color:'#4b5563', marginBottom:10 }}>{adminShortAddress(r.pickup?.address)||'—'} → {adminShortAddress(r.dropoff?.address)||'—'}</div>
       <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
         <select value={r.driverId||''} onChange={e=>reassign(r.id, e.target.value)}
           style={{ flex:1, minWidth:150, padding:'8px 10px', borderRadius:8, border:'1px solid #d0d3e0', background:'#ffffff', color:'#1a1a2e', fontSize:12 }}>
@@ -2811,7 +2881,7 @@ function UnfulfilledTab() {
       {sorted.length===0 && <div style={s.card}><div style={{ color:'#9199ad', fontSize:13, textAlign:'center', padding:20 }}>No unmatched requests logged.</div></div>}
       {sorted.map(r => (
         <div key={r.id} style={s.card}>
-          <div style={{ fontSize:13, color:'#1a1a2e', marginBottom:4 }}>{(r.pickup_address||r.pickup?.address||'—').split(',')[0]} → {(r.dropoff_address||r.dropoff?.address||'—').split(',')[0]}</div>
+          <div style={{ fontSize:13, color:'#1a1a2e', marginBottom:4 }}>{adminShortAddress(r.pickup_address||r.pickup?.address)||'—'} → {adminShortAddress(r.dropoff_address||r.dropoff?.address)||'—'}</div>
           <div style={{ fontSize:12, color:'#6b7280' }}>👤 {r.customer_name||r.customerName||'Customer'} · {r.created_at?.seconds ? new Date(r.created_at.seconds*1000).toLocaleString() : '—'}</div>
         </div>
       ))}

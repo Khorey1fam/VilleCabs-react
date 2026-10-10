@@ -11,7 +11,7 @@ import {
 import {
   getFirestore, doc, setDoc, getDoc, addDoc, collection,
   onSnapshot, updateDoc, query, where, orderBy, serverTimestamp, getDocs,
-  arrayUnion, increment, arrayRemove, runTransaction
+  arrayUnion, increment, arrayRemove, runTransaction, limit
 } from 'firebase/firestore';
 import { GoogleMap, useJsApiLoader, Marker, DirectionsRenderer } from '@react-google-maps/api';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -2506,7 +2506,7 @@ function DriverLogin({ go, user, setUser }) {
 function DriverSignup({ go, user }) {
   const [step, setStep] = useState(0); // 0=tips, 1=personal, 2=vehicle
   const [form, setForm]       = useState({ name:'',trn:'',dob:'',phone:'',email:'',password:'',make:'',model:'',color:'',plate:'' });
-  const [docs, setDocs]       = useState({ license:null, fitness:null, registration:null, profilePhoto:null, vehiclePhoto:null });
+  const [docs, setDocs]       = useState({ license:null, licenseBack:null, insurance:null, fitness:null, registration:null, profilePhoto:null, vehiclePhoto:null });
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState('');
   const [previews, setPreviews] = useState({ profilePhoto:null, vehiclePhoto:null });
@@ -2514,7 +2514,8 @@ function DriverSignup({ go, user }) {
 
   // Validate page 1 (personal) before advancing
   const personalDone = form.name && form.trn && form.dob && form.phone && form.email && form.password && docs.profilePhoto;
-  const vehicleDone  = form.make && form.model && form.color && form.plate && docs.vehiclePhoto && docs.license && docs.fitness && docs.registration;
+  const vehicleDone  = form.make && form.model && form.color && form.plate && docs.vehiclePhoto
+    && docs.license && docs.licenseBack && docs.insurance && docs.fitness && docs.registration;
 
   const goToVehicle = () => {
     setError('');
@@ -2527,7 +2528,9 @@ function DriverSignup({ go, user }) {
   const handleSubmit = async () => {
     setError('');
     if (Object.values(form).some(v => !v)) { setError('Please fill in all fields.'); return; }
-    if (!docs.license||!docs.fitness||!docs.registration) { setError('Please upload all 3 required documents.'); return; }
+    if (!docs.license||!docs.licenseBack||!docs.insurance||!docs.fitness||!docs.registration) {
+      setError('Please upload all 5 required documents (licence front and back, insurance, fitness, registration).'); return;
+    }
     if (!docs.profilePhoto) { setError('Please upload your profile photo.'); return; }
     if (!docs.vehiclePhoto)  { setError('Please upload a photo of your vehicle.'); return; }
     if (form.password.length < 6) { setError('Password must be at least 6 characters.'); return; }
@@ -2563,7 +2566,9 @@ function DriverSignup({ go, user }) {
       };
 
       try {
-        const licenseUrl      = await uploadFile(docs.license,       'license',       "Driver's Licence");
+        const licenseUrl      = await uploadFile(docs.license,       'license',       "Driver's Licence (front)");
+        const licenseBackUrl  = await uploadFile(docs.licenseBack,   'licenseBack',   "Driver's Licence (back)");
+        const insuranceUrl    = await uploadFile(docs.insurance,     'insurance',     'Insurance Document');
         const fitnessUrl      = await uploadFile(docs.fitness,       'fitness',       'Fitness Certificate');
         const registrationUrl = await uploadFile(docs.registration,  'registration',  'Vehicle Registration');
         const profilePhotoUrl = await uploadFile(docs.profilePhoto,  'profilePhoto',  'Profile Photo');
@@ -2571,7 +2576,7 @@ function DriverSignup({ go, user }) {
         setError('Saving your profile...');
         await updateDoc(doc(db,'drivers',cred.user.uid), {
           profilePhotoUrl, vehiclePhotoUrl,
-          docs:{ license:licenseUrl, fitness:fitnessUrl, registration:registrationUrl, profilePhoto:profilePhotoUrl, vehiclePhoto:vehiclePhotoUrl },
+          docs:{ license:licenseUrl, licenseBack:licenseBackUrl, insurance:insuranceUrl, fitness:fitnessUrl, registration:registrationUrl, profilePhoto:profilePhotoUrl, vehiclePhoto:vehiclePhotoUrl },
           documentsComplete: true,
         });
       } catch (upErr) {
@@ -2717,7 +2722,11 @@ function DriverSignup({ go, user }) {
 
         {/* Documents */}
         <label style={s.lbl}>Required Documents</label>
-        {[['license',"Driver's Licence",'🪪'],['fitness','Vehicle Fitness','📋'],['registration','Vehicle Registration','📄']].map(([k,lbl,icon]) => (
+        {[['license',"Driver's Licence — Front",'🪪'],
+          ['licenseBack',"Driver's Licence — Back",'🪪'],
+          ['insurance','Insurance Document','🛡️'],
+          ['fitness','Vehicle Fitness','📋'],
+          ['registration','Vehicle Registration','📄']].map(([k,lbl,icon]) => (
           <div key={k} style={{ marginBottom:10 }}>
             <input type="file" id={'doc-'+k} accept="image/*,application/pdf" style={{ display:'none' }} onChange={e => { if(e.target.files?.[0]) setDocs(p=>({...p,[k]:e.target.files[0]})); }}/>
             <div onClick={() => document.getElementById('doc-'+k).click()} style={{ border:'2px dashed '+(docs[k]?'#1a9e5a':'#e9d5ff'), borderRadius:12, padding:'12px 14px', cursor:'pointer', background:docs[k]?'#f0fff4':'#f9f5ff', display:'flex', alignItems:'center', gap:10 }}>
@@ -5215,6 +5224,24 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
       if (!pd.active) { setPromoMsg('❌ This promo code is no longer active.'); setPromoLoading(false); return; }
       if (pd.expiry && new Date(pd.expiry) < new Date()) { setPromoMsg('❌ This promo code has expired.'); setPromoLoading(false); return; }
       if (pd.usedBy && pd.usedBy.includes(user.uid)) { setPromoMsg('❌ You have already used this promo code.'); setPromoLoading(false); return; }
+      // First-ride codes (WELCOME20 and friends) are for new riders only.
+      // usedBy above only stops the SAME person reusing a code — without this
+      // check an existing customer with fifty completed trips could still claim
+      // an offer advertised as "your first ride". Only codes created with the
+      // "first ride only" box ticked are gated, so general promos are unaffected.
+      if (pd.firstRideOnly) {
+        const prior = await getDocs(query(
+          collection(db, 'bookings'),
+          where('customerId', '==', user.uid),
+          where('status', '==', 'completed'),
+          limit(1)
+        ));
+        if (!prior.empty) {
+          setPromoMsg('❌ This code is for first-time riders only.');
+          setPromoLoading(false);
+          return;
+        }
+      }
       setPromoData(pd);
       setPromoMsg(`✅ "${pd.code}" applied — ${pd.discountType === 'fixed' ? `J$${(pd.discount||0).toLocaleString()}` : `${pd.discount}%`} off!`);
     } catch(err) { setPromoMsg('❌ Error applying code. Try again.'); }
@@ -13163,7 +13190,8 @@ function DriverDocuments({ go, user }) {
       const merged = { ...rich };
       // Map signup's flat URLs (US spelling 'license') into this screen's keys.
       const flatMap = {
-        licence: flat.license, fitness: flat.fitness, registration: flat.registration,
+        licence: flat.license, licenceBack: flat.licenseBack,
+        fitness: flat.fitness, registration: flat.registration,
         vehiclePhoto: flat.vehiclePhoto || data.vehiclePhotoUrl,
         profilePhoto: flat.profilePhoto || data.profilePhotoUrl,
         insurance: flat.insurance,
@@ -13174,7 +13202,7 @@ function DriverDocuments({ go, user }) {
       setDocs(merged);
     });
   }, [user]);
-  const docTypes=[{key:'licence',label:"Driver Licence",icon:'🪪'},{key:'fitness',label:'Vehicle Fitness',icon:'📋'},{key:'registration',label:'Vehicle Registration',icon:'📄'},{key:'insurance',label:'Insurance',icon:'🛡️'},{key:'vehiclePhoto',label:'Vehicle Photo',icon:'🚗'}];
+  const docTypes=[{key:'licence',label:"Driver Licence — Front",icon:'🪪'},{key:'licenceBack',label:"Driver Licence — Back",icon:'🪪'},{key:'insurance',label:'Insurance',icon:'🛡️'},{key:'fitness',label:'Vehicle Fitness',icon:'📋'},{key:'registration',label:'Vehicle Registration',icon:'📄'},{key:'vehiclePhoto',label:'Vehicle Photo',icon:'🚗'}];
   const handleUpload = async (key, file) => {
     if (!file||!user?.uid) return;
     if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
