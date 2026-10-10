@@ -7827,6 +7827,10 @@ function DriverDash({ go, user, setUser, setBookingId }) {
   const [driverTab,    setDriverTab]    = useState('home');
   const [menuOpen,     setMenuOpen]     = useState(false);
   const [isOnline,     setIsOnline]     = useState(false);
+  // Unread admin notices — drives the badge on the menu button and the drawer
+  // row. Without a visible badge a published notice just sits there unread.
+  const driverNotices = useDriverNotices(user?.uid);
+  const unreadNotices = driverNotices.filter(n => !(n.readBy || []).includes(user?.uid)).length;
   const [earnings,     setEarnings]     = useState({ today:0, week:0, total:0, todayRides:0, weekRides:0, totalRides:0, history:[] });
   const [pendingRides, setPendingRides] = useState([]);
   const [myCharters,   setMyCharters]   = useState([]);   // charter jobs assigned to this driver
@@ -8350,10 +8354,14 @@ function DriverDash({ go, user, setUser, setBookingId }) {
 
       {/* ── TOP HEADER ── */}
       <div style={{ background:'#ffffff', padding:'8px 14px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', boxShadow:'0 1px 4px rgba(0,0,0,0.06)', flexShrink:0 }}>
-        <button onClick={() => setMenuOpen(true)} style={{ background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', gap:4, padding:4 }}>
+        <button onClick={() => setMenuOpen(true)} style={{ background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', gap:4, padding:4, position:'relative' }}>
           <div style={{ width:20, height:2, background:'#1a1a2e', borderRadius:1 }}/>
           <div style={{ width:14, height:2, background:'#1a1a2e', borderRadius:1 }}/>
           <div style={{ width:20, height:2, background:'#1a1a2e', borderRadius:1 }}/>
+          {unreadNotices > 0 && (
+            <span style={{ position:'absolute', top:-1, right:-3, width:9, height:9, borderRadius:'50%',
+              background:'#6b21a8', border:'1.5px solid #fff' }}/>
+          )}
         </button>
         <img src="/logo.png" alt="VilleCabs" onClick={() => go('driver-dash')} style={{cursor:'pointer',  height:26, objectFit:'contain', flexShrink:0 }}/>
         <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:8 }}>
@@ -8399,7 +8407,11 @@ function DriverDash({ go, user, setUser, setBookingId }) {
                   onMouseEnter={e=>e.currentTarget.style.background='#f9f5ff'}
                   onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
                   <span style={{ fontSize:18 }}>{icon}</span>
-                  <span style={{ fontSize:14, color:'#1a1a2e', fontWeight:500 }}>{label}</span>
+                  <span style={{ fontSize:14, color:'#1a1a2e', fontWeight:500, flex:1 }}>{label}</span>
+                  {label==='Notifications' && unreadNotices>0 && (
+                    <span style={{ background:'#6b21a8', color:'#fff', borderRadius:11, fontSize:10,
+                      fontWeight:800, padding:'2px 8px', minWidth:20, textAlign:'center' }}>{unreadNotices}</span>
+                  )}
                 </div>
               ))}
             </div>
@@ -13296,15 +13308,74 @@ function DriverDocuments({ go, user }) {
   );
 }
 
+// Live subscription to the notices this driver is allowed to see.
+// Firestore has no OR within one query, so this runs two — notices addressed to
+// everyone, and notices addressed to this driver — and merges them. Both are
+// permitted by the driver_notices read rule. Shared by the Notifications screen
+// and the unread badge on the driver menu.
+function useDriverNotices(uid) {
+  const [notices, setNotices] = useState([]);
+  useEffect(() => {
+    if (!uid) { setNotices([]); return; }
+    const all  = {};   // id -> notice, so the two streams can't double-count
+    const mine = {};
+    const push = () => {
+      const merged = Object.values({ ...all, ...mine });
+      merged.sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
+      setNotices(merged);
+    };
+    const u1 = onSnapshot(query(collection(db,'driver_notices'), where('audience','==','all')),
+      snap => { Object.keys(all).forEach(k=>delete all[k]);
+                snap.docs.forEach(d => { all[d.id] = { id:d.id, ...d.data() }; }); push(); },
+      () => {});
+    const u2 = onSnapshot(query(collection(db,'driver_notices'), where('driverId','==',uid)),
+      snap => { Object.keys(mine).forEach(k=>delete mine[k]);
+                snap.docs.forEach(d => { mine[d.id] = { id:d.id, ...d.data() }; }); push(); },
+      () => {});
+    return () => { u1(); u2(); };
+  }, [uid]);
+  return notices;
+}
+
+// How long ago, in words. Firestore hands back a serverTimestamp that is briefly
+// null on the writer's own device, so an unresolved stamp reads as "Just now".
+function noticeAgo(ts) {
+  if (!ts?.seconds) return 'Just now';
+  const mins = Math.floor((Date.now() - ts.seconds*1000) / 60000);
+  if (mins < 1)    return 'Just now';
+  if (mins < 60)   return `${mins} min ago`;
+  const hrs = Math.floor(mins/60);
+  if (hrs < 24)    return `${hrs} hour${hrs===1?'':'s'} ago`;
+  const days = Math.floor(hrs/24);
+  if (days === 1)  return 'Yesterday';
+  if (days < 7)    return `${days} days ago`;
+  return new Date(ts.seconds*1000).toLocaleDateString('en-JM',{ day:'numeric', month:'short' });
+}
+
 function DriverNotifications({ go, user }) {
-  const [notifs, setNotifs] = useState([
-    {id:'1',type:'account',title:'Welcome to VilleCabs!',message:'Complete your profile to start receiving ride requests.',time:'Today',read:false},
-    {id:'2',type:'account',title:'Application Received',message:'Your application is being reviewed by our team.',time:'Today',read:true},
-  ]);
+  const notices = useDriverNotices(user?.uid);
   const [filter, setFilter] = useState('all');
   const icons={ride:'🚕',account:'👤',safety:'🛡️',payment:'💰',system:'⚙️'};
-  const filtered=filter==='all'?notifs:filter==='unread'?notifs.filter(n=>!n.read):notifs.filter(n=>n.type===filter);
-  const unread=notifs.filter(n=>!n.read).length;
+
+  // Read state lives on the notice itself (readBy), so it survives a reload and
+  // a new phone — and lets the admin see who has actually seen the message.
+  const isRead = (n) => (n.readBy || []).includes(user?.uid);
+  const markRead = async (n) => {
+    if (!user?.uid || isRead(n)) return;
+    try { await updateDoc(doc(db,'driver_notices',n.id), { readBy: arrayUnion(user.uid) }); } catch(e) {}
+  };
+  const markAllRead = async () => {
+    for (const n of notices) { if (!isRead(n)) await markRead(n); }
+  };
+
+  const notifs = notices.map(n => ({
+    id: n.id, type: n.type || 'system', title: n.title || 'VilleCabs',
+    message: n.message || '', time: noticeAgo(n.createdAt), read: isRead(n), raw: n,
+  }));
+  const filtered = filter==='all' ? notifs
+    : filter==='unread' ? notifs.filter(n=>!n.read)
+    : notifs.filter(n=>n.type===filter);
+  const unread = notifs.filter(n=>!n.read).length;
   return (
     <div style={{ background:'#f5f6fa', minHeight:'100vh' }}>
       <div style={{ background:'#fff', padding:'8px 14px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #e5e7eb', position:'sticky', top:0, zIndex:10 }}>
@@ -13316,7 +13387,7 @@ function DriverNotifications({ go, user }) {
           <img src="/logo.png" onClick={() => go('driver-dash')} style={{cursor:'pointer',  height:26, objectFit:'contain' }} alt="VilleCabs"/>
         <span style={{ fontSize:14, fontWeight:700, color:'#1a1a2e', marginLeft:4 }}>Notifications</span>
         {unread>0&&<div style={{ background:'#6b21a8', color:'#fff', borderRadius:10, fontSize:10, fontWeight:700, padding:'2px 7px' }}>{unread}</div>}
-        <button onClick={()=>setNotifs(p=>p.map(n=>({...n,read:true})))} style={{ marginLeft:'auto', background:'none', border:'none', fontSize:11, color:'#6b21a8', cursor:'pointer', fontWeight:600 }}>Mark all read</button>
+        {unread>0 && <button onClick={markAllRead} style={{ marginLeft:'auto', background:'none', border:'none', fontSize:11, color:'#6b21a8', cursor:'pointer', fontWeight:600 }}>Mark all read</button>}
       </div>
       <div style={{ display:'flex', gap:6, padding:'10px 14px', background:'#fff', borderBottom:'1px solid #f0f0f0', overflowX:'auto' }}>
         {[['all','All'],['unread','Unread'],['ride','Rides'],['account','Account']].map(([k,l])=>(
@@ -13324,9 +13395,14 @@ function DriverNotifications({ go, user }) {
         ))}
       </div>
       <div style={{ padding:'12px 14px 90px' }}>
-        {filtered.length===0&&<div style={{ textAlign:'center', padding:40, color:'#888' }}>No notifications</div>}
+        {filtered.length===0&&(
+          <div style={{ textAlign:'center', padding:40, color:'#888' }}>
+            <div style={{ fontSize:34, marginBottom:8 }}>🔔</div>
+            <div style={{ fontSize:13 }}>{filter==='unread' ? "You're all caught up" : 'No notifications yet'}</div>
+          </div>
+        )}
         {filtered.map((n,i)=>(
-          <div key={i} onClick={()=>setNotifs(p=>p.map(x=>x.id===n.id?{...x,read:true}:x))}
+          <div key={n.id} onClick={()=>markRead(n.raw)}
             style={{ background:n.read?'#fff':'#f9f5ff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)', cursor:'pointer' }}>
             <div style={{ display:'flex', gap:12 }}>
               <span style={{ fontSize:22 }}>{icons[n.type]||'🔔'}</span>

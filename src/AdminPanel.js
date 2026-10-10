@@ -2943,13 +2943,75 @@ function PerformanceTab() {
 }
 
 // ── BROADCAST TAB ─────────────────────────────────────────────────────────────
+const NOTICE_TYPES = [
+  { key:'system',  label:'General',  icon:'⚙️' },
+  { key:'ride',    label:'Rides',    icon:'🚕' },
+  { key:'payment', label:'Payments', icon:'💰' },
+  { key:'safety',  label:'Safety',   icon:'🛡️' },
+  { key:'account', label:'Account',  icon:'👤' },
+];
+
 function BroadcastTab() {
   const [drivers, setDrivers] = useState([]);
   const [msg,     setMsg]     = useState('');
+
+  // ── In-app notice composer ──
+  const [title,    setTitle]    = useState('');
+  const [body,     setBody]     = useState('');
+  const [type,     setType]     = useState('system');
+  const [audience, setAudience] = useState('all');     // 'all' | 'picked'
+  const [picked,   setPicked]   = useState([]);        // driver uids
+  const [notices,  setNotices]  = useState([]);
+  const [sending,  setSending]  = useState('');
+
   useEffect(() => {
-    const unsub = onSnapshot(query(collection(db,'drivers'), where('status','==','approved')), snap => setDrivers(snap.docs.map(d=>({id:d.id,...d.data()}))), ()=>{});
-    return () => unsub();
+    // Every driver, not only approved ones — a notice is often exactly what a
+    // pending applicant needs. WhatsApp targets below still use approved only.
+    const unsub = onSnapshot(collection(db,'drivers'), snap => setDrivers(snap.docs.map(d=>({id:d.id,...d.data()}))), ()=>{});
+    const u2 = onSnapshot(collection(db,'driver_notices'), snap => {
+      const list = snap.docs.map(d=>({id:d.id,...d.data()}));
+      list.sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
+      setNotices(list);
+    }, ()=>{});
+    return () => { unsub(); u2(); };
   }, []);
+
+  const approvedDrivers = drivers.filter(d => d.status === 'approved');
+  const togglePick = (uid) => setPicked(p => p.includes(uid) ? p.filter(x=>x!==uid) : [...p, uid]);
+
+  const publish = async () => {
+    if (!title.trim() || !body.trim()) { setSending('need'); return; }
+    if (audience === 'picked' && picked.length === 0) { setSending('nopick'); return; }
+    setSending('sending');
+    try {
+      const base = {
+        title: title.trim(), message: body.trim(), type,
+        createdAt: serverTimestamp(), createdBy: 'admin', readBy: [],
+      };
+      if (audience === 'all') {
+        await addDoc(collection(db,'driver_notices'), { ...base, audience:'all', driverId:null, driverName:null });
+      } else {
+        // One document per driver, so each person's read receipt is their own
+        // and a private message never sits in a doc others are allowed to read.
+        for (const uid of picked) {
+          const d = drivers.find(x => x.id === uid);
+          await addDoc(collection(db,'driver_notices'), {
+            ...base, audience:'driver', driverId:uid, driverName:d?.name || 'Driver',
+          });
+        }
+      }
+      setTitle(''); setBody(''); setPicked([]);
+      setSending('sent'); setTimeout(()=>setSending(''), 2500);
+    } catch (e) {
+      console.error('Publish notice failed', e);
+      setSending('error');
+    }
+  };
+
+  const removeNotice = async (id) => {
+    if (!window.confirm('Delete this notice? It disappears from every driver\'s app.')) return;
+    try { await deleteDoc(doc(db,'driver_notices',id)); } catch(e) {}
+  };
   const normalizePhone = (raw) => {
     if (!raw) return null;
     let d = String(raw).replace(/\D/g,'');
@@ -2961,8 +3023,113 @@ function BroadcastTab() {
   const targets = drivers.map(d=>({ ...d, wa:normalizePhone(d.phone) })).filter(d=>d.wa);
   return (
     <div>
+      {/* ── IN-APP NOTICE — lands in the driver's Notifications screen ── */}
       <div style={s.card}>
-        <div style={{ fontSize:14, fontWeight:500, marginBottom:6, color:'#1a1a2e' }}>📢 Broadcast to Drivers</div>
+        <div style={{ fontSize:14, fontWeight:700, marginBottom:4, color:'#1a1a2e' }}>🔔 Publish to Driver Notifications</div>
+        <div style={{ fontSize:12, color:'#6b7280', marginBottom:14, lineHeight:1.6 }}>
+          Appears inside the app under Notifications, with an unread badge on the driver's menu.
+          Unlike WhatsApp below, this reaches drivers who haven't saved your number — and you can see who has read it.
+        </div>
+
+        <div style={s.lbl}>Who gets it</div>
+        <div style={{ display:'flex', gap:8, marginBottom:14 }}>
+          {[['all',`Everyone (${drivers.length})`],['picked','Pick drivers']].map(([k,l]) => (
+            <button key={k} onClick={() => setAudience(k)}
+              style={{ padding:'8px 16px', borderRadius:20, border:'none', cursor:'pointer', fontSize:12, fontWeight:700,
+                background: audience===k ? '#6b21a8' : '#f3f4f6', color: audience===k ? '#fff' : '#555' }}>{l}</button>
+          ))}
+        </div>
+
+        {audience === 'picked' && (
+          <div style={{ marginBottom:14, maxHeight:230, overflowY:'auto', border:'1px solid #e5e7eb', borderRadius:10, padding:6 }}>
+            {drivers.length === 0 && <div style={{ fontSize:12, color:'#9199ad', padding:10 }}>No drivers yet.</div>}
+            {drivers.map(d => {
+              const on = picked.includes(d.id);
+              return (
+                <div key={d.id} onClick={() => togglePick(d.id)}
+                  style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 10px', borderRadius:8, cursor:'pointer',
+                    background: on ? '#f5f0ff' : 'transparent' }}>
+                  <input type="checkbox" readOnly checked={on} style={{ width:16, height:16, accentColor:'#6b21a8', cursor:'pointer' }}/>
+                  <span style={{ fontSize:13, color:'#1a1a2e', flex:1 }}>{d.name || 'Driver'}</span>
+                  <span style={{ ...s.badge, fontSize:10,
+                    background: d.status==='approved' ? 'rgba(26,158,90,0.15)' : d.status==='pending' ? 'rgba(232,180,0,0.15)' : '#f3f4f6',
+                    color: d.status==='approved' ? '#0f7a43' : d.status==='pending' ? '#b45309' : '#6b7280' }}>{d.status || 'unknown'}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        <div style={s.lbl}>Category</div>
+        <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:14 }}>
+          {NOTICE_TYPES.map(t => (
+            <button key={t.key} onClick={() => setType(t.key)}
+              style={{ padding:'7px 13px', borderRadius:18, border:'none', cursor:'pointer', fontSize:12, fontWeight:600,
+                background: type===t.key ? '#6b21a8' : '#f3f4f6', color: type===t.key ? '#fff' : '#555' }}>
+              {t.icon} {t.label}
+            </button>
+          ))}
+        </div>
+
+        <div style={s.lbl}>Title</div>
+        <input style={s.inp} value={title} maxLength={70} placeholder="e.g. Fuel prices up from Monday"
+          onChange={e => setTitle(e.target.value)}/>
+
+        <div style={s.lbl}>Message</div>
+        <textarea value={body} onChange={e => setBody(e.target.value)} rows={4} maxLength={600}
+          placeholder="Write the full message drivers will read."
+          style={{ width:'100%', padding:12, borderRadius:8, border:'1px solid #d0d3e0', background:'#fff', color:'#1a1a2e', fontSize:14, fontFamily:'inherit', resize:'vertical', boxSizing:'border-box', marginBottom:6 }}/>
+        <div style={{ fontSize:11, color:'#9199ad', marginBottom:12 }}>{body.length}/600</div>
+
+        <div style={{ display:'flex', gap:10, alignItems:'center', flexWrap:'wrap' }}>
+          <button onClick={publish} disabled={sending==='sending'}
+            style={{ background:'#6b21a8', color:'#fff', border:'none', borderRadius:10, padding:'11px 22px',
+              fontSize:13, fontWeight:700, cursor: sending==='sending'?'default':'pointer', opacity: sending==='sending'?0.6:1 }}>
+            {sending==='sending' ? 'Publishing…'
+              : audience==='all' ? 'Publish to all drivers'
+              : `Publish to ${picked.length} driver${picked.length===1?'':'s'}`}
+          </button>
+          {sending==='sent'   && <span style={{ fontSize:12, color:'#166534', fontWeight:700 }}>✓ Published</span>}
+          {sending==='need'   && <span style={{ fontSize:12, color:'#dc2626', fontWeight:700 }}>Add a title and a message first</span>}
+          {sending==='nopick' && <span style={{ fontSize:12, color:'#dc2626', fontWeight:700 }}>Pick at least one driver</span>}
+          {sending==='error'  && <span style={{ fontSize:12, color:'#dc2626', fontWeight:700 }}>Could not publish — check your connection</span>}
+        </div>
+      </div>
+
+      {/* ── SENT NOTICES + read receipts ── */}
+      {notices.length > 0 && (
+        <div style={s.card}>
+          <div style={{ fontSize:14, fontWeight:700, marginBottom:12, color:'#1a1a2e' }}>📬 Published notices</div>
+          {notices.slice(0,25).map(n => {
+            const meta = NOTICE_TYPES.find(t => t.key === n.type) || NOTICE_TYPES[0];
+            const readCount = (n.readBy || []).length;
+            const reach = n.audience === 'all' ? drivers.length : 1;
+            const when = n.createdAt?.seconds
+              ? new Date(n.createdAt.seconds*1000).toLocaleString('en-JM',{ day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })
+              : 'just now';
+            return (
+              <div key={n.id} style={{ padding:'11px 0', borderBottom:'1px solid #f0f0f4' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:3, flexWrap:'wrap' }}>
+                  <span style={{ fontSize:15 }}>{meta.icon}</span>
+                  <span style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', flex:1, minWidth:120 }}>{n.title}</span>
+                  <span style={{ ...s.badge, background:'#f5f0ff', color:'#6b21a8', fontSize:10 }}>
+                    {n.audience === 'all' ? 'All drivers' : (n.driverName || 'One driver')}
+                  </span>
+                  <button onClick={() => removeNotice(n.id)}
+                    style={{ background:'none', border:'none', color:'#dc2626', fontSize:11, fontWeight:700, cursor:'pointer' }}>Delete</button>
+                </div>
+                <div style={{ fontSize:12, color:'#6b7280', lineHeight:1.5 }}>{n.message}</div>
+                <div style={{ fontSize:11, color:'#9199ad', marginTop:4 }}>
+                  {when} · read by {readCount} of {reach}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div style={s.card}>
+        <div style={{ fontSize:14, fontWeight:700, marginBottom:6, color:'#1a1a2e' }}>💬 WhatsApp Broadcast</div>
         <div style={{ fontSize:12, color:'#6b7280', marginBottom:14 }}>Type one message, then tap each driver to open WhatsApp with it pre-filled. {targets.length} approved driver{targets.length!==1?'s':''} with valid numbers.</div>
         <textarea value={msg} onChange={e=>setMsg(e.target.value)} rows={4} placeholder="e.g. Heavy rain expected this evening — surge pricing is ON. Drive safe!"
           style={{ width:'100%', padding:12, borderRadius:8, border:'1px solid #d0d3e0', background:'#f5f6fa', color:'#1a1a2e', fontSize:14, fontFamily:'inherit', resize:'vertical', boxSizing:'border-box', marginBottom:12 }}/>

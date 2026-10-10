@@ -1,0 +1,347 @@
+rules_version = '2';
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  VilleCabs Firestore Security Rules — HARDENED (pre-launch security review)
+//
+//  Key fixes vs previous version:
+//   • promo_codes: users can no longer rewrite discounts/counters — redemption
+//     is constrained to only touching usedBy/usageCount.
+//   • bookings: update is now scoped to the ride's customer or a driver, not
+//     "any signed-in user".
+//   • notifications: read/create only; users can't overwrite or delete others'.
+//   • tracking: only the ride's own customer can write its tracking doc.
+//   • partnerRequests: no longer world-readable (contained business leads/PII).
+//
+//  Review in Firebase Console → Firestore → Rules before publishing, then:
+//     firebase deploy --only firestore:rules
+// ═══════════════════════════════════════════════════════════════════════════
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+    function signedIn() {
+      return request.auth != null;
+    }
+    function isAdmin() {
+      return signedIn() && request.auth.token.email in [
+        'admin@villecabs.com'
+      ];
+    }
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+    // True only for an APPROVED driver. Note: every applicant gets a drivers/{uid}
+    // doc at signup with status 'pending', so a mere exists() check would let
+    // unapproved / rejected / suspended drivers claim rides via the API.
+    // Any driver account, approved or not. Notices go to applicants as well —
+    // "your documents are being reviewed" is exactly the kind of message a
+    // PENDING driver needs, and isDriver() below would lock them out of it.
+    function isDriverAccount() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/drivers/$(request.auth.uid));
+    }
+
+    function isDriver() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/drivers/$(request.auth.uid))
+        && get(/databases/$(database)/documents/drivers/$(request.auth.uid)).data.status == 'approved';
+    }
+
+    // A customer is in good standing unless an admin has banned/suspended them.
+    // NOTE: must use .data.get('status','') — a normal customer document has NO
+    // status field at all, and reading a missing key throws, which Firestore
+    // treats as DENY. That would block every ordinary booking.
+    function isCustomerInGoodStanding() {
+      return signedIn()
+        && (!exists(/databases/$(database)/documents/customers/$(request.auth.uid))
+            || !(get(/databases/$(database)/documents/customers/$(request.auth.uid)).data.get('status', '') in ['banned','suspended','deactivated']));
+    }
+    // Only the listed fields are being changed (everything else unchanged)
+    function onlyChanges(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
+    }
+
+    // ── Customers ────────────────────────────────────────────────────────────
+    match /customers/{uid} {
+      allow read:  if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid);
+      // Owner may edit own profile but NOT their own 'status' (blacklist flag);
+      // only admins can change status.
+      allow update: if isAdmin()
+                    || (isOwner(uid) && request.resource.data.status == resource.data.status)
+                    || (isOwner(uid) && !('status' in resource.data) && request.resource.data.status == 'active')
+                    || (isOwner(uid) && !('status' in request.resource.data));
+      allow delete: if isAdmin();
+    }
+
+    // ── Drivers ──────────────────────────────────────────────────────────────
+    // Driver docs hold private data (TRN, DOB, document URLs), so reads are
+    // restricted to: the driver themselves, admins, or — for the customer-side
+    // availability check — drivers that are approved AND currently online.
+    // (The customer's live-ride screen no longer reads this collection at all;
+    //  it uses the driver fields copied onto the booking at accept time.)
+    // Queries MUST be filtered by status=='approved' && isOnline==true to pass.
+    match /drivers/{uid} {
+      allow read:   if isAdmin()
+                    || isOwner(uid)
+                    || (signedIn()
+                        && resource.data.status == 'approved'
+                        && resource.data.isOnline == true);
+      allow create: if isOwner(uid);
+      // A driver may edit their own profile, but must NOT change their own
+      // status, and must NOT set isOnline unless they are approved — otherwise
+      // a pending applicant shows up as an available driver.
+      allow update: if isAdmin()
+                    || (isOwner(uid)
+                        && (!('status' in request.resource.data)
+                            || request.resource.data.status == resource.data.status)
+                        && (request.resource.data.get('isOnline', false) == false
+                            || resource.data.get('status', '') == 'approved'));
+      allow delete: if isAdmin();
+    }
+
+    // ── Bookings ─────────────────────────────────────────────────────────────
+    // Read: any signed-in user (drivers must see open requests — the pragmatic
+    //       rides-app pattern; tighten later with Cloud Functions if desired).
+    // Create: only the customer creating their own booking.
+    // Update: allowed for
+    //   • admin
+    //   • the ride's own customer (confirm / cancel)
+    //   • a driver CLAIMING a ride that is still 'searching' and unassigned
+    //     (this, combined with the client transaction, prevents two drivers
+    //      from taking the same ride), or
+    //   • the driver already assigned to this ride (arrive / complete / location)
+    // Delete: admin only.
+    match /bookings/{bookingId} {
+      // Read: admin, the ride's customer, the assigned driver, or an approved
+      // driver looking at OPEN rides (searching / scheduled). This stops any
+      // signed-in user from enumerating every booking (and every rider's phone).
+      // Client queries must be scoped by customerId, driverId, or status.
+      allow read:   if isAdmin()
+                    || (signedIn() && resource.data.customerId == request.auth.uid)
+                    || (signedIn() && resource.data.driverId == request.auth.uid)
+                    || (isDriver() && resource.data.status == 'searching')
+                    || (isDriver() && resource.data.status == 'scheduled');
+      allow create: if (signedIn()
+                        && request.resource.data.customerId == request.auth.uid
+                        && isCustomerInGoodStanding())
+                    // CHARTER TRIP: an approved driver starts a day of a charter
+                    // they have been assigned. They create the trip for someone
+                    // else's charter, so the customer-owns-it check can't apply —
+                    // instead it must be flagged as a charter and assigned to
+                    // themselves, and they must own the parent charter.
+                    || (isDriver()
+                        && request.resource.data.get('isCharter', false) == true
+                        && request.resource.data.driverId == request.auth.uid
+                        && request.resource.data.status == 'active'
+                        && exists(/databases/$(database)/documents/charterRequests/$(request.resource.data.charterId))
+                        && get(/databases/$(database)/documents/charterRequests/$(request.resource.data.charterId)).data.assignedDriverId == request.auth.uid);
+      allow update: if isAdmin()
+                    || (signedIn() && resource.data.customerId == request.auth.uid)
+                    // the driver already assigned to this ride may keep updating it
+                    // (arrive / complete / location). No isDriver() get() here —
+                    // this is the hot path (location writes every few seconds) and
+                    // they were already verified as approved when they claimed it.
+                    || (signedIn() && resource.data.driverId == request.auth.uid)
+                    // any APPROVED driver may DECLINE an open ride — this only
+                    // appends their uid to declinedBy, nothing else may change
+                    || (isDriver() && onlyChanges(['declinedBy']))
+                    // APPROVED driver claiming an OPEN ride: it must currently be
+                    // searching (on-demand) or scheduled, and unassigned, and
+                    // they must be assigning it to themselves
+                    || (isDriver()
+                        && (resource.data.status == 'searching' || resource.data.status == 'scheduled')
+                        && (!('driverId' in resource.data) || resource.data.driverId == null)
+                        && request.resource.data.driverId == request.auth.uid);
+      allow delete: if isAdmin();
+
+      // In-ride chat messages — participants send/read; recipient marks read
+      // (adds uid to readBy). Delete is admin-only.
+      match /messages/{msgId} {
+        allow read, create: if signedIn();
+        allow update: if signedIn();
+        allow delete: if isAdmin();
+      }
+    }
+
+    // ── Payouts (driver payout tracking) ─────────────────────────────────────
+    match /payouts/{payoutId} {
+      allow read:   if isAdmin()
+                    || (signedIn() && resource.data.driverId == request.auth.uid);
+      allow create: if signedIn()
+                    && request.resource.data.driverId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Settings (surge pricing + ride-request pause toggle) ─────────────────
+    match /settings/{docId} {
+      allow read:  if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // ── Partner / advertiser requests ────────────────────────────────────────
+    // Anyone (incl. signed-out visitors) may SUBMIT the public form, BUT a
+    // public submission must be status:'new' with NO slot — this stops a
+    // malicious submitter from self-approving or planting their own ad in a
+    // featured slot. Only admins can approve, assign slots, or change anything.
+    // Public READ is allowed only for APPROVED / FEATURED partners (shown on the
+    // dashboard). Pending / rejected leads (names, emails, phones) stay admin-only.
+    match /partnerRequests/{id} {
+      allow create: if request.resource.data.status == 'new'
+                    && !('slot' in request.resource.data);
+      allow read: if isAdmin()
+                  || resource.data.status in ['approved', 'featured'];
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Reviews (rider reviews of drivers) ───────────────────────────────────
+    match /reviews/{id} {
+      allow read:   if signedIn();
+      allow create: if signedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Service reviews (public "rate VilleCabs" wall) ───────────────────────
+    // Publicly READABLE (the wall is shown to everyone, signed-out included) and
+    // anyone may POST a review. Admins moderate (edit/delete). A posted review
+    // must include a 1–5 rating and a non-empty comment.
+    match /service_reviews/{id} {
+      allow read:   if true;
+      allow create: if request.resource.data.rating is int
+                    && request.resource.data.rating >= 1
+                    && request.resource.data.rating <= 5
+                    && request.resource.data.comment is string
+                    && request.resource.data.comment.size() > 0
+                    && request.resource.data.comment.size() <= 500;
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Public live-tracking (shared ride links) ─────────────────────────────
+    // World-READABLE so a friend with the link can watch without an account.
+    // Only the ride's own customer may create/update its tracking doc (the doc
+    // id is the booking id, so we verify ownership of that booking).
+    match /tracking/{bookingId} {
+      allow read: if true;
+      allow create, update: if signedIn()
+        && get(/databases/$(database)/documents/bookings/$(bookingId)).data.customerId == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+
+    // ── Promo codes ──────────────────────────────────────────────────────────
+    // Publicly READABLE — promo codes are meant to be advertised (shown on the
+    // landing page to signed-out visitors too). On redemption a signed-in
+    // customer may ONLY append to usedBy / bump usageCount — they cannot change
+    // the discount or reset limits. Only admins create/delete.
+    match /promo_codes/{id} {
+      allow read:   if true;
+      allow update: if signedIn()
+                    && onlyChanges(['usedBy', 'usageCount']);
+      allow create, delete: if isAdmin();
+    }
+
+    // ── Notifications ────────────────────────────────────────────────────────
+    // Any signed-in user may read and create a notification, but cannot edit or
+    // delete existing ones (prevents tampering/spoofing). Admins manage.
+    match /notifications/{id} {
+      allow read:   if signedIn();
+      allow create: if signedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    // ── Unfulfilled ride requests ────────────────────────────────────────────
+    match /unfulfilled_ride_requests/{id} {
+      allow create: if signedIn();
+      allow read, update, delete: if isAdmin();
+    }
+
+    // ── Contact form submissions (public create, admin-read) ─────────────────
+    match /contact_submissions/{id} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // ── App config (global force-logout cutoff, etc.) ────────────────────────
+    // Any signed-in client reads it on session restore; only admin writes it.
+    // ── DRIVER NOTICES — admin messages shown in the driver app ──────────────
+    //  audience 'all'    → every driver
+    //  audience 'driver' → only the driver named in driverId
+    //  A driver cannot read a notice addressed to someone else. Firestore has no
+    //  OR across a single query, so the app runs two queries (all / mine) and
+    //  merges them; both are covered by the read rule below.
+    match /driver_notices/{id} {
+      allow read: if isAdmin()
+                  || (isDriverAccount()
+                      && (resource.data.get('audience','all') == 'all'
+                          || resource.data.get('driverId','') == request.auth.uid));
+      allow create, delete: if isAdmin();
+      // A driver may ONLY mark it read — that means touching readBy and nothing
+      // else, and only ever adding themselves. hasAll() stops them clearing
+      // anyone else's read receipt; the uid check stops them marking it for
+      // another driver. The message itself is immutable to them.
+      allow update: if isAdmin()
+                    || (isDriverAccount()
+                        // ...and only on a notice actually addressed to them, so a
+                        // driver cannot pad the read receipts on someone else's message.
+                        && (resource.data.get('audience','all') == 'all'
+                            || resource.data.get('driverId','') == request.auth.uid)
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy'])
+                        && request.resource.data.readBy.hasAll(resource.data.get('readBy', []))
+                        && request.auth.uid in request.resource.data.readBy);
+    }
+
+    match /config/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    match /contactMessages/{id} {
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // ── Charter requests ─────────────────────────────────────────────────────
+    // Anyone can submit a charter request (the form is open to guests too).
+    // Only the admin reads/manages them.
+    match /charterRequests/{id} {
+      allow create: if request.resource.data.status == 'pending';
+
+      // Approved drivers may see NEW unclaimed charter requests (so they can
+      // take one), plus any charter already assigned to them. Everything else
+      // stays admin-only.
+      allow read: if isAdmin()
+                  || (signedIn() && resource.data.get('assignedDriverId', null) == request.auth.uid)
+                  || (isDriver() && resource.data.get('status','') == 'pending'
+                      && resource.data.get('assignedDriverId', null) == null);
+
+      allow update: if isAdmin()
+                    // CLAIM: an approved driver takes an unassigned new charter
+                    // request. Must be claiming it for themselves.
+                    || (isDriver()
+                        && resource.data.get('status','') == 'pending'
+                        && resource.data.get('assignedDriverId', null) == null
+                        && request.resource.data.assignedDriverId == request.auth.uid
+                        && onlyChanges(['assignedDriverId','assignedDriverName','status','claimedAt','updatedAt']))
+                    // PROGRESS: the assigned driver updates only the job status.
+                    || (signedIn()
+                        && resource.data.get('assignedDriverId', null) == request.auth.uid
+                        && onlyChanges(['status','driverStartedAt','driverCompletedAt','updatedAt']));
+
+      allow delete: if isAdmin();
+    }
+
+    // ── SOS / emergency alerts ───────────────────────────────────────────────
+    match /sos_alerts/{id} {
+      allow create: if signedIn();
+      allow read, update, delete: if isAdmin();
+    }
+    match /sosAlerts/{id} {
+      allow create: if signedIn();
+      allow read, update, delete: if isAdmin();
+    }
+
+    // ── Default deny for anything not explicitly listed ──────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
