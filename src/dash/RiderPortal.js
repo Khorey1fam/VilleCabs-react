@@ -187,9 +187,12 @@ function ActiveJob({ rider, job }) {
           <a href={`tel:${toPickup ? job.pickup.contactPhone : job.dropoff.recipientPhone}`} style={{ ...st.btnGhost, textAlign: 'center', textDecoration: 'none' }}>📞 Call</a>
         </div>
         <div style={{ ...st.row, marginTop: 10 }}><span style={{ color: C.quiet }}>Package</span><span>{job.package.description}{job.package.fragile ? ' · FRAGILE' : ''}</span></div>
-        <div style={st.row}><span style={{ color: C.quiet }}>Collect cash</span><b>{formatJMD(job.quote.totalCents)} from {job.payment.collectFrom === 'recipient' ? 'recipient' : 'sender'}</b></div>
+        <div style={st.row}><span style={{ color: C.quiet }}>Collect cash</span><b>{formatJMD(job.cashToCollectCents ?? job.quote.totalCents)} from {job.payment.collectFrom === 'recipient' ? 'recipient' : 'sender'}</b></div>
         <div style={st.row}><span style={{ color: C.quiet }}>Your pay</span><b>{formatJMD(job.riderPayCents)}</b></div>
       </div>
+      {job.type === 'market' && ['assigned', 'to_pickup', 'at_pickup'].includes(job.status) && (
+        <div style={st.note}>{job.merchantReady ? '✅ The store has marked this order ready.' : `The store is still preparing this order${job.estimatedReadyAt?.toDate ? ` — ready about ${job.estimatedReadyAt.toDate().toLocaleTimeString('en-JM', { hour: 'numeric', minute: '2-digit' })}` : ''}. You can collect it once they mark it ready.`}</div>
+      )}
       {gpsErr && <div style={st.err}>{gpsErr}</div>}
       {err && <div style={st.err}>{err}</div>}
       {next && <button style={{ ...st.btn, padding: 18, fontSize: 16 }} disabled={busy} onClick={() => move(next[0])}>{busy ? 'Saving…' : next[1]}</button>}
@@ -235,7 +238,7 @@ function Offers({ rider }) {
             <b style={{ color: C.green }}>{formatJMD(d.riderPayCents)}</b>
           </div>
           <div style={{ ...st.sub, marginTop: 4 }}>
-            ~{d.quote.distanceKm} km · {d.package.size} {d.package.category.replace('_', ' ')}{d.package.fragile ? ' · fragile' : ''}
+            ~{d.quote.distanceKm} km · {d.type === 'market' ? `Store order from ${d.merchantName}` : `${d.package.size} ${d.package.category.replace('_', ' ')}`}{d.package.fragile ? ' · fragile' : ''}
           </div>
           {d.pickup.instructions && <div style={{ ...st.sub, marginTop: 2 }}>Pickup note: {d.pickup.instructions}</div>}
           <button style={{ ...st.btn, marginTop: 10 }} disabled={!!busyId} onClick={() => accept(d.id)}>{busyId === d.id ? 'Accepting…' : 'Accept'}</button>

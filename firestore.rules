@@ -449,6 +449,56 @@ service cloud.firestore {
       allow create, delete: if false;
     }
 
+
+    // ── Marketplace ─────────────────────────────────────────────────────────
+    //  merchants/{ownerUid}: one store per owner login. The public sees
+    //  approved stores only. Owners edit their profile, hours and products, but
+    //  never their own status or commission. Orders and settlements are
+    //  written only by Cloud Functions.
+    match /merchants/{uid} {
+      allow read: if isAdmin() || isOwner(uid) || resource.data.status == 'approved';
+      allow create: if isOwner(uid)
+                    && request.resource.data.status == 'pending'
+                    && !('commissionPct' in request.resource.data)
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() > 1;
+      allow update: if isAdmin()
+                    || (isOwner(uid)
+                        && !request.resource.data.diff(resource.data).affectedKeys()
+                             .hasAny(['status','commissionPct','approvedAt','approvedBy']));
+      allow delete: if isAdmin();
+
+      match /products/{productId} {
+        allow read: if isAdmin() || isOwner(uid)
+                    || get(/databases/$(database)/documents/merchants/$(uid)).data.status == 'approved';
+        allow create, update: if (isAdmin() || isOwner(uid))
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() > 0
+                    && request.resource.data.priceCents is int
+                    && request.resource.data.priceCents >= 0
+                    && (!('stock' in request.resource.data) || request.resource.data.stock == null
+                        || (request.resource.data.stock is int && request.resource.data.stock >= 0));
+        allow delete: if isAdmin() || isOwner(uid);
+      }
+    }
+
+    match /dash_orders/{id} {
+      allow read: if isAdmin()
+                  || (signedIn() && resource.data.customerId == request.auth.uid)
+                  || (signedIn() && resource.data.merchantId == request.auth.uid);
+      allow write: if false;
+      match /customer/{docId} {
+        allow read: if isAdmin()
+                    || (signedIn() && get(/databases/$(database)/documents/dash_orders/$(id)).data.customerId == request.auth.uid);
+        allow write: if false;
+      }
+    }
+
+    match /settlements/{id} {
+      allow read: if isAdmin() || (signedIn() && resource.data.merchantId == request.auth.uid);
+      allow write: if false;
+    }
+
     // ── Fleet (admin only; riders never see provider details) ───────────────
     match /fleet_motorcycles/{id} { allow read, write: if isAdmin(); }
     match /fleet_providers/{id}   { allow read, write: if isAdmin(); }

@@ -23,58 +23,13 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
-const { getMessaging } = require('firebase-admin/messaging');
 const crypto = require('crypto');
 const L = require('./logic');
 
-const ADMIN_EMAILS = ['admin@villecabs.com'];
-const db = () => getFirestore();
-
-// ── Auth helpers ─────────────────────────────────────────────────────────────
-function requireAuth(req) {
-  if (!req.auth) throw new HttpsError('unauthenticated', 'Please sign in first.');
-  return req.auth;
-}
-function isAdminToken(auth) {
-  const t = (auth && auth.token) || {};
-  return t.admin === true || ADMIN_EMAILS.includes(String(t.email || '').toLowerCase());
-}
-function requireAdmin(req) {
-  const auth = requireAuth(req);
-  if (!isAdminToken(auth)) throw new HttpsError('permission-denied', 'Admins only.');
-  return auth;
-}
-async function loadPricing() {
-  const snap = await db().doc('dash_pricing/current').get();
-  return L.mergePricing(snap.exists ? snap.data() : null);
-}
-async function dashEnabledFor(auth) {
-  if (isAdminToken(auth)) return true;
-  const snap = await db().doc('config/features').get();
-  if (!snap.exists) return false;
-  const f = snap.data();
-  if (f.dash === true) return true;
-  // Pilot mode: let named testers in while it is hidden from everyone else.
-  return Array.isArray(f.dashTesters) && f.dashTesters.includes(auth.uid);
-}
-
-function audit(tx, { actor, role, action, target, details }) {
-  const ref = db().collection('audit_logs').doc();
-  const rec = { actor: actor || null, role, action, target: target || null, details: details || null, at: FieldValue.serverTimestamp() };
-  if (tx) tx.set(ref, rec); else return ref.set(rec);
-  return null;
-}
-function addEvent(tx, deliveryId, status, by, role, note) {
-  const ref = db().collection(`dash_deliveries/${deliveryId}/events`).doc();
-  tx.set(ref, { status, by: by || null, role, note: note || null, at: FieldValue.serverTimestamp() });
-}
-function statusPatch(status, extra = {}) {
-  return { status, [`statusTimes.${status}`]: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), ...extra };
-}
-function quoteErrorToHttps(e) {
-  if (e instanceof L.QuoteError) return new HttpsError('failed-precondition', e.message, { code: e.code });
-  return e;
-}
+const {
+  db, requireAuth, isAdminToken, requireAdmin, loadPricing, dashEnabledFor,
+  audit, addEvent, statusPatch, quoteErrorToHttps, pushTo,
+} = require('./common');
 
 // ── 1. Quote ─────────────────────────────────────────────────────────────────
 exports.dashQuoteDelivery = onCall(async (req) => {
@@ -203,6 +158,7 @@ exports.dashCreateDelivery = onCall(async (req) => {
     quote: { lines: quote.lines, totalCents: quote.totalCents, distanceKm: quote.distanceKm,
       distanceIsEstimate: true, pricingVersion: quote.pricingVersion, pricingPlaceholder: quote.pricingPlaceholder },
     riderPayCents: quote.riderPayCents,
+    cashToCollectCents: quote.totalCents,
     payment: { method: 'cash', collectFrom: d.payer === 'recipient' ? 'recipient' : 'sender', status: 'unpaid' },
     status: 'requested',
     statusTimes: { requested: FieldValue.serverTimestamp() },
@@ -235,6 +191,7 @@ exports.dashCancelDelivery = onCall(async (req) => {
     if (!snap.exists) throw new HttpsError('not-found', 'Delivery not found.');
     const d = snap.data();
     if (!admin && d.customerId !== auth.uid) throw new HttpsError('permission-denied', 'Not your delivery.');
+    if (d.type === 'market') throw new HttpsError('failed-precondition', 'This is a store order — cancel the order instead.');
     if (L.FINAL.includes(d.status)) throw new HttpsError('failed-precondition', 'This delivery is already closed.');
     if (!admin && !L.CUSTOMER_CANCELLABLE.includes(d.status)) {
       throw new HttpsError('failed-precondition', 'The rider already has your package. Contact support to change this delivery.');
@@ -316,7 +273,17 @@ exports.dashRiderUpdateStatus = onCall(async (req) => {
     if (d.riderId !== auth.uid) throw new HttpsError('permission-denied', 'This delivery is not assigned to you.');
     if (d.status === to) return; // repeated tap — nothing to do
     if (!L.canRiderMove(d.status, to)) throw new HttpsError('failed-precondition', `Can't go from ${d.status} to ${to}.`);
+    // A store order can only be collected once the merchant has marked it ready.
+    let orderRef = null;
+    if (d.type === 'market' && to === 'collected') {
+      orderRef = db().doc(`dash_orders/${d.orderId}`);
+      const order = await tx.get(orderRef);
+      if (!order.exists || order.get('status') !== 'ready') {
+        throw new HttpsError('failed-precondition', 'The store hasn\u2019t marked this order ready yet.');
+      }
+    }
     tx.update(ref, statusPatch(to));
+    if (orderRef) tx.update(orderRef, statusPatch('collected'));
     addEvent(tx, id, to, auth.uid, 'rider');
   });
   return { ok: true };
@@ -360,6 +327,7 @@ function completeDelivery(tx, ref, id, d, { by, role, method, note }) {
     activeDeliveryId: null, completedCount: FieldValue.increment(1),
   });
   addEvent(tx, id, 'delivered', by, role, method === 'pin' ? 'PIN verified' : `admin exception: ${note || ''}`);
+  if (d.type === 'market') { completeMarketLedger(tx, id, d); return; }
   // Money records. Cash is collected by the rider, so the rider holds the full
   // fee and owes the platform the difference between the fee and their pay.
   const entries = [
@@ -370,6 +338,25 @@ function completeDelivery(tx, ref, id, d, { by, role, method, note }) {
   entries.forEach((e) => tx.set(db().collection('ledger_entries').doc(), {
     ...e, currency: 'JMD', deliveryId: id, service: 'dash', settled: false, createdAt: FieldValue.serverTimestamp(),
   }));
+}
+
+// Store order delivered: record product sales, the 15% commission, what the
+// merchant is owed (settled every two weeks), the delivery fee and rider pay.
+function completeMarketLedger(tx, id, d) {
+  const m = d.market;
+  tx.update(db().doc(`dash_orders/${d.orderId}`), statusPatch('delivered'));
+  const base = { currency: 'JMD', deliveryId: id, orderId: d.orderId, merchantId: d.merchantId, service: 'dash_market', createdAt: FieldValue.serverTimestamp() };
+  const entries = [
+    { kind: 'product_sales', direction: 'in', amountCents: m.subtotalCents, party: 'merchant', partyId: d.merchantId, note: 'Gross merchant sales (cash collected by rider)' },
+    { kind: 'commission', direction: 'revenue', amountCents: m.commissionCents, party: 'merchant', partyId: d.merchantId, note: `${m.commissionPct}% platform commission` },
+    { kind: 'merchant_payable', direction: 'payable', amountCents: m.merchantPayableCents, party: 'merchant', partyId: d.merchantId,
+      grossCents: m.subtotalCents, commissionCents: m.commissionCents, settled: false, settlementId: null },
+    { kind: 'delivery_fee', direction: 'in', amountCents: d.quote.totalCents, party: 'customer', partyId: d.customerId },
+    { kind: 'rider_earning', direction: 'payable', amountCents: d.riderPayCents || 0, party: 'rider', partyId: d.riderId, settled: false },
+    { kind: 'rider_cash_held', direction: 'receivable', amountCents: d.cashToCollectCents - (d.riderPayCents || 0), party: 'rider', partyId: d.riderId, note: 'Cash collected minus rider pay, owed to VilleDash', settled: false },
+  ];
+  if (m.serviceCents) entries.push({ kind: 'service_fee', direction: 'in', amountCents: m.serviceCents, party: 'customer', partyId: d.customerId });
+  entries.forEach((e) => tx.set(db().collection('ledger_entries').doc(), { ...base, ...e }));
 }
 
 // ── 8. Admin closes a delivery by exception (no PIN) or marks it failed ──────
@@ -393,6 +380,7 @@ exports.dashAdminResolveDelivery = onCall(async (req) => {
     } else if (action === 'fail') {
       tx.update(ref, statusPatch('failed', { failReason: note }));
       if (d.riderId) tx.update(db().doc(`riders/${d.riderId}`), { activeDeliveryId: null });
+      if (d.type === 'market') tx.update(db().doc(`dash_orders/${d.orderId}`), statusPatch('failed', { failReason: note }));
       addEvent(tx, id, 'failed', auth.uid, 'admin', note);
     } else {
       throw new HttpsError('invalid-argument', 'Unknown action.');
@@ -442,19 +430,6 @@ exports.checkReferralCode = onCall(async (req) => {
 });
 
 // ── Push notifications ───────────────────────────────────────────────────────
-async function pushTo(collection, uid, title, body, extra = {}) {
-  if (!uid) return;
-  const snap = await db().doc(`${collection}/${uid}`).get();
-  const token = snap.exists ? snap.get('fcmToken') : null;
-  if (!token) return;
-  await getMessaging().send({
-    token,
-    notification: { title, body },
-    data: { title, body, url: collection === 'riders' ? '/rider' : '/', ...extra },
-    webpush: { headers: { Urgency: 'high' }, notification: { icon: '/logo.png', badge: '/logo.png' } },
-  }).catch((err) => console.error('Dash push failed:', err && err.message));
-}
-
 exports.dashNotifyNewDelivery = onDocumentCreated('dash_deliveries/{id}', async (event) => {
   const d = event.data && event.data.data();
   if (!d || d.status !== 'requested') return;
@@ -467,10 +442,10 @@ exports.dashNotifyNewDelivery = onDocumentCreated('dash_deliveries/{id}', async 
 });
 
 const CUSTOMER_MESSAGES = {
-  assigned:   ['🛵 Rider assigned', (d) => `${d.riderName || 'Your rider'} is collecting your package.`],
+  assigned:   ['🛵 Rider assigned', (d) => `${d.riderName || 'Your rider'} is collecting your ${d.type === 'market' ? 'order' : 'package'}.`],
   at_pickup:  ['📍 Rider at pickup', () => 'Your rider has arrived at the pickup point.'],
-  collected:  ['📦 Package collected', () => 'Your package is on its way.'],
-  at_dropoff: ['🏁 Rider has arrived', () => 'Your rider is at the drop-off. The recipient will need the delivery PIN.'],
+  collected:  ['📦 On its way', (d) => (d.type === 'market' ? `Your ${d.merchantName || 'store'} order is on its way.` : 'Your package is on its way.')],
+  at_dropoff: ['🏁 Rider has arrived', (d) => (d.type === 'market' ? 'Your rider is outside. Have your delivery PIN ready.' : 'Your rider is at the drop-off. The recipient will need the delivery PIN.')],
   delivered:  ['✅ Delivered', () => 'Your package was delivered. Thanks for using VilleDash!'],
   cancelled:  ['Delivery cancelled', (d) => (d.cancelledBy === 'admin' ? 'VilleDash cancelled this delivery. Contact support if you have questions.' : 'Your delivery was cancelled.')],
   failed:     ['⚠️ Delivery problem', () => 'We couldn’t complete your delivery. VilleDash support will contact you.'],
@@ -493,3 +468,6 @@ exports.dashNotifyStatusChange = onDocumentUpdated('dash_deliveries/{id}', async
   }
   await Promise.all(jobs);
 });
+
+// Marketplace (stores, orders, settlements)
+Object.assign(exports, require('./market'));

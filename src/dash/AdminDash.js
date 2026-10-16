@@ -1,7 +1,7 @@
 // VilleDash section of the admin panel (/admin → VilleDash tab).
 import React, { useEffect, useMemo, useState } from 'react';
 import { collection, doc, onSnapshot, query, orderBy, limit, setDoc, updateDoc, where, serverTimestamp, Timestamp, getDoc } from 'firebase/firestore';
-import { api, dashDb, errText, formatJMD, STATUS_LABEL, FINAL } from './dashApi';
+import { api, dashDb, errText, formatJMD, STATUS_LABEL, FINAL, ORDER_LABEL, MERCHANT_CATEGORIES } from './dashApi';
 import { C, st, Pill, statusTone, Spinner } from './ui';
 
 const ACTIVE = ['requested', 'assigned', 'to_pickup', 'at_pickup', 'collected', 'to_dropoff', 'at_dropoff'];
@@ -38,6 +38,9 @@ function Overview({ deliveries, riders }) {
   const done = deliveries.filter((d) => d.status === 'delivered');
   const fees = done.reduce((s, d) => s + (d.quote?.totalCents || 0), 0);
   const riderPay = done.reduce((s, d) => s + (d.riderPayCents || 0), 0);
+  const marketDone = done.filter((d) => d.type === 'market');
+  const sales = marketDone.reduce((s, d) => s + (d.market?.subtotalCents || 0), 0);
+  const commission = marketDone.reduce((s, d) => s + (d.market?.commissionCents || 0), 0);
   const approved = riders.filter((r) => r.status === 'approved');
   const online = approved.filter((r) => r.isOnline);
   const busy = online.filter((r) => r.activeDeliveryId);
@@ -55,7 +58,9 @@ function Overview({ deliveries, riders }) {
         <Stat label="Riders online" value={`${online.length - busy.length} free / ${online.length}`} sub={`${approved.length} approved`} />
         <Stat label="Delivery fees" value={formatJMD(fees)} sub="gross, completed only" />
         <Stat label="Rider pay" value={formatJMD(riderPay)} sub="earned on completed" />
-        <Stat label="Contribution" value={formatJMD(fees - riderPay)} sub="fees − rider pay, before fleet & other costs" />
+        <Stat label="Store sales" value={formatJMD(sales)} sub={`${marketDone.length} orders · merchants' gross`} />
+        <Stat label="Commission" value={formatJMD(commission)} sub="platform share of store sales" />
+        <Stat label="Contribution" value={formatJMD(fees + commission - riderPay)} sub="delivery fees + commission − rider pay, before fleet & other costs" />
       </div>
     </>
   );
@@ -108,7 +113,9 @@ function DeliveryCard({ d, riders }) {
                 )}
                 <button disabled={!note || busy} onClick={() => run(() => api.resolve({ deliveryId: d.id, action: 'fail', note }))}
                   style={{ ...small, background: '#fff7e6', color: C.amber, border: '1px solid #fde3b0' }}>Mark failed</button>
-                <button disabled={busy} onClick={() => run(() => api.cancel({ deliveryId: d.id, reason: note || 'Cancelled by admin' }))}
+                <button disabled={busy} onClick={() => run(() => (d.type === 'market'
+                  ? api.marketCancel({ orderId: d.orderId, reason: note || 'Cancelled by admin' })
+                  : api.cancel({ deliveryId: d.id, reason: note || 'Cancelled by admin' })))}
                   style={{ ...small, background: '#fff5f5', color: C.red, border: '1px solid #fecaca' }}>Cancel</button>
               </div>
             </>
@@ -300,6 +307,134 @@ function Launch() {
   );
 }
 
+// ── Store orders ─────────────────────────────────────────────────────────────
+function StoreOrders() {
+  const since = useMemo(() => Timestamp.fromDate(new Date(Date.now() - 14 * 864e5)), []);
+  const orders = useCol('dash_orders', where('createdAt', '>=', since), orderBy('createdAt', 'desc'), limit(300));
+  const [msg, setMsg] = useState('');
+  if (!orders) return <Spinner />;
+  const stuck = (o) => o.status === 'awaiting_merchant' && o.createdAt?.toMillis && Date.now() - o.createdAt.toMillis() > 10 * 60000;
+  const cancel = async (o) => {
+    setMsg('');
+    try { await api.marketCancel({ orderId: o.id, reason: 'Cancelled by VilleDash admin' }); setMsg(`Order ${o.id.slice(-6)} cancelled.`); } catch (e) { setMsg(errText(e)); }
+  };
+  return (
+    <>
+      <div style={{ fontSize: 12.5, color: C.quiet, marginBottom: 8 }}>Last 14 days. Orders waiting more than 10 minutes for the store are flagged — call the store.</div>
+      {msg && <div style={st.note}>{msg}</div>}
+      {orders.length === 0 ? <div style={{ ...card, color: C.quiet }}>No store orders yet.</div> : orders.map((o) => (
+        <div key={o.id} style={{ ...card, border: stuck(o) ? `2px solid ${C.amber}` : card.border }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+            <b>{o.merchantName} → {o.customerName}</b>
+            <Pill tone={o.status === 'delivered' ? 'green' : ['rejected', 'cancelled', 'failed'].includes(o.status) ? 'grey' : stuck(o) ? 'amber' : 'purple'}>{ORDER_LABEL[o.status]}</Pill>
+          </div>
+          <div style={{ fontSize: 12.5, color: C.quiet, marginTop: 4 }}>
+            #{o.id.slice(-6)} · {ts(o.createdAt)} · {o.items.reduce((s, i) => s + i.qty, 0)} items · total {formatJMD(o.totalCents)} · store gets {formatJMD(o.merchantPayableCents)} · store {o.merchantPhone || '—'} · customer {o.customerPhone}
+          </div>
+          {['awaiting_merchant', 'accepted', 'preparing', 'ready'].includes(o.status) && (
+            <button onClick={() => cancel(o)} style={{ ...small, marginTop: 8, background: '#fff5f5', color: C.red, border: '1px solid #fecaca' }}>Cancel order</button>
+          )}
+        </div>
+      ))}
+    </>
+  );
+}
+
+// ── Merchants ────────────────────────────────────────────────────────────────
+function MerchantRow({ m }) {
+  const [pct, setPct] = useState(m.commissionPct ?? '');
+  const [msg, setMsg] = useState('');
+  const save = async (patch) => {
+    setMsg('');
+    try { await updateDoc(doc(dashDb(), 'merchants', m.id), { ...patch, updatedAt: serverTimestamp() }); setMsg('Saved.'); } catch (e) { setMsg('Could not save.'); }
+  };
+  const cat = (MERCHANT_CATEGORIES.find(([k]) => k === m.category) || [m.category, m.category])[1];
+  return (
+    <div style={card}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+        <div><b>{m.name}</b> <span style={{ fontSize: 12.5, color: C.quiet }}>{cat} · {m.phone} · rep: {m.representative || '—'}</span></div>
+        <Pill tone={m.status === 'approved' ? 'green' : m.status === 'pending' ? 'amber' : 'red'}>{m.status}</Pill>
+      </div>
+      <div style={{ fontSize: 12.5, color: C.quiet, marginTop: 4 }}>{m.address}{m.registrationNo ? ` · Reg/TRN ${m.registrationNo}` : ''}{m.location ? '' : ' · NO PICKUP PIN'}</div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+        {m.status !== 'approved' && <button disabled={!m.location} onClick={() => save({ status: 'approved', approvedAt: serverTimestamp() })} style={{ ...small, background: C.green, color: C.white, border: 'none' }}>Approve</button>}
+        {m.status === 'pending' && <button onClick={() => save({ status: 'rejected' })} style={{ ...small, background: '#fff5f5', color: C.red, border: '1px solid #fecaca' }}>Reject</button>}
+        {m.status === 'approved' && <button onClick={() => save({ status: 'suspended', isAcceptingOrders: false })} style={{ ...small, background: '#f3f4f6', color: '#555', border: '1px solid #e5e7eb' }}>Suspend</button>}
+        <input value={pct} onChange={(e) => setPct(e.target.value)} placeholder="Commission % (default 15)" style={{ ...st.input, width: 190, padding: '6px 10px' }} />
+        <button onClick={() => { const n = pct === '' ? null : Number(pct); if (n !== null && !(n >= 0 && n <= 50)) { setMsg('Commission must be 0–50%.'); return; } save({ commissionPct: n }); }}
+          style={{ ...small, background: C.purpleSoft, color: C.purple, border: `1px solid ${C.purpleLine}` }}>Save commission</button>
+        {msg && <span style={{ fontSize: 12, color: C.quiet }}>{msg}</span>}
+      </div>
+    </div>
+  );
+}
+function Merchants() {
+  const list = useCol('merchants');
+  if (!list) return <Spinner />;
+  const order = { pending: 0, approved: 1, suspended: 2, rejected: 3 };
+  return (
+    <>
+      <div style={{ fontSize: 12.5, color: C.quiet, marginBottom: 8 }}>Stores register at villecabs.com/merchant. Approve only after checking business documents and agreeing settlement details offline. Pharmacies and regulated goods stay off.</div>
+      {list.length === 0 ? <div style={{ ...card, color: C.quiet }}>No store applications yet.</div>
+        : [...list].sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9)).map((m) => <MerchantRow key={m.id} m={m} />)}
+    </>
+  );
+}
+
+// ── Settlements ──────────────────────────────────────────────────────────────
+function Settlements() {
+  const unsettled = useCol('ledger_entries', where('kind', '==', 'merchant_payable'), where('settled', '==', false));
+  const settlements = useCol('settlements', orderBy('createdAt', 'desc'), limit(100));
+  const [msg, setMsg] = useState('');
+  const [refs, setRefs] = useState({});
+  if (!unsettled || !settlements) return <Spinner />;
+  const owed = {};
+  unsettled.forEach((e) => {
+    const k = e.partyId; owed[k] = owed[k] || { n: 0, net: 0, oldest: Infinity };
+    owed[k].n += 1; owed[k].net += e.amountCents; owed[k].oldest = Math.min(owed[k].oldest, e.createdAt?.toMillis?.() || Date.now());
+  });
+  const names = Object.fromEntries(settlements.map((s) => [s.merchantId, s.merchantName]));
+  const create = async (merchantId) => {
+    setMsg('');
+    try { const r = await api.settle({ merchantId, upTo: new Date().toISOString() }); setMsg(`Settlement created: ${r.orderCount} orders, ${formatJMD(r.netPayableCents)} to pay.`); } catch (e) { setMsg(errText(e)); }
+  };
+  const paid = async (id) => {
+    setMsg('');
+    try { await api.settlePaid({ settlementId: id, reference: refs[id] || '' }); setMsg('Marked paid.'); } catch (e) { setMsg(errText(e)); }
+  };
+  return (
+    <>
+      {msg && <div style={st.note}>{msg}</div>}
+      <div style={st.h2}>Owed to stores (not yet settled)</div>
+      {Object.keys(owed).length === 0 ? <div style={{ ...card, color: C.quiet }}>Nothing owed right now.</div> : Object.entries(owed).map(([mid, o]) => {
+        const days = Math.floor((Date.now() - o.oldest) / 864e5);
+        return (
+          <div key={mid} style={{ ...card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <div><b>{names[mid] || mid}</b><div style={{ fontSize: 12.5, color: C.quiet }}>{o.n} delivered orders · oldest {days} day(s) ago{days >= 14 ? ' · DUE' : ''}</div></div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}><b>{formatJMD(o.net)}</b>
+              <button onClick={() => create(mid)} style={{ ...small, background: C.purple, color: C.white, border: 'none' }}>Create settlement</button></div>
+          </div>
+        );
+      })}
+      <div style={{ ...st.h2, marginTop: 16 }}>Settlements</div>
+      {settlements.length === 0 ? <div style={{ ...card, color: C.quiet }}>None yet.</div> : settlements.map((s) => (
+        <div key={s.id} style={card}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+            <b>{s.merchantName}</b><Pill tone={s.status === 'paid' ? 'green' : 'amber'}>{s.status === 'paid' ? 'Paid' : 'To pay'}</Pill>
+          </div>
+          <div style={{ fontSize: 12.5, color: C.quiet, marginTop: 4 }}>{ts(s.periodStart)} – {ts(s.periodEnd)} · {s.orderCount} orders · gross {formatJMD(s.grossSalesCents)} − commission {formatJMD(s.commissionCents)} = <b style={{ color: C.ink }}>{formatJMD(s.netPayableCents)}</b>{s.paymentReference ? ` · ref ${s.paymentReference}` : ''}</div>
+          {s.status !== 'paid' && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <input style={{ ...st.input, flex: 1, padding: '6px 10px' }} placeholder="Bank transfer / receipt reference" value={refs[s.id] || ''} onChange={(e) => setRefs({ ...refs, [s.id]: e.target.value })} />
+              <button onClick={() => paid(s.id)} style={{ ...small, background: C.green, color: C.white, border: 'none' }}>Mark paid</button>
+            </div>
+          )}
+        </div>
+      ))}
+    </>
+  );
+}
+
 export default function AdminDashTab() {
   const [sub, setSub] = useState('overview');
   const since = useMemo(() => Timestamp.fromDate(new Date(Date.now() - 30 * 864e5)), []);
@@ -308,7 +443,7 @@ export default function AdminDashTab() {
   return (
     <div>
       <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-        {[['overview', 'Overview'], ['deliveries', 'Dispatch'], ['riders', 'Riders'], ['pricing', 'Pricing'], ['launch', 'Launch']].map(([k, l]) => (
+        {[['overview', 'Overview'], ['deliveries', 'Dispatch'], ['orders', 'Store orders'], ['riders', 'Riders'], ['merchants', 'Merchants'], ['settlements', 'Settlements'], ['pricing', 'Pricing'], ['launch', 'Launch']].map(([k, l]) => (
           <button key={k} onClick={() => setSub(k)} style={{ ...small, padding: '7px 14px', borderRadius: 20, background: sub === k ? C.purple : '#f3f4f6', color: sub === k ? C.white : '#555', border: 'none' }}>{l}</button>
         ))}
       </div>
@@ -317,6 +452,9 @@ export default function AdminDashTab() {
       {sub === 'riders' && <Riders riders={riders} />}
       {sub === 'pricing' && <Pricing />}
       {sub === 'launch' && <Launch />}
+      {sub === 'orders' && <StoreOrders />}
+      {sub === 'merchants' && <Merchants />}
+      {sub === 'settlements' && <Settlements />}
     </div>
   );
 }

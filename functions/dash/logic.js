@@ -35,6 +35,9 @@ const DEFAULT_PRICING = Object.freeze({
   // Marketplace (confirmed by Keneile)
   merchantCommissionPct: 15,
   settlementPeriodDays:  14,
+  marketServiceFeeCents:  0,       // optional customer service fee
+  marketDeliverySize: 'medium',    // store orders are priced as a medium parcel
+  maxPrepMinutes: 120,
   // Operations
   maxActivePerCustomer:  3,
   allowQueueWhenNoRiders: false,   // refuse a booking when nobody is online
@@ -208,10 +211,116 @@ function formatJMD(cents) {
   return `J$${(Math.round(cents) / 100).toLocaleString('en-JM', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 }
 
+
+// ── Marketplace ──────────────────────────────────────────────────────────────
+const MERCHANT_CATEGORIES = ['restaurant', 'fast_food', 'cafe_bakery', 'supermarket', 'convenience', 'boutique', 'gift_shop', 'retail'];
+// Regulated categories stay off until compliance is sorted.
+const DISABLED_CATEGORIES = ['pharmacy', 'alcohol', 'tobacco'];
+const JAMAICA_OFFSET_MIN = -5 * 60; // UTC-5 all year, no daylight saving
+
+function jamaicaClock(date) {
+  const d = new Date(date.getTime() + JAMAICA_OFFSET_MIN * 60000);
+  return { day: d.getUTCDay(), minutes: d.getUTCHours() * 60 + d.getUTCMinutes() };
+}
+const toMin = (hhmm) => {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || ''));
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+};
+/** hours = { "0": {open:"08:00", close:"20:00"}, … } keyed by weekday (0 = Sunday), Jamaica time.
+ *  A missing day = closed. close < open means it runs past midnight. */
+function isOpenAt(hours, date = new Date()) {
+  if (!hours) return false;
+  const { day, minutes } = jamaicaClock(date);
+  const today = hours[String(day)];
+  if (today) {
+    const o = toMin(today.open); const c = toMin(today.close);
+    if (o != null && c != null) {
+      if (c > o && minutes >= o && minutes < c) return true;
+      if (c <= o && minutes >= o) return true; // late-night shift, before midnight
+    }
+  }
+  const y = hours[String((day + 6) % 7)];
+  if (y) {
+    const o = toMin(y.open); const c = toMin(y.close);
+    if (o != null && c != null && c <= o && minutes < c) return true; // after midnight
+  }
+  return false;
+}
+
+class CartError extends Error {
+  constructor(code, message) { super(message); this.code = code; }
+}
+
+/**
+ * Price a cart against products as stored in the database. Never trusts a
+ * price from the phone. products = { [productId]: productDoc }.
+ * items = [{ productId, qty, options: { [groupName]: [choiceLabel, …] }, note }]
+ */
+function priceCart(items, products) {
+  if (!Array.isArray(items) || items.length === 0) throw new CartError('empty', 'Your cart is empty.');
+  if (items.length > 50) throw new CartError('too-many', 'Too many items in one order.');
+  const lines = [];
+  for (const it of items) {
+    const p = products[it.productId];
+    const qty = Number(it.qty);
+    if (!p) throw new CartError('missing', 'An item in your cart is no longer sold.');
+    if (!Number.isInteger(qty) || qty < 1 || qty > 99) throw new CartError('bad-qty', `Check the quantity for ${p.name}.`);
+    if (p.available === false) throw new CartError('unavailable', `${p.name} is unavailable right now.`);
+    if (Number.isInteger(p.stock) && p.stock < qty) throw new CartError('stock', p.stock > 0 ? `Only ${p.stock} × ${p.name} left.` : `${p.name} is sold out.`);
+    if (!Number.isInteger(p.priceCents) || p.priceCents < 0) throw new CartError('bad-price', `${p.name} has no valid price.`);
+    let unit = p.priceCents;
+    const chosen = [];
+    const picked = it.options || {};
+    for (const g of p.options || []) {
+      const want = Array.isArray(picked[g.name]) ? picked[g.name] : [];
+      const max = Number.isInteger(g.maxSelect) && g.maxSelect > 0 ? g.maxSelect : 1;
+      if (g.required && want.length === 0) throw new CartError('option', `Choose ${g.name} for ${p.name}.`);
+      if (want.length > max) throw new CartError('option', `Pick up to ${max} for ${g.name}.`);
+      for (const label of want) {
+        const c = (g.choices || []).find((x) => x.label === label);
+        if (!c) throw new CartError('option', `${label} is no longer offered for ${p.name}.`);
+        if (c.available === false) throw new CartError('option', `${label} is unavailable right now.`);
+        unit += Number.isInteger(c.priceCents) ? c.priceCents : 0;
+        chosen.push({ group: g.name, label, priceCents: c.priceCents || 0 });
+      }
+    }
+    for (const name of Object.keys(picked)) {
+      if (!(p.options || []).some((g) => g.name === name)) throw new CartError('option', `${p.name} has changed. Please re-add it.`);
+    }
+    lines.push({
+      productId: it.productId, name: p.name, qty, unitCents: unit, lineCents: unit * qty,
+      options: chosen, note: cleanText(it.note, 200),
+    });
+  }
+  const subtotalCents = lines.reduce((s, l) => s + l.lineCents, 0);
+  return { lines, subtotalCents };
+}
+
+/** How one delivered marketplace order splits. Integer cents throughout. */
+function marketSplit({ subtotalCents, deliveryCents, serviceCents, riderPayCents, commissionPct }) {
+  const commissionCents = Math.round(subtotalCents * commissionPct / 100);
+  const merchantPayableCents = subtotalCents - commissionCents;
+  const totalCents = subtotalCents + deliveryCents + serviceCents;
+  return {
+    totalCents, commissionCents, merchantPayableCents,
+    riderPayCents,
+    // The rider collects all the cash, keeps their pay, and owes VilleDash the rest.
+    riderCashHeldCents: totalCents - riderPayCents,
+    // What VilleDash keeps once the merchant and rider are paid.
+    platformGrossCents: commissionCents + deliveryCents + serviceCents - riderPayCents,
+  };
+}
+
+const ORDER_STATUSES = ['awaiting_merchant', 'accepted', 'preparing', 'ready', 'collected', 'delivered', 'rejected', 'cancelled', 'failed'];
+const ORDER_FINAL = ['delivered', 'rejected', 'cancelled', 'failed'];
+const MERCHANT_STEPS = { awaiting_merchant: ['accepted', 'rejected'], accepted: ['preparing', 'ready'], preparing: ['ready'] };
+
 module.exports = {
   DEFAULT_PRICING, PACKAGE_CATEGORIES, PROHIBITED_WORDS,
   mergePricing, haversineKm, isCoord, quoteParcel, QuoteError, findProhibited,
   STATUSES, FINAL, ACTIVE, RIDER_STEPS, CUSTOMER_CANCELLABLE, ADMIN_ASSIGNABLE, canRiderMove,
   generatePin, hashPin, newPinRecord, pinMatches,
   cleanText, cleanPhone, coarseArea, formatJMD,
+  MERCHANT_CATEGORIES, DISABLED_CATEGORIES, isOpenAt, CartError, priceCart, marketSplit,
+  ORDER_STATUSES, ORDER_FINAL, MERCHANT_STEPS,
 };

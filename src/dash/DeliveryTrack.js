@@ -43,7 +43,7 @@ export default function DeliveryTrack({ go, deliveryId, shared }) {
   const stepIndex = STEPS.indexOf(d.status);
   const locAge = loc?.at ? now - (loc.at.toMillis ? loc.at.toMillis() : loc.at) : null;
   const locFresh = loc && locAge != null && locAge < STALE_MS;
-  const canCancel = ['requested', 'assigned', 'to_pickup'].includes(d.status);
+  const canCancel = d.type !== 'market' && ['requested', 'assigned', 'to_pickup'].includes(d.status);
 
   const markers = [
     { position: { lat: d.pickup.lat, lng: d.pickup.lng }, title: 'Pickup' },
@@ -115,7 +115,7 @@ export default function DeliveryTrack({ go, deliveryId, shared }) {
           <div style={st.row}><span style={{ color: C.quiet }}>From</span><span style={{ textAlign: 'right' }}>{d.pickup.address}</span></div>
           <div style={st.row}><span style={{ color: C.quiet }}>To</span><span style={{ textAlign: 'right' }}>{d.dropoff.address}</span></div>
           <div style={st.row}><span style={{ color: C.quiet }}>Package</span><span>{d.package.description}</span></div>
-          <div style={st.row}><span style={{ color: C.quiet }}>Total</span><b>{formatJMD(d.quote.totalCents)} cash · paid by {d.payment.collectFrom === 'recipient' ? 'recipient' : 'sender'}</b></div>
+          <div style={st.row}><span style={{ color: C.quiet }}>Total</span><b>{formatJMD(d.cashToCollectCents ?? d.quote.totalCents)} cash · paid by {d.payment.collectFrom === 'recipient' ? 'recipient' : 'sender'}</b></div>
           <div style={{ fontSize: 11.5, color: C.quiet, marginTop: 6 }}>Delivery ID {d.id}</div>
         </div>
 

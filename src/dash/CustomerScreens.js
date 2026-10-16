@@ -3,6 +3,8 @@ import React, { useEffect, useState } from 'react';
 import { collection, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { dashDb, STATUS_LABEL, FINAL, formatJMD } from './dashApi';
 import { C, st, Header, Pill, statusTone, Spinner } from './ui';
+import { useMyOrders, OrderRow } from './Marketplace';
+import { ORDER_FINAL } from './dashApi';
 
 const ACTIVE_RIDE = ['searching', 'active', 'arrived', 'enroute', 'scheduled'];
 const ACTIVE_DELIVERY = ['requested', 'assigned', 'to_pickup', 'at_pickup', 'collected', 'to_dropoff', 'at_dropoff'];
@@ -24,7 +26,8 @@ export function useMyDeliveries(uid, { activeOnly = false, max = 30 } = {}) {
     const q = activeOnly
       ? query(base, where('customerId', '==', uid), where('status', 'in', ACTIVE_DELIVERY))
       : query(base, where('customerId', '==', uid), orderBy('createdAt', 'desc'), limit(max));
-    return onSnapshot(q, (s) => setList(s.docs.map((d) => ({ id: d.id, ...d.data() }))), () => setList([]));
+    // Store-order deliveries are shown through their order, not twice.
+    return onSnapshot(q, (s) => setList(s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((d) => d.type !== 'market')), () => setList([]));
   }, [uid, activeOnly, max]);
   return list;
 }
@@ -64,9 +67,10 @@ function DeliveryRow({ d, onOpen }) {
 }
 
 // ── VILLE home ───────────────────────────────────────────────────────────────
-export function VilleHome({ go, user, setBookingId, openDelivery }) {
+export function VilleHome({ go, user, setBookingId, openDelivery, openOrder }) {
   const rides = useActiveRides(user?.uid);
   const deliveries = useMyDeliveries(user?.uid, { activeOnly: true });
+  const orders = (useMyOrders(user?.uid, 10) || []).filter((o) => !ORDER_FINAL.includes(o.status));
   const first = (user?.name || '').split(' ')[0];
   return (
     <div style={st.page}>
@@ -89,7 +93,7 @@ export function VilleHome({ go, user, setBookingId, openDelivery }) {
         <ServiceCard emoji="🎉" eyebrow="VilleEvents" title="Discover Events" desc="See what's on and book a ride there." onClick={() => go('ville-events')} />
 
         <div style={{ ...st.h2, marginTop: 18 }}>Your activity</div>
-        {rides.length === 0 && deliveries && deliveries.length === 0 && (
+        {rides.length === 0 && orders.length === 0 && deliveries && deliveries.length === 0 && (
           <div style={{ ...st.card, ...st.sub }}>Nothing in progress. Book a ride or send a package to get started.</div>
         )}
         {rides.map((r) => (
@@ -101,6 +105,7 @@ export function VilleHome({ go, user, setBookingId, openDelivery }) {
             </div>
           </button>
         ))}
+        {orders.map((o) => <OrderRow key={o.id} o={o} onOpen={openOrder} />)}
         {deliveries === null ? <Spinner /> : deliveries.map((d) => <DeliveryRow key={d.id} d={d} onOpen={openDelivery} />)}
       </div>
     </div>
@@ -108,8 +113,9 @@ export function VilleHome({ go, user, setBookingId, openDelivery }) {
 }
 
 // ── VilleDash home ───────────────────────────────────────────────────────────
-export function DashHome({ go, user, openDelivery }) {
+export function DashHome({ go, user, openDelivery, openOrder }) {
   const active = useMyDeliveries(user?.uid, { activeOnly: true });
+  const orders = (useMyOrders(user?.uid, 10) || []).filter((o) => !ORDER_FINAL.includes(o.status));
   return (
     <div style={st.page}>
       <Header title="VilleDash" onBack={() => go('ville-home')} />
@@ -119,15 +125,16 @@ export function DashHome({ go, user, openDelivery }) {
           <div style={st.sub}>Motorcycle delivery across Mandeville. Pay cash on pickup or delivery.</div>
         </div>
         <ServiceCard emoji="📦" eyebrow="Option A" title="Send a Package" desc="Documents, gifts, parcels — picked up and delivered by a VilleDash rider." onClick={() => go('dash-send')} />
-        <ServiceCard emoji="🛍️" eyebrow="Option B" title="Order from Stores" desc="Restaurants, supermarkets and local shops. Opening soon as stores join." onClick={() => go('dash-stores')} />
+        <ServiceCard emoji="🛍️" eyebrow="Option B" title="Order from Stores" desc="Restaurants, supermarkets and local shops across Mandeville." onClick={() => go('dash-stores')} />
 
-        <div style={{ ...st.h2, marginTop: 18 }}>Active deliveries</div>
-        {active === null ? <Spinner /> : active.length === 0
-          ? <div style={{ ...st.card, ...st.sub }}>No deliveries in progress.</div>
+        <div style={{ ...st.h2, marginTop: 18 }}>In progress</div>
+        {orders.map((o) => <OrderRow key={o.id} o={o} onOpen={openOrder} />)}
+        {active === null ? <Spinner /> : active.length === 0 && orders.length === 0
+          ? <div style={{ ...st.card, ...st.sub }}>Nothing in progress.</div>
           : active.map((d) => <DeliveryRow key={d.id} d={d} onOpen={openDelivery} />)}
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
-          <button style={st.btnGhost} onClick={() => go('dash-history')}>Delivery history</button>
+          <button style={st.btnGhost} onClick={() => go('dash-history')}>History</button>
           <button style={st.btnGhost} onClick={() => go('contact-us')}>Help & support</button>
         </div>
       </div>
@@ -135,33 +142,19 @@ export function DashHome({ go, user, openDelivery }) {
   );
 }
 
-// ── Stores placeholder (marketplace is the next build phase) ─────────────────
-export function DashStores({ go }) {
-  return (
-    <div style={st.page}>
-      <Header title="Order from Stores" onBack={() => go('dash-home')} />
-      <div style={st.wrap}>
-        <div style={{ ...st.card, textAlign: 'center', padding: 28 }}>
-          <div style={{ fontSize: 40 }}>🛍️</div>
-          <div style={{ ...st.h2, marginTop: 8 }}>Stores are joining VilleDash</div>
-          <div style={st.sub}>Ordering opens when the first Mandeville businesses are approved. Until then you can send a package.</div>
-          <button style={{ ...st.btn, marginTop: 16 }} onClick={() => go('dash-send')}>Send a package</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── History ──────────────────────────────────────────────────────────────────
-export function DashHistory({ go, user, openDelivery }) {
+export function DashHistory({ go, user, openDelivery, openOrder }) {
   const list = useMyDeliveries(user?.uid, { max: 50 });
+  const orders = useMyOrders(user?.uid, 50);
   return (
     <div style={st.page}>
-      <Header title="Delivery history" onBack={() => go('dash-home')} />
+      <Header title="History" onBack={() => go('dash-home')} />
       <div style={st.wrap}>
-        {list === null ? <Spinner /> : list.length === 0
-          ? <div style={{ ...st.card, ...st.sub }}>You haven't sent anything yet.</div>
-          : list.map((d) => <DeliveryRow key={d.id} d={d} onOpen={openDelivery} />)}
+        {list === null || orders === null ? <Spinner /> : list.length === 0 && orders.length === 0
+          ? <div style={{ ...st.card, ...st.sub }}>No orders or deliveries yet.</div>
+          : [...orders.map((o) => ({ k: 'o', t: o.createdAt?.toMillis?.() || Date.now(), v: o })), ...list.map((d) => ({ k: 'd', t: d.createdAt?.toMillis?.() || Date.now(), v: d }))]
+            .sort((a, b) => b.t - a.t)
+            .map((x) => (x.k === 'o' ? <OrderRow key={x.v.id} o={x.v} onOpen={openOrder} /> : <DeliveryRow key={x.v.id} d={x.v} onOpen={openDelivery} />))}
         {list && list.some((d) => !FINAL.includes(d.status)) && <div style={st.note}>Tap a delivery in progress to track it live.</div>}
       </div>
     </div>

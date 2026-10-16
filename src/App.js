@@ -18,7 +18,8 @@ import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'fire
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 // VilleDash (VILLE ecosystem) — new screens live in src/dash, gated by config/features
-import { VilleHome, DashHome, DashStores, DashHistory } from './dash/CustomerScreens';
+import { VilleHome, DashHome, DashHistory } from './dash/CustomerScreens';
+import { StoresList, StorePage, Checkout, OrderTrack } from './dash/Marketplace';
 import SendPackage from './dash/SendPackage';
 import DeliveryTrack from './dash/DeliveryTrack';
 import { useDashEnabled } from './dash/dashApi';
@@ -12772,6 +12773,9 @@ function PartnerLocations({ go, user, setPickupData }) {
 
 // ── PUBLIC LIVE TRACKING (shared link — no login required) ──────────────────
 // Reads a world-readable tracking/{id} doc that the rider's app keeps updated.
+// Shared with the VilleDash merchant portal (src/dash/MerchantPortal.js)
+export { AddressAutocompleteInput, VilleMap, geocodeLatLng };
+
 export function LiveTrackShare({ trackId }) {
   const [t, setT] = useState(null);
   const [notFound, setNotFound] = useState(false);
@@ -12930,6 +12934,8 @@ export default function App() {
   const [dropoffData, setDropoffData] = useState(null);
   const [loading,     setLoading]     = useState(true);
   const [deliveryId,  setDeliveryId]  = useState(null);
+  const [storeId,     setStoreId]     = useState(null);
+  const [orderId,     setOrderId]     = useState(null);
   const dashOn = useDashEnabled(user?.uid);
   // When VilleDash is switched on, the VILLE hub becomes the customer's home.
   // Sent there once per session; the VilleCabs dashboard stays one tap away.
@@ -13086,7 +13092,9 @@ export default function App() {
   const props = { go:setScreen, user, setUser, bookingId, setBookingId, pickupData, setPickupData, dropoffData, setDropoffData };
   const dashShared = { AddressAutocompleteInput, VilleMap, geocodeLatLng, vcToast, vcConfirm };
   const openDelivery = (id) => { setDeliveryId(id); setScreen('dash-track'); };
-  const dashProps = { ...props, shared: dashShared, openDelivery, deliveryId };
+  const openStore = (id) => { setStoreId(id); setScreen('dash-store'); };
+  const openOrder = (id) => { setOrderId(id); setScreen('dash-order'); };
+  const dashProps = { ...props, shared: dashShared, openDelivery, deliveryId, openStore, storeId, openOrder, orderId };
   // VilleDash screens exist only while the feature flag is on.
   const dash = (el) => (dashOn ? el : <CustomerDash {...props}/>);
 
@@ -13148,7 +13156,10 @@ export default function App() {
     'dash-send':              dash(<SendPackage {...dashProps}/>),
     'dash-track':             dash(<DeliveryTrack {...dashProps}/>),
     'dash-history':           dash(<DashHistory {...dashProps}/>),
-    'dash-stores':            dash(<DashStores {...dashProps}/>),
+    'dash-stores':            dash(<StoresList {...dashProps}/>),
+    'dash-store':             dash(<StorePage {...dashProps}/>),
+    'dash-checkout':          dash(<Checkout {...dashProps}/>),
+    'dash-order':             dash(<OrderTrack {...dashProps}/>),
   };
 
   return (

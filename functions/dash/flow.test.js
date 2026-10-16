@@ -93,7 +93,7 @@ const inject = (mod, exportsObj) => { const id = require.resolve(mod); require.c
 inject('firebase-admin/firestore', {
   getFirestore: () => fakeDb,
   FieldValue: { serverTimestamp: () => SERVER_TS, increment: INC },
-  Timestamp: { now, fromDate: (d) => ({ toMillis: () => d.getTime(), toDate: () => d }) },
+  Timestamp: { now, fromDate: (d) => ({ toMillis: () => d.getTime(), toDate: () => d }), fromMillis: (ms) => ({ toMillis: () => ms, toDate: () => new Date(ms) }) },
 });
 const pushes = [];
 inject('firebase-admin/messaging', { getMessaging: () => ({ send: async (m) => { pushes.push(m); } }) });
@@ -237,4 +237,96 @@ test('referral check works server-side and only for first rides', async () => {
   assert.deepEqual(await call('checkReferralCode', 'cust1', { code: 'NOPE999' }), { valid: false });
   store.set('bookings/b1', { customerId: 'cust1', status: 'completed' });
   assert.deepEqual(await call('checkReferralCode', 'cust1', { code: 'VCABC12' }), { valid: true, eligible: false, referrerId: null });
+});
+
+
+// ── Marketplace ──────────────────────────────────────────────────────────────
+const ALL_DAY = Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [d, { open: '00:00', close: '00:00' }]));
+function seedStore() {
+  store.set('merchants/shop1', { name: 'Juici Spot', status: 'approved', isAcceptingOrders: true, hours: ALL_DAY,
+    location: { lat: 18.0450, lng: -77.5050 }, address: 'Main St, Mandeville', phone: '8765550909', category: 'restaurant' });
+  store.set('merchants/shop1/products/jerk', { name: 'Jerk chicken', priceCents: 120000, available: true, stock: null,
+    options: [{ name: 'Size', required: true, maxSelect: 1, choices: [{ label: 'Small', priceCents: 0 }, { label: 'Large', priceCents: 40000 }] }] });
+  store.set('merchants/shop1/products/water', { name: 'Water', priceCents: 15000, available: true, stock: 5 });
+  store.set('merchants/shop2', { name: 'Other', status: 'approved', hours: ALL_DAY, location: { lat: 18.04, lng: -77.5 } });
+}
+const CART = [{ productId: 'jerk', qty: 2, options: { Size: ['Large'] } }, { productId: 'water', qty: 3 }];
+const HOME = { address: 'Caledonia Road, Mandeville', lat: 18.0300, lng: -77.5100 };
+const order = (key, extra = {}) => ({ idempotencyKey: key, merchantId: 'shop1', items: CART, dropoff: HOME, ...extra });
+
+test('store order: checkout → merchant → rider → PIN → ledger → settlement', async () => {
+  seedStore();
+  const q = await call('marketQuoteOrder', 'cust1', { merchantId: 'shop1', items: CART, dropoff: HOME });
+  assert.equal(q.subtotalCents, 2 * 160000 + 3 * 15000);
+  assert.equal(q.totalCents, q.subtotalCents + q.deliveryCents);
+
+  const { orderId, pin } = await call('marketCreateOrder', 'cust1', order('ord-aaaaaaaa', { expectedTotalCents: q.totalCents }));
+  assert.match(pin, /^\d{4}$/);
+  assert.equal(store.get('merchants/shop1/products/water').stock, 2, 'stock reserved');
+  assert.equal(store.get(`dash_orders/${orderId}`).status, 'awaiting_merchant');
+
+  await assert.rejects(call('marketMerchantUpdateOrder', 'shop2', { orderId, action: 'accepted', prepMinutes: 15 }), errCode('permission-denied'));
+  await assert.rejects(call('marketMerchantUpdateOrder', 'shop1', { orderId, action: 'ready' }), errCode('failed-precondition'));
+  await call('marketMerchantUpdateOrder', 'shop1', { orderId, action: 'accepted', prepMinutes: 15 });
+  const o = store.get(`dash_orders/${orderId}`);
+  const delId = o.deliveryId;
+  const del = store.get(`dash_deliveries/${delId}`);
+  assert.equal(del.type, 'market'); assert.equal(del.status, 'requested');
+  assert.equal(del.cashToCollectCents, q.totalCents);
+  assert.equal(del.quote.totalCents, q.deliveryCents);
+
+  await call('dashAcceptDelivery', 'riderA', { deliveryId: delId });
+  for (const s of ['to_pickup', 'at_pickup']) await call('dashRiderUpdateStatus', 'riderA', { deliveryId: delId, status: s });
+  await assert.rejects(call('dashRiderUpdateStatus', 'riderA', { deliveryId: delId, status: 'collected' }), errCode('failed-precondition'));
+  await call('marketMerchantUpdateOrder', 'shop1', { orderId, action: 'preparing' });
+  await call('marketMerchantUpdateOrder', 'shop1', { orderId, action: 'ready' });
+  await assert.rejects(call('marketCancelOrder', 'cust1', { orderId }), errCode('failed-precondition'));
+  await call('dashRiderUpdateStatus', 'riderA', { deliveryId: delId, status: 'collected' });
+  assert.equal(store.get(`dash_orders/${orderId}`).status, 'collected');
+  for (const s of ['to_dropoff', 'at_dropoff']) await call('dashRiderUpdateStatus', 'riderA', { deliveryId: delId, status: s });
+  await assert.rejects(call('dashCancelDelivery', 'cust1', { deliveryId: delId }), errCode('failed-precondition'));
+  assert.equal((await call('dashVerifyDropoffPin', 'riderA', { deliveryId: delId, pin })).ok, true);
+  assert.equal(store.get(`dash_orders/${orderId}`).status, 'delivered');
+
+  const ledger = [...store.entries()].filter(([k]) => k.startsWith('ledger_entries/')).map(([, v]) => v);
+  const amt = (k) => ledger.find((e) => e.kind === k).amountCents;
+  assert.equal(amt('product_sales'), q.subtotalCents);
+  assert.equal(amt('commission'), Math.round(q.subtotalCents * 0.15));
+  assert.equal(amt('merchant_payable') + amt('commission'), q.subtotalCents);
+  assert.equal(amt('rider_earning') + amt('rider_cash_held'), q.totalCents);
+
+  await assert.rejects(call('marketCreateSettlement', 'cust1', { merchantId: 'shop1' }), errCode('permission-denied'));
+  const st = await asAdmin('marketCreateSettlement', { merchantId: 'shop1', upTo: new Date(Date.now() + 1000).toISOString() });
+  assert.equal(st.netPayableCents, amt('merchant_payable'));
+  assert.equal(st.orderCount, 1);
+  await assert.rejects(asAdmin('marketCreateSettlement', { merchantId: 'shop1' }), errCode('failed-precondition'));
+  await assert.rejects(asAdmin('marketMarkSettlementPaid', { settlementId: st.settlementId }), errCode('invalid-argument'));
+  await asAdmin('marketMarkSettlementPaid', { settlementId: st.settlementId, reference: 'NCB-TRF-001' });
+  assert.equal(store.get(`settlements/${st.settlementId}`).status, 'paid');
+});
+
+test('store order: reject and cancel put stock back; bad carts and closed stores refused', async () => {
+  seedStore();
+  const a = await call('marketCreateOrder', 'cust1', order('ord-bbbbbbbb'));
+  await assert.rejects(call('marketMerchantUpdateOrder', 'shop1', { orderId: a.orderId, action: 'rejected' }), errCode('invalid-argument'));
+  await call('marketMerchantUpdateOrder', 'shop1', { orderId: a.orderId, action: 'rejected', reason: 'Out of chicken' });
+  assert.equal(store.get('merchants/shop1/products/water').stock, 5);
+
+  const b = await call('marketCreateOrder', 'cust1', order('ord-cccccccc'));
+  await call('marketMerchantUpdateOrder', 'shop1', { orderId: b.orderId, action: 'accepted', prepMinutes: 10 });
+  await call('dashAcceptDelivery', 'riderB', { deliveryId: store.get(`dash_orders/${b.orderId}`).deliveryId });
+  await call('marketCancelOrder', 'cust1', { orderId: b.orderId });
+  assert.equal(store.get('merchants/shop1/products/water').stock, 5);
+  assert.equal(store.get(`dash_deliveries/${store.get(`dash_orders/${b.orderId}`).deliveryId}`).status, 'cancelled');
+  assert.equal(store.get('riders/riderB').activeDeliveryId, null);
+
+  await assert.rejects(call('marketCreateOrder', 'cust1', order('ord-dddddddd', { items: [{ productId: 'water', qty: 6 }] })), errCode('failed-precondition'));
+  await assert.rejects(call('marketCreateOrder', 'cust1', order('ord-eeeeeeee', { items: [{ productId: 'water', qty: 3 }, { productId: 'water', qty: 3 }] })), errCode('failed-precondition'));
+  await assert.rejects(call('marketCreateOrder', 'cust1', order('ord-ffffffff', { expectedTotalCents: 5 })), errCode('aborted'));
+  store.set('merchants/shop1', { ...store.get('merchants/shop1'), hours: {} });
+  await assert.rejects(call('marketCreateOrder', 'cust1', order('ord-gggggggg')), errCode('failed-precondition'));
+  store.set('merchants/shop1', { ...store.get('merchants/shop1'), hours: ALL_DAY, isAcceptingOrders: false });
+  await assert.rejects(call('marketQuoteOrder', 'cust1', { merchantId: 'shop1', items: CART, dropoff: HOME }), errCode('failed-precondition'));
+  store.set('merchants/shop1', { ...store.get('merchants/shop1'), isAcceptingOrders: true, status: 'pending' });
+  await assert.rejects(call('marketQuoteOrder', 'cust1', { merchantId: 'shop1', items: CART, dropoff: HOME }), errCode('not-found'));
 });
