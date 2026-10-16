@@ -14,7 +14,7 @@ const clean = (d) => String(d || '').trim().toLowerCase().replace(/^https?:\/\//
 function Domains() {
   const [f, setF] = useState(null);
   const [msg, setMsg] = useState('');
-  useEffect(() => onSnapshot(doc(dashDb(), 'config', 'sites'), (s) => setF({ cabs: 'villecabs.com', ville: '', dash: '', ...(s.exists() ? s.data() : {}) }), () => setF({ cabs: 'villecabs.com', ville: '', dash: '' })), []);
+  useEffect(() => onSnapshot(doc(dashDb(), 'config', 'sites'), (s) => setF({ cabs: 'villecabs.com', ville: 'villeapp.org', dash: 'villedash.com', ...(s.exists() ? s.data() : {}) }), () => setF({ cabs: 'villecabs.com', ville: 'villeapp.org', dash: 'villedash.com' })), []);
   if (!f) return <Spinner />;
   const save = async () => {
     setMsg('');

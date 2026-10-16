@@ -1,8 +1,8 @@
 // VILLE family of sites: one app, several domains.
 //
 //   villecabs.com  → VilleCabs (taxi) — unchanged
-//   VILLE domain   → the VILLE hub (Cabs · Dash · Events)
-//   Dash domain    → VilleDash (send packages, order from stores)
+//   villeapp.org   → the VILLE hub (Cabs · Dash · Events)
+//   villedash.com  → VilleDash (send packages, order from stores)
 //
 // Domains come from config/sites in Firestore (Admin → VilleDash → Sites & ads),
 // falling back to REACT_APP_SITE_* build variables. On preview URLs
@@ -23,8 +23,8 @@ export const SITE_INFO = {
 
 const ENV_DOMAINS = {
   cabs: process.env.REACT_APP_SITE_CABS || 'villecabs.com',
-  ville: process.env.REACT_APP_SITE_VILLE || '',
-  dash: process.env.REACT_APP_SITE_DASH || '',
+  ville: process.env.REACT_APP_SITE_VILLE || 'villeapp.org',
+  dash: process.env.REACT_APP_SITE_DASH || 'villedash.com',
 };
 const bare = (h) => String(h || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '');
 

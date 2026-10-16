@@ -52,18 +52,18 @@ All three sites run from this one app and one Vercel project. The domain a visit
 | Domain | Signed out | Signed in |
 | --- | --- | --- |
 | villecabs.com | VilleCabs landing (unchanged) | VilleCabs dashboard + house ad |
-| VILLE domain | VILLE landing | VILLE hub |
-| VilleDash domain | VilleDash landing | VilleDash home |
+| villeapp.org | VILLE landing | VILLE hub |
+| villedash.com | VilleDash landing | VilleDash home |
 
 Every page carries a family bar linking the sites, and house ads (Admin → VilleDash → Sites & ads) promote the other services. Links between sites carry utm tags; ad clicks are counted per ad.
 
-Setup for each new domain:
+Setup for villedash.com and villeapp.org (do each one):
 
 1. Buy the domain (Namecheap). In Vercel → Project → Settings → Domains, add it (and `www.`).
 2. In Namecheap → Advanced DNS add what Vercel shows — usually an **A** record `@ → 76.76.21.21` and a **CNAME** `www → cname.vercel-dns.com`. Add records one at a time (batch save has failed before).
 3. Firebase console → Authentication → Settings → **Authorized domains**: add the domain, or sign-in fails there.
 4. Google Cloud → Credentials → your Maps key → **Website restrictions**: add `https://<domain>/*`.
-5. Admin → VilleDash → **Sites & ads**: enter the domain and save.
+5. Nothing to enter in the app: `villeapp.org` and `villedash.com` are built in as defaults. Admin → VilleDash → **Sites & ads** can change them later.
 
 Sign-ins don't carry across domains: a customer signed in on villecabs.com signs in once more on the VilleDash domain (same account). To try a brand before the domain is live, open a Vercel preview with `?site=dash` or `?site=ville`.
 
