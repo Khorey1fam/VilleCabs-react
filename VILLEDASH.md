@@ -8,9 +8,11 @@ customers see VilleCabs exactly as before.
 | Area | Files |
 | --- | --- |
 | Server (prices, dispatch, PIN, ledger, push) | `functions/dash/index.js`, `functions/dash/logic.js` |
-| Tests (26 server + 5 scheduling: `cd functions && npm test`, `node --test src/dash/coverage.test.mjs`) | `functions/dash/*.test.js`, `src/dash/coverage.test.mjs` |
+| Tests (31 server + 5 scheduling: `cd functions && npm test`, `node --test src/dash/coverage.test.mjs`) | `functions/dash/*.test.js`, `src/dash/coverage.test.mjs` |
 | Fleet & shifts (bikes, providers, assignment, schedule vs demand, attendance) | `functions/dash/fleet.js`, `shiftjobs.js`, `src/dash/AdminFleet.js`, `coverage.js` |
 | Separate domains, family bar, house ads | `src/dash/sites.js`, `src/dash/AdminSites.js` |
+| Automatic dispatch (timed offers) | `functions/dash/dispatch.js` |
+| Money controls, support cases, audit log | `functions/dash/finance.js`, `src/dash/AdminFinance.js` |
 | Customer screens (VILLE home, VilleDash, send, track, history) | `src/dash/CustomerScreens.js`, `SendPackage.js`, `DeliveryTrack.js` |
 | Marketplace — stores, store page, cart, checkout, order tracking | `src/dash/Marketplace.js`, `functions/dash/market.js` |
 | Merchant portal at `/merchant` (register, orders, products, hours, pause, sales, payouts) | `src/dash/MerchantPortal.js` |
@@ -45,6 +47,21 @@ Store orders and their deliveries are separate records (`dash_orders` and `dash_
 - Riders confirm or decline shifts and request days off in the rider portal. They get a push when a shift is added or changed and an hour before it starts.
 - A planned shift is never counted as "online". After each shift, a job every 15 minutes marks it **completed** if the rider was online for at least 30 minutes of it, otherwise **missed**.
 
+## Dispatch
+
+- **Automatic (default):** each new job is offered to the nearest free rider (online, approved, with a bike) for 45 seconds. If they pass or let it run out it goes to the next nearest. After 5 riders, or when nobody is free, it opens to everyone and turns red in Admin → Dispatch so you can assign it by hand. Idle riders share their rough location once a minute so "nearest" is real.
+- **Open:** every free rider is notified; first to accept wins. Switch in Admin → VilleDash → Launch. Offer time and rider count are in Pricing.
+- Batch deliveries and several jobs at once stay off, as the brief asked.
+
+## Proof, support and money
+
+- Riders can take a photo of the package at pickup and of the handover at drop-off. Photos show on the customer's tracking page and in Dispatch. The PIN is still what completes a delivery.
+- **Support** tab: every problem reported by customers and riders, with status and notes.
+- **Finance** tab: for any date range, cash collected (gross, including store sales that belong to merchants) is shown separately from VilleDash revenue (delivery fees + commission). Contribution = revenue − rider pay − recorded fleet charges, and is labelled as not net profit.
+- **Rider cash:** riders keep their pay from the cash they collect and owe the rest. The Finance tab shows what each rider owes; record each handover with a receipt reference. Part-payments are fine.
+- **Fleet charges:** record each fleet-provider invoice for a period (the app suggests an amount from the provider's rate and bike count) and mark it paid.
+- **Audit log** tab: every manual assignment, cancellation, exception, fleet change, settlement and cash record. Read-only.
+
 ## Separate domains (VILLE, VilleDash, VilleCabs)
 
 All three sites run from this one app and one Vercel project. The domain a visitor uses decides which home page they get:
@@ -67,9 +84,9 @@ Setup for villedash.com and villeapp.org (do each one):
 
 Sign-ins don't carry across domains: a customer signed in on villecabs.com signs in once more on the VilleDash domain (same account). To try a brand before the domain is live, open a Vercel preview with `?site=dash` or `?site=ville`.
 
-## Storage rule for store images
+## Storage rules for images
 
-Logos, covers and product photos upload to `merchants/{uid}/…` in Firebase Storage. Your Storage rules live in the Firebase console, not this repo, so add this block there:
+Store logos, covers and product photos upload to `merchants/{uid}/…`, rider proof photos to `dash_proof/{deliveryId}/…` and ad images to `site_ads/…` in Firebase Storage. Your Storage rules live in the Firebase console, not this repo, so add this block there:
 
 ```
 match /merchants/{uid}/{file} {
@@ -77,6 +94,13 @@ match /merchants/{uid}/{file} {
   allow write: if request.auth != null && request.auth.uid == uid
                && request.resource.size < 3 * 1024 * 1024
                && request.resource.contentType.matches('image/(png|jpeg|webp)');
+}
+match /dash_proof/{deliveryId}/{file} {
+  allow read: if request.auth != null;
+  allow write: if request.auth != null
+               && firestore.get(/databases/(default)/documents/dash_deliveries/$(deliveryId)).data.riderId == request.auth.uid
+               && request.resource.size < 8 * 1024 * 1024
+               && request.resource.contentType.matches('image/.*');
 }
 match /site_ads/{file} {
   allow read: if true;
@@ -113,9 +137,6 @@ existing document is changed.
 - Substitutions (store offers a replacement, customer approves) — for now the store rejects with a reason or calls the customer
 - Refunds — cash only, so nothing is charged before delivery; card refunds come with online payments
 - Online payments (cash only at launch, as decided)
-- Fleet-provider costs in the ledger (rates are recorded on each provider, but not yet charged per day/week)
-- Timed offers and automatic dispatch (riders see all open jobs; admins can assign)
-- Proof-of-delivery photos, demand charts, support-case and audit-log screens in admin
 - Email notifications (push is wired; email needs EmailJS templates)
 - One store per login; multi-location chains need a merchant-users model
 - Distances are straight-line × 1.3, not road routes

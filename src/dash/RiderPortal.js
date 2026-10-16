@@ -7,7 +7,7 @@ import {
 import {
   doc, onSnapshot, setDoc, updateDoc, addDoc, deleteDoc, collection, query, where, orderBy, limit, serverTimestamp,
 } from 'firebase/firestore';
-import { api, dashAuth, dashDb, errText, formatJMD, STATUS_LABEL, SHIFT_LABEL, DAYS, jmToday, weekday } from './dashApi';
+import { api, dashAuth, dashDb, errText, formatJMD, STATUS_LABEL, SHIFT_LABEL, DAYS, jmToday, weekday, uploadProof } from './dashApi';
 import { C, st, Header, Pill, statusTone, Spinner } from './ui';
 import { IssueForm } from './DeliveryTrack';
 import { registerRiderPushToken } from '../App';
@@ -146,6 +146,22 @@ function useLocationSharing(rider, job) {
   return gpsErr;
 }
 
+function ProofButton({ job, kind, label }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const done = job.proofPhotos && job.proofPhotos[kind];
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <label style={{ ...st.btnGhost, display: 'block', textAlign: 'center', opacity: busy ? 0.6 : 1 }}>
+        {busy ? 'Uploading…' : done ? `✓ ${label} — retake` : `📷 ${label}`}
+        <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} disabled={busy}
+          onChange={async (e) => { setBusy(true); setErr(''); try { await uploadProof(job.id, kind, e.target.files[0]); } catch (x) { setErr(errText(x)); } setBusy(false); }} />
+      </label>
+      {err && <div style={st.err}>{err}</div>}
+    </div>
+  );
+}
+
 function ActiveJob({ rider, job }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -193,6 +209,8 @@ function ActiveJob({ rider, job }) {
       {job.type === 'market' && ['assigned', 'to_pickup', 'at_pickup'].includes(job.status) && (
         <div style={st.note}>{job.merchantReady ? '✅ The store has marked this order ready.' : `The store is still preparing this order${job.estimatedReadyAt?.toDate ? ` — ready about ${job.estimatedReadyAt.toDate().toLocaleTimeString('en-JM', { hour: 'numeric', minute: '2-digit' })}` : ''}. You can collect it once they mark it ready.`}</div>
       )}
+      {['at_pickup', 'collected'].includes(job.status) && <ProofButton job={job} kind="pickup" label="Photo of the package at pickup" />}
+      {job.status === 'at_dropoff' && <ProofButton job={job} kind="dropoff" label="Photo of the handover (optional)" />}
       {gpsErr && <div style={st.err}>{gpsErr}</div>}
       {err && <div style={st.err}>{err}</div>}
       {next && <button style={{ ...st.btn, padding: 18, fontSize: 16 }} disabled={busy} onClick={() => move(next[0])}>{busy ? 'Saving…' : next[1]}</button>}
@@ -218,8 +236,16 @@ function Offers({ rider }) {
   useEffect(() => {
     const q = query(collection(dashDb(), 'dash_deliveries'), where('status', '==', 'requested'));
     return onSnapshot(q, (s) => setList(s.docs.map((d) => ({ id: d.id, ...d.data() }))
-      .filter((d) => !d.offeredTo || d.offeredTo === rider.uid)), () => setList([]));
+      .filter((d) => (!d.offeredTo || d.offeredTo === rider.uid) && !(d.declinedBy || []).includes(rider.uid))
+      .sort((a, b) => Number(b.offeredTo === rider.uid) - Number(a.offeredTo === rider.uid))), () => setList([]));
   }, [rider.uid]);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+  const decline = async (id) => {
+    setBusyId(id); setErr('');
+    try { await api.declineOffer({ deliveryId: id }); } catch (e) { setErr(errText(e)); }
+    setBusyId(null);
+  };
   const accept = async (id) => {
     setBusyId(id); setErr('');
     try { await api.accept({ deliveryId: id }); } catch (e) { setErr(errText(e)); }
@@ -231,8 +257,13 @@ function Offers({ rider }) {
       <div style={st.h2}>Available deliveries</div>
       {err && <div style={st.err}>{err}</div>}
       {list.length === 0 && <div style={{ ...st.card, ...st.sub }}>No open deliveries right now. You'll get a notification when one comes in.</div>}
-      {list.map((d) => (
-        <div key={d.id} style={st.card}>
+      {list.map((d) => {
+        const mine = d.offeredTo === rider.uid;
+        const left = mine && d.offerExpiresAt?.toMillis ? Math.max(0, Math.round((d.offerExpiresAt.toMillis() - now) / 1000)) : null;
+        if (mine && left === 0) return null;
+        return (
+        <div key={d.id} style={{ ...st.card, ...(mine ? { border: `2px solid ${C.purple}` } : {}) }}>
+          {mine && <div style={{ fontSize: 12, fontWeight: 800, color: C.purple, marginBottom: 6 }}>OFFERED TO YOU · {left}s to accept{d.offerKm != null ? ` · ${d.offerKm} km to pickup` : ''}</div>}
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             <b>{d.pickup.address.split(',')[0]} → {d.dropoff.address.split(',')[0]}</b>
             <b style={{ color: C.green }}>{formatJMD(d.riderPayCents)}</b>
@@ -241,9 +272,13 @@ function Offers({ rider }) {
             ~{d.quote.distanceKm} km · {d.type === 'market' ? `Store order from ${d.merchantName}` : `${d.package.size} ${d.package.category.replace('_', ' ')}`}{d.package.fragile ? ' · fragile' : ''}
           </div>
           {d.pickup.instructions && <div style={{ ...st.sub, marginTop: 2 }}>Pickup note: {d.pickup.instructions}</div>}
-          <button style={{ ...st.btn, marginTop: 10 }} disabled={!!busyId} onClick={() => accept(d.id)}>{busyId === d.id ? 'Accepting…' : 'Accept'}</button>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+            <button style={{ ...st.btn, flex: 2 }} disabled={!!busyId} onClick={() => accept(d.id)}>{busyId === d.id ? 'Accepting…' : 'Accept'}</button>
+            {mine && <button style={{ ...st.btnGhost, flex: 1 }} disabled={!!busyId} onClick={() => decline(d.id)}>Pass</button>}
+          </div>
         </div>
-      ))}
+        );
+      })}
     </>
   );
 }
@@ -342,6 +377,17 @@ function Dashboard({ user, rider }) {
   useEffect(() => {
     try { if (typeof Notification !== 'undefined' && Notification.permission === 'granted') registerRiderPushToken(user.uid); } catch (e) { /* optional */ }
   }, [user.uid]);
+  // While online and between jobs, share a rough position once a minute so
+  // dispatch can offer the nearest rider each new job.
+  useEffect(() => {
+    if (!rider.isOnline || rider.activeDeliveryId || !navigator.geolocation) return undefined;
+    const send = () => navigator.geolocation.getCurrentPosition((p) => {
+      updateDoc(doc(dashDb(), 'riders', user.uid), { lastLocation: { lat: p.coords.latitude, lng: p.coords.longitude, at: serverTimestamp() } }).catch(() => {});
+    }, () => {}, { enableHighAccuracy: false, maximumAge: 60000, timeout: 20000 });
+    send();
+    const t = setInterval(send, 60000);
+    return () => clearInterval(t);
+  }, [rider.isOnline, rider.activeDeliveryId, user.uid]);
 
   const toggle = async () => {
     setErr('');

@@ -25,6 +25,8 @@ const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 const crypto = require('crypto');
 const L = require('./logic');
+const { onSchedule } = require('firebase-functions/v2/scheduler');
+const { offerNext, sweepOffers } = require('./dispatch');
 
 const {
   db, requireAuth, isAdminToken, requireAdmin, loadPricing, dashEnabledFor,
@@ -224,7 +226,7 @@ exports.dashAcceptDelivery = onCall(async (req) => {
     tx.update(ref, statusPatch('assigned', {
       riderId: auth.uid, riderName: rider.get('name') || 'VilleDash rider',
       riderPhone: rider.get('phone') || null, riderPlate: rider.get('motorcyclePlate') || null,
-      offeredTo: null,
+      offeredTo: null, offerExpiresAt: null, needsDispatcher: false,
     }));
     tx.update(riderRef, { activeDeliveryId: id });
     addEvent(tx, id, 'assigned', auth.uid, 'rider', 'accepted by rider');
@@ -255,7 +257,7 @@ exports.dashAdminAssignRider = onCall(async (req) => {
     tx.update(ref, statusPatch('assigned', {
       riderId, riderName: rider.get('name') || 'VilleDash rider',
       riderPhone: rider.get('phone') || null, riderPlate: rider.get('motorcyclePlate') || null,
-      offeredTo: null,
+      offeredTo: null, offerExpiresAt: null, needsDispatcher: false,
     }));
     tx.update(riderRef, { activeDeliveryId: id });
     addEvent(tx, id, 'assigned', auth.uid, 'admin', d.riderId ? `reassigned from ${d.riderId}` : 'assigned by admin');
@@ -394,6 +396,32 @@ exports.dashAdminResolveDelivery = onCall(async (req) => {
   return { ok: true };
 });
 
+// ── Proof photos (pickup and drop-off) ──────────────────────────────────────
+// The rider uploads to Storage at dash_proof/{deliveryId}/…, then attaches the
+// link here. Only the assigned rider, only at the matching stage.
+exports.dashAttachProof = onCall(async (req) => {
+  const auth = requireAuth(req);
+  const id = L.cleanText(req.data && req.data.deliveryId, 40);
+  const kind = req.data && req.data.kind;
+  const url = String((req.data && req.data.url) || '');
+  if (!['pickup', 'dropoff'].includes(kind)) throw new HttpsError('invalid-argument', 'Unknown photo type.');
+  if (!/^https:\/\/firebasestorage\.googleapis\.com\//.test(url) || !url.includes(`dash_proof%2F${id}%2F`)) {
+    throw new HttpsError('invalid-argument', 'Upload the photo through the app.');
+  }
+  const ref = db().doc(`dash_deliveries/${id}`);
+  await db().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw new HttpsError('not-found', 'Delivery not found.');
+    const d = snap.data();
+    if (d.riderId !== auth.uid) throw new HttpsError('permission-denied', 'This delivery is not assigned to you.');
+    const okStages = kind === 'pickup' ? ['at_pickup', 'collected', 'to_dropoff'] : ['at_dropoff', 'delivered'];
+    if (!okStages.includes(d.status)) throw new HttpsError('failed-precondition', kind === 'pickup' ? 'Add the pickup photo at the pickup.' : 'Add the delivery photo at the drop-off.');
+    tx.update(ref, { [`proofPhotos.${kind}`]: { url, at: Timestamp.now(), by: auth.uid }, updatedAt: FieldValue.serverTimestamp() });
+    addEvent(tx, id, d.status, auth.uid, 'rider', `${kind} photo added`);
+  });
+  return { ok: true };
+});
+
 // ── 9. Report a problem (rider or customer) ──────────────────────────────────
 const ISSUE_CATEGORIES = {
   rider: ['sender_unreachable', 'merchant_not_ready', 'recipient_unavailable', 'wrong_address', 'damaged_package', 'motorcycle_breakdown', 'other'],
@@ -437,6 +465,9 @@ exports.checkReferralCode = onCall(async (req) => {
 exports.dashNotifyNewDelivery = onDocumentCreated('dash_deliveries/{id}', async (event) => {
   const d = event.data && event.data.data();
   if (!d || d.status !== 'requested') return;
+  const pricing = await loadPricing();
+  if (pricing.autoDispatch) { await offerNext(event.params.id); return; }
+  // Manual mode: tell every free rider; first to accept wins.
   const riders = await db().collection('riders')
     .where('status', '==', 'approved').where('isOnline', '==', true).get();
   const area = d.pickup && d.pickup.address ? ` from ${d.pickup.address.split(',')[0]}` : '';
@@ -444,6 +475,26 @@ exports.dashNotifyNewDelivery = onDocumentCreated('dash_deliveries/{id}', async 
     .filter((r) => !r.get('activeDeliveryId'))
     .map((r) => pushTo('riders', r.id, '📦 New VilleDash delivery', `A package needs collecting${area}. Open VilleDash to accept.`, { tag: 'vd-new', deliveryId: event.params.id })));
 });
+
+// Rider passes on an offer → it goes to the next nearest rider straight away.
+exports.dashDeclineOffer = onCall(async (req) => {
+  const auth = requireAuth(req);
+  const id = L.cleanText(req.data && req.data.deliveryId, 40);
+  const ref = db().doc(`dash_deliveries/${id}`);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'Delivery not found.');
+  const d = snap.data();
+  if (d.status !== 'requested') return { ok: true };
+  await ref.update({
+    declinedBy: FieldValue.arrayUnion(auth.uid),
+    ...(d.offeredTo === auth.uid ? { offeredTo: null, offerExpiresAt: null, lastOfferOutcome: 'declined' } : {}),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+  if (d.offeredTo === auth.uid) await offerNext(id);
+  return { ok: true };
+});
+
+exports.dashDispatchSweep = onSchedule({ schedule: 'every 1 minutes', timeZone: 'America/Jamaica' }, async () => { await sweepOffers(); });
 
 const CUSTOMER_MESSAGES = {
   assigned:   ['🛵 Rider assigned', (d) => `${d.riderName || 'Your rider'} is collecting your ${d.type === 'market' ? 'order' : 'package'}.`],
@@ -478,3 +529,9 @@ Object.assign(exports, require('./market'));
 
 // Fleet and rider shifts
 Object.assign(exports, require('./fleet'));
+
+// Money controls (rider cash, fleet charges)
+const finance = require('./finance');
+exports.dashAdminRecordRiderCash = finance.dashAdminRecordRiderCash;
+exports.dashAdminRecordFleetCharge = finance.dashAdminRecordFleetCharge;
+exports.dashAdminMarkFleetChargePaid = finance.dashAdminMarkFleetChargePaid;

@@ -15,6 +15,7 @@ let autoId = 0;
 
 function resolve(v, prev) {
   if (v && v.__ts) return now();
+  if (v && v.__union) return [...new Set([...(Array.isArray(prev) ? prev : []), ...v.__union])];
   if (v && v.__inc !== undefined) return (prev || 0) + v.__inc;
   if (v && typeof v === 'object' && !Array.isArray(v) && !v.toMillis) {
     const o = {}; for (const [k, x] of Object.entries(v)) o[k] = resolve(x, prev && prev[k]); return o;
@@ -92,7 +93,7 @@ const fakeDb = {
 const inject = (mod, exportsObj) => { const id = require.resolve(mod); require.cache[id] = { id, filename: id, loaded: true, exports: exportsObj }; };
 inject('firebase-admin/firestore', {
   getFirestore: () => fakeDb,
-  FieldValue: { serverTimestamp: () => SERVER_TS, increment: INC },
+  FieldValue: { serverTimestamp: () => SERVER_TS, increment: INC, arrayUnion: (...a) => ({ __union: a }) },
   Timestamp: { now, fromDate: (d) => ({ toMillis: () => d.getTime(), toDate: () => d }), fromMillis: (ms) => ({ toMillis: () => ms, toDate: () => new Date(ms) }) },
 });
 const pushes = [];
@@ -407,4 +408,93 @@ test('online sessions are logged and shifts close as completed or missed', async
   } });
   const sess = [...store.entries()].filter(([k, v]) => k.startsWith('rider_online_sessions/') && v.riderId === 'riderA');
   assert.equal(sess.length, 2);
+});
+
+
+// ── Automatic dispatch ───────────────────────────────────────────────────────
+test('auto dispatch: nearest rider first, decline/expiry moves on, then opens to all', async () => {
+  const ts = (msv) => ({ toMillis: () => msv, toDate: () => new Date(msv) });
+  const t0 = Date.now();
+  store.set('riders/riderA', { ...store.get('riders/riderA'), fcmToken: 'tokA', lastLocation: { lat: 18.0417, lng: -77.5037, at: ts(t0) } }); // at pickup
+  store.set('riders/riderB', { ...store.get('riders/riderB'), lastLocation: { lat: 18.07, lng: -77.52, at: ts(t0) } });     // ~4 km
+  const { deliveryId: id } = await call('dashCreateDelivery', 'cust1', booking('key-auto0001'));
+  const fire = () => F.dashNotifyNewDelivery.run({ params: { id }, data: { data: () => store.get(`dash_deliveries/${id}`) } });
+  await fire();
+  let d = store.get(`dash_deliveries/${id}`);
+  assert.equal(d.offeredTo, 'riderA');
+  assert.ok(pushes.some((p) => /offer/i.test(p.notification.title)));
+
+  // B can't take A's offer; A declines → B gets it
+  await assert.rejects(call('dashAcceptDelivery', 'riderB', { deliveryId: id }), errCode('permission-denied'));
+  await call('dashDeclineOffer', 'riderA', { deliveryId: id });
+  d = store.get(`dash_deliveries/${id}`);
+  assert.equal(d.offeredTo, 'riderB');
+
+  // B lets it expire → nobody left → open to all, dispatcher flagged
+  const { sweepOffers } = require('./dispatch');
+  await sweepOffers(Date.now() + 120000);
+  d = store.get(`dash_deliveries/${id}`);
+  assert.equal(d.offeredTo, null);
+  assert.equal(d.dispatchOpen, true);
+  assert.equal(d.needsDispatcher, true);
+  assert.deepEqual([...d.declinedBy].sort(), ['riderA', 'riderB']);
+
+  // Open job: anyone free can accept, flags clear
+  await call('dashAcceptDelivery', 'riderB', { deliveryId: id });
+  d = store.get(`dash_deliveries/${id}`);
+  assert.equal(d.riderId, 'riderB'); assert.equal(d.needsDispatcher, false);
+});
+
+test('auto dispatch: offered rider accepts; manual mode broadcasts instead', async () => {
+  const { deliveryId: id } = await call('dashCreateDelivery', 'cust1', booking('key-auto0002'));
+  await F.dashNotifyNewDelivery.run({ params: { id }, data: { data: () => store.get(`dash_deliveries/${id}`) } });
+  const first = store.get(`dash_deliveries/${id}`).offeredTo;
+  assert.ok(['riderA', 'riderB'].includes(first));
+  await call('dashAcceptDelivery', first, { deliveryId: id });
+  assert.equal(store.get(`dash_deliveries/${id}`).status, 'assigned');
+
+  store.set('dash_pricing/current', { autoDispatch: false });
+  const other = first === 'riderA' ? 'riderB' : 'riderA';
+  const { deliveryId: id2 } = await call('dashCreateDelivery', 'cust1', booking('key-auto0003'));
+  store.set(`riders/${other}`, { ...store.get(`riders/${other}`), fcmToken: 'tokOther' });
+  await F.dashNotifyNewDelivery.run({ params: { id: id2 }, data: { data: () => store.get(`dash_deliveries/${id2}`) } });
+  assert.equal(store.get(`dash_deliveries/${id2}`).offeredTo, undefined);
+  assert.ok(pushes.some((p) => p.token === 'tokOther' && /New VilleDash delivery/.test(p.notification.title)));
+});
+
+test('proof photos: only the assigned rider, only at the right stage, only our storage', async () => {
+  const { deliveryId: id } = await call('dashCreateDelivery', 'cust1', booking('key-proof001'));
+  await asAdmin('dashAdminAssignRider', { deliveryId: id, riderId: 'riderA' });
+  const url = (k) => `https://firebasestorage.googleapis.com/v0/b/x/o/dash_proof%2F${id}%2F${k}.jpg?alt=media`;
+  await assert.rejects(call('dashAttachProof', 'riderA', { deliveryId: id, kind: 'pickup', url: url('pickup') }), errCode('failed-precondition'));
+  for (const s of ['to_pickup', 'at_pickup']) await call('dashRiderUpdateStatus', 'riderA', { deliveryId: id, status: s });
+  await assert.rejects(call('dashAttachProof', 'riderB', { deliveryId: id, kind: 'pickup', url: url('pickup') }), errCode('permission-denied'));
+  await assert.rejects(call('dashAttachProof', 'riderA', { deliveryId: id, kind: 'pickup', url: 'https://evil.example/x.jpg' }), errCode('invalid-argument'));
+  await call('dashAttachProof', 'riderA', { deliveryId: id, kind: 'pickup', url: url('pickup') });
+  assert.equal(store.get(`dash_deliveries/${id}`).proofPhotos.pickup.url, url('pickup'));
+  await assert.rejects(call('dashAttachProof', 'riderA', { deliveryId: id, kind: 'dropoff', url: url('drop') }), errCode('failed-precondition'));
+});
+
+test('rider cash handovers reduce what they owe; fleet charges are recorded and paid', async () => {
+  const { deliveryId: id, pin } = await call('dashCreateDelivery', 'cust1', booking('key-cash0001'));
+  await asAdmin('dashAdminAssignRider', { deliveryId: id, riderId: 'riderA' });
+  for (const s of ['to_pickup', 'at_pickup', 'collected', 'to_dropoff', 'at_dropoff']) await call('dashRiderUpdateStatus', 'riderA', { deliveryId: id, status: s });
+  await call('dashVerifyDropoffPin', 'riderA', { deliveryId: id, pin });
+  const d = store.get(`dash_deliveries/${id}`);
+  const owed = d.cashToCollectCents - d.riderPayCents;
+  await assert.rejects(asAdmin('dashAdminRecordRiderCash', { riderId: 'riderA', amountCents: owed + 1, reference: 'R1' }), errCode('failed-precondition'));
+  await assert.rejects(asAdmin('dashAdminRecordRiderCash', { riderId: 'riderA', amountCents: 100 }), errCode('invalid-argument'));
+  const r1 = await asAdmin('dashAdminRecordRiderCash', { riderId: 'riderA', amountCents: 10000, reference: 'R1' });
+  assert.equal(r1.owedCents, owed - 10000);
+  const r2 = await asAdmin('dashAdminRecordRiderCash', { riderId: 'riderA', amountCents: owed - 10000, reference: 'R2' });
+  assert.equal(r2.owedCents, 0);
+  await assert.rejects(call('dashAdminRecordRiderCash', 'riderA', { riderId: 'riderA', amountCents: 1, reference: 'x' }), errCode('permission-denied'));
+
+  store.set('fleet_providers/prov1', { name: 'Island Bikes Ltd' });
+  await assert.rejects(asAdmin('dashAdminRecordFleetCharge', { providerId: 'prov1', amountCents: 500000, periodStart: '2026-10-12', periodEnd: '2026-10-11' }), errCode('invalid-argument'));
+  const fc = await asAdmin('dashAdminRecordFleetCharge', { providerId: 'prov1', amountCents: 500000, periodStart: '2026-10-12', periodEnd: '2026-10-18', bikes: 5 });
+  assert.equal(store.get(`ledger_entries/${fc.entryId}`).kind, 'fleet_charge');
+  await asAdmin('dashAdminMarkFleetChargePaid', { entryId: fc.entryId, reference: 'NCB-123' });
+  assert.equal(store.get(`ledger_entries/${fc.entryId}`).paid, true);
+  await assert.rejects(asAdmin('dashAdminMarkFleetChargePaid', { entryId: fc.entryId, reference: 'again' }), errCode('failed-precondition'));
 });

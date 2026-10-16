@@ -144,3 +144,20 @@ test('attendance needs real online time inside the shift', () => {
   assert.ok(L.attendedShift(shift, [{ start: start + 2 * h, end: null }], start + 3 * h));        // still online
   assert.ok(!L.attendedShift(shift, []));
 });
+
+test('dispatch ranks fresh, nearby, free riders with bikes first', () => {
+  const now = 1_000_000_000_000;
+  const P = { lat: 18.0416, lng: -77.5036 };
+  const r = (id, extra) => ({ id, status: 'approved', isOnline: true, motorcycleId: 'b', ...extra });
+  const ranked = L.rankRiders([
+    r('far', { lastLocation: { lat: 18.08, lng: -77.53, atMs: now - 60000 } }),
+    r('near', { lastLocation: { lat: 18.042, lng: -77.504, atMs: now - 60000 } }),
+    r('stale', { lastLocation: { lat: 18.0416, lng: -77.5036, atMs: now - 3600000 } }),
+    r('noloc'),
+    r('busy', { activeDeliveryId: 'x', lastLocation: { lat: 18.0416, lng: -77.5036, atMs: now } }),
+    r('nobike', { motorcycleId: null, lastLocation: { lat: 18.0416, lng: -77.5036, atMs: now } }),
+    r('offline', { isOnline: false }),
+    r('declined', { lastLocation: { lat: 18.0416, lng: -77.5036, atMs: now } }),
+  ], P, { exclude: ['declined'], now });
+  assert.deepEqual(ranked.map((x) => x.id), ['near', 'far', 'noloc', 'stale']);
+});

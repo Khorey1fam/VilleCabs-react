@@ -40,6 +40,9 @@ const DEFAULT_PRICING = Object.freeze({
   maxPrepMinutes: 120,
   requireMotorcycle: true,         // riders need an assigned bike to take jobs
   deliveriesPerRiderHour: 2,       // used to turn demand into riders needed
+  autoDispatch: true,              // offer each job to the nearest free rider in turn
+  offerSeconds: 45,                // how long a rider has to accept an offer
+  maxOfferRounds: 5,               // after this many riders pass, open the job to everyone
   // Operations
   maxActivePerCustomer:  3,
   allowQueueWhenNoRiders: false,   // refuse a booking when nobody is online
@@ -343,6 +346,28 @@ function attendedShift(shift, sessions, now = Date.now(), minMinutes = 30) {
   return overlap >= Math.min(minMinutes, (w.end - w.start) / 60000) * 60000;
 }
 
+
+// ── Dispatch: who gets the next offer ────────────────────────────────────────
+/**
+ * riders = [{ id, status, isOnline, motorcycleId, activeDeliveryId, lastLocation: {lat,lng,atMs} }]
+ * Eligible: approved, online, free, has a bike (if required), not already
+ * offered/declined this job. Riders with a fresh location (≤ staleMs) come
+ * first, nearest to pickup; then riders with stale or no location.
+ */
+function rankRiders(riders, pickup, { exclude = [], requireMotorcycle = true, now = Date.now(), staleMs = 10 * 60000 } = {}) {
+  const out = (riders || [])
+    .filter((r) => r.status === 'approved' && r.isOnline && !r.activeDeliveryId)
+    .filter((r) => !requireMotorcycle || r.motorcycleId)
+    .filter((r) => !exclude.includes(r.id))
+    .map((r) => {
+      const loc = r.lastLocation;
+      const fresh = loc && isCoord(loc) && Number.isFinite(loc.atMs) && now - loc.atMs <= staleMs;
+      return { id: r.id, fresh: !!fresh, km: fresh && isCoord(pickup) ? haversineKm(loc, pickup) : Infinity };
+    });
+  out.sort((a, b) => (b.fresh - a.fresh) || (a.km - b.km) || a.id.localeCompare(b.id));
+  return out;
+}
+
 module.exports = {
   DEFAULT_PRICING, PACKAGE_CATEGORIES, PROHIBITED_WORDS,
   mergePricing, haversineKm, isCoord, quoteParcel, QuoteError, findProhibited,
@@ -352,4 +377,5 @@ module.exports = {
   MERCHANT_CATEGORIES, DISABLED_CATEGORIES, isOpenAt, CartError, priceCart, marketSplit,
   ORDER_STATUSES, ORDER_FINAL, MERCHANT_STEPS,
   BIKE_STATUSES, BIKE_ASSIGNABLE, SHIFT_STATUSES, shiftWindow, attendedShift,
+  rankRiders,
 };

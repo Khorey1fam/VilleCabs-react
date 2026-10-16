@@ -117,6 +117,16 @@ export default function DeliveryTrack({ go, deliveryId, shared }) {
           <div style={st.row}><span style={{ color: C.quiet }}>Package</span><span>{d.package.description}</span></div>
           <div style={st.row}><span style={{ color: C.quiet }}>Total</span><b>{formatJMD(d.cashToCollectCents ?? d.quote.totalCents)} cash · paid by {d.payment.collectFrom === 'recipient' ? 'recipient' : 'sender'}</b></div>
           <div style={{ fontSize: 11.5, color: C.quiet, marginTop: 6 }}>Delivery ID {d.id}</div>
+          {d.proofPhotos && (d.proofPhotos.pickup || d.proofPhotos.dropoff) && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              {['pickup', 'dropoff'].filter((k) => d.proofPhotos[k]).map((k) => (
+                <a key={k} href={d.proofPhotos[k].url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: C.purple, textAlign: 'center' }}>
+                  <img src={d.proofPhotos[k].url} alt={`${k} proof`} style={{ width: 90, height: 90, objectFit: 'cover', borderRadius: 10, display: 'block' }} />
+                  {k === 'pickup' ? 'At pickup' : 'At delivery'}
+                </a>
+              ))}
+            </div>
+          )}
         </div>
 
         {err && <div style={st.err}>{err}</div>}

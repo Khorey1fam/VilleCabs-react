@@ -447,6 +447,7 @@ service cloud.firestore {
       allow read: if isAdmin() || (signedIn() && resource.data.reporterId == request.auth.uid);
       allow update: if isAdmin();
       allow create, delete: if false;
+      match /notes/{noteId} { allow read, create: if isAdmin(); allow update, delete: if false; }
     }
 
 

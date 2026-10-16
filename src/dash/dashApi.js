@@ -26,6 +26,8 @@ export const api = {
   create:       (data) => fn('dashCreateDelivery')(data).then((r) => r.data),
   cancel:       (data) => fn('dashCancelDelivery')(data).then((r) => r.data),
   accept:       (data) => fn('dashAcceptDelivery')(data).then((r) => r.data),
+  declineOffer: (data) => fn('dashDeclineOffer')(data).then((r) => r.data),
+  attachProof:  (data) => fn('dashAttachProof')(data).then((r) => r.data),
   assign:       (data) => fn('dashAdminAssignRider')(data).then((r) => r.data),
   riderStatus:  (data) => fn('dashRiderUpdateStatus')(data).then((r) => r.data),
   verifyPin:    (data) => fn('dashVerifyDropoffPin')(data).then((r) => r.data),
@@ -196,3 +198,28 @@ export const SHIFT_LABEL = {
 export const jmToday = () => new Date(Date.now() - 5 * 3600000).toISOString().slice(0, 10);
 export const addDays = (date, n) => new Date(Date.parse(`${date}T12:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
 export const weekday = (date) => new Date(`${date}T12:00:00Z`).getUTCDay();
+
+// Shrink a phone photo (max 1280px, JPEG) before upload — saves riders' data.
+function shrinkImage(file, max = 1280) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      c.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not read the photo.'))), 'image/jpeg', 0.8);
+      URL.revokeObjectURL(img.src);
+    };
+    img.onerror = () => reject(new Error('Could not read the photo.'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+export async function uploadProof(deliveryId, kind, file) {
+  if (!file) return;
+  const blob = await shrinkImage(file);
+  const r = storageRef(getStorage(app()), `dash_proof/${deliveryId}/${kind}-${Date.now()}.jpg`);
+  await uploadBytes(r, blob, { contentType: 'image/jpeg' });
+  const url = await getDownloadURL(r);
+  await api.attachProof({ deliveryId, kind, url });
+}

@@ -5,6 +5,7 @@ import { api, dashDb, errText, formatJMD, STATUS_LABEL, FINAL, ORDER_LABEL, MERC
 import { C, st, Pill, statusTone, Spinner } from './ui';
 import { FleetTab, ScheduleTab } from './AdminFleet';
 import { SitesTab } from './AdminSites';
+import { FinanceTab, SupportTab, AuditTab } from './AdminFinance';
 
 const ACTIVE = ['requested', 'assigned', 'to_pickup', 'at_pickup', 'collected', 'to_dropoff', 'at_dropoff'];
 const card = { ...st.card, padding: 14 };
@@ -78,16 +79,17 @@ function DeliveryCard({ d, riders }) {
   const [open, setOpen] = useState(false);
   const run = async (fn) => { setBusy(true); setMsg(''); try { await fn(); setMsg('Done.'); } catch (e) { setMsg(errText(e)); } setBusy(false); };
   const assignable = ['requested', 'assigned', 'to_pickup', 'at_pickup'].includes(d.status);
+  const alert = d.needsDispatcher && d.status === 'requested';
   const candidates = riders.filter((r) => r.status === 'approved' && (!r.activeDeliveryId || r.activeDeliveryId === d.id));
   return (
-    <div style={card}>
+    <div style={{ ...card, ...(alert ? { border: `2px solid ${C.red}` } : {}) }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
         <div style={{ fontWeight: 700, fontSize: 13.5 }}>{d.pickup.address.split(',')[0]} → {d.dropoff.address.split(',')[0]}</div>
         <Pill tone={statusTone(d.status)}>{STATUS_LABEL[d.status]}</Pill>
       </div>
       <div style={{ fontSize: 12.5, color: C.quiet, marginTop: 4 }}>
         {d.id} · {ts(d.createdAt)} · {formatJMD(d.quote.totalCents)} cash · {d.quote.distanceKm} km · {d.package.size}{d.package.fragile ? ' fragile' : ''}
-        {d.riderName ? ` · Rider: ${d.riderName}` : ' · No rider'}{d.pinLocked ? ' · PIN LOCKED' : ''}
+        {d.riderName ? ` · Rider: ${d.riderName}` : d.offeredTo ? ` · Offered to ${riders.find((r) => r.id === d.offeredTo)?.name || 'a rider'}` : ' · No rider'}{d.pinLocked ? ' · PIN LOCKED' : ''}{d.needsDispatcher && d.status === 'requested' ? ' · ⚠ NO RIDER TOOK IT — assign by hand' : ''}
       </div>
       <button onClick={() => setOpen(!open)} style={{ ...small, marginTop: 8, background: C.purpleSoft, color: C.purple, border: `1px solid ${C.purpleLine}` }}>{open ? 'Hide' : 'Manage'}</button>
       {open && (
@@ -96,6 +98,8 @@ function DeliveryCard({ d, riders }) {
           <div><b>Sender:</b> {d.pickup.contactName} {d.pickup.contactPhone} — {d.pickup.address}</div>
           <div><b>Recipient:</b> {d.dropoff.recipientName} {d.dropoff.recipientPhone} — {d.dropoff.address}</div>
           <div><b>Package:</b> {d.package.category} · {d.package.description}</div>
+          {d.proofPhotos && <div style={{ marginTop: 4 }}><b>Proof:</b> {['pickup', 'dropoff'].filter((k) => d.proofPhotos[k]).map((k) => <a key={k} href={d.proofPhotos[k].url} target="_blank" rel="noreferrer" style={{ color: C.purple, marginRight: 10 }}>{k} photo</a>)}</div>}
+          {d.proofOfDelivery && <div><b>Completed by:</b> {d.proofOfDelivery.method === 'pin' ? 'PIN verified' : `admin exception — ${d.proofOfDelivery.note || ''}`}</div>}
           {assignable && (
             <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
               <select style={{ ...st.input, width: 'auto', flex: 1, minWidth: 180 }} value={riderId} onChange={(e) => setRiderId(e.target.value)}>
@@ -200,11 +204,12 @@ const PRICE_FIELDS = [
   ['merchantCommissionPct', 'Merchant commission (%)', false], ['settlementPeriodDays', 'Merchant settlement period (days)', false],
   ['maxActivePerCustomer', 'Max deliveries in progress per customer', false], ['pinMaxAttempts', 'Wrong PIN attempts before lock', false],
   ['deliveriesPerRiderHour', 'Deliveries one rider handles per hour (for scheduling)', false],
+  ['offerSeconds', 'Seconds a rider has to accept an offer', false], ['maxOfferRounds', 'Riders to try before opening a job to all', false],
 ];
 const DEFAULTS = {
   baseFeeCents: 30000, perKmCents: 6000, minimumCents: 50000, fragileSurchargeCents: 10000, roundToCents: 1000,
   riderBaseCents: 20000, riderPerKmCents: 3000, roadFactor: 1.3, maxDistanceKm: 25,
-  merchantCommissionPct: 15, settlementPeriodDays: 14, maxActivePerCustomer: 3, pinMaxAttempts: 5, deliveriesPerRiderHour: 2,
+  merchantCommissionPct: 15, settlementPeriodDays: 14, maxActivePerCustomer: 3, pinMaxAttempts: 5, deliveriesPerRiderHour: 2, offerSeconds: 45, maxOfferRounds: 5,
   serviceArea: { lat: 18.0416, lng: -77.5036, radiusKm: 15 },
   sizes: { small: { label: 'Small — fits in a backpack', maxKg: 5, surchargeCents: 0 }, medium: { label: 'Medium — shoebox to small box', maxKg: 10, surchargeCents: 15000 }, large: { label: 'Large — strapped to the bike', maxKg: 20, surchargeCents: 30000 } },
 };
@@ -307,6 +312,25 @@ function Launch() {
         </div>
       ))}
       {msg && <div style={st.note}>{msg}</div>}
+      <AutoDispatchSwitch />
+    </div>
+  );
+}
+
+function AutoDispatchSwitch() {
+  const [p, setP] = useState(null);
+  useEffect(() => onSnapshot(doc(dashDb(), 'dash_pricing', 'current'), (s) => setP(s.exists() ? s.data() : {}), () => setP({})), []);
+  if (!p) return null;
+  const on = p.autoDispatch !== false;
+  return (
+    <div style={{ marginTop: 16, paddingTop: 12, borderTop: `1px solid ${C.line}` }}>
+      <div style={st.h2}>Dispatch mode</div>
+      <div style={{ fontSize: 13, color: C.quiet, marginBottom: 8 }}>
+        {on ? `Automatic: each job is offered to the nearest free rider for ${p.offerSeconds || 45} seconds, then the next. After ${p.maxOfferRounds || 5} riders it opens to everyone and shows red in Dispatch.`
+          : 'Open: every free rider is notified and the first to accept gets the job.'} You can always assign by hand.
+      </div>
+      <button onClick={() => setDoc(doc(dashDb(), 'dash_pricing', 'current'), { autoDispatch: !on, updatedAt: serverTimestamp() }, { merge: true }).catch(() => {})}
+        style={{ ...small, padding: '8px 14px', background: C.purple, color: C.white, border: 'none' }}>{on ? 'Switch to open dispatch' : 'Switch to automatic dispatch'}</button>
     </div>
   );
 }
@@ -449,7 +473,7 @@ export default function AdminDashTab() {
   return (
     <div>
       <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-        {[['overview', 'Overview'], ['deliveries', 'Dispatch'], ['orders', 'Store orders'], ['schedule', 'Schedule'], ['riders', 'Riders'], ['fleet', 'Fleet'], ['merchants', 'Merchants'], ['settlements', 'Settlements'], ['pricing', 'Pricing'], ['sites', 'Sites & ads'], ['launch', 'Launch']].map(([k, l]) => (
+        {[['overview', 'Overview'], ['deliveries', 'Dispatch'], ['orders', 'Store orders'], ['schedule', 'Schedule'], ['riders', 'Riders'], ['fleet', 'Fleet'], ['merchants', 'Merchants'], ['settlements', 'Settlements'], ['finance', 'Finance'], ['support', 'Support'], ['pricing', 'Pricing'], ['sites', 'Sites & ads'], ['audit', 'Audit log'], ['launch', 'Launch']].map(([k, l]) => (
           <button key={k} onClick={() => setSub(k)} style={{ ...small, padding: '7px 14px', borderRadius: 20, background: sub === k ? C.purple : '#f3f4f6', color: sub === k ? C.white : '#555', border: 'none' }}>{l}</button>
         ))}
       </div>
@@ -462,6 +486,9 @@ export default function AdminDashTab() {
       {sub === 'schedule' && <ScheduleTab riders={riders} perRiderHour={perRiderHour} />}
       {sub === 'fleet' && <FleetTab riders={riders} />}
       {sub === 'sites' && <SitesTab />}
+      {sub === 'finance' && <FinanceTab riders={riders} />}
+      {sub === 'support' && <SupportTab />}
+      {sub === 'audit' && <AuditTab />}
       {sub === 'merchants' && <Merchants />}
       {sub === 'settlements' && <Settlements />}
     </div>
