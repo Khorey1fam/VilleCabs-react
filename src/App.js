@@ -1683,7 +1683,7 @@ function LandingEventsSection({ go }) {
   );
 }
 
-function Splash({ go, site, domains }) {
+function Splash({ go, site, domains, dashOn }) {
   const [slide, setSlide] = useState(0);
   const [livePromos, setLivePromos] = useState([]);
   // Load active, non-expired promo codes so the Promotions banner reflects what
@@ -1712,7 +1712,7 @@ function Splash({ go, site, domains }) {
   const cur = slides[slide] || slides[0];
   return (
     <div style={{ background:'#ffffff', minHeight:'100vh' }}>
-      <FamilyBar site={site || 'cabs'} domains={domains || {}} go={go}/>
+      {(dashOn || (site && site !== 'cabs')) && <FamilyBar site={site || 'cabs'} domains={domains || {}} go={go}/>}
 
       {/* NAV */}
       <div style={{ background:'#ffffff', borderBottom:'1px solid #eee', padding:'10px 16px', display:'flex', alignItems:'center', position:'sticky', top:0, zIndex:100 }}>
@@ -3738,7 +3738,7 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
       </div>
 
       {/* VILLE family: cross-promotion for VilleDash / VilleEvents */}
-      <HouseAd site={site || 'cabs'} domains={domains || {}} go={go} variant="banner"/>
+      {dashOn && <HouseAd site={site || 'cabs'} domains={domains || {}} go={go} variant="banner"/>}
 
       {/* Side drawer menu */}
       {menuOpen && (
@@ -13102,7 +13102,7 @@ export default function App() {
   if (loading) return <LoadingScreen/>;
 
     // go() - navigate to a screen and track history
-  const props = { go:setScreen, user, setUser, bookingId, setBookingId, pickupData, setPickupData, dropoffData, setDropoffData, site, domains };
+  const props = { go:setScreen, user, setUser, bookingId, setBookingId, pickupData, setPickupData, dropoffData, setDropoffData, site, domains, dashOn };
   const dashShared = { AddressAutocompleteInput, VilleMap, geocodeLatLng, vcToast, vcConfirm };
   const openDelivery = (id) => { setDeliveryId(id); setScreen('dash-track'); };
   const openStore = (id) => { setStoreId(id); setScreen('dash-store'); };
