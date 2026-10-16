@@ -1,0 +1,93 @@
+rules_version = '2';
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  VilleCabs / VILLE Firebase STORAGE Security Rules
+//
+//  Covers every upload path the app uses:
+//    • driver-docs/{uid}/...       — driver licence / vehicle docs & photos (owner)
+//    • driverPhotos/{uid}/...      — driver profile photo (owner)
+//    • customerPhotos/{uid}/...    — customer profile photo (owner)
+//    • partnerUploads/...          — advertiser logo / flyer / promo (PUBLIC form,
+//                                    so signed-OUT visitors must be able to upload)
+//    • merchants/{uid}/...         — VilleDash store logo, cover, product photos (owner)
+//    • dash_proof/{deliveryId}/... — VilleDash rider pickup / drop-off photos
+//                                    (only the rider assigned to that delivery)
+//    • site_ads/...                — VILLE cross-site ad images (admin)
+//
+//  Deploy with:  firebase deploy --only storage
+//  (Storage rules are SEPARATE from Firestore rules.)
+// ═══════════════════════════════════════════════════════════════════════════
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Helper: an allowed advertiser upload — image or PDF, max 8MB
+    function isValidPromo() {
+      return request.resource.size < 8 * 1024 * 1024
+        && (request.resource.contentType.matches('image/.*')
+            || request.resource.contentType == 'application/pdf');
+    }
+    function isValidImage() {
+      return request.resource.size < 8 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+    function isAdmin() {
+      return request.auth != null && request.auth.token.email == 'admin@villecabs.com';
+    }
+
+    // ── Driver documents & photos — only the owner (driver) may write ─────────
+    match /driver-docs/{uid}/{allPaths=**} {
+      allow read:  if true;                      // shown to the driver & admin
+      allow write: if request.auth != null && request.auth.uid == uid && isValidPromo();
+    }
+    match /driverPhotos/{uid}/{allPaths=**} {
+      allow read:  if true;
+      allow write: if request.auth != null && request.auth.uid == uid && isValidImage();
+    }
+
+    // ── Customer profile photos — only the owner may write ────────────────────
+    match /customerPhotos/{uid}/{allPaths=**} {
+      allow read:  if true;
+      allow write: if request.auth != null && request.auth.uid == uid && isValidImage();
+    }
+
+    // ── Advertiser uploads — PUBLIC form, so signed-out visitors can upload ───
+    //  Anyone may upload a valid promo file (image/PDF ≤ 8MB). Files are public-
+    //  read because approved partners' images appear on the customer dashboard.
+    //  No update/delete by the public (write=create only via create check).
+    match /partnerUploads/{fileName} {
+      allow read:   if true;
+      allow create: if isValidPromo();
+      allow update, delete: if false;   // only the Firebase console / admin SDK
+    }
+
+    // ── VilleDash store images — the store owner only (≤ 3MB PNG/JPG/WebP) ────
+    match /merchants/{uid}/{file} {
+      allow read:  if true;
+      allow write: if request.auth != null && request.auth.uid == uid
+                   && request.resource.size < 3 * 1024 * 1024
+                   && request.resource.contentType.matches('image/(png|jpeg|webp)');
+    }
+
+    // ── VilleDash proof photos — only the rider assigned to that delivery ─────
+    match /dash_proof/{deliveryId}/{file} {
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null
+                   && firestore.get(/databases/(default)/documents/dash_deliveries/$(deliveryId)).data.riderId == request.auth.uid
+                   && isValidImage();
+    }
+
+    // ── VILLE cross-site ad images — admin only ───────────────────────────────
+    match /site_ads/{file} {
+      allow read:  if true;
+      allow write: if isAdmin()
+                   && request.resource.size < 3 * 1024 * 1024
+                   && request.resource.contentType.matches('image/(png|jpeg|webp)');
+    }
+
+    // ── Default: deny everything not explicitly allowed ───────────────────────
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

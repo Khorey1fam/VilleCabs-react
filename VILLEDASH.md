@@ -93,33 +93,11 @@ Sign-ins don't carry across domains: a customer signed in on villecabs.com signs
 
 ## Storage rules for images
 
-Store logos, covers and product photos upload to `merchants/{uid}/…`, rider proof photos to `dash_proof/{deliveryId}/…` and ad images to `site_ads/…` in Firebase Storage. Your Storage rules live in the Firebase console, not this repo, so add this block there:
-
-```
-match /merchants/{uid}/{file} {
-  allow read: if true;
-  allow write: if request.auth != null && request.auth.uid == uid
-               && request.resource.size < 3 * 1024 * 1024
-               && request.resource.contentType.matches('image/(png|jpeg|webp)');
-}
-match /dash_proof/{deliveryId}/{file} {
-  allow read: if request.auth != null;
-  allow write: if request.auth != null
-               && firestore.get(/databases/(default)/documents/dash_deliveries/$(deliveryId)).data.riderId == request.auth.uid
-               && request.resource.size < 8 * 1024 * 1024
-               && request.resource.contentType.matches('image/.*');
-}
-match /site_ads/{file} {
-  allow read: if true;
-  allow write: if request.auth != null && request.auth.token.email == 'admin@villecabs.com'
-               && request.resource.size < 3 * 1024 * 1024
-               && request.resource.contentType.matches('image/(png|jpeg|webp)');
-}
-```
+`storage.rules` is now in the repo (your existing rules plus store images, rider proof photos and ad images). Deploy with `firebase deploy --only storage`. The proof-photo rule checks the delivery in Firestore, so the first deploy may ask to let Storage read Firestore — answer yes.
 
 ## Deploy order (staging first)
 
-1. `firebase deploy --only firestore:indexes` — wait until the console shows the indexes as built.
+1. `firebase deploy --only firestore:indexes,storage` (indexes and image rules) — wait until the console shows the indexes as built.
 2. `firebase deploy --only firestore:rules`
 3. `cd functions && npm install && npm test && firebase deploy --only functions`
 4. Deploy the web app (Vercel preview of the `ville-dash` branch).
