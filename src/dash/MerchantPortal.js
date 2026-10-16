@@ -115,18 +115,19 @@ function StoreForm({ uid, initial, onSaved, registering }) {
       <label style={st.label}>Pickup instructions for riders</label><input style={st.input} value={f.pickupInstructions} onChange={set('pickupInstructions')} placeholder="e.g. Collect at the side window" />
       <label style={st.label}>Usual prep time (minutes)</label><input style={st.input} type="number" min="1" max="120" value={f.prepMinutesTypical} onChange={set('prepMinutesTypical')} />
       <label style={st.label}>Opening hours (Jamaica time)</label>
+      <div style={{ fontSize: 12, color: C.quiet, marginBottom: 6 }}>Open all day? Set both times to 12:00 AM. Closing after midnight is fine (e.g. 6 PM – 2 AM).</div>
       {DAYS.map((d, i) => {
         const h = f.hours?.[i];
         return (
-          <div key={d} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+          <div key={d} style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6, flexWrap: 'wrap' }}>
             <div style={{ width: 36, fontSize: 13, fontWeight: 600 }}>{d}</div>
             <label style={{ fontSize: 12.5, display: 'flex', gap: 4, alignItems: 'center', width: 70 }}>
               <input type="checkbox" checked={!!h} onChange={(e) => setDay(i, e.target.checked ? {} : null)} /> Open
             </label>
             {h && <>
-              <input type="time" value={h.open} onChange={(e) => setDay(i, { open: e.target.value })} style={{ ...st.input, width: 'auto', padding: '6px 8px' }} />
+              <input type="time" value={h.open} onChange={(e) => setDay(i, { open: e.target.value })} style={{ ...st.input, width: 112, padding: '6px 6px' }} />
               <span>–</span>
-              <input type="time" value={h.close} onChange={(e) => setDay(i, { close: e.target.value })} style={{ ...st.input, width: 'auto', padding: '6px 8px' }} />
+              <input type="time" value={h.close} onChange={(e) => setDay(i, { close: e.target.value })} style={{ ...st.input, width: 112, padding: '6px 6px' }} />
             </>}
           </div>
         );
@@ -166,12 +167,13 @@ function OrderCard({ o, store }) {
     try { await api.merchantUpdate({ orderId: o.id, action, ...extra }); setRejecting(false); } catch (e) { setMsg(errText(e)); }
     setBusy(false);
   };
+  const label = o.status === 'awaiting_merchant' ? 'New order' : ORDER_LABEL[o.status];
   const tone = o.status === 'awaiting_merchant' ? 'amber' : ['rejected', 'cancelled', 'failed'].includes(o.status) ? 'red' : o.status === 'delivered' ? 'green' : 'purple';
   return (
     <div style={{ ...st.card, border: o.status === 'awaiting_merchant' ? `2px solid ${C.amber}` : st.card.border }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
         <div><b>#{o.id.slice(-6)}</b> <span style={{ color: C.quiet, fontSize: 12.5 }}>{ts(o.createdAt)} · {o.customerName}</span></div>
-        <Pill tone={tone}>{ORDER_LABEL[o.status]}</Pill>
+        <Pill tone={tone}>{label}</Pill>
       </div>
       <div style={{ margin: '8px 0' }}>
         {o.items.map((i, n) => (

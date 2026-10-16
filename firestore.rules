@@ -384,6 +384,13 @@ service cloud.firestore {
                     || (signedIn() && get(/databases/$(database)/documents/dash_deliveries/$(id)).data.riderId == request.auth.uid);
         allow write: if false;
       }
+      // Phone numbers: the customer, the ASSIGNED rider and admins only.
+      match /private/{docId} {
+        allow read: if isAdmin()
+                    || (signedIn() && get(/databases/$(database)/documents/dash_deliveries/$(id)).data.customerId == request.auth.uid)
+                    || (signedIn() && get(/databases/$(database)/documents/dash_deliveries/$(id)).data.riderId == request.auth.uid);
+        allow write: if false;
+      }
       // The drop-off PIN — the customer shares it with the recipient. Riders
       // must never see it, so not even the assigned rider can read this.
       match /customer/{docId} {
@@ -421,13 +428,17 @@ service cloud.firestore {
       allow read: if isAdmin() || isOwner(uid);
       allow create: if isOwner(uid)
                     && request.resource.data.status == 'pending'
+                    && request.resource.data.get('isOnline', false) == false
+                    && request.resource.data.get('backgroundCheck', 'not_started') == 'not_started'
                     && !('activeDeliveryId' in request.resource.data)
                     && !('motorcycleId' in request.resource.data)
-                    && !('completedCount' in request.resource.data);
+                    && !('motorcyclePlate' in request.resource.data)
+                    && !('completedCount' in request.resource.data)
+                    && !('approvedAt' in request.resource.data);
       allow update: if isAdmin()
                     || (isOwner(uid)
                         && !request.resource.data.diff(resource.data).affectedKeys()
-                             .hasAny(['status','activeDeliveryId','motorcycleId','motorcyclePlate','completedCount','approvedAt','approvedBy','onlineSince'])
+                             .hasAny(['status','activeDeliveryId','motorcycleId','motorcyclePlate','completedCount','approvedAt','approvedBy','onlineSince','backgroundCheck'])
                         && (request.resource.data.get('isOnline', false) == false
                             || resource.data.get('status','') == 'approved'));
       allow delete: if isAdmin();
@@ -461,6 +472,7 @@ service cloud.firestore {
       allow create: if isOwner(uid)
                     && request.resource.data.status == 'pending'
                     && !('commissionPct' in request.resource.data)
+                    && !('approvedAt' in request.resource.data)
                     && request.resource.data.name is string
                     && request.resource.data.name.size() > 1;
       allow update: if isAdmin()

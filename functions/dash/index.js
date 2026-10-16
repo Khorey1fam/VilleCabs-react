@@ -141,15 +141,16 @@ exports.dashCreateDelivery = onCall(async (req) => {
     type: 'parcel',
     customerId: auth.uid,
     customerName: L.cleanText(cust.get('name'), 80),
-    customerPhone: L.cleanPhone(cust.get('phone')),
+    // Phone numbers live in /private/contact — only the assigned rider, the
+    // customer and admins can read them (open jobs are visible to all riders).
     pickup: {
       address: L.cleanText(pickup.address, 200), lat: pickup.lat, lng: pickup.lng,
-      contactName: senderName, contactPhone: senderPhone,
+      contactName: senderName,
       landmark: L.cleanText(pickup.landmark, 150), instructions: L.cleanText(pickup.instructions, 300),
     },
     dropoff: {
       address: L.cleanText(dropoff.address, 200), lat: dropoff.lat, lng: dropoff.lng,
-      recipientName, recipientPhone, altPhone: L.cleanPhone(dropoff.altPhone),
+      recipientName,
       landmark: L.cleanText(dropoff.landmark, 150), instructions: L.cleanText(dropoff.instructions, 300),
     },
     package: {
@@ -174,6 +175,9 @@ exports.dashCreateDelivery = onCall(async (req) => {
     if (again.exists) return;
     tx.create(ref, delivery);
     tx.set(ref.collection('customer').doc('pin'), { pin: pinRec.pin, createdAt: FieldValue.serverTimestamp() });
+    tx.set(ref.collection('private').doc('contact'), {
+      customerPhone: L.cleanPhone(cust.get('phone')), senderPhone, recipientPhone, altPhone: L.cleanPhone(dropoff.altPhone),
+    });
     tx.set(db().doc(`dash_secrets/${deliveryId}`), { pinHash: pinRec.hash, pinSalt: pinRec.salt });
     addEvent(tx, deliveryId, 'requested', auth.uid, 'customer');
   });

@@ -240,12 +240,12 @@ exports.marketMerchantUpdateOrder = onCall(async (req) => {
       // Create the delivery now so a rider can head over while food is prepared.
       tx.create(db().doc(`dash_deliveries/${deliveryId}`), {
         type: 'market', orderId, merchantId: o.merchantId, merchantName: o.merchantName,
-        customerId: o.customerId, customerName: o.customerName, customerPhone: o.customerPhone,
+        customerId: o.customerId, customerName: o.customerName,
         pickup: {
           address: m.address || o.merchantName, lat: m.location.lat, lng: m.location.lng,
           contactName: o.merchantName, contactPhone: m.phone || '', landmark: '', instructions: L.cleanText(m.pickupInstructions, 300),
         },
-        dropoff: { ...o.dropoff, recipientName: o.customerName, recipientPhone: o.customerPhone, altPhone: '' },
+        dropoff: { ...o.dropoff, recipientName: o.customerName },
         package: { category: 'retail', description: `${o.merchantName} order · ${o.items.reduce((s, i) => s + i.qty, 0)} item(s)`, size: pricing.marketDeliverySize, weightKg: null, fragile: false, handling: '' },
         quote: { lines: [], totalCents: o.deliveryCents, distanceKm: o.distanceKm, distanceIsEstimate: true },
         riderPayCents: o.riderPayCents, cashToCollectCents: o.totalCents,
@@ -259,6 +259,9 @@ exports.marketMerchantUpdateOrder = onCall(async (req) => {
         riderId: null, riderName: null, riderPhone: null, riderPlate: null,
         pinAttempts: 0, pinLocked: false,
         createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
+      });
+      tx.set(db().doc(`dash_deliveries/${deliveryId}/private/contact`), {
+        customerPhone: o.customerPhone, senderPhone: m.phone || '', recipientPhone: o.customerPhone, altPhone: '',
       });
     } else {
       tx.update(orderRef, statusPatch(action));

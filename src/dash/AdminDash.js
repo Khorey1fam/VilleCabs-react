@@ -50,7 +50,7 @@ function Overview({ deliveries, riders }) {
   const noBike = online.filter((r) => !r.motorcycleId);
   return (
     <>
-      <div style={{ fontSize: 12.5, color: C.quiet, marginBottom: 8 }}>Last 30 days of deliveries loaded below. Fleet-provider costs are not recorded yet, so contribution excludes them.</div>
+      <div style={{ fontSize: 12.5, color: C.quiet, marginBottom: 8 }}>Last 30 days. Fleet-provider charges and rider cash are in the Finance tab.</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 10, marginBottom: 14 }}>
         <Stat label="Requests" value={deliveries.length} sub="all statuses" />
         <Stat label="Active now" value={deliveries.filter((d) => ACTIVE.includes(d.status)).length} color={C.purple} />
@@ -77,6 +77,8 @@ function DeliveryCard({ d, riders }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [open, setOpen] = useState(false);
+  const [contact, setContact] = useState({});
+  useEffect(() => { if (open) getDoc(doc(dashDb(), 'dash_deliveries', d.id, 'private', 'contact')).then((x) => setContact(x.exists() ? x.data() : {})).catch(() => {}); }, [open, d.id]);
   const run = async (fn) => { setBusy(true); setMsg(''); try { await fn(); setMsg('Done.'); } catch (e) { setMsg(errText(e)); } setBusy(false); };
   const assignable = ['requested', 'assigned', 'to_pickup', 'at_pickup'].includes(d.status);
   const alert = d.needsDispatcher && d.status === 'requested';
@@ -88,15 +90,15 @@ function DeliveryCard({ d, riders }) {
         <Pill tone={statusTone(d.status)}>{STATUS_LABEL[d.status]}</Pill>
       </div>
       <div style={{ fontSize: 12.5, color: C.quiet, marginTop: 4 }}>
-        {d.id} · {ts(d.createdAt)} · {formatJMD(d.quote.totalCents)} cash · {d.quote.distanceKm} km · {d.package.size}{d.package.fragile ? ' fragile' : ''}
+        {d.id} · {ts(d.createdAt)} · collect {formatJMD(d.cashToCollectCents ?? d.quote.totalCents)} cash{d.type === 'market' ? ` (delivery ${formatJMD(d.quote.totalCents)})` : ''} · {d.quote.distanceKm} km · {d.package.size}{d.package.fragile ? ' fragile' : ''}
         {d.riderName ? ` · Rider: ${d.riderName}` : d.offeredTo ? ` · Offered to ${riders.find((r) => r.id === d.offeredTo)?.name || 'a rider'}` : ' · No rider'}{d.pinLocked ? ' · PIN LOCKED' : ''}{d.needsDispatcher && d.status === 'requested' ? ' · ⚠ NO RIDER TOOK IT — assign by hand' : ''}
       </div>
       <button onClick={() => setOpen(!open)} style={{ ...small, marginTop: 8, background: C.purpleSoft, color: C.purple, border: `1px solid ${C.purpleLine}` }}>{open ? 'Hide' : 'Manage'}</button>
       {open && (
         <div style={{ marginTop: 10, fontSize: 13 }}>
-          <div><b>Customer:</b> {d.customerName} {d.customerPhone}</div>
-          <div><b>Sender:</b> {d.pickup.contactName} {d.pickup.contactPhone} — {d.pickup.address}</div>
-          <div><b>Recipient:</b> {d.dropoff.recipientName} {d.dropoff.recipientPhone} — {d.dropoff.address}</div>
+          <div><b>Customer:</b> {d.customerName} {contact.customerPhone || d.customerPhone || ''}</div>
+          <div><b>Sender:</b> {d.pickup.contactName} {contact.senderPhone || d.pickup.contactPhone || ''} — {d.pickup.address}</div>
+          <div><b>Recipient:</b> {d.dropoff.recipientName} {contact.recipientPhone || d.dropoff.recipientPhone || ''}{contact.altPhone ? ` (alt ${contact.altPhone})` : ''} — {d.dropoff.address}</div>
           <div><b>Package:</b> {d.package.category} · {d.package.description}</div>
           {d.proofPhotos && <div style={{ marginTop: 4 }}><b>Proof:</b> {['pickup', 'dropoff'].filter((k) => d.proofPhotos[k]).map((k) => <a key={k} href={d.proofPhotos[k].url} target="_blank" rel="noreferrer" style={{ color: C.purple, marginRight: 10 }}>{k} photo</a>)}</div>}
           {d.proofOfDelivery && <div><b>Completed by:</b> {d.proofOfDelivery.method === 'pin' ? 'PIN verified' : `admin exception — ${d.proofOfDelivery.note || ''}`}</div>}
@@ -139,6 +141,8 @@ function Deliveries({ deliveries, riders }) {
   if (!deliveries || !riders) return <Spinner />;
   const list = filter === 'active' ? deliveries.filter((d) => ACTIVE.includes(d.status))
     : filter === 'unassigned' ? deliveries.filter((d) => d.status === 'requested') : deliveries;
+  // Jobs nobody took come first.
+  const sorted = [...list].sort((a, b) => Number(!!(b.needsDispatcher && b.status === 'requested')) - Number(!!(a.needsDispatcher && a.status === 'requested')));
   return (
     <>
       <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
@@ -146,7 +150,7 @@ function Deliveries({ deliveries, riders }) {
           <button key={k} onClick={() => setFilter(k)} style={{ ...small, background: filter === k ? C.purple : '#f3f4f6', color: filter === k ? C.white : '#555', border: 'none' }}>{l}</button>
         ))}
       </div>
-      {list.length === 0 ? <div style={{ ...card, color: C.quiet }}>Nothing here.</div> : list.map((d) => <DeliveryCard key={d.id} d={d} riders={riders} />)}
+      {sorted.length === 0 ? <div style={{ ...card, color: C.quiet }}>Nothing here.</div> : sorted.map((d) => <DeliveryCard key={d.id} d={d} riders={riders} />)}
     </>
   );
 }
@@ -172,7 +176,12 @@ function RiderRow({ r }) {
         Licence {r.licenceNumber || '—'}{r.licenceExpiry ? ` (exp ${r.licenceExpiry})` : ''} · Emergency: {r.emergencyContact?.name} {r.emergencyContact?.phone} · Completed: {r.completedCount || 0}
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        {r.status !== 'approved' && <button onClick={() => save({ status: 'approved', approvedAt: serverTimestamp() })} style={{ ...small, background: C.green, color: C.white, border: 'none' }}>Approve</button>}
+        <select value={r.backgroundCheck || 'not_started'} onChange={(e) => save({ backgroundCheck: e.target.value })} style={{ ...st.input, width: 'auto', padding: '6px 8px' }}>
+          <option value="not_started">Background check: not started</option><option value="in_progress">Background check: in progress</option>
+          <option value="passed">Background check: passed</option><option value="failed">Background check: failed</option>
+        </select>
+        {r.status !== 'approved' && <button disabled={r.backgroundCheck !== 'passed'} title={r.backgroundCheck !== 'passed' ? 'Mark the background check passed first' : ''}
+          onClick={() => save({ status: 'approved', approvedAt: serverTimestamp() })} style={{ ...small, background: C.green, color: C.white, border: 'none', opacity: r.backgroundCheck === 'passed' ? 1 : 0.45 }}>Approve</button>}
         {r.status === 'pending' && <button onClick={() => save({ status: 'rejected' })} style={{ ...small, background: '#fff5f5', color: C.red, border: '1px solid #fecaca' }}>Reject</button>}
         {r.status === 'approved' && !r.activeDeliveryId && <button onClick={() => save({ status: 'suspended', isOnline: false })} style={{ ...small, background: '#f3f4f6', color: '#555', border: '1px solid #e5e7eb' }}>Suspend</button>}
         {r.status === 'approved' && r.isOnline && !r.activeDeliveryId && <button onClick={() => save({ isOnline: false })} style={{ ...small, background: '#f3f4f6', color: '#555', border: '1px solid #e5e7eb' }}>Set offline</button>}

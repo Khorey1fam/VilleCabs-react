@@ -8,7 +8,7 @@ customers see VilleCabs exactly as before.
 | Area | Files |
 | --- | --- |
 | Server (prices, dispatch, PIN, ledger, push) | `functions/dash/index.js`, `functions/dash/logic.js` |
-| Tests (31 server + 5 scheduling: `cd functions && npm test`, `node --test src/dash/coverage.test.mjs`) | `functions/dash/*.test.js`, `src/dash/coverage.test.mjs` |
+| Tests (32 server + 5 scheduling: `cd functions && npm test`, `node --test src/dash/coverage.test.mjs`) | `functions/dash/*.test.js`, `src/dash/coverage.test.mjs` |
 | Fleet & shifts (bikes, providers, assignment, schedule vs demand, attendance) | `functions/dash/fleet.js`, `shiftjobs.js`, `src/dash/AdminFleet.js`, `coverage.js` |
 | Separate domains, family bar, house ads | `src/dash/sites.js`, `src/dash/AdminSites.js` |
 | Automatic dispatch (timed offers) | `functions/dash/dispatch.js` |
@@ -19,6 +19,7 @@ customers see VilleCabs exactly as before.
 | Rider portal at `/rider` | `src/dash/RiderPortal.js` |
 | Admin → VilleDash tab (overview, dispatch, store orders, riders, merchants, settlements, pricing, launch) | `src/dash/AdminDash.js` |
 | Security rules + indexes | `firestore.rules`, `firestore.indexes.json` |
+| Screen check — renders every new screen with sample data, screenshots at phone width | `tools/screen-check/` |
 
 Fixes to the existing app in the same branch:
 
@@ -27,6 +28,7 @@ Fixes to the existing app in the same branch:
 - The Promotions page checks a code for real instead of accepting anything 4+ characters long.
 - Ride chat can only be read by that ride's customer and driver.
 - The unused in-app `AdminDash` (and its dead support-email helper) was removed. `/admin` is unchanged.
+- Driver licence re-uploads now show in the admin driver card (the Documents screen saved `licence`, the admin card read `license`).
 
 ## How store orders work
 
@@ -52,6 +54,11 @@ Store orders and their deliveries are separate records (`dash_orders` and `dash_
 - **Automatic (default):** each new job is offered to the nearest free rider (online, approved, with a bike) for 45 seconds. If they pass or let it run out it goes to the next nearest. After 5 riders, or when nobody is free, it opens to everyone and turns red in Admin → Dispatch so you can assign it by hand. Idle riders share their rough location once a minute so "nearest" is real.
 - **Open:** every free rider is notified; first to accept wins. Switch in Admin → VilleDash → Launch. Offer time and rider count are in Pricing.
 - Batch deliveries and several jobs at once stay off, as the brief asked.
+
+## Privacy
+
+- Phone numbers (customer, sender, recipient) are kept in `dash_deliveries/{id}/private/contact`, readable only by the customer, the assigned rider and admins. Open jobs that every online rider can see show addresses and names, never numbers.
+- Riders can't mark their own background check; an admin sets it in Riders, and Approve stays disabled until it's marked passed.
 
 ## Proof, support and money
 
@@ -140,4 +147,5 @@ existing document is changed.
 - Email notifications (push is wired; email needs EmailJS templates)
 - One store per login; multi-location chains need a merchant-users model
 - Distances are straight-line × 1.3, not road routes
-- Firestore rules are untested against the emulator, and most signed-in screens haven't been seen in a browser yet (only the landing pages and sign-in screens were checked) — test on staging before production
+- Firestore rules are reviewed against every screen's reads and writes but untested against the emulator (its download is blocked here) — test on staging before production
+- Open jobs show pickup and drop-off addresses to every online rider until one accepts

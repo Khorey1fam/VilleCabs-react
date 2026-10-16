@@ -12340,6 +12340,9 @@ function DriverDocuments({ go, user }) {
 
       const docData = { status:'pending', name:file.name, url, uploadedAt:new Date().toISOString() };
       const updates = { ['documents.'+key]: docData, ['docs.'+key]: url };
+      // Keep the signup field (US spelling) in step so the admin card shows the new file.
+      if (key === 'licence') updates['docs.license'] = url;
+      if (key === 'licenceBack') updates['docs.licenseBack'] = url;
       // Also mirror photos to the top-level fields the admin card & live-ride screen read
       if (key === 'vehiclePhoto') updates.vehiclePhotoUrl = url;
       if (key === 'profilePhoto') updates.profilePhotoUrl = url;

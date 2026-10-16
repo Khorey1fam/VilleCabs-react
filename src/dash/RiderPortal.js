@@ -168,6 +168,9 @@ function ActiveJob({ rider, job }) {
   const [pin, setPin] = useState('');
   const [issue, setIssue] = useState(false);
   const gpsErr = useLocationSharing(rider, job);
+  // Phone numbers are only readable once the job is ours.
+  const [contact, setContact] = useState({});
+  useEffect(() => onSnapshot(doc(dashDb(), 'dash_deliveries', job.id, 'private', 'contact'), (x) => setContact(x.exists() ? x.data() : {}), () => setContact({})), [job.id]);
   const next = NEXT[job.status];
   const toPickup = ['assigned', 'to_pickup', 'at_pickup'].includes(job.status);
   const target = toPickup ? job.pickup : job.dropoff;
@@ -197,10 +200,10 @@ function ActiveJob({ rider, job }) {
         <div style={{ fontSize: 16, fontWeight: 700, margin: '2px 0' }}>{target.address}</div>
         {target.landmark && <div style={st.sub}>Landmark: {target.landmark}</div>}
         {target.instructions && <div style={st.sub}>Note: {target.instructions}</div>}
-        <div style={{ ...st.sub, marginTop: 4 }}>{toPickup ? `${job.pickup.contactName} · ${job.pickup.contactPhone}` : `${job.dropoff.recipientName} · ${job.dropoff.recipientPhone}`}</div>
+        <div style={{ ...st.sub, marginTop: 4 }}>{toPickup ? `${job.pickup.contactName} · ${contact.senderPhone || ''}` : `${job.dropoff.recipientName} · ${contact.recipientPhone || ''}`}</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
           <a href={mapsLink(target.lat, target.lng)} target="_blank" rel="noreferrer" style={{ ...st.btnGhost, textAlign: 'center', textDecoration: 'none' }}>🧭 Navigate</a>
-          <a href={`tel:${toPickup ? job.pickup.contactPhone : job.dropoff.recipientPhone}`} style={{ ...st.btnGhost, textAlign: 'center', textDecoration: 'none' }}>📞 Call</a>
+          <a href={`tel:${toPickup ? contact.senderPhone : contact.recipientPhone}`} style={{ ...st.btnGhost, textAlign: 'center', textDecoration: 'none' }}>📞 Call</a>
         </div>
         <div style={{ ...st.row, marginTop: 10 }}><span style={{ color: C.quiet }}>Package</span><span>{job.package.description}{job.package.fragile ? ' · FRAGILE' : ''}</span></div>
         <div style={st.row}><span style={{ color: C.quiet }}>Collect cash</span><b>{formatJMD(job.cashToCollectCents ?? job.quote.totalCents)} from {job.payment.collectFrom === 'recipient' ? 'recipient' : 'sender'}</b></div>
@@ -213,7 +216,10 @@ function ActiveJob({ rider, job }) {
       {job.status === 'at_dropoff' && <ProofButton job={job} kind="dropoff" label="Photo of the handover (optional)" />}
       {gpsErr && <div style={st.err}>{gpsErr}</div>}
       {err && <div style={st.err}>{err}</div>}
-      {next && <button style={{ ...st.btn, padding: 18, fontSize: 16 }} disabled={busy} onClick={() => move(next[0])}>{busy ? 'Saving…' : next[1]}</button>}
+      {next && (() => {
+        const waiting = job.type === 'market' && next[0] === 'collected' && !job.merchantReady;
+        return <button style={{ ...st.btn, padding: 18, fontSize: 16, opacity: busy || waiting ? 0.5 : 1 }} disabled={busy || waiting} onClick={() => move(next[0])}>{busy ? 'Saving…' : waiting ? 'Waiting for the store…' : next[1]}</button>;
+      })()}
       {job.status === 'at_dropoff' && (
         <div style={st.card}>
           <div style={st.h2}>Enter the recipient's PIN</div>
@@ -297,8 +303,8 @@ function Earnings({ uid }) {
   const count = (from) => rows.filter((d) => doneAt(d) && doneAt(d) >= from).length;
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
-      <div style={st.card}><div style={st.label}>Today</div><div style={{ fontSize: 20, fontWeight: 800 }}>{formatJMD(sum(startToday))}</div><div style={st.sub}>{count(startToday)} deliveries</div></div>
-      <div style={st.card}><div style={st.label}>This week</div><div style={{ fontSize: 20, fontWeight: 800 }}>{formatJMD(sum(startWeek))}</div><div style={st.sub}>{count(startWeek)} deliveries</div></div>
+      <div style={st.card}><div style={st.label}>Today</div><div style={{ fontSize: 20, fontWeight: 800 }}>{formatJMD(sum(startToday))}</div><div style={st.sub}>{count(startToday)} {count(startToday) === 1 ? 'delivery' : 'deliveries'}</div></div>
+      <div style={st.card}><div style={st.label}>This week</div><div style={{ fontSize: 20, fontWeight: 800 }}>{formatJMD(sum(startWeek))}</div><div style={st.sub}>{count(startWeek)} {count(startWeek) === 1 ? 'delivery' : 'deliveries'}</div></div>
     </div>
   );
 }

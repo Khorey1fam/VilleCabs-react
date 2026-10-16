@@ -571,7 +571,11 @@ function DriversTab() {
             <div style={{ fontSize:11, color:'#9199ad', marginBottom:8, textTransform:'uppercase', letterSpacing:0.5 }}>Documents</div>
             <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
               {[['license',"Licence (front)"],['licenseBack',"Licence (back)"],['insurance','Insurance'],['fitness','Fitness Certificate'],['registration','Registration']].map(([docType,docLabel]) => {
-                const url = driver.docs?.[docType];
+                // Signup saves docs.license (US spelling); the driver's Documents screen
+                // re-uploads under documents.licence / docs.licence (UK spelling).
+                // Prefer the newest re-upload, then fall back to the signup file.
+                const alt = { license:'licence', licenseBack:'licenceBack' }[docType] || docType;
+                const url = driver.documents?.[alt]?.url || driver.docs?.[alt] || driver.docs?.[docType];
                 const uploaded = url && url !== 'pending_upload';
                 return (
                   <div key={docType}>

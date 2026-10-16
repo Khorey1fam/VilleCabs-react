@@ -53,8 +53,12 @@ export function errText(e) {
   return e.message || 'Something went wrong.';
 }
 
-export const formatJMD = (cents) =>
-  `J$${(Math.round(Number(cents) || 0) / 100).toLocaleString('en-JM', { maximumFractionDigits: 2 })}`;
+export const formatJMD = (cents) => {
+  const c = Math.round(Number(cents) || 0);
+  const abs = Math.abs(c);
+  const digits = abs % 100 ? 2 : 0;   // J$127.50, but J$500 not J$500.00
+  return `${c < 0 ? '−' : ''}J$${(abs / 100).toLocaleString('en-JM', { minimumFractionDigits: digits, maximumFractionDigits: 2 })}`;
+};
 
 export const STATUS_LABEL = {
   requested:  'Finding a rider',
@@ -144,7 +148,8 @@ export function isOpenAt(hours, date = new Date()) {
 export function hoursToday(hours) {
   const day = new Date(Date.now() - 5 * 3600000).getUTCDay();
   const t = hours && hours[String(day)];
-  return t ? `${t.open}–${t.close}` : 'Closed today';
+  if (!t) return 'Closed today';
+  return t.open === t.close ? 'Open 24 hours' : `${t.open}–${t.close}`;
 }
 
 // Cart — one store at a time, kept in this browser.

@@ -498,3 +498,17 @@ test('rider cash handovers reduce what they owe; fleet charges are recorded and 
   assert.equal(store.get(`ledger_entries/${fc.entryId}`).paid, true);
   await assert.rejects(asAdmin('dashAdminMarkFleetChargePaid', { entryId: fc.entryId, reference: 'again' }), errCode('failed-precondition'));
 });
+
+test('phone numbers are kept off the delivery that every rider can see', async () => {
+  const { deliveryId: id } = await call('dashCreateDelivery', 'cust1', booking('key-priv0001'));
+  const main = JSON.stringify(store.get(`dash_deliveries/${id}`));
+  for (const ph of ['8765550101', '8765550202', '876-555-0101', '876-555-0202']) assert.ok(!main.includes(ph), `main doc leaks ${ph}`);
+  const c = store.get(`dash_deliveries/${id}/private/contact`);
+  assert.equal(c.senderPhone, '8765550101'); assert.equal(c.recipientPhone, '8765550202');
+  seedStore();
+  const { orderId } = await call('marketCreateOrder', 'cust1', order('ord-priv0001'));
+  await call('marketMerchantUpdateOrder', 'shop1', { orderId, action: 'accepted', prepMinutes: 10 });
+  const delId = store.get(`dash_orders/${orderId}`).deliveryId;
+  assert.ok(!JSON.stringify(store.get(`dash_deliveries/${delId}`)).includes('8765550101'));
+  assert.equal(store.get(`dash_deliveries/${delId}/private/contact`).recipientPhone, '8765550101');
+});
