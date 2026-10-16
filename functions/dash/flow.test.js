@@ -114,8 +114,11 @@ test.beforeEach(() => {
   store.set('config/features', { dash: true });
   store.set('customers/cust1', { name: 'Keneile Davis', phone: '8765550101' });
   store.set('customers/cust2', { name: 'Other Person', phone: '8765550303' });
-  store.set('riders/riderA', { name: 'Andre', phone: '8765550404', status: 'approved', isOnline: true, motorcyclePlate: 'AB1234' });
-  store.set('riders/riderB', { name: 'Brian', phone: '8765550505', status: 'approved', isOnline: true });
+  store.set('riders/riderA', { name: 'Andre', phone: '8765550404', status: 'approved', isOnline: true, motorcycleId: 'bike1', motorcyclePlate: 'AB1234' });
+  store.set('riders/riderB', { name: 'Brian', phone: '8765550505', status: 'approved', isOnline: true, motorcycleId: 'bike2', motorcyclePlate: 'CD5678' });
+  store.set('fleet_motorcycles/bike1', { plate: 'AB1234', status: 'assigned', assignedRiderId: 'riderA' });
+  store.set('fleet_motorcycles/bike2', { plate: 'CD5678', status: 'assigned', assignedRiderId: 'riderB' });
+  store.set('fleet_motorcycles/bike3', { plate: 'EF9012', status: 'available', assignedRiderId: null });
   store.set('riders/riderP', { name: 'Pending', status: 'pending', isOnline: false });
 });
 
@@ -329,4 +332,79 @@ test('store order: reject and cancel put stock back; bad carts and closed stores
   await assert.rejects(call('marketQuoteOrder', 'cust1', { merchantId: 'shop1', items: CART, dropoff: HOME }), errCode('failed-precondition'));
   store.set('merchants/shop1', { ...store.get('merchants/shop1'), isAcceptingOrders: true, status: 'pending' });
   await assert.rejects(call('marketQuoteOrder', 'cust1', { merchantId: 'shop1', items: CART, dropoff: HOME }), errCode('not-found'));
+});
+
+
+// ── Fleet & shifts ───────────────────────────────────────────────────────────
+test('motorcycles: no bike means no jobs; assignment is one-to-one; maintenance takes the bike off its rider', async () => {
+  store.set('riders/riderC', { name: 'Carl', status: 'approved', isOnline: true });
+  const { deliveryId: id } = await call('dashCreateDelivery', 'cust1', booking('key-fleet001'));
+  await assert.rejects(call('dashAcceptDelivery', 'riderC', { deliveryId: id }), errCode('failed-precondition'));
+  await assert.rejects(asAdmin('dashAdminAssignRider', { deliveryId: id, riderId: 'riderC' }), errCode('failed-precondition'));
+
+  await assert.rejects(call('dashAdminAssignMotorcycle', 'riderC', { motorcycleId: 'bike3', riderId: 'riderC' }), errCode('permission-denied'));
+  await assert.rejects(asAdmin('dashAdminAssignMotorcycle', { motorcycleId: 'bike3', riderId: 'riderA' }), errCode('failed-precondition')); // A has bike1
+  await assert.rejects(asAdmin('dashAdminAssignMotorcycle', { motorcycleId: 'bike3', riderId: 'riderP' }), errCode('failed-precondition')); // pending
+  await asAdmin('dashAdminAssignMotorcycle', { motorcycleId: 'bike3', riderId: 'riderC' });
+  assert.equal(store.get('riders/riderC').motorcyclePlate, 'EF9012');
+  assert.equal(store.get('fleet_motorcycles/bike3').status, 'assigned');
+  await call('dashAcceptDelivery', 'riderC', { deliveryId: id });
+
+  // Can't pull a bike from a rider mid-delivery
+  await assert.rejects(asAdmin('dashAdminSetMotorcycleStatus', { motorcycleId: 'bike3', status: 'maintenance', note: 'brakes' }), errCode('failed-precondition'));
+  await asAdmin('dashAdminSetMotorcycleStatus', { motorcycleId: 'bike2', status: 'maintenance', note: 'Oil change' });
+  assert.equal(store.get('riders/riderB').motorcycleId, null);
+  assert.equal(store.get('riders/riderB').isOnline, false);
+  assert.equal(store.get('fleet_motorcycles/bike2').assignedRiderId, null);
+  await assert.rejects(asAdmin('dashAdminAssignMotorcycle', { motorcycleId: 'bike2', riderId: 'riderB' }), errCode('failed-precondition'));
+  const logs = [...store.keys()].filter((k) => k.startsWith('fleet_motorcycles/bike2/log/'));
+  assert.equal(logs.length, 1);
+});
+
+test('no bookable riders when the online riders have no motorcycle', async () => {
+  store.set('riders/riderA', { ...store.get('riders/riderA'), motorcycleId: null });
+  store.set('riders/riderB', { ...store.get('riders/riderB'), motorcycleId: null });
+  await assert.rejects(call('dashCreateDelivery', 'cust1', booking('key-fleet002')), errCode('unavailable'));
+});
+
+test('online sessions are logged and shifts close as completed or missed', async () => {
+  const { runShiftJobs } = require('./shiftjobs');
+  const h = 3600000;
+  const now = Date.now();
+  const jdate = (ms) => new Date(ms - 5 * h).toISOString().slice(0, 10);
+  const hhmm = (ms) => new Date(ms - 5 * h).toISOString().slice(11, 16);
+  // A shift that ended 30 minutes ago, 2 hours long
+  const start = now - 2.5 * h; const end = now - 0.5 * h;
+  const shift = { date: jdate(start), start: hhmm(start), end: hhmm(end) };
+  store.set('rider_shifts/s1', { ...shift, riderId: 'riderA', status: 'confirmed' });
+  store.set('rider_shifts/s2', { ...shift, riderId: 'riderB', status: 'scheduled' });
+  store.set('rider_shifts/s3', { ...shift, riderId: 'riderB', status: 'cancelled' });
+  // A shift starting in 40 minutes → reminder
+  const soon = now + 40 * 60000;
+  store.set('rider_shifts/s4', { date: jdate(soon), start: hhmm(soon), end: hhmm(soon + 2 * h), riderId: 'riderA', status: 'confirmed' });
+  store.set('riders/riderA', { ...store.get('riders/riderA'), fcmToken: 'tokA' });
+  // riderA was online for the middle hour; riderB never
+  const ts = (ms) => ({ toMillis: () => ms, toDate: () => new Date(ms) });
+  store.set('rider_online_sessions/x1', { riderId: 'riderA', start: ts(start + 0.5 * h), end: ts(start + 1.5 * h) });
+  store.set('riders/riderA', { ...store.get('riders/riderA'), isOnline: false });
+  store.set('riders/riderB', { ...store.get('riders/riderB'), isOnline: false });
+
+  const r = await runShiftJobs(now);
+  assert.equal(store.get('rider_shifts/s1').status, 'completed');
+  assert.equal(store.get('rider_shifts/s2').status, 'missed');
+  assert.equal(store.get('rider_shifts/s3').status, 'cancelled');
+  assert.equal(store.get('rider_shifts/s4').reminderSent, true);
+  assert.equal(r.reminded, 1);
+  assert.ok(pushes.some((p) => p.token === 'tokA' && /starting soon/.test(p.notification.title)));
+  await runShiftJobs(now);
+  assert.equal(pushes.filter((p) => /starting soon/.test(p.notification.title)).length, 1, 'reminder sent once');
+
+  // Going offline writes a session
+  const F2 = require('./index');
+  await F2.dashRiderOnlineLog.run({ params: { uid: 'riderA' }, data: {
+    before: { data: () => ({ isOnline: true, onlineSince: ts(now - h) }) },
+    after: { data: () => ({ isOnline: false }), ref: { update: async (p) => ops.update('riders/riderA', p) } },
+  } });
+  const sess = [...store.entries()].filter(([k, v]) => k.startsWith('rider_online_sessions/') && v.riderId === 'riderA');
+  assert.equal(sess.length, 2);
 });

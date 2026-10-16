@@ -5,9 +5,9 @@ import {
   onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail,
 } from 'firebase/auth';
 import {
-  doc, onSnapshot, setDoc, updateDoc, collection, query, where, orderBy, limit, serverTimestamp,
+  doc, onSnapshot, setDoc, updateDoc, addDoc, deleteDoc, collection, query, where, orderBy, limit, serverTimestamp,
 } from 'firebase/firestore';
-import { api, dashAuth, dashDb, errText, formatJMD, STATUS_LABEL } from './dashApi';
+import { api, dashAuth, dashDb, errText, formatJMD, STATUS_LABEL, SHIFT_LABEL, DAYS, jmToday, weekday } from './dashApi';
 import { C, st, Header, Pill, statusTone, Spinner } from './ui';
 import { IssueForm } from './DeliveryTrack';
 import { registerRiderPushToken } from '../App';
@@ -268,6 +268,70 @@ function Earnings({ uid }) {
   );
 }
 
+function Schedule({ uid, name }) {
+  const [shifts, setShifts] = useState(null);
+  const [offs, setOffs] = useState([]);
+  const [offDate, setOffDate] = useState('');
+  const [offReason, setOffReason] = useState('');
+  const [msg, setMsg] = useState('');
+  useEffect(() => {
+    const today = jmToday();
+    const u1 = onSnapshot(query(collection(dashDb(), 'rider_shifts'), where('riderId', '==', uid), where('date', '>=', today), orderBy('date', 'asc'), limit(30)),
+      (s) => setShifts(s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((x) => x.status !== 'cancelled')), () => setShifts([]));
+    const u2 = onSnapshot(query(collection(dashDb(), 'rider_time_off'), where('riderId', '==', uid)),
+      (s) => setOffs(s.docs.map((d) => ({ id: d.id, ...d.data() })).filter((x) => x.date >= today)), () => setOffs([]));
+    return () => { u1(); u2(); };
+  }, [uid]);
+  const respond = async (sh, status) => {
+    setMsg('');
+    try { await updateDoc(doc(dashDb(), 'rider_shifts', sh.id), { status, respondedAt: serverTimestamp() }); } catch (e) { setMsg('Could not update the shift.'); }
+  };
+  const requestOff = async () => {
+    setMsg('');
+    if (!offDate) return;
+    try {
+      await addDoc(collection(dashDb(), 'rider_time_off'), { riderId: uid, riderName: name || '', date: offDate, reason: offReason.trim().slice(0, 200), status: 'pending', createdAt: serverTimestamp() });
+      setOffDate(''); setOffReason(''); setMsg('Day-off request sent.');
+    } catch (e) { setMsg('Could not send the request.'); }
+  };
+  if (!shifts) return null;
+  return (
+    <div style={{ marginTop: 14 }}>
+      <div style={st.h2}>My schedule</div>
+      {shifts.length === 0 && <div style={{ ...st.card, ...st.sub }}>No upcoming shifts. VilleDash will add shifts based on demand.</div>}
+      {shifts.map((sh) => (
+        <div key={sh.id} style={{ ...st.card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <div>
+            <b>{DAYS[weekday(sh.date)]} {sh.date.slice(5)} · {sh.start}–{sh.end}</b>{sh.isBackup ? <span style={{ color: C.quiet }}> · backup</span> : null}
+            <div style={{ fontSize: 12.5, color: C.quiet }}>{SHIFT_LABEL[sh.status]}{sh.notes ? ` · ${sh.notes}` : ''}</div>
+          </div>
+          {['scheduled', 'confirmed'].includes(sh.status) && (
+            <div style={{ display: 'flex', gap: 6 }}>
+              {sh.status === 'scheduled' && <button onClick={() => respond(sh, 'confirmed')} style={{ padding: '8px 12px', borderRadius: 10, border: 'none', background: C.green, color: C.white, fontWeight: 700, cursor: 'pointer' }}>Confirm</button>}
+              <button onClick={() => respond(sh, 'declined')} style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid #fecaca', background: '#fff5f5', color: C.red, fontWeight: 700, cursor: 'pointer' }}>Can't do it</button>
+            </div>
+          )}
+        </div>
+      ))}
+      <div style={st.card}>
+        <div style={{ fontWeight: 700, fontSize: 14 }}>Request a day off</div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+          <input type="date" style={{ ...st.input, width: 'auto' }} value={offDate} min={jmToday()} onChange={(e) => setOffDate(e.target.value)} />
+          <input style={{ ...st.input, flex: 1, minWidth: 140 }} placeholder="Reason (optional)" value={offReason} onChange={(e) => setOffReason(e.target.value)} />
+          <button onClick={requestOff} disabled={!offDate} style={{ ...st.btn, width: 'auto', padding: '10px 16px', opacity: offDate ? 1 : 0.5 }}>Send</button>
+        </div>
+        {offs.map((o) => (
+          <div key={o.id} style={{ fontSize: 12.5, marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
+            <span>{o.date}{o.reason ? ` — ${o.reason}` : ''}: <b>{o.status}</b></span>
+            {o.status === 'pending' && <button onClick={() => deleteDoc(doc(dashDb(), 'rider_time_off', o.id)).catch(() => {})} style={{ background: 'none', border: 'none', color: C.red, cursor: 'pointer' }}>Withdraw</button>}
+          </div>
+        ))}
+        {msg && <div style={st.note}>{msg}</div>}
+      </div>
+    </div>
+  );
+}
+
 function Dashboard({ user, rider }) {
   const [job, setJob] = useState(null);
   const [err, setErr] = useState('');
@@ -282,6 +346,7 @@ function Dashboard({ user, rider }) {
   const toggle = async () => {
     setErr('');
     if (rider.isOnline && rider.activeDeliveryId) { setErr('Finish your current delivery before going offline.'); return; }
+    if (!rider.isOnline && !rider.motorcycleId) { setErr('You need a VilleDash motorcycle assigned before going online. Contact dispatch.'); return; }
     try {
       if (!rider.isOnline && typeof Notification !== 'undefined' && Notification.permission === 'default') {
         await Notification.requestPermission().catch(() => {});
@@ -311,6 +376,7 @@ function Dashboard({ user, rider }) {
         {job ? <ActiveJob rider={{ uid: user.uid, ...rider }} job={job} />
           : rider.isOnline ? <Offers rider={{ uid: user.uid, ...rider }} />
           : <div style={{ ...st.card, ...st.sub }}>You're offline. Go online to see and accept deliveries.</div>}
+        {!job && <Schedule uid={user.uid} name={rider.name} />}
         <div style={{ ...st.note, marginTop: 16 }}>Safety first: don't use the app while riding. Pull over before tapping anything.</div>
       </div>
     </div>

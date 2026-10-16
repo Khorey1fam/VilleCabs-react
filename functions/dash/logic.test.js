@@ -125,3 +125,22 @@ test('15% commission split balances to the cent', () => {
   assert.equal(s.riderCashHeldCents + s.riderPayCents, s.totalCents);
   assert.equal(s.merchantPayableCents + s.riderPayCents + s.platformGrossCents, s.totalCents);
 });
+
+test('shift windows use Jamaica time and run past midnight', () => {
+  const w = L.shiftWindow({ date: '2026-10-16', start: '17:00', end: '22:00' });
+  assert.equal(new Date(w.start).toISOString(), '2026-10-16T22:00:00.000Z');
+  assert.equal(w.end - w.start, 5 * 3600000);
+  const late = L.shiftWindow({ date: '2026-10-16', start: '20:00', end: '02:00' });
+  assert.equal(late.end - late.start, 6 * 3600000);
+});
+
+test('attendance needs real online time inside the shift', () => {
+  const shift = { date: '2026-10-16', start: '09:00', end: '12:00' };
+  const { start } = L.shiftWindow(shift);
+  const h = 3600000;
+  assert.ok(L.attendedShift(shift, [{ start: start - h, end: start + h }]));
+  assert.ok(!L.attendedShift(shift, [{ start: start - 2 * h, end: start + 10 * 60000 }]));       // 10 min only
+  assert.ok(!L.attendedShift(shift, [{ start: start + 4 * h, end: start + 5 * h }]));            // after
+  assert.ok(L.attendedShift(shift, [{ start: start + 2 * h, end: null }], start + 3 * h));        // still online
+  assert.ok(!L.attendedShift(shift, []));
+});

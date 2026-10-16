@@ -427,7 +427,7 @@ service cloud.firestore {
       allow update: if isAdmin()
                     || (isOwner(uid)
                         && !request.resource.data.diff(resource.data).affectedKeys()
-                             .hasAny(['status','activeDeliveryId','motorcycleId','motorcyclePlate','completedCount','approvedAt','approvedBy'])
+                             .hasAny(['status','activeDeliveryId','motorcycleId','motorcyclePlate','completedCount','approvedAt','approvedBy','onlineSince'])
                         && (request.resource.data.get('isOnline', false) == false
                             || resource.data.get('status','') == 'approved'));
       allow delete: if isAdmin();
@@ -500,8 +500,48 @@ service cloud.firestore {
     }
 
     // ── Fleet (admin only; riders never see provider details) ───────────────
-    match /fleet_motorcycles/{id} { allow read, write: if isAdmin(); }
+    match /fleet_motorcycles/{id} {
+      allow read, write: if isAdmin();
+      match /log/{logId} { allow read, write: if isAdmin(); }
+    }
     match /fleet_providers/{id}   { allow read, write: if isAdmin(); }
+
+    // ── Rider shifts ────────────────────────────────────────────────────────
+    //  Admin plans shifts. A rider can only confirm or decline their own
+    //  scheduled shift — never move it, and never mark it completed.
+    match /rider_shifts/{id} {
+      allow read: if isAdmin() || (signedIn() && resource.data.riderId == request.auth.uid);
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+                    || (signedIn()
+                        && resource.data.riderId == request.auth.uid
+                        && resource.data.status in ['scheduled', 'confirmed']
+                        && request.resource.data.status in ['confirmed', 'declined']
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'respondedAt', 'declineReason']));
+    }
+    match /rider_time_off/{id} {
+      allow read: if isAdmin() || (signedIn() && resource.data.riderId == request.auth.uid);
+      allow create: if signedIn()
+                    && request.resource.data.riderId == request.auth.uid
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.date is string;
+      allow update: if isAdmin();
+      allow delete: if isAdmin() || (signedIn() && resource.data.riderId == request.auth.uid && resource.data.status == 'pending');
+    }
+    match /rider_availability/{uid} {
+      allow read: if isAdmin() || isOwner(uid);
+      allow write: if isOwner(uid) || isAdmin();
+    }
+    match /rider_online_sessions/{id} {
+      allow read: if isAdmin() || (signedIn() && resource.data.riderId == request.auth.uid);
+      allow write: if false;
+    }
+
+    // ── VILLE cross-site house ads (public read, admin write) ───────────────
+    match /site_ads/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
 
     // ── Default deny for anything not explicitly listed ──────────────────────
     match /{document=**} {

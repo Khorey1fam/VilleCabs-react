@@ -23,6 +23,7 @@ import { StoresList, StorePage, Checkout, OrderTrack } from './dash/Marketplace'
 import SendPackage from './dash/SendPackage';
 import DeliveryTrack from './dash/DeliveryTrack';
 import { useDashEnabled } from './dash/dashApi';
+import { useSites, SiteLanding, FamilyBar, HouseAd } from './dash/sites';
 
 const firebaseConfig = {
   apiKey:            process.env.REACT_APP_FIREBASE_API_KEY,
@@ -1682,7 +1683,7 @@ function LandingEventsSection({ go }) {
   );
 }
 
-function Splash({ go }) {
+function Splash({ go, site, domains }) {
   const [slide, setSlide] = useState(0);
   const [livePromos, setLivePromos] = useState([]);
   // Load active, non-expired promo codes so the Promotions banner reflects what
@@ -1711,6 +1712,7 @@ function Splash({ go }) {
   const cur = slides[slide] || slides[0];
   return (
     <div style={{ background:'#ffffff', minHeight:'100vh' }}>
+      <FamilyBar site={site || 'cabs'} domains={domains || {}} go={go}/>
 
       {/* NAV */}
       <div style={{ background:'#ffffff', borderBottom:'1px solid #eee', padding:'10px 16px', display:'flex', alignItems:'center', position:'sticky', top:0, zIndex:100 }}>
@@ -3482,7 +3484,7 @@ function DashFAQ({ go }) {
   );
 }
 
-function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupData, setDropoffData }) {
+function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupData, setDropoffData, site, domains }) {
   const dashOn = useDashEnabled(user?.uid);
   // Verification gate: a password (email/password) account that hasn't verified
   // its email must not reach the dashboard via any navigation path (logo tap,
@@ -3734,6 +3736,9 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
           <span style={{ fontSize:11, fontWeight:600, color:'#2a1a4a', maxWidth:70, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{user?.name?.split(' ')[0]||''}</span>
         </div>
       </div>
+
+      {/* VILLE family: cross-promotion for VilleDash / VilleEvents */}
+      <HouseAd site={site || 'cabs'} domains={domains || {}} go={go} variant="banner"/>
 
       {/* Side drawer menu */}
       {menuOpen && (
@@ -12937,15 +12942,20 @@ export default function App() {
   const [storeId,     setStoreId]     = useState(null);
   const [orderId,     setOrderId]     = useState(null);
   const dashOn = useDashEnabled(user?.uid);
-  // When VilleDash is switched on, the VILLE hub becomes the customer's home.
-  // Sent there once per session; the VilleCabs dashboard stays one tap away.
-  const villeHomeShownRef = useRef(false);
+  // Which VILLE site this is (villecabs.com, the VILLE domain or the VilleDash
+  // domain). Each domain lands signed-in customers on its own home screen; the
+  // VilleCabs domain keeps the taxi dashboard as before.
+  const { site, domains } = useSites();
+  const siteHomeShownRef = useRef(false);
   useEffect(() => {
-    if (dashOn && user?.role === 'customer' && screen === 'customer-dash' && !villeHomeShownRef.current) {
-      villeHomeShownRef.current = true;
-      setScreen('ville-home');
-    }
-  }, [dashOn, user, screen]);
+    if (user?.role !== 'customer' || screen !== 'customer-dash' || siteHomeShownRef.current) return;
+    let goEvents = false;
+    try { goEvents = new URLSearchParams(window.location.search).get('go') === 'events'; } catch (e) {}
+    if (goEvents) { siteHomeShownRef.current = true; setScreen('ville-events'); return; }
+    if (!dashOn || site === 'cabs') return;
+    siteHomeShownRef.current = true;
+    setScreen(site === 'dash' ? 'dash-home' : 'ville-home');
+  }, [dashOn, user, screen, site]);
 
   // Scroll back to the top whenever we navigate to a new screen (SPA fix:
   // otherwise the browser keeps your old scroll position on the new page).
@@ -13089,7 +13099,7 @@ export default function App() {
   if (loading) return <LoadingScreen/>;
 
     // go() - navigate to a screen and track history
-  const props = { go:setScreen, user, setUser, bookingId, setBookingId, pickupData, setPickupData, dropoffData, setDropoffData };
+  const props = { go:setScreen, user, setUser, bookingId, setBookingId, pickupData, setPickupData, dropoffData, setDropoffData, site, domains };
   const dashShared = { AddressAutocompleteInput, VilleMap, geocodeLatLng, vcToast, vcConfirm };
   const openDelivery = (id) => { setDeliveryId(id); setScreen('dash-track'); };
   const openStore = (id) => { setStoreId(id); setScreen('dash-store'); };
@@ -13099,7 +13109,7 @@ export default function App() {
   const dash = (el) => (dashOn ? el : <CustomerDash {...props}/>);
 
   const screens = {
-    splash:           <Splash {...props}/>,
+    splash:           site === 'cabs' ? <Splash {...props}/> : <SiteLanding site={site} domains={domains} go={setScreen} dashOn={dashOn}/>,
     role:             <RoleSelect {...props}/>,
     'customer-signup':<CustomerSignup {...props}/>,
     'customer-login': <CustomerLogin {...props}/>,
@@ -13168,9 +13178,9 @@ export default function App() {
         <GlobalStyles/>
         <ToastHost/>
         <MapBg/>
-        {showOnboarding && !user && screen === 'splash'
+        {showOnboarding && !user && screen === 'splash' && site === 'cabs'
           ? <OnboardingFlow onDone={() => { try { localStorage.setItem('vc_onboarded','1'); } catch(e) {} setShowOnboarding(false); }}/>
-          : (screens[screen]||<Splash {...props}/>)}
+          : (screens[screen]||screens.splash)}
       </div>
     </ErrorBoundary>
   );

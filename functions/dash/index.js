@@ -120,7 +120,7 @@ exports.dashCreateDelivery = onCall(async (req) => {
   // Is anyone available? (Planned shifts don't count — only riders online now.)
   const online = await db().collection('riders')
     .where('status', '==', 'approved').where('isOnline', '==', true).get();
-  const free = online.docs.filter((r) => !r.get('activeDeliveryId'));
+  const free = online.docs.filter((r) => !r.get('activeDeliveryId') && (!pricing.requireMotorcycle || r.get('motorcycleId')));
   const demandBase = {
     type: 'parcel', customerId: auth.uid,
     pickupArea: L.coarseArea(pickup), dropoffArea: L.coarseArea(dropoff),
@@ -207,6 +207,7 @@ exports.dashCancelDelivery = onCall(async (req) => {
 // ── 4. Rider accepts an open delivery (locked: only one rider can win) ──────
 exports.dashAcceptDelivery = onCall(async (req) => {
   const auth = requireAuth(req);
+  const pricing = await loadPricing();
   const id = L.cleanText(req.data && req.data.deliveryId, 40);
   const ref = db().doc(`dash_deliveries/${id}`);
   const riderRef = db().doc(`riders/${auth.uid}`);
@@ -214,6 +215,7 @@ exports.dashAcceptDelivery = onCall(async (req) => {
     const [snap, rider] = await Promise.all([tx.get(ref), tx.get(riderRef)]);
     if (!rider.exists || rider.get('status') !== 'approved') throw new HttpsError('permission-denied', 'Your rider account is not approved yet.');
     if (!rider.get('isOnline')) throw new HttpsError('failed-precondition', 'Go online to accept deliveries.');
+    if (pricing.requireMotorcycle && !rider.get('motorcycleId')) throw new HttpsError('failed-precondition', 'You need a VilleDash motorcycle assigned before taking deliveries.');
     if (rider.get('activeDeliveryId')) throw new HttpsError('failed-precondition', 'Finish your current delivery first.');
     if (!snap.exists) throw new HttpsError('not-found', 'Delivery not found.');
     const d = snap.data();
@@ -233,6 +235,7 @@ exports.dashAcceptDelivery = onCall(async (req) => {
 // ── 5. Admin assigns / reassigns a rider (manual dispatch) ───────────────────
 exports.dashAdminAssignRider = onCall(async (req) => {
   const auth = requireAdmin(req);
+  const pricing = await loadPricing();
   const id = L.cleanText(req.data && req.data.deliveryId, 40);
   const riderId = L.cleanText(req.data && req.data.riderId, 128);
   const ref = db().doc(`dash_deliveries/${id}`);
@@ -241,6 +244,7 @@ exports.dashAdminAssignRider = onCall(async (req) => {
     const [snap, rider] = await Promise.all([tx.get(ref), tx.get(riderRef)]);
     if (!snap.exists) throw new HttpsError('not-found', 'Delivery not found.');
     if (!rider.exists || rider.get('status') !== 'approved') throw new HttpsError('failed-precondition', 'That rider is not approved.');
+    if (pricing.requireMotorcycle && !rider.get('motorcycleId')) throw new HttpsError('failed-precondition', 'That rider has no motorcycle assigned.');
     const d = snap.data();
     if (!L.ADMIN_ASSIGNABLE.includes(d.status)) throw new HttpsError('failed-precondition', `Can't reassign a delivery that is ${d.status}.`);
     const busy = rider.get('activeDeliveryId');
@@ -471,3 +475,6 @@ exports.dashNotifyStatusChange = onDocumentUpdated('dash_deliveries/{id}', async
 
 // Marketplace (stores, orders, settlements)
 Object.assign(exports, require('./market'));
+
+// Fleet and rider shifts
+Object.assign(exports, require('./fleet'));

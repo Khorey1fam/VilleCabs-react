@@ -38,6 +38,8 @@ const DEFAULT_PRICING = Object.freeze({
   marketServiceFeeCents:  0,       // optional customer service fee
   marketDeliverySize: 'medium',    // store orders are priced as a medium parcel
   maxPrepMinutes: 120,
+  requireMotorcycle: true,         // riders need an assigned bike to take jobs
+  deliveriesPerRiderHour: 2,       // used to turn demand into riders needed
   // Operations
   maxActivePerCustomer:  3,
   allowQueueWhenNoRiders: false,   // refuse a booking when nobody is online
@@ -315,6 +317,32 @@ const ORDER_STATUSES = ['awaiting_merchant', 'accepted', 'preparing', 'ready', '
 const ORDER_FINAL = ['delivered', 'rejected', 'cancelled', 'failed'];
 const MERCHANT_STEPS = { awaiting_merchant: ['accepted', 'rejected'], accepted: ['preparing', 'ready'], preparing: ['ready'] };
 
+
+// ── Fleet & shifts ───────────────────────────────────────────────────────────
+const BIKE_STATUSES = ['available', 'assigned', 'in_service', 'maintenance', 'unavailable', 'removed'];
+const BIKE_ASSIGNABLE = ['available', 'assigned', 'in_service'];
+const SHIFT_STATUSES = ['scheduled', 'confirmed', 'declined', 'missed', 'completed', 'cancelled'];
+
+/** Jamaica date + "HH:MM" → epoch ms. A shift ending at or before its start runs past midnight. */
+function shiftWindow(shift) {
+  const at = (date, hhmm) => Date.parse(`${date}T${hhmm}:00-05:00`);
+  const start = at(shift.date, shift.start);
+  let end = at(shift.date, shift.end);
+  if (!(end > start)) end += 24 * 3600000;
+  return { start, end };
+}
+/** Did the rider spend at least `minMinutes` online during the shift? sessions = [{start, end}] in ms (end null = still online). */
+function attendedShift(shift, sessions, now = Date.now(), minMinutes = 30) {
+  const w = shiftWindow(shift);
+  let overlap = 0;
+  for (const s of sessions || []) {
+    const a = Math.max(w.start, s.start);
+    const b = Math.min(w.end, s.end == null ? now : s.end);
+    if (b > a) overlap += b - a;
+  }
+  return overlap >= Math.min(minMinutes, (w.end - w.start) / 60000) * 60000;
+}
+
 module.exports = {
   DEFAULT_PRICING, PACKAGE_CATEGORIES, PROHIBITED_WORDS,
   mergePricing, haversineKm, isCoord, quoteParcel, QuoteError, findProhibited,
@@ -323,4 +351,5 @@ module.exports = {
   cleanText, cleanPhone, coarseArea, formatJMD,
   MERCHANT_CATEGORIES, DISABLED_CATEGORIES, isOpenAt, CartError, priceCart, marketSplit,
   ORDER_STATUSES, ORDER_FINAL, MERCHANT_STEPS,
+  BIKE_STATUSES, BIKE_ASSIGNABLE, SHIFT_STATUSES, shiftWindow, attendedShift,
 };

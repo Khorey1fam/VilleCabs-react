@@ -38,6 +38,9 @@ export const api = {
   merchantUpdate: (data) => fn('marketMerchantUpdateOrder')(data).then((r) => r.data),
   settle:         (data) => fn('marketCreateSettlement')(data).then((r) => r.data),
   settlePaid:     (data) => fn('marketMarkSettlementPaid')(data).then((r) => r.data),
+  // Fleet
+  assignBike:     (data) => fn('dashAdminAssignMotorcycle')(data).then((r) => r.data),
+  bikeStatus:     (data) => fn('dashAdminSetMotorcycleStatus')(data).then((r) => r.data),
 };
 
 // Callable errors carry a friendly message written on the server.
@@ -171,13 +174,25 @@ export function lineUnitCents(product, options) {
 
 // Upload a store image to merchants/{uid}/… and return its URL. Needs the
 // Storage rule in VILLEDASH.md.
-export async function uploadMerchantImage(uid, file, name) {
+export async function uploadMerchantImage(uid, file, name, folder = `merchants/${uid}`) {
   if (!file) return null;
   if (!/^image\/(png|jpe?g|webp)$/.test(file.type)) throw new Error('Use a PNG, JPG or WebP image.');
   if (file.size > 3 * 1024 * 1024) throw new Error('Images must be under 3 MB.');
   const ext = file.type.split('/')[1].replace('jpeg', 'jpg');
-  const r = storageRef(getStorage(app()), `merchants/${uid}/${name}-${Date.now()}.${ext}`);
+  const r = storageRef(getStorage(app()), `${folder}/${name}-${Date.now()}.${ext}`);
   await uploadBytes(r, file, { contentType: file.type });
   return getDownloadURL(r);
 }
 export const centsFromJ = (v) => { const n = Number(String(v).replace(/[^0-9.]/g, '')); return Number.isFinite(n) ? Math.round(n * 100) : NaN; };
+
+export const BIKE_STATUS_LABEL = {
+  available: 'Available', assigned: 'Assigned', in_service: 'In service', maintenance: 'Under maintenance',
+  unavailable: 'Unavailable', removed: 'Removed from operation',
+};
+export const SHIFT_LABEL = {
+  scheduled: 'Awaiting confirmation', confirmed: 'Confirmed', declined: 'Declined',
+  missed: 'Missed', completed: 'Completed', cancelled: 'Cancelled',
+};
+export const jmToday = () => new Date(Date.now() - 5 * 3600000).toISOString().slice(0, 10);
+export const addDays = (date, n) => new Date(Date.parse(`${date}T12:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
+export const weekday = (date) => new Date(`${date}T12:00:00Z`).getUTCDay();

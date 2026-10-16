@@ -68,10 +68,11 @@ async function pushTo(collection, uid, title, body, extra = {}) {
   }).catch((err) => console.error('Dash push failed:', err && err.message));
 }
 
-async function ridersAvailable() {
+async function ridersAvailable(pricing) {
   const online = await db().collection('riders')
     .where('status', '==', 'approved').where('isOnline', '==', true).get();
-  return { online: online.size, free: online.docs.filter((r) => !r.get('activeDeliveryId')).length };
+  const ready = online.docs.filter((r) => !(pricing && pricing.requireMotorcycle) || r.get('motorcycleId'));
+  return { online: ready.length, free: ready.filter((r) => !r.get('activeDeliveryId')).length };
 }
 
 module.exports = {

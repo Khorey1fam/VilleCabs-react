@@ -5,6 +5,7 @@ import { dashDb, STATUS_LABEL, FINAL, formatJMD } from './dashApi';
 import { C, st, Header, Pill, statusTone, Spinner } from './ui';
 import { useMyOrders, OrderRow } from './Marketplace';
 import { ORDER_FINAL } from './dashApi';
+import { FamilyBar, HouseAd } from './sites';
 
 const ACTIVE_RIDE = ['searching', 'active', 'arrived', 'enroute', 'scheduled'];
 const ACTIVE_DELIVERY = ['requested', 'assigned', 'to_pickup', 'at_pickup', 'collected', 'to_dropoff', 'at_dropoff'];
@@ -67,13 +68,14 @@ function DeliveryRow({ d, onOpen }) {
 }
 
 // ── VILLE home ───────────────────────────────────────────────────────────────
-export function VilleHome({ go, user, setBookingId, openDelivery, openOrder }) {
+export function VilleHome({ go, user, setBookingId, openDelivery, openOrder, site, domains }) {
   const rides = useActiveRides(user?.uid);
   const deliveries = useMyDeliveries(user?.uid, { activeOnly: true });
   const orders = (useMyOrders(user?.uid, 10) || []).filter((o) => !ORDER_FINAL.includes(o.status));
   const first = (user?.name || '').split(' ')[0];
   return (
     <div style={st.page}>
+      <FamilyBar site={site || 'ville'} domains={domains || {}} go={go} />
       <div style={{ background: `linear-gradient(160deg, ${C.purple}, ${C.purpleDark})`, color: C.white }}>
         <div style={{ maxWidth: 560, margin: '0 auto', padding: '26px 18px 30px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -92,6 +94,7 @@ export function VilleHome({ go, user, setBookingId, openDelivery, openOrder }) {
         <ServiceCard emoji="📦" eyebrow="VilleDash" title="Send or Order" desc="Send a package or order from local businesses." onClick={() => go('dash-home')} />
         <ServiceCard emoji="🎉" eyebrow="VilleEvents" title="Discover Events" desc="See what's on and book a ride there." onClick={() => go('ville-events')} />
 
+        <HouseAd site="ville" domains={domains || {}} go={go} />
         <div style={{ ...st.h2, marginTop: 18 }}>Your activity</div>
         {rides.length === 0 && orders.length === 0 && deliveries && deliveries.length === 0 && (
           <div style={{ ...st.card, ...st.sub }}>Nothing in progress. Book a ride or send a package to get started.</div>
@@ -113,12 +116,13 @@ export function VilleHome({ go, user, setBookingId, openDelivery, openOrder }) {
 }
 
 // ── VilleDash home ───────────────────────────────────────────────────────────
-export function DashHome({ go, user, openDelivery, openOrder }) {
+export function DashHome({ go, user, openDelivery, openOrder, site, domains }) {
   const active = useMyDeliveries(user?.uid, { activeOnly: true });
   const orders = (useMyOrders(user?.uid, 10) || []).filter((o) => !ORDER_FINAL.includes(o.status));
   return (
     <div style={st.page}>
-      <Header title="VilleDash" onBack={() => go('ville-home')} />
+      {site === 'dash' && <FamilyBar site="dash" domains={domains || {}} go={go} />}
+      <Header title="VilleDash" onBack={site === 'dash' ? null : () => go('ville-home')} />
       <div style={st.wrap}>
         <div style={{ padding: '6px 2px 14px' }}>
           <div style={st.h1}>Send It. Track It. Delivered.</div>
@@ -133,6 +137,7 @@ export function DashHome({ go, user, openDelivery, openOrder }) {
           ? <div style={{ ...st.card, ...st.sub }}>Nothing in progress.</div>
           : active.map((d) => <DeliveryRow key={d.id} d={d} onOpen={openDelivery} />)}
 
+        <div style={{ marginTop: 12 }}><HouseAd site="dash" domains={domains || {}} go={go} /></div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
           <button style={st.btnGhost} onClick={() => go('dash-history')}>History</button>
           <button style={st.btnGhost} onClick={() => go('contact-us')}>Help & support</button>

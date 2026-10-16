@@ -119,7 +119,7 @@ exports.marketCreateOrder = onCall(async (req) => {
   const items = cleanItems(d.items);
   const pricing = await loadPricing();
 
-  const riders = await ridersAvailable();
+  const riders = await ridersAvailable(pricing);
   const demand = { type: 'market', customerId: auth.uid, merchantId, dropoffArea: L.coarseArea(dropoff),
     ridersOnline: riders.online, ridersFree: riders.free, at: FieldValue.serverTimestamp() };
   if (riders.online === 0 && !pricing.allowQueueWhenNoRiders) {

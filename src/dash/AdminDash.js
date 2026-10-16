@@ -3,6 +3,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { collection, doc, onSnapshot, query, orderBy, limit, setDoc, updateDoc, where, serverTimestamp, Timestamp, getDoc } from 'firebase/firestore';
 import { api, dashDb, errText, formatJMD, STATUS_LABEL, FINAL, ORDER_LABEL, MERCHANT_CATEGORIES } from './dashApi';
 import { C, st, Pill, statusTone, Spinner } from './ui';
+import { FleetTab, ScheduleTab } from './AdminFleet';
+import { SitesTab } from './AdminSites';
 
 const ACTIVE = ['requested', 'assigned', 'to_pickup', 'at_pickup', 'collected', 'to_dropoff', 'at_dropoff'];
 const card = { ...st.card, padding: 14 };
@@ -44,6 +46,7 @@ function Overview({ deliveries, riders }) {
   const approved = riders.filter((r) => r.status === 'approved');
   const online = approved.filter((r) => r.isOnline);
   const busy = online.filter((r) => r.activeDeliveryId);
+  const noBike = online.filter((r) => !r.motorcycleId);
   return (
     <>
       <div style={{ fontSize: 12.5, color: C.quiet, marginBottom: 8 }}>Last 30 days of deliveries loaded below. Fleet-provider costs are not recorded yet, so contribution excludes them.</div>
@@ -55,7 +58,7 @@ function Overview({ deliveries, riders }) {
         <Stat label="Cancelled" value={by('cancelled')} />
         <Stat label="Failed" value={by('failed')} color={by('failed') ? C.red : undefined} />
         <Stat label="Missed requests" value={unserved ? unserved.length : '…'} sub="no rider free" />
-        <Stat label="Riders online" value={`${online.length - busy.length} free / ${online.length}`} sub={`${approved.length} approved`} />
+        <Stat label="Riders online" value={`${online.length - busy.length} free / ${online.length}`} sub={`${busy.length} on deliveries · ${approved.length} approved${noBike.length ? ` · ${noBike.length} without a bike` : ''}`} />
         <Stat label="Delivery fees" value={formatJMD(fees)} sub="gross, completed only" />
         <Stat label="Rider pay" value={formatJMD(riderPay)} sub="earned on completed" />
         <Stat label="Store sales" value={formatJMD(sales)} sub={`${marketDone.length} orders · merchants' gross`} />
@@ -196,11 +199,12 @@ const PRICE_FIELDS = [
   ['roadFactor', 'Road distance factor (× straight line)', false], ['maxDistanceKm', 'Longest delivery (km)', false],
   ['merchantCommissionPct', 'Merchant commission (%)', false], ['settlementPeriodDays', 'Merchant settlement period (days)', false],
   ['maxActivePerCustomer', 'Max deliveries in progress per customer', false], ['pinMaxAttempts', 'Wrong PIN attempts before lock', false],
+  ['deliveriesPerRiderHour', 'Deliveries one rider handles per hour (for scheduling)', false],
 ];
 const DEFAULTS = {
   baseFeeCents: 30000, perKmCents: 6000, minimumCents: 50000, fragileSurchargeCents: 10000, roundToCents: 1000,
   riderBaseCents: 20000, riderPerKmCents: 3000, roadFactor: 1.3, maxDistanceKm: 25,
-  merchantCommissionPct: 15, settlementPeriodDays: 14, maxActivePerCustomer: 3, pinMaxAttempts: 5,
+  merchantCommissionPct: 15, settlementPeriodDays: 14, maxActivePerCustomer: 3, pinMaxAttempts: 5, deliveriesPerRiderHour: 2,
   serviceArea: { lat: 18.0416, lng: -77.5036, radiusKm: 15 },
   sizes: { small: { label: 'Small — fits in a backpack', maxKg: 5, surchargeCents: 0 }, medium: { label: 'Medium — shoebox to small box', maxKg: 10, surchargeCents: 15000 }, large: { label: 'Large — strapped to the bike', maxKg: 20, surchargeCents: 30000 } },
 };
@@ -440,10 +444,12 @@ export default function AdminDashTab() {
   const since = useMemo(() => Timestamp.fromDate(new Date(Date.now() - 30 * 864e5)), []);
   const deliveries = useCol('dash_deliveries', where('createdAt', '>=', since), orderBy('createdAt', 'desc'), limit(500));
   const riders = useCol('riders');
+  const [perRiderHour, setPerRiderHour] = useState(2);
+  useEffect(() => onSnapshot(doc(dashDb(), 'dash_pricing', 'current'), (s) => { const v = s.exists() ? s.data().deliveriesPerRiderHour : null; if (v > 0) setPerRiderHour(v); }, () => {}), []);
   return (
     <div>
       <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-        {[['overview', 'Overview'], ['deliveries', 'Dispatch'], ['orders', 'Store orders'], ['riders', 'Riders'], ['merchants', 'Merchants'], ['settlements', 'Settlements'], ['pricing', 'Pricing'], ['launch', 'Launch']].map(([k, l]) => (
+        {[['overview', 'Overview'], ['deliveries', 'Dispatch'], ['orders', 'Store orders'], ['schedule', 'Schedule'], ['riders', 'Riders'], ['fleet', 'Fleet'], ['merchants', 'Merchants'], ['settlements', 'Settlements'], ['pricing', 'Pricing'], ['sites', 'Sites & ads'], ['launch', 'Launch']].map(([k, l]) => (
           <button key={k} onClick={() => setSub(k)} style={{ ...small, padding: '7px 14px', borderRadius: 20, background: sub === k ? C.purple : '#f3f4f6', color: sub === k ? C.white : '#555', border: 'none' }}>{l}</button>
         ))}
       </div>
@@ -453,6 +459,9 @@ export default function AdminDashTab() {
       {sub === 'pricing' && <Pricing />}
       {sub === 'launch' && <Launch />}
       {sub === 'orders' && <StoreOrders />}
+      {sub === 'schedule' && <ScheduleTab riders={riders} perRiderHour={perRiderHour} />}
+      {sub === 'fleet' && <FleetTab riders={riders} />}
+      {sub === 'sites' && <SitesTab />}
       {sub === 'merchants' && <Merchants />}
       {sub === 'settlements' && <Settlements />}
     </div>
