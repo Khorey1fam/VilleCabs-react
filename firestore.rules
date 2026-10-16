@@ -158,9 +158,24 @@ service cloud.firestore {
 
       // In-ride chat messages — participants send/read; recipient marks read
       // (adds uid to readBy). Delete is admin-only.
+      // Only the ride's own customer and assigned driver (or an admin) may see
+      // or send messages. Previously ANY signed-in user could read every chat.
       match /messages/{msgId} {
-        allow read, create: if signedIn();
-        allow update: if signedIn();
+        function ride() {
+          return get(/databases/$(database)/documents/bookings/$(bookingId)).data;
+        }
+        function isParticipant() {
+          return signedIn()
+            && (ride().get('customerId', '') == request.auth.uid
+                || ride().get('driverId', '') == request.auth.uid);
+        }
+        allow read:   if isAdmin() || isParticipant();
+        allow create: if isAdmin()
+                      || (isParticipant() && request.resource.data.senderId == request.auth.uid);
+        // A participant may only add themselves to readBy.
+        allow update: if isAdmin()
+                      || (isParticipant()
+                          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy']));
         allow delete: if isAdmin();
       }
     }
@@ -337,6 +352,208 @@ service cloud.firestore {
     match /sosAlerts/{id} {
       allow create: if signedIn();
       allow read, update, delete: if isAdmin();
+    }
+
+
+    // ═════════════════════════════════════════════════════════════════════════
+    //  VILLEDASH
+    //  Prices, statuses, rider assignment and PINs are written ONLY by Cloud
+    //  Functions (functions/dash). Clients may read their own records and do a
+    //  few harmless writes (rider sign-up, online toggle, live location).
+    // ═════════════════════════════════════════════════════════════════════════
+    function isRider() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/riders/$(request.auth.uid))
+        && get(/databases/$(database)/documents/riders/$(request.auth.uid)).data.status == 'approved';
+    }
+
+    // ── Deliveries ──────────────────────────────────────────────────────────
+    //  Customer: their own. Rider: the one assigned to them, plus OPEN jobs
+    //  (status 'requested') so they can accept one. Admin: all.
+    //  No client writes at all.
+    match /dash_deliveries/{id} {
+      allow read: if isAdmin()
+                  || (signedIn() && resource.data.customerId == request.auth.uid)
+                  || (signedIn() && resource.data.riderId == request.auth.uid)
+                  || (isRider() && resource.data.status == 'requested');
+      allow write: if false;
+
+      match /events/{eventId} {
+        allow read: if isAdmin()
+                    || (signedIn() && get(/databases/$(database)/documents/dash_deliveries/$(id)).data.customerId == request.auth.uid)
+                    || (signedIn() && get(/databases/$(database)/documents/dash_deliveries/$(id)).data.riderId == request.auth.uid);
+        allow write: if false;
+      }
+      // Phone numbers: the customer, the ASSIGNED rider and admins only.
+      match /private/{docId} {
+        allow read: if isAdmin()
+                    || (signedIn() && get(/databases/$(database)/documents/dash_deliveries/$(id)).data.customerId == request.auth.uid)
+                    || (signedIn() && get(/databases/$(database)/documents/dash_deliveries/$(id)).data.riderId == request.auth.uid);
+        allow write: if false;
+      }
+      // The drop-off PIN — the customer shares it with the recipient. Riders
+      // must never see it, so not even the assigned rider can read this.
+      match /customer/{docId} {
+        allow read: if isAdmin()
+                    || (signedIn() && get(/databases/$(database)/documents/dash_deliveries/$(id)).data.customerId == request.auth.uid);
+        allow write: if false;
+      }
+    }
+
+    // PIN hashes — server only.
+    match /dash_secrets/{id} {
+      allow read, write: if false;
+    }
+
+    // Live rider position for a delivery. Only the assigned rider writes it,
+    // only while the job is active; customer, rider and admin read it.
+    match /dash_locations/{id} {
+      function job() { return get(/databases/$(database)/documents/dash_deliveries/$(id)).data; }
+      allow read: if isAdmin()
+                  || (signedIn() && (job().customerId == request.auth.uid || job().riderId == request.auth.uid));
+      allow create, update: if signedIn()
+                  && job().riderId == request.auth.uid
+                  && job().status in ['assigned','to_pickup','at_pickup','collected','to_dropoff','at_dropoff']
+                  && request.resource.data.keys().hasOnly(['lat','lng','heading','accuracy','at','riderId'])
+                  && request.resource.data.riderId == request.auth.uid
+                  && request.resource.data.lat is number && request.resource.data.lng is number;
+      allow delete: if isAdmin();
+    }
+
+    // ── Riders ──────────────────────────────────────────────────────────────
+    //  A rider creates their own application as 'pending'. They can edit their
+    //  profile and go online/offline (only once approved) but can never change
+    //  their status, active job, motorcycle or earnings counters.
+    match /riders/{uid} {
+      allow read: if isAdmin() || isOwner(uid);
+      allow create: if isOwner(uid)
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.get('isOnline', false) == false
+                    && request.resource.data.get('backgroundCheck', 'not_started') == 'not_started'
+                    && !('activeDeliveryId' in request.resource.data)
+                    && !('motorcycleId' in request.resource.data)
+                    && !('motorcyclePlate' in request.resource.data)
+                    && !('completedCount' in request.resource.data)
+                    && !('approvedAt' in request.resource.data);
+      allow update: if isAdmin()
+                    || (isOwner(uid)
+                        && !request.resource.data.diff(resource.data).affectedKeys()
+                             .hasAny(['status','activeDeliveryId','motorcycleId','motorcyclePlate','completedCount','approvedAt','approvedBy','onlineSince','backgroundCheck'])
+                        && (request.resource.data.get('isOnline', false) == false
+                            || resource.data.get('status','') == 'approved'));
+      allow delete: if isAdmin();
+    }
+
+    // ── Pricing (admin-set, everyone signed in may read for display) ────────
+    match /dash_pricing/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // ── Analytics, money, support, audit — server writes, admin reads ───────
+    match /dash_demand_events/{id} { allow read: if isAdmin(); allow write: if false; }
+    match /ledger_entries/{id}     { allow read: if isAdmin(); allow update: if isAdmin(); allow create, delete: if false; }
+    match /audit_logs/{id}         { allow read: if isAdmin(); allow write: if false; }
+    match /support_cases/{id} {
+      allow read: if isAdmin() || (signedIn() && resource.data.reporterId == request.auth.uid);
+      allow update: if isAdmin();
+      allow create, delete: if false;
+      match /notes/{noteId} { allow read, create: if isAdmin(); allow update, delete: if false; }
+    }
+
+
+    // ── Marketplace ─────────────────────────────────────────────────────────
+    //  merchants/{ownerUid}: one store per owner login. The public sees
+    //  approved stores only. Owners edit their profile, hours and products, but
+    //  never their own status or commission. Orders and settlements are
+    //  written only by Cloud Functions.
+    match /merchants/{uid} {
+      allow read: if isAdmin() || isOwner(uid) || resource.data.status == 'approved';
+      allow create: if isOwner(uid)
+                    && request.resource.data.status == 'pending'
+                    && !('commissionPct' in request.resource.data)
+                    && !('approvedAt' in request.resource.data)
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() > 1;
+      allow update: if isAdmin()
+                    || (isOwner(uid)
+                        && !request.resource.data.diff(resource.data).affectedKeys()
+                             .hasAny(['status','commissionPct','approvedAt','approvedBy']));
+      allow delete: if isAdmin();
+
+      match /products/{productId} {
+        allow read: if isAdmin() || isOwner(uid)
+                    || get(/databases/$(database)/documents/merchants/$(uid)).data.status == 'approved';
+        allow create, update: if (isAdmin() || isOwner(uid))
+                    && request.resource.data.name is string
+                    && request.resource.data.name.size() > 0
+                    && request.resource.data.priceCents is int
+                    && request.resource.data.priceCents >= 0
+                    && (!('stock' in request.resource.data) || request.resource.data.stock == null
+                        || (request.resource.data.stock is int && request.resource.data.stock >= 0));
+        allow delete: if isAdmin() || isOwner(uid);
+      }
+    }
+
+    match /dash_orders/{id} {
+      allow read: if isAdmin()
+                  || (signedIn() && resource.data.customerId == request.auth.uid)
+                  || (signedIn() && resource.data.merchantId == request.auth.uid);
+      allow write: if false;
+      match /customer/{docId} {
+        allow read: if isAdmin()
+                    || (signedIn() && get(/databases/$(database)/documents/dash_orders/$(id)).data.customerId == request.auth.uid);
+        allow write: if false;
+      }
+    }
+
+    match /settlements/{id} {
+      allow read: if isAdmin() || (signedIn() && resource.data.merchantId == request.auth.uid);
+      allow write: if false;
+    }
+
+    // ── Fleet (admin only; riders never see provider details) ───────────────
+    match /fleet_motorcycles/{id} {
+      allow read, write: if isAdmin();
+      match /log/{logId} { allow read, write: if isAdmin(); }
+    }
+    match /fleet_providers/{id}   { allow read, write: if isAdmin(); }
+
+    // ── Rider shifts ────────────────────────────────────────────────────────
+    //  Admin plans shifts. A rider can only confirm or decline their own
+    //  scheduled shift — never move it, and never mark it completed.
+    match /rider_shifts/{id} {
+      allow read: if isAdmin() || (signedIn() && resource.data.riderId == request.auth.uid);
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+                    || (signedIn()
+                        && resource.data.riderId == request.auth.uid
+                        && resource.data.status in ['scheduled', 'confirmed']
+                        && request.resource.data.status in ['confirmed', 'declined']
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'respondedAt', 'declineReason']));
+    }
+    match /rider_time_off/{id} {
+      allow read: if isAdmin() || (signedIn() && resource.data.riderId == request.auth.uid);
+      allow create: if signedIn()
+                    && request.resource.data.riderId == request.auth.uid
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.date is string;
+      allow update: if isAdmin();
+      allow delete: if isAdmin() || (signedIn() && resource.data.riderId == request.auth.uid && resource.data.status == 'pending');
+    }
+    match /rider_availability/{uid} {
+      allow read: if isAdmin() || isOwner(uid);
+      allow write: if isOwner(uid) || isAdmin();
+    }
+    match /rider_online_sessions/{id} {
+      allow read: if isAdmin() || (signedIn() && resource.data.riderId == request.auth.uid);
+      allow write: if false;
+    }
+
+    // ── VILLE cross-site house ads (public read, admin write) ───────────────
+    match /site_ads/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     // ── Default deny for anything not explicitly listed ──────────────────────

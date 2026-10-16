@@ -256,3 +256,8 @@ exports.notifyCustomerCompleted = onDocumentUpdated(
     );
   }
 );
+/* ═══════════════════════════════════════════════════════════════════════════
+   VILLEDASH — delivery service functions live in ./dash (pricing, dispatch,
+   PIN verification, notifications, referral check).
+   ═══════════════════════════════════════════════════════════════════════════ */
+Object.assign(exports, require('./dash'));

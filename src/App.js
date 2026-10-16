@@ -17,6 +17,13 @@ import { GoogleMap, useJsApiLoader, Marker, DirectionsRenderer } from '@react-go
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+// VilleDash (VILLE ecosystem) — new screens live in src/dash, gated by config/features
+import { VilleHome, DashHome, DashHistory } from './dash/CustomerScreens';
+import { StoresList, StorePage, Checkout, OrderTrack } from './dash/Marketplace';
+import SendPackage from './dash/SendPackage';
+import DeliveryTrack from './dash/DeliveryTrack';
+import { useDashEnabled } from './dash/dashApi';
+import { useSites, SiteLanding, FamilyBar, HouseAd } from './dash/sites';
 
 const firebaseConfig = {
   apiKey:            process.env.REACT_APP_FIREBASE_API_KEY,
@@ -41,6 +48,8 @@ try { messaging = getMessaging(app); } catch(e) { console.warn('Messaging unavai
 const functions_     = getFunctions(app);
 const createPaymentIntentFn   = httpsCallable(functions_, 'createPaymentIntent');
 const updateDriverLocationFn  = httpsCallable(functions_, 'updateDriverLocation');
+const checkReferralCodeFn     = httpsCallable(functions_, 'checkReferralCode');
+const REFERRAL_DISCOUNT_PCT   = 20;
 const YELLOW = '#e8b400';
 const DARK   = '#1a1a2e';
 const GREEN  = '#1a9e5a';
@@ -78,35 +87,6 @@ const sendWelcomeEmail = async (toEmail, toName, role = 'customer') => {
   }
 };
 
-// Send an admin support reply via EmailJS (Feature: Support Inbox Replies)
-// Reuses the same working service/template already proven for contact notifications —
-// admin can refine the wording of template_ss6rofa in the EmailJS dashboard any time
-// without needing a code change.
-const sendReplyEmail = async (toEmail, toName, subject, replyText) => {
-  try {
-    const res = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        service_id:  EMAILJS_SERVICE,
-        template_id: 'template_ss6rofa',
-        user_id:     EMAILJS_USER,
-        template_params: {
-          to_email:   toEmail,
-          to_name:    toName || 'VilleCabs Customer',
-          from_name:  'VilleCabs Support',
-          from_email: 'admin@villecabs.com',
-          subject:    subject ? `Re: ${subject}` : 'Re: Your message to VilleCabs',
-          otp_code:   replyText,
-        },
-      }),
-    });
-    return res.ok;
-  } catch(e) {
-    console.warn('Support reply email failed:', e);
-    return false;
-  }
-};
 const LIBRARIES       = ['places'];
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -293,6 +273,8 @@ const registerPushToken = async (uid, collectionName) => {
 };
 
 const registerCustomerPushToken = async (uid) => registerPushToken(uid, 'customers');
+// VilleDash riders (used by src/dash/RiderPortal.js)
+export const registerRiderPushToken = async (uid) => registerPushToken(uid, 'riders');
 
 // Register a driver's push token so a Cloud Function can push new-ride alerts
 const registerDriverPushToken = async (uid) => registerPushToken(uid, 'drivers');
@@ -1701,7 +1683,7 @@ function LandingEventsSection({ go }) {
   );
 }
 
-function Splash({ go }) {
+function Splash({ go, site, domains, dashOn }) {
   const [slide, setSlide] = useState(0);
   const [livePromos, setLivePromos] = useState([]);
   // Load active, non-expired promo codes so the Promotions banner reflects what
@@ -1730,6 +1712,7 @@ function Splash({ go }) {
   const cur = slides[slide] || slides[0];
   return (
     <div style={{ background:'#ffffff', minHeight:'100vh' }}>
+      {(dashOn || (site && site !== 'cabs')) && <FamilyBar site={site || 'cabs'} domains={domains || {}} go={go}/>}
 
       {/* NAV */}
       <div style={{ background:'#ffffff', borderBottom:'1px solid #eee', padding:'10px 16px', display:'flex', alignItems:'center', position:'sticky', top:0, zIndex:100 }}>
@@ -3501,7 +3484,8 @@ function DashFAQ({ go }) {
   );
 }
 
-function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupData, setDropoffData }) {
+function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupData, setDropoffData, site, domains }) {
+  const dashOn = useDashEnabled(user?.uid);
   // Verification gate: a password (email/password) account that hasn't verified
   // its email must not reach the dashboard via any navigation path (logo tap,
   // back button, etc). Bounce them back to the verify screen. Google accounts
@@ -3744,12 +3728,17 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
           <img src="/logo.png" alt="VilleCabs" onClick={() => setTab('book')} style={{ height:26, width:'auto', objectFit:'contain', cursor:'pointer' }}/>
         </div>
         <div style={{ display:'flex', gap:5, marginLeft:'auto', alignItems:'center' }}>
+          {dashOn && <button onClick={() => go('ville-home')} style={{ padding:'3px 8px', background:'#6b21a8', border:'1px solid #6b21a8', borderRadius:12, color:'#ffffff', fontSize:10, fontWeight:700, cursor:'pointer' }}>VILLE</button>}
+          {dashOn && <button onClick={() => go('dash-home')} style={{ padding:'3px 8px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, color:'#6b21a8', fontSize:10, fontWeight:600, cursor:'pointer' }}>VilleDash</button>}
           <button onClick={() => go('ville-events')} style={{ padding:'3px 8px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, color:'#6b21a8', fontSize:10, fontWeight:600, cursor:'pointer' }}>VilleEvents</button>
           <button onClick={() => go('featured')} style={{ padding:'3px 8px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, color:'#6b21a8', fontSize:10, fontWeight:600, cursor:'pointer' }}>Featured</button>
           {activeRide && <div onClick={() => { if (activeRide?.id) setBookingId(activeRide.id); go('live-ride'); }} style={{ background:GREEN, borderRadius:14, padding:'3px 8px', fontSize:10, color:WHITE, cursor:'pointer', fontWeight:600 }}>🚕 Live</div>}
           <span style={{ fontSize:11, fontWeight:600, color:'#2a1a4a', maxWidth:70, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{user?.name?.split(' ')[0]||''}</span>
         </div>
       </div>
+
+      {/* VILLE family: cross-promotion for VilleDash / VilleEvents */}
+      {dashOn && <HouseAd site={site || 'cabs'} domains={domains || {}} go={go} variant="banner"/>}
 
       {/* Side drawer menu */}
       {menuOpen && (
@@ -5252,20 +5241,24 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
 
   const calcFinalPrice = (v) => {
     const base = calcPrice(v);
-    if (!promoData) return base;
+    // A validated referral code gives 20% off a first ride. It does not stack
+    // with a promo code — the customer gets whichever discount is bigger.
+    const referralPrice = referralDocId ? Math.round(base * (1 - REFERRAL_DISCOUNT_PCT / 100)) : base;
+    if (!promoData) return referralPrice;
     // Codes are either a percentage off or a flat J$ amount off. Older codes
     // have no discountType and are treated as percent for backwards compatibility.
-    if (promoData.discountType === 'fixed') {
-      return Math.max(0, base - Math.round(promoData.discount));   // never below zero
-    }
-    return Math.round(base * (1 - promoData.discount / 100));
+    const promoPrice = promoData.discountType === 'fixed'
+      ? Math.max(0, base - Math.round(promoData.discount))   // never below zero
+      : Math.round(base * (1 - promoData.discount / 100));
+    return Math.min(promoPrice, referralPrice);
   };
   // Human-readable label for the applied discount.
   const promoLabel = () => {
-    if (!promoData) return '';
-    return promoData.discountType === 'fixed'
+    if (!promoData) return referralDocId ? `referral ${REFERRAL_DISCOUNT_PCT}% off` : '';
+    const promoText = promoData.discountType === 'fixed'
       ? `J$${(promoData.discount||0).toLocaleString()} off`
       : `${promoData.discount}% off`;
+    return referralDocId ? `best of ${promoText} or referral ${REFERRAL_DISCOUNT_PCT}% off` : promoText;
   };
 
   const saveUnfulfilledRequest = async (v, price, dist) => {
@@ -5400,6 +5393,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
           surgeMultiplier: SURGE_MULT > 1 ? SURGE_MULT : null,
           promoCode:       promoData?.code || null,
           referredBy:      referralDocId || null,
+          referralDiscountPct: referralDocId ? REFERRAL_DISCOUNT_PCT : null,
           promoDiscount:   promoData?.discount || null,
           promoType:       promoData?.discountType || 'percent',
           distanceKm:      dist,
@@ -5438,6 +5432,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
         surgeMultiplier: SURGE_MULT > 1 ? SURGE_MULT : null,
         promoCode:    promoData?.code || null,
         referredBy:   referralDocId || null,
+        referralDiscountPct: referralDocId ? REFERRAL_DISCOUNT_PCT : null,
         promoDiscount:promoData?.discount || null,
         promoType:    promoData?.discountType || 'percent',
         distanceKm:   dist,
@@ -5556,10 +5551,16 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
               if (code.length < 7) { setReferralMsg(null); setReferralDocId(null); return; }
               setReferralChecking(true);
               try {
-                const snap = await getDocs(query(collection(db,'customers'), where('referralCode','==',code)));
-                if (!snap.empty && snap.docs[0].id !== user.uid) {
-                  setReferralDocId(snap.docs[0].id);
+                // Checked on the server: customers can't read other customers'
+                // records, so the old direct query was always refused.
+                const res = await checkReferralCodeFn({ code });
+                const r = res?.data || {};
+                if (r.valid && r.eligible) {
+                  setReferralDocId(r.referrerId);
                   setReferralMsg({ text:'✅ Valid referral code — 20% off your first ride!', ok:true });
+                } else if (r.valid && !r.eligible) {
+                  setReferralDocId(null);
+                  setReferralMsg({ text:'❌ Referral discounts are for first rides only.', ok:false });
                 } else {
                   setReferralDocId(null);
                   setReferralMsg({ text:'❌ Invalid referral code', ok:false });
@@ -5606,7 +5607,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
         </div>
 
         {/* Price summary with discount */}
-        {promoData && (
+        {(promoData || referralDocId) && (
           <div style={{ background:'rgba(26,158,90,0.1)', border:'0.5px solid rgba(26,158,90,0.3)', borderRadius:10, padding:'10px 14px', marginBottom:10, display:'flex', justifyContent:'space-between', alignItems:'center' }}>
             <div>
               <div style={{ fontSize:12, color:'#6b7280', textDecoration:'line-through' }}>J${calcPrice(v).toLocaleString()}</div>
@@ -5711,9 +5712,9 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
                   <span style={{ color:'#8a83a0' }}>Payment</span>
                   <span style={{ color:'#1a1a2e', fontWeight:600 }}>Cash to your driver</span>
                 </div>
-                {promoData && (
+                {(promoData || referralDocId) && (
                   <div style={{ display:'flex', justifyContent:'space-between', marginBottom:7, color:GREEN }}>
-                    <span>Promo {promoData.code}</span><span style={{ fontWeight:700 }}>{promoLabel()}</span>
+                    <span>{promoData ? `Promo ${promoData.code}` : 'Referral code'}</span><span style={{ fontWeight:700 }}>{promoLabel()}</span>
                   </div>
                 )}
               </div>
@@ -10286,7 +10287,18 @@ function PromotionsPage({ go, user }) {
         <div style={{ display:'flex', gap:10 }}>
           <input value={promoInput} onChange={e => setPromoInput(e.target.value.toUpperCase())} placeholder="e.g. VILLE20"
             style={{ flex:1, padding:'12px 14px', background:'#ffffff', border:'1.5px solid #d0d3e0', borderRadius:12, fontSize:14, color:'#1a1a2e', outline:'none' }}/>
-          <button onClick={() => { if(promoInput.length>3) { setPromoMsg('✅ Code saved for your next booking!'); } else { setPromoMsg('❌ Invalid code'); } }}
+          <button onClick={async () => {
+              const c = promoInput.trim();
+              if (!c) return;
+              try {
+                const snap = await getDocs(query(collection(db,'promo_codes'), where('code','==',c)));
+                const pd = snap.empty ? null : snap.docs[0].data();
+                if (!pd || !pd.active) setPromoMsg('❌ That code isn\u2019t valid.');
+                else if (pd.expiry && new Date(pd.expiry) < new Date()) setPromoMsg('❌ That code has expired.');
+                else if ((pd.usedBy||[]).includes(user?.uid)) setPromoMsg('❌ You have already used that code.');
+                else setPromoMsg(`✅ "${pd.code}" is valid — enter it when you book to get ${pd.discountType === 'fixed' ? `J$${(pd.discount||0).toLocaleString()}` : `${pd.discount}%`} off.`);
+              } catch(e) { setPromoMsg('❌ Could not check that code. Try again.'); }
+            }}
             style={{ padding:'12px 18px', background:'#0f1a35', border:'none', borderRadius:12, color:'#ffffff', fontSize:13, fontWeight:700, cursor:'pointer' }}>
             Apply
           </button>
@@ -11398,909 +11410,7 @@ function FeaturedPage({ go, user, setPickupData, setDropoffData }) {
 }
 
 
-// ── SUPPORT MESSAGE CARD (Feature: Customer Support Inbox) ─────────────────────
-// Self-contained so each card manages its own reply textarea without re-rendering
-// the whole AdminDash on every keystroke.
-function SupportMessageCard({ m, updateMessage }) {
-  const [replyText, setReplyText] = useState('');
-  const [sending,   setSending]   = useState(false);
-  const [sent,      setSent]      = useState('');
-  const badgeCfg = { new:{bg:'#f5f0ff',color:'#6b21a8'}, 'in-progress':{bg:'#fffbeb',color:'#b45309'}, resolved:{bg:'#f0fff4',color:'#1a9e5a'} };
-  const badge = badgeCfg[m.status] || badgeCfg.new;
-
-  const handleSendReply = async () => {
-    if (!replyText.trim() || !m.email) return;
-    setSending(true); setSent('');
-    const ok = await sendReplyEmail(m.email, m.name, m.subject, replyText.trim());
-    try {
-      await updateMessage(m.id, {
-        replies: arrayUnion({ text: replyText.trim(), sentAt: new Date().toISOString(), sentBy: 'Admin' }),
-        status: 'in-progress',
-      });
-    } catch(e) {}
-    setSent(ok ? '✅ Reply sent to customer' : '⚠️ Saved, but email delivery may have failed — check EmailJS');
-    setReplyText('');
-    setSending(false);
-  };
-
-  return (
-    <div style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)', borderLeft:`3px solid ${m.status==='new'?'#6b21a8':m.status==='resolved'?'#1a9e5a':'#f59e0b'}` }}>
-      <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
-        <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>{m.name||'—'}</div>
-        <span style={{ fontSize:10, background:badge.bg, color:badge.color, padding:'2px 8px', borderRadius:8, fontWeight:600, textTransform:'capitalize' }}>{m.status||'new'}</span>
-      </div>
-      <div style={{ fontSize:11, color:'#888', marginBottom:6 }}>{m.email||''} · {m.createdAt ? new Date((m.createdAt?.seconds||0)*1000).toLocaleDateString() : '—'}{m.role==='driver' ? ' · 🚗 Driver' : ''}</div>
-      {m.subject && <div style={{ fontSize:12, fontWeight:600, color:'#374151', marginBottom:4 }}>{m.subject}</div>}
-      <div style={{ fontSize:12, color:'#555', marginBottom:10, lineHeight:1.5 }}>{m.message||'—'}</div>
-
-      {/* Reply thread */}
-      {(m.replies||[]).length > 0 && (
-        <div style={{ background:'#f9fafb', borderRadius:10, padding:10, marginBottom:10 }}>
-          <div style={{ fontSize:10, fontWeight:700, color:'#6b7280', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6 }}>Reply History</div>
-          {m.replies.map((r, i) => (
-            <div key={i} style={{ fontSize:12, color:'#374151', padding:'6px 0', borderTop:i>0?'1px solid #eee':'none' }}>
-              <div style={{ marginBottom:2 }}>{r.text}</div>
-              <div style={{ fontSize:10, color:'#9199ad' }}>{r.sentBy||'Admin'} · {r.sentAt ? new Date(r.sentAt).toLocaleString('en-JM',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}) : ''}</div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Reply composer */}
-      <textarea value={replyText} onChange={e=>setReplyText(e.target.value)} placeholder={m.email ? `Reply to ${m.name||'this customer'}...` : 'No email on file — cannot reply in-app'} disabled={!m.email}
-        rows={2} style={{ width:'100%', padding:'8px 10px', border:'1px solid #e2e4ed', borderRadius:8, fontSize:12, fontFamily:'inherit', resize:'vertical', marginBottom:8, boxSizing:'border-box', background: m.email ? '#fff' : '#f5f5f5' }}/>
-      {sent && <div style={{ fontSize:11, color: sent.startsWith('✅') ? '#1a9e5a' : '#b45309', marginBottom:8 }}>{sent}</div>}
-      <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-        <button onClick={handleSendReply} disabled={sending || !replyText.trim() || !m.email}
-          style={{ padding:'6px 12px', background: sending||!replyText.trim()||!m.email ? '#e5e7eb' : '#6b21a8', color: sending||!replyText.trim()||!m.email ? '#999' : '#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:700, cursor: sending||!replyText.trim()||!m.email ? 'default' : 'pointer' }}>
-          {sending ? 'Sending...' : '💬 Send Reply'}
-        </button>
-        {m.status!=='in-progress' && <button onClick={() => updateMessage(m.id,{status:'in-progress'})} style={{ padding:'6px 10px', background:'#f59e0b', color:'#fff', border:'none', borderRadius:8, fontSize:10, fontWeight:600, cursor:'pointer' }}>In Progress</button>}
-        {m.status!=='resolved' && <button onClick={() => updateMessage(m.id,{status:'resolved'})} style={{ padding:'6px 10px', background:'#1a9e5a', color:'#fff', border:'none', borderRadius:8, fontSize:10, fontWeight:600, cursor:'pointer' }}>✅ Resolved</button>}
-        {m.email && <a href={'mailto:'+m.email} style={{ padding:'6px 10px', background:'#f5f0ff', color:'#6b21a8', border:'none', borderRadius:8, fontSize:10, fontWeight:600, textDecoration:'none' }}>📧 Open in Email App</a>}
-      </div>
-    </div>
-  );
-}
-
-// ── ADMIN DASHBOARD ───────────────────────────────────────────────────────────
-const ADMIN_EMAILS = ['admin@villecabs.com'];
-
-function AdminDash({ go, user }) {
-  const ADMIN_EMAILS = ['admin@villecabs.com'];
-  const [tab,         setTab]        = useState('overview');
-  const [stats,       setStats]      = useState({ customers:0, drivers:0, pendingDrivers:0, activeDrivers:0, rides:0, completed:0, cancelled:0, totalFare:0, partnerRequests:0 });
-  const [drivers,     setDrivers]    = useState([]);
-  const [customers,   setCustomers]  = useState([]);
-  const [rides,       setRides]      = useState([]);
-  const [partners,    setPartners]   = useState([]);
-  const [messages,    setMessages]   = useState([]);
-  const [alerts,      setAlerts]     = useState([]);
-  const [unfulfilled, setUnfulfilled]= useState([]);
-  const [promos,      setPromos]     = useState([]);
-  const [loading,     setLoading]    = useState(true);
-  const [rideFilter,  setRideFilter] = useState('all');
-  const [driverFilter,setDriverFilter]=useState('all');
-  const [detail,      setDetail]     = useState(null);
-  const [breakdownPeriod, setBreakdownPeriod] = useState('day'); // 'day' | 'week' — Feature: Financial Reporting
-  const [surgeCfg,    setSurgeCfg]   = useState({ surgeActive:false, surgeMultiplier:1.5 }); // Feature: Surge Pricing
-  const [broadcastMsg,setBroadcastMsg]= useState(''); // Feature: Bulk Driver Broadcast
-
-  // Access control
-  if (!user || !ADMIN_EMAILS.includes((user.email || '').toLowerCase())) {
-    return (
-      <div style={{ minHeight:'100vh', background:'#f5f6fa', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24 }}>
-        <div style={{ fontSize:48, marginBottom:16 }}>🔒</div>
-        <div style={{ fontSize:18, fontWeight:700, color:'#1a1a2e', marginBottom:8 }}>Admin Access Only</div>
-        <div style={{ fontSize:13, color:'#888', marginBottom:20 }}>You do not have permission to view this page.</div>
-        <button onClick={() => go('splash')} style={{ padding:'12px 24px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:12, fontSize:14, fontWeight:700, cursor:'pointer' }}>Go Home</button>
-      </div>
-    );
-  }
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [cSnap, dSnap, rSnap, pSnap, mSnap, aSnap, uSnap, promoSnap] = await Promise.all([
-          getDocs(collection(db,'customers')),
-          getDocs(collection(db,'drivers')),
-          getDocs(collection(db,'bookings')),
-          getDocs(collection(db,'partnerRequests')),
-          getDocs(collection(db,'contactMessages')),
-          getDocs(collection(db,'sosAlerts')),
-          getDocs(query(collection(db,'unfulfilled_ride_requests'), orderBy('created_at','desc'))),
-          getDocs(collection(db,'promo_codes')),
-        ]);
-        const cd = cSnap.docs.map(d=>({id:d.id,...d.data()}));
-        const dd = dSnap.docs.map(d=>({id:d.id,...d.data()}));
-        const rd = rSnap.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.createdAt?.seconds||0)-(a.createdAt?.seconds||0));
-        const pd = pSnap.docs.map(d=>({id:d.id,...d.data()}));
-        const md = mSnap.docs.map(d=>({id:d.id,...d.data()}));
-        const ad2= aSnap.docs.map(d=>({id:d.id,...d.data()}));
-        const ud = uSnap.docs.map(d=>({id:d.id,...d.data()}));
-        const prd= promoSnap.docs.map(d=>({id:d.id,...d.data()}));
-        const completed = rd.filter(r=>r.status==='completed');
-        const totalFare = completed.reduce((s,r)=>s+(r.fare||0),0);
-        setCustomers(cd); setDrivers(dd); setRides(rd); setPartners(pd);
-        setMessages(md); setAlerts(ad2); setUnfulfilled(ud); setPromos(prd);
-        setStats({ customers:cd.length, drivers:dd.length, pendingDrivers:dd.filter(d=>d.status==='pending').length, activeDrivers:dd.filter(d=>d.isOnline).length, rides:rd.length, completed:completed.length, cancelled:rd.filter(r=>r.status==='cancelled').length, totalFare, partnerRequests:pd.filter(p=>p.status==='new').length });
-      } catch(e) { console.error(e); }
-      // Load surge pricing config (Feature: Surge Pricing)
-      try {
-        const sSnap = await getDoc(doc(db,'settings','pricing'));
-        if (sSnap.exists()) setSurgeCfg(prev => ({ ...prev, ...sSnap.data() }));
-      } catch(e) {}
-      setLoading(false);
-    };
-    load();
-  }, []);
-
-  const updateDriver  = async (id, data) => { await updateDoc(doc(db,'drivers',id), data); setDrivers(p=>p.map(d=>d.id===id?{...d,...data}:d)); };
-  const updatePartner = async (id, data) => { await updateDoc(doc(db,'partnerRequests',id), data); setPartners(p=>p.map(d=>d.id===id?{...d,...data}:d)); };
-  const updateMessage = async (id, data) => { await updateDoc(doc(db,'contactMessages',id), data); setMessages(p=>p.map(d=>d.id===id?{...d,...data}:d)); };
-  const updateAlert   = async (id, data) => { await updateDoc(doc(db,'sosAlerts',id), data); setAlerts(p=>p.map(d=>d.id===id?{...d,...data}:d)); };
-  const updateCustomer = async (id, data) => { await updateDoc(doc(db,'customers',id), data); setCustomers(p=>p.map(c=>c.id===id?{...c,...data}:c)); }; // Feature: Customer Blacklist
-  const updateBooking = async (id, data) => { await updateDoc(doc(db,'bookings',id), data); setRides(p=>p.map(r=>r.id===id?{...r,...data}:r)); }; // Feature: Scheduled Queue
-  const toggleSurge = async (next) => { // Feature: Surge Pricing
-    const cfg = { surgeActive: next, surgeMultiplier: surgeCfg.surgeMultiplier || 1.5, updatedAt: serverTimestamp(), updatedBy: user.email };
-    await setDoc(doc(db,'settings','pricing'), cfg, { merge:true });
-    setSurgeCfg(prev => ({ ...prev, surgeActive: next }));
-  };
-
-  const vcRevenue  = Math.round(stats.totalFare * 0.15);
-  const driverPayout = Math.round(stats.totalFare * 0.85);
-  const avgFare    = stats.completed > 0 ? Math.round(stats.totalFare / stats.completed) : 0;
-
-  // Filtered rides
-  const now        = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const weekStart  = new Date(todayStart.getTime() - 7*86400000);
-  const filteredRides = rides.filter(r => {
-    const d = new Date((r.createdAt?.seconds||0)*1000);
-    if (rideFilter==='today')     return d >= todayStart;
-    if (rideFilter==='week')      return d >= weekStart;
-    if (rideFilter==='completed') return r.status==='completed';
-    if (rideFilter==='cancelled') return r.status==='cancelled';
-    if (rideFilter==='active')    return r.status==='active'||r.status==='searching';
-    return true;
-  });
-
-  const filteredDrivers = drivers.filter(d => {
-    if (driverFilter==='pending')  return d.status==='pending';
-    if (driverFilter==='approved') return d.status==='approved';
-    if (driverFilter==='suspended')return d.status==='suspended';
-    return true;
-  });
-
-  const tabs = [
-    ['overview','📊 Overview'], ['drivers','🚗 Drivers'], ['customers','👥 Customers'],
-    ['rides','🛣️ Rides'], ['livemap','🗺️ Live Map'], ['scheduled','🗓️ Scheduled'],
-    ['partners','🤝 Partners'], ['revenue','💰 Revenue'],
-    ['promos','🎟️ Promos'], ['messages','📩 Messages'], ['alerts','🆘 Alerts'],
-    ['unfulfilled','📍 No Driver'], ['performance','📈 Performance'], ['broadcast','📢 Broadcast'],
-  ];
-
-  const StatusBadge = ({ status }) => {
-    const cfg = { pending:{bg:'#fefce8',color:'#854d0e'}, approved:{bg:'#f0fff4',color:'#1a9e5a'}, active:{bg:'#f0fff4',color:'#1a9e5a'}, rejected:{bg:'#fff0f0',color:'#dc2626'}, suspended:{bg:'#fff0f0',color:'#dc2626'}, banned:{bg:'#1a1a2e',color:'#ffffff'}, scheduled:{bg:'#eff6ff',color:'#1d4ed8'}, new:{bg:'#f5f0ff',color:'#6b21a8'}, completed:{bg:'#f0fff4',color:'#1a9e5a'}, cancelled:{bg:'#fff0f0',color:'#dc2626'}, searching:{bg:'#fefce8',color:'#854d0e'}, contacted:{bg:'#fefce8',color:'#854d0e'}, featured:{bg:'#f5f0ff',color:'#6b21a8'}, online:{bg:'#f0fff4',color:'#1a9e5a'}, offline:{bg:'#f5f5f5',color:'#888'} };
-    const c = cfg[status?.toLowerCase()] || {bg:'#f5f5f5',color:'#888'};
-    return <span style={{ fontSize:10, background:c.bg, color:c.color, padding:'2px 8px', borderRadius:8, fontWeight:600, textTransform:'capitalize' }}>{status||'unknown'}</span>;
-  };
-
-  if (loading) return (
-    <div style={{ minHeight:'100vh', background:'#f5f6fa', display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:12 }}>
-      <img src="/logo.png" onClick={() => go('admin')} style={{cursor:'pointer',  height:40, objectFit:'contain' }} alt="VilleCabs"/>
-      <div style={{ fontSize:14, color:'#888' }}>Loading admin dashboard...</div>
-    </div>
-  );
-
-  return (
-    <div style={{ minHeight:'100vh', background:'#f5f6fa' }}>
-
-      {/* ── TOP BAR ── */}
-      <div style={{ background:'#ffffff', borderBottom:'1px solid #e5e7eb', padding:'10px 16px', display:'flex', alignItems:'center', gap:10, position:'sticky', top:0, zIndex:50, boxShadow:'0 1px 4px rgba(0,0,0,0.06)' }}>
-        <img src="/logo.png" style={{ height:28, objectFit:'contain' }} alt="VilleCabs"/>
-        <span style={{ fontSize:13, fontWeight:700, color:'#6b21a8', marginLeft:4 }}>Admin Dashboard</span>
-        <button onClick={() => go('splash')} style={{ marginLeft:'auto', padding:'6px 12px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:10, color:'#6b21a8', fontSize:11, fontWeight:600, cursor:'pointer' }}>← Exit Admin</button>
-      </div>
-
-      {/* ── TAB NAV ── */}
-      <div style={{ display:'flex', gap:4, padding:'10px 14px', background:'#fff', borderBottom:'1px solid #e5e7eb', overflowX:'auto', scrollbarWidth:'none' }}>
-        {tabs.map(([key, label]) => (
-          <button key={key} onClick={() => setTab(key)}
-            style={{ flexShrink:0, padding:'6px 12px', borderRadius:20, border:'none', background:tab===key?'#6b21a8':'#f3f4f6', color:tab===key?'#fff':'#555', fontSize:11, fontWeight:600, cursor:'pointer', whiteSpace:'nowrap' }}>
-            {label}{key==='drivers'&&stats.pendingDrivers>0?` (${stats.pendingDrivers})`:''}{key==='messages'&&messages.filter(m=>m.status==='new').length>0?` (${messages.filter(m=>m.status==='new').length})`:''}{key==='alerts'&&alerts.filter(a=>a.status==='new').length>0?` (${alerts.filter(a=>a.status==='new').length})`:''}{key==='unfulfilled'&&unfulfilled.length>0?` (${unfulfilled.length})`:''}{key==='partners'&&stats.partnerRequests>0?` (${stats.partnerRequests})`:''}</button>
-        ))}
-      </div>
-
-      <div style={{ padding:'14px 14px 40px', maxWidth:1000, margin:'0 auto' }}>
-
-        {/* ══ OVERVIEW ══ */}
-        {tab === 'overview' && (
-          <div>
-            <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:14 }}>Overview</div>
-            {/* ── Surge Pricing Toggle (Feature: Surge Pricing) ── */}
-            <div style={{ background: surgeCfg.surgeActive ? '#fffbeb' : '#fff', border:`1px solid ${surgeCfg.surgeActive ? '#fde047' : '#e5e7eb'}`, borderRadius:14, padding:'14px 16px', marginBottom:14, display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap' }}>
-              <div>
-                <div style={{ fontSize:14, fontWeight:800, color: surgeCfg.surgeActive ? '#b45309' : '#1a1a2e' }}>⚡ Surge Pricing {surgeCfg.surgeActive ? `ACTIVE (${surgeCfg.surgeMultiplier||1.5}x)` : 'Off'}</div>
-                <div style={{ fontSize:11, color:'#888', marginTop:2 }}>Turn on during events or rain — all new fares are multiplied by {surgeCfg.surgeMultiplier||1.5}x instantly</div>
-              </div>
-              <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-                <select value={surgeCfg.surgeMultiplier||1.5} onChange={async e => { const m=Number(e.target.value); setSurgeCfg(prev=>({...prev,surgeMultiplier:m})); try { await setDoc(doc(db,'settings','pricing'), { surgeMultiplier:m }, { merge:true }); } catch(err){} }} style={{ padding:'8px 10px', borderRadius:10, border:'1px solid #e5e7eb', fontSize:12, fontWeight:700 }}>
-                  {[1.25,1.5,1.75,2].map(m => <option key={m} value={m}>{m}x</option>)}
-                </select>
-                <button onClick={() => toggleSurge(!surgeCfg.surgeActive)} style={{ padding:'9px 16px', borderRadius:10, border:'none', fontSize:12, fontWeight:800, cursor:'pointer', background: surgeCfg.surgeActive ? '#dc2626' : '#1a9e5a', color:'#fff' }}>
-                  {surgeCfg.surgeActive ? 'Turn OFF' : 'Turn ON'}
-                </button>
-              </div>
-            </div>
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(140px,1fr))', gap:10, marginBottom:16 }}>
-              {[
-                ['Total Customers',    stats.customers,       '#6b21a8','#f9f5ff','#e9d5ff'],
-                ['Total Drivers',      stats.drivers,         '#1a1a2e','#fff','#e5e7eb'],
-                ['Pending Drivers',    stats.pendingDrivers,  '#b45309','#fffbeb','#fde047'],
-                ['Active Drivers',     stats.activeDrivers,   '#1a9e5a','#f0fff4','#86efac'],
-                ['Total Rides',        stats.rides,           '#1a1a2e','#fff','#e5e7eb'],
-                ['Completed Rides',    stats.completed,       '#1a9e5a','#f0fff4','#86efac'],
-                ['Cancelled Rides',    stats.cancelled,       '#dc2626','#fff0f0','#fca5a5'],
-                ['Total Fare (J$)',    stats.totalFare.toLocaleString(), '#6b21a8','#f9f5ff','#e9d5ff'],
-                ['VilleCabs Revenue',  'J$'+vcRevenue.toLocaleString(), '#1a9e5a','#f0fff4','#86efac'],
-                ['Partner Requests',   stats.partnerRequests, '#b45309','#fffbeb','#fde047'],
-              ].map(([label, value, color, bg, border], i) => (
-                <div key={i} style={{ background:bg, border:`1px solid ${border}`, borderRadius:14, padding:'14px 12px' }}>
-                  <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6 }}>{label}</div>
-                  <div style={{ fontSize:20, fontWeight:800, color }}>{value}</div>
-                </div>
-              ))}
-            </div>
-            {/* Recent activity */}
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-              <div style={{ background:'#fff', borderRadius:14, padding:14, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
-                <div style={{ fontSize:12, fontWeight:700, color:'#6b21a8', marginBottom:10 }}>Recent Rides</div>
-                {rides.slice(0,5).map((r,i) => (
-                  <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'6px 0', borderBottom:i<4?'1px solid #f5f5f5':'none', fontSize:12 }}>
-                    <span style={{ color:'#1a1a2e' }}>{r.customerName||'Customer'}</span>
-                    <StatusBadge status={r.status}/>
-                  </div>
-                ))}
-              </div>
-              <div style={{ background:'#fff', borderRadius:14, padding:14, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
-                <div style={{ fontSize:12, fontWeight:700, color:'#6b21a8', marginBottom:10 }}>Pending Drivers</div>
-                {drivers.filter(d=>d.status==='pending').slice(0,5).map((d,i) => (
-                  <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'6px 0', borderBottom:i<4?'1px solid #f5f5f5':'none', fontSize:12 }}>
-                    <span style={{ color:'#1a1a2e' }}>{d.name||'Driver'}</span>
-                    <button onClick={() => { setTab('drivers'); setDriverFilter('pending'); }} style={{ fontSize:10, color:'#6b21a8', background:'none', border:'none', cursor:'pointer', fontWeight:600 }}>Review →</button>
-                  </div>
-                ))}
-                {drivers.filter(d=>d.status==='pending').length===0 && <div style={{ fontSize:12, color:'#888' }}>No pending applications</div>}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ══ DRIVERS ══ */}
-        {tab === 'drivers' && (
-          <div>
-            <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:12 }}>Driver Management</div>
-            <div style={{ display:'flex', gap:6, marginBottom:14, flexWrap:'wrap' }}>
-              {[['all','All'],['pending','Pending'],['approved','Approved'],['suspended','Suspended']].map(([k,l]) => (
-                <button key={k} onClick={() => setDriverFilter(k)} style={{ padding:'6px 14px', borderRadius:20, border:'none', background:driverFilter===k?'#6b21a8':'#f3f4f6', color:driverFilter===k?'#fff':'#555', fontSize:11, fontWeight:600, cursor:'pointer' }}>{l}</button>
-              ))}
-            </div>
-            {filteredDrivers.map((d, i) => (
-              <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:8 }}>
-                  <div style={{ display:'flex', gap:10, alignItems:'center' }}>
-                    {d.profilePhotoUrl ? <img src={d.profilePhotoUrl} style={{ width:40, height:40, borderRadius:'50%', objectFit:'cover' }} alt=""/> : <div style={{ width:40, height:40, borderRadius:'50%', background:'#f3f4f6', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18 }}>👤</div>}
-                    <div>
-                      <div style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>{d.name||'—'}</div>
-                      <div style={{ fontSize:11, color:'#888' }}>{d.phone||''} · {d.email||''}</div>
-                    </div>
-                  </div>
-                  <StatusBadge status={d.isOnline?'online':d.status}/>
-                </div>
-                <div style={{ fontSize:12, color:'#555', marginBottom:8 }}>
-                  🚗 {d.vehicleMake||'—'} {d.vehicleModel||''} · {d.vehicleColor||''} · {d.licensePlate||'—'}
-                </div>
-                {d.vehiclePhotoUrl && <img src={d.vehiclePhotoUrl} style={{ width:'100%', maxHeight:100, objectFit:'cover', borderRadius:8, marginBottom:8 }} alt="Vehicle"/>}
-                {/* Documents */}
-                {d.docs && (
-                  <div style={{ display:'flex', gap:6, flexWrap:'wrap', marginBottom:10 }}>
-                    {Object.entries(d.docs).map(([key, url]) => url && (
-                      <a key={key} href={url} target="_blank" rel="noreferrer" style={{ fontSize:10, background:'#f5f0ff', color:'#6b21a8', padding:'2px 8px', borderRadius:8, textDecoration:'none', fontWeight:600 }}>
-                        📄 {key}
-                      </a>
-                    ))}
-                  </div>
-                )}
-                {/* Actions */}
-                <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                  {d.status==='pending' && <>
-                    <button onClick={() => updateDriver(d.id, { status:'approved' })} style={{ padding:'6px 12px', background:'#1a9e5a', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>✅ Approve</button>
-                    <button onClick={() => updateDriver(d.id, { status:'rejected' })} style={{ padding:'6px 12px', background:'#dc2626', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>❌ Reject</button>
-                    <button onClick={() => updateDriver(d.id, { status:'pending', docsRequested:true })} style={{ padding:'6px 12px', background:'#f59e0b', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>📋 Request Docs</button>
-                  </>}
-                  {d.status==='approved' && <button onClick={() => updateDriver(d.id, { status:'suspended' })} style={{ padding:'6px 12px', background:'#dc2626', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>🚫 Suspend</button>}
-                  {d.status==='suspended' && <button onClick={() => updateDriver(d.id, { status:'approved' })} style={{ padding:'6px 12px', background:'#1a9e5a', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>✅ Reinstate</button>}
-                </div>
-              </div>
-            ))}
-            {filteredDrivers.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}>No drivers in this category</div>}
-          </div>
-        )}
-
-        {/* ══ CUSTOMERS ══ */}
-        {tab === 'customers' && (
-          <div>
-            <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:14 }}>Customer Management</div>
-            {customers.map((c, i) => {
-              const cRides = rides.filter(r => r.customerId===c.id);
-              const spent  = cRides.filter(r=>r.status==='completed').reduce((s,r)=>s+(r.fare||0),0);
-              return (
-                <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:6 }}>
-                    <div>
-                      <div style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>{c.name||'—'}</div>
-                      <div style={{ fontSize:11, color:'#888' }}>{c.email||''} · {c.phone||''}</div>
-                    </div>
-                    <StatusBadge status={c.status||'active'}/>
-                  </div>
-                  <div style={{ display:'flex', gap:10, fontSize:11, color:'#555' }}>
-                    <span>🚕 {cRides.length} rides</span>
-                    <span>💰 J${spent.toLocaleString()} spent</span>
-                    <span>📅 {c.createdAt ? new Date((c.createdAt?.seconds||0)*1000).toLocaleDateString() : '—'}</span>
-                  </div>
-                  {/* ── Blacklist controls (Feature: Customer Blacklist) ── */}
-                  <div style={{ display:'flex', gap:6, marginTop:10 }}>
-                    {c.status === 'banned'
-                      ? <button onClick={() => updateCustomer(c.id, { status:'active' })} style={{ padding:'6px 12px', background:'#1a9e5a', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>✅ Unban — allow bookings</button>
-                      : <button onClick={async () => { if (await vcConfirm(`Ban ${c.name||'this customer'} from booking rides?`, { confirmText:'Ban', danger:true })) updateCustomer(c.id, { status:'banned' }); }} style={{ padding:'6px 12px', background:'#dc2626', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>🚫 Ban from booking</button>}
-                  </div>
-                </div>
-              );
-            })}
-            {customers.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}>No customers yet</div>}
-          </div>
-        )}
-
-        {/* ══ LIVE OPERATIONS MAP (Feature: Live Ops Map) ══ */}
-        {tab === 'livemap' && (() => {
-          const activeRides = rides.filter(r => ['active','enroute','arrived'].includes(r.status));
-          const onlineDrivers = drivers.filter(d => d.isOnline);
-          const nowMs = Date.now();
-          const isFresh = (loc) => loc?.lat && (!loc.updatedAt?.seconds || (nowMs - loc.updatedAt.seconds*1000) < 5*60*1000);
-          const locatedDrivers = onlineDrivers.filter(d => isFresh(d.currentLocation));
-          const mapMarkers = [];
-          activeRides.forEach(r => {
-            if (r.driverLocation?.lat) mapMarkers.push({ position:{ lat:r.driverLocation.lat, lng:r.driverLocation.lng }, title:`🚗 ${r.driverName||'Driver'} → ${r.customerName||'rider'}` });
-            if (r.pickup?.lat)  mapMarkers.push({ position:{ lat:r.pickup.lat,  lng:r.pickup.lng  }, title:`📍 Pickup: ${r.customerName||'rider'}` });
-          });
-          locatedDrivers.forEach(d => {
-            if (!activeRides.some(r => r.driverId === d.id)) mapMarkers.push({ position:{ lat:d.currentLocation.lat, lng:d.currentLocation.lng }, title:`🟢 ${d.name||'Driver'} (available)` });
-          });
-          return (
-            <div>
-              <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:12 }}>Live Operations Map</div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginBottom:14 }}>
-                {[
-                  ['Online Drivers', onlineDrivers.length, '#1a9e5a','#f0fff4','#86efac'],
-                  ['Active Rides',   activeRides.length,   '#6b21a8','#f9f5ff','#e9d5ff'],
-                  ['On Map',         mapMarkers.length,    '#1a1a2e','#fff','#e5e7eb'],
-                ].map(([l,v,c,bg,border],i) => (
-                  <div key={i} style={{ background:bg, border:`1px solid ${border}`, borderRadius:12, padding:'12px 10px', textAlign:'center' }}>
-                    <div style={{ fontSize:22, fontWeight:800, color:c }}>{v}</div>
-                    <div style={{ fontSize:9, color:'#888', textTransform:'uppercase', letterSpacing:0.4, marginTop:2 }}>{l}</div>
-                  </div>
-                ))}
-              </div>
-
-              {mapMarkers.length > 0 ? (
-                <div style={{ borderRadius:14, overflow:'hidden', boxShadow:'0 1px 6px rgba(0,0,0,0.1)', marginBottom:14 }}>
-                  <VilleMap height={typeof window!=='undefined'?Math.round(window.innerHeight*0.70):600} center={mapMarkers[0].position} zoom={13} markers={mapMarkers} expandable={true}/>
-                </div>
-              ) : (
-                <div style={{ background:'#fff', borderRadius:14, padding:30, textAlign:'center', color:'#888', marginBottom:14, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
-                  <div style={{ fontSize:32, marginBottom:8 }}>🗺️</div>
-                  <div style={{ fontSize:14, fontWeight:700, color:'#374151', marginBottom:4 }}>No live positions right now</div>
-                  <div style={{ fontSize:12 }}>Driver pins appear here when drivers are online and sharing location during a ride.</div>
-                </div>
-              )}
-
-              {/* Active rides list */}
-              <div style={{ fontSize:13, fontWeight:700, color:'#6b21a8', marginBottom:8 }}>Active Rides ({activeRides.length})</div>
-              {activeRides.map(r => (
-                <div key={r.id} style={{ background:'#fff', borderRadius:12, padding:12, marginBottom:8, boxShadow:'0 1px 4px rgba(0,0,0,0.05)', borderLeft:'3px solid #6b21a8' }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:4 }}>
-                    <span style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>{r.driverName||'Driver'} → {r.customerName||'Rider'}</span>
-                    <StatusBadge status={r.status}/>
-                  </div>
-                  <div style={{ fontSize:12, color:'#555' }}>{shortAddress(r.pickup?.address||'—')} → {shortAddress(r.dropoff?.address||'—')} · J${(r.fare||0).toLocaleString()}</div>
-                  <div style={{ fontSize:11, color:'#888', marginTop:2 }}>{r.driverLocation?.lat ? '📍 Live location active' : '⏳ Awaiting driver GPS'}</div>
-                </div>
-              ))}
-              {activeRides.length===0 && <div style={{ fontSize:12, color:'#888', padding:'4px 0' }}>No rides in progress.</div>}
-
-              {/* Idle online drivers note */}
-              {onlineDrivers.length > locatedDrivers.length && (
-                <div style={{ background:'#fffbeb', border:'1px solid #fde047', borderRadius:10, padding:'10px 12px', marginTop:12, fontSize:11, color:'#854d0e' }}>
-                  ℹ️ {onlineDrivers.length - locatedDrivers.length} online driver{onlineDrivers.length - locatedDrivers.length !== 1 ? 's are' : ' is'} available but not shown on the map — drivers only broadcast GPS during an active ride.
-                </div>
-              )}
-            </div>
-          );
-        })()}
-
-        {/* ══ SCHEDULED RIDES QUEUE (Feature: Scheduled Queue) ══ */}
-        {tab === 'scheduled' && (() => {
-          const now = Date.now();
-          const scheduled = rides
-            .filter(r => r.status === 'scheduled')
-            .sort((a,b) => (a.scheduledFor?.seconds||0) - (b.scheduledFor?.seconds||0));
-          const unassigned = scheduled.filter(r => !r.driverId);
-          const assigned   = scheduled.filter(r => r.driverId);
-          const approvedDrivers = drivers.filter(d => d.status === 'approved');
-
-          const reassign = (rideId, driverId) => {
-            if (!driverId) { updateBooking(rideId, { driverId:null, driverName:null }); return; }
-            const drv = drivers.find(d => d.id === driverId);
-            updateBooking(rideId, { driverId, driverName: drv?.name || 'Driver' });
-          };
-          const cancelScheduled = async (rideId) => {
-            if (await vcConfirm('Cancel this scheduled ride? The customer will see it as cancelled.', { confirmText:'Cancel Ride', danger:true })) {
-              updateBooking(rideId, { status:'cancelled', cancelledBy:'admin', cancelledAt: serverTimestamp() });
-            }
-          };
-          const fmt = (val) => {
-            const sec = val?.seconds; if (!sec) return '—';
-            return new Date(sec*1000).toLocaleString('en-JM',{ weekday:'short', day:'numeric', month:'short', hour:'numeric', minute:'2-digit' });
-          };
-          const isSoon = (val) => val?.seconds && (val.seconds*1000 - now) < 2*3600*1000 && (val.seconds*1000 - now) > 0;
-          const isPast = (val) => val?.seconds && (val.seconds*1000 < now);
-
-          const RideCard = ({ r }) => (
-            <div style={{ background:'#fff', borderRadius:12, padding:13, marginBottom:9, boxShadow:'0 1px 4px rgba(0,0,0,0.05)', borderLeft:`3px solid ${isPast(r.scheduledFor)?'#dc2626':isSoon(r.scheduledFor)?'#f59e0b':'#1d4ed8'}` }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
-                <span style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>🗓️ {fmt(r.scheduledFor)}</span>
-                <span style={{ fontSize:14, fontWeight:800, color:'#1a9e5a' }}>J${(r.fare||0).toLocaleString()}</span>
-              </div>
-              {isPast(r.scheduledFor) && <div style={{ fontSize:10, color:'#dc2626', fontWeight:700, marginBottom:4 }}>⚠️ Pickup time has passed</div>}
-              {isSoon(r.scheduledFor) && <div style={{ fontSize:10, color:'#b45309', fontWeight:700, marginBottom:4 }}>⏰ Within 2 hours</div>}
-              <div style={{ fontSize:12, color:'#555', marginBottom:3 }}>👤 {r.customerName||'Customer'} · {r.vehicleType||'VilleRide'}</div>
-              <div style={{ fontSize:12, color:'#555', marginBottom:8 }}>{shortAddress(r.pickup?.address||'—')} → {shortAddress(r.dropoff?.address||'—')}</div>
-              <div style={{ display:'flex', gap:8, alignItems:'center', flexWrap:'wrap' }}>
-                <span style={{ fontSize:11, color:'#6b7280' }}>Driver:</span>
-                <select value={r.driverId||''} onChange={e => reassign(r.id, e.target.value)}
-                  style={{ flex:1, minWidth:130, padding:'6px 8px', borderRadius:8, border:'1px solid #e2e4ed', fontSize:12, background:'#fff' }}>
-                  <option value="">— Unassigned (any driver can claim) —</option>
-                  {approvedDrivers.map(d => <option key={d.id} value={d.id}>{d.name||'Driver'}{d.isOnline?' 🟢':''}</option>)}
-                </select>
-                <button onClick={() => cancelScheduled(r.id)} style={{ padding:'6px 10px', background:'#fff0f0', color:'#dc2626', border:'1px solid #fca5a5', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>Cancel</button>
-              </div>
-            </div>
-          );
-
-          return (
-            <div>
-              <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:12 }}>Scheduled Rides Queue</div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
-                <div style={{ background:'#fffbeb', border:'1px solid #fde047', borderRadius:12, padding:12, textAlign:'center' }}>
-                  <div style={{ fontSize:22, fontWeight:800, color:'#b45309' }}>{unassigned.length}</div>
-                  <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', letterSpacing:0.4 }}>Unassigned</div>
-                </div>
-                <div style={{ background:'#eff6ff', border:'1px solid #bfdbfe', borderRadius:12, padding:12, textAlign:'center' }}>
-                  <div style={{ fontSize:22, fontWeight:800, color:'#1d4ed8' }}>{assigned.length}</div>
-                  <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', letterSpacing:0.4 }}>Assigned</div>
-                </div>
-              </div>
-
-              {scheduled.length === 0 && (
-                <div style={{ background:'#fff', borderRadius:14, padding:30, textAlign:'center', color:'#888', boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
-                  <div style={{ fontSize:32, marginBottom:8 }}>🗓️</div>
-                  <div style={{ fontSize:14, fontWeight:700, color:'#374151', marginBottom:4 }}>No scheduled rides</div>
-                  <div style={{ fontSize:12 }}>Future bookings customers schedule will appear here.</div>
-                </div>
-              )}
-
-              {unassigned.length > 0 && <div style={{ fontSize:13, fontWeight:700, color:'#b45309', marginBottom:8 }}>⚠️ Needs a Driver ({unassigned.length})</div>}
-              {unassigned.map(r => <RideCard key={r.id} r={r}/>)}
-
-              {assigned.length > 0 && <div style={{ fontSize:13, fontWeight:700, color:'#1d4ed8', margin:'14px 0 8px' }}>✅ Assigned ({assigned.length})</div>}
-              {assigned.map(r => <RideCard key={r.id} r={r}/>)}
-            </div>
-          );
-        })()}
-
-        {/* ══ DRIVER PERFORMANCE (Feature: Performance Report) ══ */}
-        {tab === 'performance' && (
-          <div>
-            <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:12 }}>Driver Performance Report</div>
-            <div style={{ background:'#fff', borderRadius:14, boxShadow:'0 1px 6px rgba(0,0,0,0.06)', overflowX:'auto' }}>
-              <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12, minWidth:640 }}>
-                <thead>
-                  <tr style={{ background:'#f9fafb' }}>
-                    {['Driver','Status','Rating','Rides','Cancelled','Cancel %','Earned (85%)','Last Active'].map(h => (
-                      <th key={h} style={{ textAlign:'left', padding:'10px 12px', fontSize:10, textTransform:'uppercase', letterSpacing:0.5, color:'#888', borderBottom:'1px solid #e5e7eb', whiteSpace:'nowrap' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {drivers.filter(d => d.status==='approved' || d.status==='suspended').map(d => {
-                    const dRides    = rides.filter(r => r.driverId === d.id);
-                    const done      = dRides.filter(r => r.status === 'completed');
-                    const cancelled = dRides.filter(r => r.status === 'cancelled');
-                    const cancelPct = dRides.length ? Math.round(cancelled.length / dRides.length * 100) : 0;
-                    const earned    = Math.round(done.reduce((sum,r)=>sum+(r.fare||0),0) * 0.85);
-                    const lastRide  = Math.max(0, ...dRides.map(r => r.completedAt?.seconds || r.createdAt?.seconds || 0));
-                    const lastActive = d.isOnline ? 'Online now' : (d.lastOnlineAt?.seconds ? new Date(d.lastOnlineAt.seconds*1000).toLocaleDateString('en-JM',{day:'numeric',month:'short'}) : (lastRide ? new Date(lastRide*1000).toLocaleDateString('en-JM',{day:'numeric',month:'short'}) : '—'));
-                    return (
-                      <tr key={d.id} style={{ borderBottom:'1px solid #f5f5f5' }}>
-                        <td style={{ padding:'10px 12px', fontWeight:700, color:'#1a1a2e', whiteSpace:'nowrap' }}>{d.name||'—'}</td>
-                        <td style={{ padding:'10px 12px' }}><StatusBadge status={d.isOnline?'online':d.status}/></td>
-                        <td style={{ padding:'10px 12px', whiteSpace:'nowrap' }}>⭐ {(d.rating||5.0).toFixed(1)} <span style={{color:'#aaa'}}>({d.ratingCount||0})</span></td>
-                        <td style={{ padding:'10px 12px', fontWeight:700 }}>{done.length}</td>
-                        <td style={{ padding:'10px 12px', color: cancelled.length>0?'#dc2626':'#555' }}>{cancelled.length}</td>
-                        <td style={{ padding:'10px 12px', fontWeight:700, color: cancelPct>=20?'#dc2626':cancelPct>=10?'#b45309':'#1a9e5a' }}>{cancelPct}%</td>
-                        <td style={{ padding:'10px 12px', whiteSpace:'nowrap' }}>J${earned.toLocaleString()}</td>
-                        <td style={{ padding:'10px 12px', color: d.isOnline?'#1a9e5a':'#555', fontWeight: d.isOnline?700:400, whiteSpace:'nowrap' }}>{lastActive}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-              {drivers.filter(d=>d.status==='approved'||d.status==='suspended').length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}>No approved drivers yet</div>}
-            </div>
-          </div>
-        )}
-
-        {/* ══ BULK WHATSAPP BROADCAST (Feature: Bulk Message to Drivers) ══ */}
-        {tab === 'broadcast' && (() => {
-          const targets = drivers
-            .filter(d => d.status === 'approved')
-            .map(d => ({ ...d, wa: normalizeJmPhone(d.phone) }))
-            .filter(d => d.wa);
-          return (
-            <div>
-              <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:6 }}>Broadcast to Drivers</div>
-              <div style={{ fontSize:12, color:'#888', marginBottom:14 }}>Type one message, then tap each driver to open WhatsApp with it pre-filled. {targets.length} approved driver{targets.length!==1?'s':''} with valid phone numbers.</div>
-              <textarea value={broadcastMsg} onChange={e=>setBroadcastMsg(e.target.value)} placeholder="e.g. Heavy rain expected this evening — surge pricing is now ON. Drive safe!" rows={4}
-                style={{ width:'100%', padding:14, border:'1px solid #d0d3e0', borderRadius:12, fontSize:14, marginBottom:12, boxSizing:'border-box', fontFamily:'inherit', resize:'vertical' }}/>
-              <div style={{ display:'flex', gap:8, marginBottom:16, flexWrap:'wrap' }}>
-                <button onClick={() => { navigator.clipboard?.writeText(broadcastMsg).catch(()=>{}); }} disabled={!broadcastMsg.trim()} style={{ padding:'9px 16px', borderRadius:10, border:'1px solid #e5e7eb', background:'#fff', fontSize:12, fontWeight:700, cursor:'pointer', color:'#1a1a2e' }}>📋 Copy Message</button>
-                <button onClick={() => { navigator.clipboard?.writeText(targets.map(t=>'+'+t.wa).join(', ')).catch(()=>{}); }} disabled={!targets.length} style={{ padding:'9px 16px', borderRadius:10, border:'1px solid #e5e7eb', background:'#fff', fontSize:12, fontWeight:700, cursor:'pointer', color:'#1a1a2e' }}>📞 Copy All Numbers</button>
-              </div>
-              {targets.map(d => (
-                <div key={d.id} style={{ background:'#fff', borderRadius:12, padding:'12px 14px', marginBottom:8, display:'flex', alignItems:'center', justifyContent:'space-between', boxShadow:'0 1px 4px rgba(0,0,0,0.05)' }}>
-                  <div>
-                    <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>{d.name||'Driver'} {d.isOnline && <span style={{ fontSize:10, color:'#1a9e5a' }}>● online</span>}</div>
-                    <div style={{ fontSize:11, color:'#888' }}>+{d.wa}</div>
-                  </div>
-                  <a href={`https://wa.me/${d.wa}?text=${encodeURIComponent(broadcastMsg||'')}`} target="_blank" rel="noreferrer"
-                    style={{ padding:'8px 14px', background: broadcastMsg.trim() ? '#25D366' : '#e5e7eb', color: broadcastMsg.trim() ? '#fff' : '#999', borderRadius:10, fontSize:12, fontWeight:700, textDecoration:'none', pointerEvents: broadcastMsg.trim() ? 'auto' : 'none' }}>
-                    💬 Send on WhatsApp
-                  </a>
-                </div>
-              ))}
-              {targets.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888', background:'#fff', borderRadius:14 }}>No approved drivers with phone numbers yet</div>}
-            </div>
-          );
-        })()}
-
-        {/* ══ RIDES ══ */}
-        {tab === 'rides' && (
-          <div>
-            <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:12 }}>Ride Management</div>
-            <div style={{ display:'flex', gap:6, marginBottom:14, flexWrap:'wrap' }}>
-              {[['all','All'],['today','Today'],['week','This Week'],['active','Active'],['completed','Completed'],['cancelled','Cancelled']].map(([k,l]) => (
-                <button key={k} onClick={() => setRideFilter(k)} style={{ padding:'6px 14px', borderRadius:20, border:'none', background:rideFilter===k?'#6b21a8':'#f3f4f6', color:rideFilter===k?'#fff':'#555', fontSize:11, fontWeight:600, cursor:'pointer' }}>{l}</button>
-              ))}
-            </div>
-            <div style={{ fontSize:12, color:'#888', marginBottom:10 }}>{filteredRides.length} rides</div>
-            {filteredRides.slice(0,50).map((r, i) => (
-              <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
-                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
-                  <div>
-                    <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>👤 {r.customerName||'Customer'} → 🚗 {r.driverName||'Searching...'}</div>
-                    <div style={{ fontSize:11, color:'#888' }}>{new Date((r.createdAt?.seconds||0)*1000).toLocaleString()}</div>
-                  </div>
-                  <div style={{ textAlign:'right' }}>
-                    <div style={{ fontSize:14, fontWeight:700, color:'#6b21a8' }}>J${(r.fare||0).toLocaleString()}</div>
-                    <StatusBadge status={r.status}/>
-                  </div>
-                </div>
-                <div style={{ fontSize:11, color:'#555', marginBottom:2 }}>📍 {r.pickup?.address||'—'}</div>
-                <div style={{ fontSize:11, color:'#555', marginBottom:6 }}>🏁 {r.dropoff?.address||'—'}</div>
-                <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                  {r.distanceKm && <span style={{ fontSize:10, background:'#f3f4f6', color:'#555', padding:'2px 8px', borderRadius:8 }}>📏 {r.distanceKm} km</span>}
-                  <span style={{ fontSize:10, background:'#f3f4f6', color:'#555', padding:'2px 8px', borderRadius:8 }}>💵 {r.paymentMethod||'Cash'}</span>
-                  <span style={{ fontSize:10, background:'#f3f4f6', color:'#555', padding:'2px 8px', borderRadius:8 }}>🚗 {r.vehicleType||'—'}</span>
-                </div>
-              </div>
-            ))}
-            {filteredRides.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}>No rides found</div>}
-          </div>
-        )}
-
-        {/* ══ PARTNERS ══ */}
-        {tab === 'partners' && (
-          <div>
-            <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:14 }}>Partner Management</div>
-            {partners.map((p, i) => (
-              <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
-                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:8 }}>
-                  <div>
-                    <div style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>{p.bizName||'—'}</div>
-                    <div style={{ fontSize:11, color:'#888' }}>{p.bizType||''} · {p.contact||''}</div>
-                  </div>
-                  <StatusBadge status={p.status||'new'}/>
-                </div>
-                <div style={{ fontSize:12, color:'#555', marginBottom:6 }}>📞 {p.phone||'—'} · 📧 {p.email||'—'}</div>
-                <div style={{ fontSize:12, color:'#555', marginBottom:6 }}>📍 {p.address||'—'}</div>
-                {p.message && <div style={{ fontSize:12, color:'#555', background:'#f9f9f9', borderRadius:8, padding:'8px 10px', marginBottom:10 }}>{p.message}</div>}
-                <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                  {(!p.status||p.status==='new') && <button onClick={() => updatePartner(p.id,{status:'contacted'})} style={{ padding:'6px 12px', background:'#f59e0b', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>📞 Mark Contacted</button>}
-                  {p.status!=='approved' && <button onClick={() => updatePartner(p.id,{status:'approved'})} style={{ padding:'6px 12px', background:'#1a9e5a', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>✅ Approve</button>}
-                  {p.status!=='featured' && <button onClick={() => updatePartner(p.id,{status:'featured'})} style={{ padding:'6px 12px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>⭐ Feature</button>}
-                  {p.status!=='rejected' && <button onClick={() => updatePartner(p.id,{status:'rejected'})} style={{ padding:'6px 12px', background:'#dc2626', color:'#fff', border:'none', borderRadius:8, fontSize:11, fontWeight:600, cursor:'pointer' }}>❌ Reject</button>}
-                </div>
-              </div>
-            ))}
-            {partners.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}>No partner requests yet</div>}
-          </div>
-        )}
-
-        {/* ══ REVENUE ══ */}
-        {tab === 'revenue' && (
-          <div>
-            <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:14 }}>Revenue Dashboard</div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:16 }}>
-              {[
-                ['Total Fare Value',      'J$'+stats.totalFare.toLocaleString(), '#1a1a2e','#fff','#e5e7eb'],
-                ['VilleCabs Revenue (15%)','J$'+vcRevenue.toLocaleString(),       '#1a9e5a','#f0fff4','#86efac'],
-                ['Driver Payout (85%)',   'J$'+driverPayout.toLocaleString(),     '#6b21a8','#f9f5ff','#e9d5ff'],
-                ['Average Fare',          'J$'+avgFare.toLocaleString(),           '#b45309','#fffbeb','#fde047'],
-                ['Completed Rides',       stats.completed,                          '#1a1a2e','#fff','#e5e7eb'],
-                ['Cancelled Rides',       stats.cancelled,                          '#dc2626','#fff0f0','#fca5a5'],
-              ].map(([l,v,c,bg,border],i) => (
-                <div key={i} style={{ background:bg, border:`1px solid ${border}`, borderRadius:14, padding:'14px 12px' }}>
-                  <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', letterSpacing:0.5, marginBottom:6 }}>{l}</div>
-                  <div style={{ fontSize:22, fontWeight:800, color:c }}>{v}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:12, padding:'12px 14px', fontSize:12, color:'#6b21a8' }}>
-              💰 Formula: VilleCabs Revenue = Total Fare × 15% · Driver Payout = Total Fare × 85%
-            </div>
-            {/* Revenue by ride type */}
-            <div style={{ background:'#fff', borderRadius:14, padding:14, marginTop:12, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
-              <div style={{ fontSize:12, fontWeight:700, color:'#6b21a8', marginBottom:10 }}>Revenue by Ride Type</div>
-              {['VilleRide','VilleXL','VilleMoto'].map((type, i) => {
-                const typeRides = rides.filter(r=>r.vehicleType===type&&r.status==='completed');
-                const typeFare  = typeRides.reduce((s,r)=>s+(r.fare||0),0);
-                return (
-                  <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'8px 0', borderBottom:i<2?'1px solid #f5f5f5':'none' }}>
-                    <span style={{ fontSize:13, color:'#1a1a2e' }}>{type}</span>
-                    <div style={{ textAlign:'right' }}>
-                      <span style={{ fontSize:13, fontWeight:700, color:'#6b21a8' }}>J${typeFare.toLocaleString()}</span>
-                      <span style={{ fontSize:11, color:'#888', marginLeft:8 }}>({typeRides.length} rides)</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* CSV Export */}
-            <button onClick={() => {
-              const rows = rides.filter(r => r.status === 'completed');
-              const header = 'Date,Customer,Driver,Vehicle,Pickup,Dropoff,Fare,Distance,Vehicle Type';
-              const csv = [header, ...rows.map(r => {
-                const date = r.completedAt?.seconds ? new Date(r.completedAt.seconds*1000).toLocaleDateString('en-JM') : '—';
-                return [
-                  date,
-                  r.customerName||'—',
-                  r.driverName||'—',
-                  `${r.vehicleMake||''} ${r.vehicleModel||''}`.trim()||'—',
-                  (r.pickup?.address||'—').replace(/,/g,' '),
-                  (r.dropoff?.address||'—').replace(/,/g,' '),
-                  r.fare||0,
-                  r.distanceKm ? Number(r.distanceKm).toFixed(1) : '—',
-                  r.vehicleType||'—'
-                ].join(',');
-              })].join(String.fromCharCode(10));
-              const blob = new Blob([csv], { type:'text/csv' });
-              const url  = URL.createObjectURL(blob);
-              const a    = document.createElement('a');
-              a.href = url; a.download = `villecabs-rides-${new Date().toISOString().slice(0,10)}.csv`;
-              a.click(); URL.revokeObjectURL(url);
-            }}
-              style={{ width:'100%', padding:'13px', background:'linear-gradient(135deg,#6b21a8,#4c1d95)', color:'#fff', border:'none', borderRadius:12, fontSize:14, fontWeight:700, cursor:'pointer', marginTop:8, boxShadow:'0 4px 12px rgba(107,33,168,0.3)' }}>
-              📥 Export Ride Data (CSV)
-            </button>
-
-            {/* ── Revenue Breakdown: Daily/Weekly (Feature: Financial Reporting) ── */}
-            {(() => {
-              const completed = rides.filter(r => r.status === 'completed');
-              const groupRevenue = (period) => {
-                const map = {};
-                completed.forEach(r => {
-                  const sec = r.completedAt?.seconds || r.createdAt?.seconds;
-                  if (!sec) return;
-                  const d = new Date(sec*1000);
-                  let key, label;
-                  if (period === 'day') {
-                    key = d.toISOString().slice(0,10);
-                    label = d.toLocaleDateString('en-JM',{ weekday:'short', day:'numeric', month:'short' });
-                  } else {
-                    const dow = d.getDay();
-                    const diffToMon = dow===0 ? -6 : 1-dow;
-                    const monday = new Date(d); monday.setDate(d.getDate()+diffToMon); monday.setHours(0,0,0,0);
-                    const sunday = new Date(monday); sunday.setDate(monday.getDate()+6);
-                    key = monday.toISOString().slice(0,10);
-                    label = `${monday.toLocaleDateString('en-JM',{day:'numeric',month:'short'})} – ${sunday.toLocaleDateString('en-JM',{day:'numeric',month:'short'})}`;
-                  }
-                  if (!map[key]) map[key] = { key, label, rides:0, fare:0 };
-                  map[key].rides += 1;
-                  map[key].fare  += (r.fare||0);
-                });
-                return Object.values(map).sort((a,b) => b.key.localeCompare(a.key));
-              };
-              const breakdown = groupRevenue(breakdownPeriod).slice(0, breakdownPeriod==='day' ? 30 : 12);
-              const exportBreakdown = () => {
-                const header = breakdownPeriod==='day' ? 'Date,Rides,Total Fare,VilleCabs Revenue (15%),Driver Payout (85%)' : 'Week,Rides,Total Fare,VilleCabs Revenue (15%),Driver Payout (85%)';
-                const csv = [header, ...breakdown.map(row => [
-                  row.label.replace(/,/g,' '), row.rides, row.fare, Math.round(row.fare*0.15), Math.round(row.fare*0.85)
-                ].join(','))].join(String.fromCharCode(10));
-                const blob = new Blob([csv], { type:'text/csv' });
-                const url  = URL.createObjectURL(blob);
-                const a    = document.createElement('a');
-                a.href = url; a.download = `villecabs-revenue-${breakdownPeriod}ly-${new Date().toISOString().slice(0,10)}.csv`;
-                a.click(); URL.revokeObjectURL(url);
-              };
-              return (
-                <div style={{ marginTop:20 }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12, flexWrap:'wrap', gap:8 }}>
-                    <div style={{ fontSize:14, fontWeight:800, color:'#1a1a2e' }}>Revenue Breakdown</div>
-                    <div style={{ display:'flex', gap:6 }}>
-                      {[['day','Daily'],['week','Weekly']].map(([k,l]) => (
-                        <button key={k} onClick={() => setBreakdownPeriod(k)} style={{ padding:'6px 14px', borderRadius:20, border:'none', background:breakdownPeriod===k?'#6b21a8':'#f3f4f6', color:breakdownPeriod===k?'#fff':'#555', fontSize:11, fontWeight:600, cursor:'pointer' }}>{l}</button>
-                      ))}
-                    </div>
-                  </div>
-                  <div style={{ background:'#fff', borderRadius:14, boxShadow:'0 1px 6px rgba(0,0,0,0.06)', overflowX:'auto' }}>
-                    <table style={{ width:'100%', borderCollapse:'collapse', fontSize:12, minWidth:520 }}>
-                      <thead>
-                        <tr style={{ background:'#f9fafb' }}>
-                          {[breakdownPeriod==='day'?'Date':'Week', 'Rides', 'Total Fare', 'VC Revenue (15%)', 'Driver Payout (85%)'].map(h => (
-                            <th key={h} style={{ textAlign:'left', padding:'10px 12px', fontSize:10, textTransform:'uppercase', letterSpacing:0.5, color:'#888', borderBottom:'1px solid #e5e7eb', whiteSpace:'nowrap' }}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {breakdown.map(row => (
-                          <tr key={row.key} style={{ borderBottom:'1px solid #f5f5f5' }}>
-                            <td style={{ padding:'10px 12px', fontWeight:700, color:'#1a1a2e', whiteSpace:'nowrap' }}>{row.label}</td>
-                            <td style={{ padding:'10px 12px' }}>{row.rides}</td>
-                            <td style={{ padding:'10px 12px', whiteSpace:'nowrap' }}>J${row.fare.toLocaleString()}</td>
-                            <td style={{ padding:'10px 12px', color:'#1a9e5a', fontWeight:700, whiteSpace:'nowrap' }}>J${Math.round(row.fare*0.15).toLocaleString()}</td>
-                            <td style={{ padding:'10px 12px', color:'#6b21a8', whiteSpace:'nowrap' }}>J${Math.round(row.fare*0.85).toLocaleString()}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {breakdown.length===0 && <div style={{ textAlign:'center', padding:30, color:'#888' }}>No completed rides yet</div>}
-                  </div>
-                  <button onClick={exportBreakdown} disabled={breakdown.length===0}
-                    style={{ width:'100%', padding:'12px', background:breakdown.length===0?'#e5e7eb':'#fff', color:breakdown.length===0?'#999':'#6b21a8', border:'1px solid #e9d5ff', borderRadius:12, fontSize:13, fontWeight:700, cursor:breakdown.length===0?'default':'pointer', marginTop:10 }}>
-                    📥 Export {breakdownPeriod==='day'?'Daily':'Weekly'} Breakdown (CSV)
-                  </button>
-                </div>
-              );
-            })()}
-          </div>
-        )}
-
-        {/* ══ PROMOS ══ */}
-        {tab === 'promos' && (
-          <div>
-            <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:14 }}>Promotions</div>
-            {promos.map((p, i) => (
-              <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
-                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
-                  <div style={{ fontSize:14, fontWeight:700, color:'#6b21a8' }}>{p.code||'—'}</div>
-                  <StatusBadge status={p.active?'active':'inactive'}/>
-                </div>
-                <div style={{ fontSize:12, color:'#555' }}>Discount: J${(p.discount||0).toLocaleString()} · Used: {(p.usedBy||[]).length} times</div>
-                {p.maxUses && <div style={{ fontSize:11, color:'#888', marginTop:2 }}>Max uses: {p.maxUses}</div>}
-              </div>
-            ))}
-            {promos.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}>No promo codes yet</div>}
-          </div>
-        )}
-
-        {/* ══ MESSAGES ══ */}
-        {tab === 'messages' && (
-          <div>
-            <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:14 }}>Support Messages</div>
-            {messages.map((m, i) => (
-              <SupportMessageCard key={m.id||i} m={m} updateMessage={updateMessage}/>
-            ))}
-            {messages.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}>No messages yet</div>}
-          </div>
-        )}
-
-        {/* ══ SAFETY ALERTS ══ */}
-        {tab === 'alerts' && (
-          <div>
-            <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:14 }}>Safety Alerts</div>
-            {alerts.map((a, i) => (
-              <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)', borderLeft:`3px solid ${a.status==='new'?'#dc2626':a.status==='resolved'?'#1a9e5a':'#f59e0b'}` }}>
-                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
-                  <div style={{ fontSize:13, fontWeight:700, color:'#dc2626' }}>🆘 SOS Alert</div>
-                  <StatusBadge status={a.status||'new'}/>
-                </div>
-                <div style={{ fontSize:12, color:'#555', marginBottom:4 }}>👤 Customer: {a.customerName||'—'} · 🚗 Driver: {a.driverName||'—'}</div>
-                <div style={{ fontSize:12, color:'#555', marginBottom:4 }}>🔑 Ride ID: {a.rideId||'—'}</div>
-                {a.location && <div style={{ fontSize:12, color:'#555', marginBottom:4 }}>📍 {a.location}</div>}
-                <div style={{ fontSize:11, color:'#888', marginBottom:10 }}>{a.createdAt ? new Date((a.createdAt?.seconds||0)*1000).toLocaleString() : '—'}</div>
-                <div style={{ display:'flex', gap:6 }}>
-                  {a.status!=='responding' && <button onClick={() => updateAlert(a.id,{status:'responding'})} style={{ padding:'5px 10px', background:'#f59e0b', color:'#fff', border:'none', borderRadius:8, fontSize:10, fontWeight:600, cursor:'pointer' }}>Responding</button>}
-                  {a.status!=='resolved' && <button onClick={() => updateAlert(a.id,{status:'resolved'})} style={{ padding:'5px 10px', background:'#1a9e5a', color:'#fff', border:'none', borderRadius:8, fontSize:10, fontWeight:600, cursor:'pointer' }}>✅ Resolved</button>}
-                </div>
-              </div>
-            ))}
-            {alerts.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}><div style={{ fontSize:32, marginBottom:10 }}>✅</div>No safety alerts</div>}
-          </div>
-        )}
-
-        {/* ══ UNFULFILLED REQUESTS ══ */}
-        {tab === 'unfulfilled' && (
-          <div>
-            <div style={{ fontSize:16, fontWeight:800, color:'#1a1a2e', marginBottom:14 }}>No Driver Requests</div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:14 }}>
-              {(() => {
-                const todayCount = unfulfilled.filter(r => new Date((r.created_at?.seconds||0)*1000) >= todayStart).length;
-                const weekCount  = unfulfilled.filter(r => new Date((r.created_at?.seconds||0)*1000) >= weekStart).length;
-                const hours      = unfulfilled.map(r=>r.hour_of_day).filter(h=>h!==undefined);
-                const hCounts    = hours.reduce((a,h)=>{a[h]=(a[h]||0)+1;return a;},{});
-                const busiest    = Object.entries(hCounts).sort((a,b)=>b[1]-a[1])[0]?.[0];
-                return [
-                  ['Today',unfulfilled.filter(r=>new Date((r.created_at?.seconds||0)*1000)>=todayStart).length,'#6b21a8','#f9f5ff','#e9d5ff'],
-                  ['This Week',weekCount,'#1a9e5a','#f0fff4','#86efac'],
-                  ['Total',unfulfilled.length,'#1a1a2e','#fff','#e5e7eb'],
-                  ['Busiest Hour',busiest!==undefined?`${busiest}:00`:'—','#b45309','#fffbeb','#fde047'],
-                ].map(([l,v,c,bg,border],i) => (
-                  <div key={i} style={{ background:bg, border:`1px solid ${border}`, borderRadius:12, padding:'12px 14px' }}>
-                    <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', marginBottom:4 }}>{l}</div>
-                    <div style={{ fontSize:20, fontWeight:800, color:c }}>{v}</div>
-                  </div>
-                ));
-              })()}
-            </div>
-            {unfulfilled.map((r,i) => {
-              const d = new Date((r.created_at?.seconds||0)*1000);
-              return (
-                <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)', borderLeft:'3px solid #e9d5ff' }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
-                    <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>👤 {r.customer_name||'Customer'}</div>
-                    <div style={{ fontSize:13, fontWeight:700, color:'#6b21a8' }}>J${(r.estimated_fare||0).toLocaleString()}</div>
-                  </div>
-                  <div style={{ fontSize:11, color:'#555', marginBottom:2 }}>📍 {shortAddress(r.pickup_address||'')}</div>
-                  <div style={{ fontSize:11, color:'#555', marginBottom:8 }}>🏁 {shortAddress(r.dropoff_address||'')}</div>
-                  <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
-                    <span style={{ fontSize:10, background:'#f3f4f6', color:'#555', padding:'2px 8px', borderRadius:8 }}>🚗 {r.ride_type}</span>
-                    <span style={{ fontSize:10, background:'#f3f4f6', color:'#555', padding:'2px 8px', borderRadius:8 }}>📏 {r.estimated_distance_km} km</span>
-                    <span style={{ fontSize:10, background:'#fefce8', color:'#854d0e', padding:'2px 8px', borderRadius:8 }}>⏰ {r.day_of_week} {r.hour_of_day}:00</span>
-                  </div>
-                  <div style={{ fontSize:10, color:'#aaa', marginTop:6 }}>{d.toLocaleString()}</div>
-                </div>
-              );
-            })}
-            {unfulfilled.length===0 && <div style={{ textAlign:'center', padding:40, color:'#888' }}>No unfulfilled requests yet</div>}
-          </div>
-        )}
-
-      </div>
-    </div>
-  );
-}
+// (The old in-app AdminDash was removed — the admin panel lives at /admin.)
 
 
 function LoadingScreen() {
@@ -13230,6 +12340,9 @@ function DriverDocuments({ go, user }) {
 
       const docData = { status:'pending', name:file.name, url, uploadedAt:new Date().toISOString() };
       const updates = { ['documents.'+key]: docData, ['docs.'+key]: url };
+      // Keep the signup field (US spelling) in step so the admin card shows the new file.
+      if (key === 'licence') updates['docs.license'] = url;
+      if (key === 'licenceBack') updates['docs.licenseBack'] = url;
       // Also mirror photos to the top-level fields the admin card & live-ride screen read
       if (key === 'vehiclePhoto') updates.vehiclePhotoUrl = url;
       if (key === 'profilePhoto') updates.profilePhotoUrl = url;
@@ -13668,6 +12781,9 @@ function PartnerLocations({ go, user, setPickupData }) {
 
 // ── PUBLIC LIVE TRACKING (shared link — no login required) ──────────────────
 // Reads a world-readable tracking/{id} doc that the rider's app keeps updated.
+// Shared with the VilleDash merchant portal (src/dash/MerchantPortal.js)
+export { AddressAutocompleteInput, VilleMap, geocodeLatLng };
+
 export function LiveTrackShare({ trackId }) {
   const [t, setT] = useState(null);
   const [notFound, setNotFound] = useState(false);
@@ -13825,6 +12941,24 @@ export default function App() {
   const [pickupData,  setPickupData]  = useState(null);
   const [dropoffData, setDropoffData] = useState(null);
   const [loading,     setLoading]     = useState(true);
+  const [deliveryId,  setDeliveryId]  = useState(null);
+  const [storeId,     setStoreId]     = useState(null);
+  const [orderId,     setOrderId]     = useState(null);
+  const dashOn = useDashEnabled(user?.uid);
+  // Which VILLE site this is (villecabs.com, the VILLE domain or the VilleDash
+  // domain). Each domain lands signed-in customers on its own home screen; the
+  // VilleCabs domain keeps the taxi dashboard as before.
+  const { site, domains } = useSites();
+  const siteHomeShownRef = useRef(false);
+  useEffect(() => {
+    if (user?.role !== 'customer' || screen !== 'customer-dash' || siteHomeShownRef.current) return;
+    let goEvents = false;
+    try { goEvents = new URLSearchParams(window.location.search).get('go') === 'events'; } catch (e) {}
+    if (goEvents) { siteHomeShownRef.current = true; setScreen('ville-events'); return; }
+    if (!dashOn || site === 'cabs') return;
+    siteHomeShownRef.current = true;
+    setScreen(site === 'dash' ? 'dash-home' : 'ville-home');
+  }, [dashOn, user, screen, site]);
 
   // Scroll back to the top whenever we navigate to a new screen (SPA fix:
   // otherwise the browser keeps your old scroll position on the new page).
@@ -13968,10 +13102,17 @@ export default function App() {
   if (loading) return <LoadingScreen/>;
 
     // go() - navigate to a screen and track history
-  const props = { go:setScreen, user, setUser, bookingId, setBookingId, pickupData, setPickupData, dropoffData, setDropoffData };
+  const props = { go:setScreen, user, setUser, bookingId, setBookingId, pickupData, setPickupData, dropoffData, setDropoffData, site, domains, dashOn };
+  const dashShared = { AddressAutocompleteInput, VilleMap, geocodeLatLng, vcToast, vcConfirm };
+  const openDelivery = (id) => { setDeliveryId(id); setScreen('dash-track'); };
+  const openStore = (id) => { setStoreId(id); setScreen('dash-store'); };
+  const openOrder = (id) => { setOrderId(id); setScreen('dash-order'); };
+  const dashProps = { ...props, shared: dashShared, openDelivery, deliveryId, openStore, storeId, openOrder, orderId };
+  // VilleDash screens exist only while the feature flag is on.
+  const dash = (el) => (dashOn ? el : <CustomerDash {...props}/>);
 
   const screens = {
-    splash:           <Splash {...props}/>,
+    splash:           site === 'cabs' ? <Splash {...props}/> : <SiteLanding site={site} domains={domains} go={setScreen} dashOn={dashOn}/>,
     role:             <RoleSelect {...props}/>,
     'customer-signup':<CustomerSignup {...props}/>,
     'customer-login': <CustomerLogin {...props}/>,
@@ -14022,8 +13163,16 @@ export default function App() {
     'login':                  <CustomerLogin {...props}/>,
     'login-choice':           <CustomerLogin {...props}/>,
     'complete-profile':       <CompleteProfile {...props}/>,
-    admin:                    <AdminDash {...props}/>,
     'partner-locations':      <PartnerLocations {...props}/>,
+    'ville-home':             dash(<VilleHome {...dashProps}/>),
+    'dash-home':              dash(<DashHome {...dashProps}/>),
+    'dash-send':              dash(<SendPackage {...dashProps}/>),
+    'dash-track':             dash(<DeliveryTrack {...dashProps}/>),
+    'dash-history':           dash(<DashHistory {...dashProps}/>),
+    'dash-stores':            dash(<StoresList {...dashProps}/>),
+    'dash-store':             dash(<StorePage {...dashProps}/>),
+    'dash-checkout':          dash(<Checkout {...dashProps}/>),
+    'dash-order':             dash(<OrderTrack {...dashProps}/>),
   };
 
   return (
@@ -14032,9 +13181,9 @@ export default function App() {
         <GlobalStyles/>
         <ToastHost/>
         <MapBg/>
-        {showOnboarding && !user && screen === 'splash'
+        {showOnboarding && !user && screen === 'splash' && site === 'cabs'
           ? <OnboardingFlow onDone={() => { try { localStorage.setItem('vc_onboarded','1'); } catch(e) {} setShowOnboarding(false); }}/>
-          : (screens[screen]||<Splash {...props}/>)}
+          : (screens[screen]||screens.splash)}
       </div>
     </ErrorBoundary>
   );
