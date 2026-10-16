@@ -4,6 +4,7 @@ import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendP
 import { getFirestore, collection, query, where, onSnapshot, updateDoc, doc, orderBy, addDoc, deleteDoc, setDoc, serverTimestamp, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from '@react-google-maps/api';
+import AdminDashTab from './dash/AdminDash';
 
 const GOOGLE_MAPS_KEY = process.env.REACT_APP_GOOGLE_MAPS_KEY || '';
 const MAP_LIBRARIES = ['places'];
@@ -1662,8 +1663,10 @@ function OverviewTab({ setTab }) {
     const unsubRides = onSnapshot(collection(db,'bookings'), snap => {
       const rides       = snap.docs.map(d => d.data());
       const total_rides = rides.length;
-      const revenue     = rides.reduce((sum,r) => sum + (r.fare||0), 0);
-      const active_rides= rides.filter(r => r.status==='active').length;
+      // Only COMPLETED rides earn anything. Cancelled, expired and unmatched
+      // bookings used to be added in too, and the total was labelled earnings.
+      const revenue     = rides.filter(r => r.status==='completed').reduce((sum,r) => sum + (Number(r.fare)||0), 0);
+      const active_rides= rides.filter(r => ['active','arrived','enroute'].includes(r.status)).length;
       setStats(p => ({ ...p, total_rides, revenue, active_rides }));
     });
     const unsubCustomers = onSnapshot(collection(db,'customers'), snap => {
@@ -1683,7 +1686,7 @@ function OverviewTab({ setTab }) {
         <StatCard label="Pending applications" value={stats.pending}    color="#b45309" sub="awaiting review"/>
         <StatCard label="Active drivers"        value={stats.approved}  color={GREEN}  sub="approved"/>
         <StatCard label="Total rides"           value={stats.total_rides}              sub="all time"/>
-        <StatCard label="Total revenue"         value={`J$${stats.revenue.toLocaleString()}`} color="#b45309" sub="platform earnings × 15%"/>
+        <StatCard label="Completed ride fares"  value={`J$${stats.revenue.toLocaleString()}`} color="#b45309" sub={`gross · platform 15% ≈ J$${Math.round(stats.revenue*0.15).toLocaleString()}`}/>
       </div>
       <div style={s.statgrid}>
         <StatCard label="Active rides now" value={stats.active_rides} color={GREEN} sub="in progress"/>
@@ -3764,6 +3767,7 @@ export default function AdminPanel() {
 
   const tabs = [
     { id:'overview',  label:'Overview',    icon:'📊' },
+    { id:'villedash', label:'VilleDash',   icon:'📦' },
     { id:'analytics', label:'Analytics',   icon:'📉' },
     { id:'drivers',   label:'Drivers',     icon:'🚗' },
     { id:'rides',     label:'Rides',       icon:'🚕' },
@@ -3810,9 +3814,10 @@ export default function AdminPanel() {
       {/* ── CONTENT ── */}
       <div style={s.main}>
         <div style={{ fontSize:18, fontWeight:800, marginBottom:16, color:'#1a1a2e' }}>
-          {tab==='overview'?'📊 Dashboard Overview':tab==='analytics'?'📉 Analytics':tab==='drivers'?'🚗 Driver Management':tab==='rides'?'🚕 Ride Management':tab==='livemap'?'🗺️ Live Operations Map':tab==='scheduled'?'🗓️ Scheduled Rides':tab==='customers'?'👥 Customers':tab==='revenue'?'💰 Revenue':tab==='demand'?'📅 Demand Schedule':tab==='performance'?'📈 Driver Performance':tab==='partners'?'🤝 Partner Requests':tab==='charter'?'🚘 Charter Bookings':tab==='contacts'?'📬 Messages':tab==='alerts'?'🆘 Safety Alerts':tab==='unfulfilled'?'📍 No Driver Available':tab==='broadcast'?'📢 Broadcast to Drivers':'🎟️ Promo Codes'}
+          {tab==='overview'?'📊 Dashboard Overview':tab==='villedash'?'📦 VilleDash':tab==='analytics'?'📉 Analytics':tab==='drivers'?'🚗 Driver Management':tab==='rides'?'🚕 Ride Management':tab==='livemap'?'🗺️ Live Operations Map':tab==='scheduled'?'🗓️ Scheduled Rides':tab==='customers'?'👥 Customers':tab==='revenue'?'💰 Revenue':tab==='demand'?'📅 Demand Schedule':tab==='performance'?'📈 Driver Performance':tab==='partners'?'🤝 Partner Requests':tab==='charter'?'🚘 Charter Bookings':tab==='contacts'?'📬 Messages':tab==='alerts'?'🆘 Safety Alerts':tab==='unfulfilled'?'📍 No Driver Available':tab==='broadcast'?'📢 Broadcast to Drivers':'🎟️ Promo Codes'}
         </div>
         {tab === 'overview'  && <OverviewTab setTab={setTab}/>}
+        {tab === 'villedash' && <AdminDashTab/>}
         {tab === 'analytics' && <AnalyticsTab/>}
         {tab === 'drivers'   && <DriversTab/>}
         {tab === 'rides'     && <RidesTab/>}
