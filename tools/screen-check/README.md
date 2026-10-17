@@ -9,6 +9,8 @@ cd tools/screen-check
 npm i --no-save esbuild@0.24 playwright@1   # once
 npx playwright install chromium             # once
 node build.js && (node serve.js &) && node shots.js
+VIEW=1280x900 node shots.js dash-home dash-store   # any width
+node flows.js                                      # clicks through the customer journeys
 ```
 
 Screenshots land in `shots/`. Sample data is in `main.jsx`; Firebase is replaced

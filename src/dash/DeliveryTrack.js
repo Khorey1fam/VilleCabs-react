@@ -2,14 +2,16 @@
 import React, { useEffect, useState } from 'react';
 import { doc, onSnapshot, collection, query, orderBy } from 'firebase/firestore';
 import { api, dashDb, errText, formatJMD, STATUS_LABEL, STEPS, FINAL } from './dashApi';
-import { C, st, Header, Pill, statusTone, Spinner } from './ui';
+import { Shell, PageHead, Field, Icon, Chip, Skeleton, SkeletonRows, EmptyState, ErrorState, Timeline, useLive, docOf, fmtWhen, shortId } from './kit';
+import { deliveryTone } from './Orders';
 
 const TRACKABLE = ['assigned', 'to_pickup', 'at_pickup', 'collected', 'to_dropoff', 'at_dropoff'];
 const STALE_MS = 2 * 60 * 1000;
 
-export default function DeliveryTrack({ go, deliveryId, shared }) {
+export default function DeliveryTrack({ go, deliveryId, shared, domains }) {
   const { VilleMap, vcConfirm } = shared;
-  const [d, setD] = useState(undefined);
+  const live = useLive(() => (deliveryId ? doc(dashDb(), 'dash_deliveries', deliveryId) : null), [deliveryId], docOf);
+  const d = live.data;
   const [pin, setPin] = useState(null);
   const [loc, setLoc] = useState(null);
   const [events, setEvents] = useState([]);
@@ -21,14 +23,11 @@ export default function DeliveryTrack({ go, deliveryId, shared }) {
   useEffect(() => {
     if (!deliveryId) return undefined;
     const db = dashDb();
-    const u1 = onSnapshot(doc(db, 'dash_deliveries', deliveryId), (s) => setD(s.exists() ? { id: s.id, ...s.data() } : null), () => setD(null));
     const u2 = onSnapshot(doc(db, 'dash_deliveries', deliveryId, 'customer', 'pin'), (s) => setPin(s.exists() ? s.data().pin : null), () => {});
-    const u3 = onSnapshot(query(collection(db, 'dash_deliveries', deliveryId, 'events'), orderBy('at', 'asc')),
-      (s) => setEvents(s.docs.map((x) => x.data())), () => {});
-    return () => { u1(); u2(); u3(); };
+    const u3 = onSnapshot(query(collection(db, 'dash_deliveries', deliveryId, 'events'), orderBy('at', 'asc')), (s) => setEvents(s.docs.map((x) => x.data())), () => {});
+    return () => { u2(); u3(); };
   }, [deliveryId]);
 
-  // Rider location only while the job is active.
   const tracking = d && TRACKABLE.includes(d.status);
   useEffect(() => {
     if (!tracking) { setLoc(null); return undefined; }
@@ -37,104 +36,106 @@ export default function DeliveryTrack({ go, deliveryId, shared }) {
     return () => { u(); clearInterval(t); };
   }, [tracking, deliveryId]);
 
-  if (d === undefined) return <div style={st.page}><Header title="Delivery" onBack={() => go('dash-home')} /><Spinner /></div>;
-  if (d === null) return <div style={st.page}><Header title="Delivery" onBack={() => go('dash-home')} /><div style={st.wrap}><div style={st.card}>We couldn't find this delivery.</div></div></div>;
+  const back = () => go('dash-history');
+  const shell = (body) => <Shell go={go} active="track" domains={domains}><div className="vd-wrap">{body}</div></Shell>;
+  if (live.error) return shell(<div style={{ paddingTop: 24 }}><ErrorState onRetry={live.retry} /></div>);
+  if (live.loading) return shell(<div style={{ paddingTop: 24 }}><Skeleton h={34} w="60%" /><div style={{ marginTop: 16 }}><SkeletonRows n={3} h={140} /></div></div>);
+  if (!d) return shell(<div style={{ paddingTop: 24 }}><EmptyState title="We couldn’t find this delivery" action="My Orders" onAction={back} /></div>);
 
   const stepIndex = STEPS.indexOf(d.status);
   const locAge = loc?.at ? now - (loc.at.toMillis ? loc.at.toMillis() : loc.at) : null;
   const locFresh = loc && locAge != null && locAge < STALE_MS;
   const canCancel = d.type !== 'market' && ['requested', 'assigned', 'to_pickup'].includes(d.status);
-
+  const ended = d.status === 'cancelled' || d.status === 'failed';
   const markers = [
     { position: { lat: d.pickup.lat, lng: d.pickup.lng }, title: 'Pickup' },
     { position: { lat: d.dropoff.lat, lng: d.dropoff.lng }, title: 'Drop-off' },
+    ...(locFresh ? [{ position: { lat: loc.lat, lng: loc.lng }, title: 'Rider' }] : []),
   ];
-  if (locFresh) markers.push({ position: { lat: loc.lat, lng: loc.lng }, title: 'Rider' });
+  const lastAt = events.length ? events[events.length - 1].at : null;
+  const timeline = STEPS.map((s, i) => ({
+    key: s, title: STATUS_LABEL[s],
+    state: i < stepIndex || (i === stepIndex && s === 'delivered') ? 'done' : i === stepIndex ? 'now' : 'todo',
+    sub: i === stepIndex && lastAt?.toDate ? `Updated ${lastAt.toDate().toLocaleTimeString('en-JM', { hour: 'numeric', minute: '2-digit' })}` : null,
+  }));
 
   const cancel = async () => {
-    const ok = await vcConfirm('Cancel this delivery?', { confirmText: 'Yes, cancel', danger: true });
-    if (!ok) return;
+    if (!(await vcConfirm('Cancel this delivery?', { confirmText: 'Yes, cancel', danger: true }))) return;
     setBusy(true); setErr('');
     try { await api.cancel({ deliveryId, reason: 'Cancelled by customer' }); } catch (e) { setErr(errText(e)); }
     setBusy(false);
   };
+  const title = d.type === 'market' ? `Delivery from ${d.merchantName || 'store'}` : `Package to ${d.dropoff.recipientName || 'recipient'}`;
 
-  return (
-    <div style={st.page}>
-      <Header title="Track delivery" onBack={() => go('dash-home')} right={<Pill tone={statusTone(d.status)}>{STATUS_LABEL[d.status]}</Pill>} />
-      <div style={st.wrap}>
-        {tracking && (
-          <div style={{ borderRadius: 14, overflow: 'hidden', border: `1px solid ${C.line}`, marginBottom: 8 }}>
-            <VilleMap height={240} center={locFresh ? { lat: loc.lat, lng: loc.lng } : { lat: d.pickup.lat, lng: d.pickup.lng }} zoom={14} markers={markers} />
-          </div>
-        )}
-        {tracking && !locFresh && (
-          <div style={st.note}>Live rider location is temporarily unavailable{loc ? ' — the last update is more than 2 minutes old' : ''}. Status updates still arrive here.</div>
-        )}
-
-        {d.status === 'requested' && (
-          <div style={st.card}><div style={st.h2}>Finding a rider…</div><div style={st.sub}>We'll notify you when a rider accepts. You can cancel free of charge until the package is collected.</div></div>
-        )}
-
-        {!FINAL.includes(d.status) && pin && (
-          <div style={{ ...st.card, textAlign: 'center', border: `2px solid ${C.purpleLine}` }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: C.purple, textTransform: 'uppercase', letterSpacing: 0.6 }}>Delivery PIN</div>
-            <div style={{ fontSize: 38, fontWeight: 800, letterSpacing: 10, color: C.ink, margin: '6px 0' }}>{pin}</div>
-            <div style={st.sub}>Share this with {d.dropoff.recipientName}. They give it to the rider only after receiving the package.</div>
-          </div>
-        )}
-
-        {d.riderId && (
-          <div style={st.card}>
-            <div style={st.h2}>Your rider</div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <div style={{ fontWeight: 700 }}>{d.riderName}</div>
-                {d.riderPlate && <div style={{ fontSize: 12.5, color: C.quiet }}>Motorcycle {d.riderPlate}</div>}
+  return shell(
+    <>
+      <PageHead title={title} sub={`Delivery ${shortId(d.id)}, requested ${fmtWhen(d.createdAt)}`} crumb="My Orders" onCrumb={back}
+        right={<Chip tone={deliveryTone(d.status)}>{STATUS_LABEL[d.status]}</Chip>} />
+      <div className="vd-split" style={{ paddingBottom: 40 }}>
+        <div className="vd-stack">
+          {tracking && (
+            <div>
+              <div className="vd-map" style={{ marginTop: 0 }}>
+                <VilleMap height={260} center={locFresh ? { lat: loc.lat, lng: loc.lng } : { lat: d.pickup.lat, lng: d.pickup.lng }} zoom={14} markers={markers} />
               </div>
-              {d.riderPhone && !FINAL.includes(d.status) && <a href={`tel:${d.riderPhone}`} style={{ ...st.btnGhost, width: 'auto', padding: '9px 14px', textDecoration: 'none' }}>📞 Call</a>}
-            </div>
-          </div>
-        )}
-
-        <div style={st.card}>
-          <div style={st.h2}>Progress</div>
-          {(d.status === 'cancelled' || d.status === 'failed')
-            ? <div style={st.sub}>{d.status === 'cancelled' ? `Cancelled${d.cancelReason ? ` — ${d.cancelReason}` : ''}.` : `Could not be delivered${d.failReason ? ` — ${d.failReason}` : ''}. Support will contact you.`}</div>
-            : STEPS.map((s, i) => (
-              <div key={s} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '4px 0', opacity: i <= stepIndex ? 1 : 0.4 }}>
-                <div style={{ width: 12, height: 12, borderRadius: 6, background: i <= stepIndex ? C.purple : C.purpleLine }} />
-                <div style={{ fontSize: 13.5, fontWeight: i === stepIndex ? 700 : 500 }}>{STATUS_LABEL[s]}</div>
-              </div>
-            ))}
-          {events.length > 0 && <div style={{ fontSize: 11.5, color: C.quiet, marginTop: 8 }}>Last update {events[events.length - 1].at?.toDate?.().toLocaleTimeString('en-JM', { hour: 'numeric', minute: '2-digit' })}</div>}
-        </div>
-
-        <div style={st.card}>
-          <div style={st.h2}>Details</div>
-          <div style={st.row}><span style={{ color: C.quiet }}>From</span><span style={{ textAlign: 'right' }}>{d.pickup.address}</span></div>
-          <div style={st.row}><span style={{ color: C.quiet }}>To</span><span style={{ textAlign: 'right' }}>{d.dropoff.address}</span></div>
-          <div style={st.row}><span style={{ color: C.quiet }}>Package</span><span>{d.package.description}</span></div>
-          <div style={st.row}><span style={{ color: C.quiet }}>Total</span><b>{formatJMD(d.cashToCollectCents ?? d.quote.totalCents)} cash · paid by {d.payment.collectFrom === 'recipient' ? 'recipient' : 'sender'}</b></div>
-          <div style={{ fontSize: 11.5, color: C.quiet, marginTop: 6 }}>Delivery ID {d.id}</div>
-          {d.proofPhotos && (d.proofPhotos.pickup || d.proofPhotos.dropoff) && (
-            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-              {['pickup', 'dropoff'].filter((k) => d.proofPhotos[k]).map((k) => (
-                <a key={k} href={d.proofPhotos[k].url} target="_blank" rel="noreferrer" style={{ fontSize: 12, color: C.purple, textAlign: 'center' }}>
-                  <img src={d.proofPhotos[k].url} alt={`${k} proof`} style={{ width: 90, height: 90, objectFit: 'cover', borderRadius: 10, display: 'block' }} />
-                  {k === 'pickup' ? 'At pickup' : 'At delivery'}
-                </a>
-              ))}
+              {!locFresh && <p className="vd-field__hint">Live rider location isn’t available right now{loc ? '; the last update is over 2 minutes old' : ''}. Status updates still arrive here.</p>}
             </div>
           )}
+          {d.status === 'requested' && (
+            <div className="vd-note"><b>Finding a rider.</b> We’ll notify you when a rider accepts. You can cancel free of charge until the package is collected.</div>
+          )}
+          {!FINAL.includes(d.status) && pin && (
+            <div className="vd-pin">
+              <div style={{ fontWeight: 650, color: 'var(--vd-deep)' }}>Delivery PIN</div>
+              <div className="vd-pin__code" aria-label={`PIN ${String(pin).split('').join(' ')}`}>{pin}</div>
+              <p>Share this with {d.dropoff.recipientName || 'the recipient'}. They give it to the rider only after receiving the package.</p>
+            </div>
+          )}
+          <div className="vd-panel">
+            <div className="vd-panel__title">Progress</div>
+            {ended
+              ? <p>{d.status === 'cancelled' ? `Cancelled${d.cancelReason ? `: ${d.cancelReason}` : ''}.` : `Couldn’t be delivered${d.failReason ? `: ${d.failReason}` : ''}. Support will contact you.`}</p>
+              : <Timeline items={timeline} />}
+            {d.riderId && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--vd-line)' }}>
+                <div>
+                  <div style={{ fontWeight: 650, color: 'var(--vd-ink)' }}>Your rider: {d.riderName}</div>
+                  {d.riderPlate && <div className="vd-field__hint" style={{ marginTop: 0 }}>Motorcycle {d.riderPlate}</div>}
+                </div>
+                {d.riderPhone && !FINAL.includes(d.status) && <a className="vd-btn vd-btn--secondary vd-btn--sm" href={`tel:${d.riderPhone}`}><Icon name="phone" size={17} /> Call</a>}
+              </div>
+            )}
+          </div>
         </div>
-
-        {err && <div style={st.err}>{err}</div>}
-        {canCancel && <button style={{ ...st.btnDanger, marginBottom: 10 }} disabled={busy} onClick={cancel}>Cancel delivery</button>}
-        <button style={st.btnGhost} onClick={() => setIssueOpen(!issueOpen)}>Report a problem</button>
-        {issueOpen && <IssueForm deliveryId={deliveryId} onDone={() => setIssueOpen(false)} />}
+        <aside className="vd-split__aside">
+          <div className="vd-panel">
+            <div className="vd-panel__title">Receipt</div>
+            <div className="vd-row"><span>From</span><span>{d.pickup.address}</span></div>
+            <div className="vd-row"><span>To</span><span>{d.dropoff.address}</span></div>
+            <div className="vd-row"><span>Package</span><span>{d.package.description}</span></div>
+            {(d.quote?.lines || []).map((l) => <div key={l.key} className="vd-row"><span>{l.label}</span><span>{formatJMD(l.cents)}</span></div>)}
+            <div className="vd-total"><span>Total, cash</span><b>{formatJMD(d.cashToCollectCents ?? d.quote.totalCents)}</b></div>
+            <p className="vd-field__hint">Paid by the {d.payment?.collectFrom === 'recipient' ? 'recipient on delivery' : 'sender at pickup'}.</p>
+            {d.proofPhotos && (d.proofPhotos.pickup || d.proofPhotos.dropoff) && (
+              <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+                {['pickup', 'dropoff'].filter((k) => d.proofPhotos[k]).map((k) => (
+                  <a key={k} href={d.proofPhotos[k].url} target="_blank" rel="noreferrer" style={{ fontSize: 13, textAlign: 'center', textDecoration: 'none' }}>
+                    <img src={d.proofPhotos[k].url} alt={k === 'pickup' ? 'Photo at pickup' : 'Photo at delivery'} loading="lazy" style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 12, display: 'block' }} />
+                    {k === 'pickup' ? 'At pickup' : 'At delivery'}
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+          {err && <div className="vd-errbox" role="alert">{err}</div>}
+          <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
+            {canCancel && <button className="vd-btn vd-btn--danger vd-btn--block" disabled={busy} onClick={cancel}>Cancel delivery</button>}
+            <button className="vd-btn vd-btn--secondary vd-btn--block" aria-expanded={issueOpen} onClick={() => setIssueOpen(!issueOpen)}>Report a problem</button>
+          </div>
+          {issueOpen && <IssueForm deliveryId={deliveryId} onDone={() => setIssueOpen(false)} />}
+        </aside>
       </div>
-    </div>
+    </>,
   );
 }
 
@@ -142,6 +143,7 @@ const CUSTOMER_ISSUES = [
   ['missing', 'Missing delivery'], ['late', 'Late delivery'], ['wrong_item', 'Wrong item'], ['damaged', 'Damaged item'],
   ['wrong_charge', 'Incorrect charge'], ['rider_conduct', 'Rider conduct'], ['other', 'Something else'],
 ];
+// Also used by the rider portal (which passes its own categories).
 export function IssueForm({ deliveryId, onDone, categories = CUSTOMER_ISSUES }) {
   const [cat, setCat] = useState('');
   const [text, setText] = useState('');
@@ -151,22 +153,26 @@ export function IssueForm({ deliveryId, onDone, categories = CUSTOMER_ISSUES }) 
     setBusy(true); setMsg('');
     try {
       const r = await api.reportIssue({ deliveryId, category: cat, description: text });
-      setMsg(`Reported. Case ${r.caseId.slice(0, 8).toUpperCase()} — support will follow up.`);
+      setMsg(`Reported. Your case number is ${r.caseId.slice(0, 8).toUpperCase()}; support will follow up.`);
       setTimeout(onDone, 2500);
     } catch (e) { setMsg(errText(e)); }
     setBusy(false);
   };
   return (
-    <div style={{ ...st.card, marginTop: 10 }}>
-      <label style={st.label}>What went wrong?</label>
-      <select style={st.input} value={cat} onChange={(e) => setCat(e.target.value)}>
-        <option value="">Choose…</option>
-        {categories.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-      </select>
-      <label style={st.label}>Details</label>
-      <textarea style={{ ...st.input, minHeight: 70 }} value={text} maxLength={1000} onChange={(e) => setText(e.target.value)} />
-      {msg && <div style={st.note}>{msg}</div>}
-      <button style={{ ...st.btn, marginTop: 10, opacity: cat && !busy ? 1 : 0.5 }} disabled={!cat || busy} onClick={send}>Send report</button>
+    <div className="vd-root" style={{ minHeight: 0, padding: 0, background: 'transparent' }}>
+    <div className="vd-panel" style={{ marginTop: 12 }}>
+      <Field label="What went wrong?">
+        <select className="vd-input" value={cat} onChange={(e) => setCat(e.target.value)}>
+          <option value="">Choose…</option>
+          {categories.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+        </select>
+      </Field>
+      <Field label="Details">
+        <textarea className="vd-input" value={text} maxLength={1000} onChange={(e) => setText(e.target.value)} />
+      </Field>
+      {msg && <p className="vd-note" style={{ marginTop: 12 }} role="status">{msg}</p>}
+      <button className="vd-btn vd-btn--primary vd-btn--block" style={{ marginTop: 12 }} disabled={!cat || busy} onClick={send}>{busy ? 'Sending…' : 'Send report'}</button>
+    </div>
     </div>
   );
 }
