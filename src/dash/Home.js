@@ -3,7 +3,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { addDoc, collection, getDocs, query, serverTimestamp, where } from 'firebase/firestore';
 import { dashDb, MERCHANT_CATEGORIES, isOpenAt, hoursToday, formatJMD } from './dashApi';
 import { Shell, Icon, Chip, Skeleton, EmptyState, ErrorState, useLive, docsOf } from './kit';
-import { HeroArt, ParcelArt, StoreArt, StoreCoverArt, EmptyRouteArt } from './art';
+import { StoreArt, StoreCoverArt, EmptyRouteArt } from './art';
+import heroLarge from './img/hero-1448.webp';
+import heroSmall from './img/hero-800.webp';
+import imgSend from './img/svc-send.webp';
+import imgStores from './img/svc-stores.webp';
 import imgFood from './img/cat-food.webp';
 import imgGroceries from './img/cat-groceries.webp';
 import imgConvenience from './img/cat-convenience.webp';
@@ -175,12 +179,12 @@ function ServiceCards({ onSend, onStores, prelaunch }) {
     <div className="vd-services">
       <button className="vd-service" onClick={onSend}>
         <div><h3>Send a Package</h3><p>Documents, gifts and parcels delivered across our service area.</p></div>
-        <div className="vd-service__art"><ParcelArt /></div>
+        <div className="vd-service__art"><img src={imgSend} alt="Parcels and a mailer bag wrapped in VilleDash purple tape" width="360" height="360" loading="lazy" decoding="async" /></div>
         <span className="vd-service__cta">{prelaunch ? 'Get notified at launch' : 'Send a Package'}</span>
       </button>
       <button className="vd-service" onClick={onStores}>
         <div><h3>Order from Stores</h3><p>Explore restaurants, groceries and local favourites.</p></div>
-        <div className="vd-service__art"><StoreArt /></div>
+        <div className="vd-service__art"><img src={imgStores} alt="A purple shopping bag full of groceries beside a takeaway box and fresh fruit" width="360" height="360" loading="lazy" decoding="async" /></div>
         <span className="vd-service__cta">{prelaunch ? 'Get notified at launch' : 'Explore Stores'}</span>
       </button>
     </div>
@@ -277,7 +281,7 @@ function Hero({ onStores, onSend, extra }) {
             </div>
           )}
         </div>
-        <div className="vd-hero__art"><HeroArt /></div>
+        <div className="vd-hero__art"><img src={heroLarge} srcSet={`${heroSmall} 800w, ${heroLarge} 1448w`} sizes="(min-width: 900px) 540px, 100vw" width="1448" height="1086" fetchpriority="high" decoding="async" alt="A VilleDash rider on a purple motorcycle carrying a delivery box from a local store to a home, with the Mandeville hills behind" /></div>
       </div>
     </section>
   );

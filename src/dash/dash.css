@@ -72,9 +72,10 @@
 .vd-nav { position: sticky; top: 0; z-index: 40; background: rgba(255,255,255,.97); border-bottom: 1px solid var(--vd-line); }
 .vd-nav__in { display: flex; align-items: center; gap: 12px; height: 60px; }
 .vd-mark { display: inline-flex; flex-direction: column; align-items: flex-start; background: none; border: 0; padding: 0; cursor: pointer; line-height: 1; }
-.vd-mark__name { font-family: var(--vd-display); font-weight: 800; font-size: 22px; letter-spacing: -0.035em; color: var(--vd-deep); }
-.vd-mark__name i { font-style: normal; color: var(--vd-brand); }
-.vd-mark__by { font-size: 10.5px; color: var(--vd-muted); margin-top: 3px; letter-spacing: .01em; }
+.vd-mark img { display: block; height: 36px; width: auto; }
+.vd-mark--full img { height: 104px; }
+@media (min-width: 900px) { .vd-mark img { height: 42px; } .vd-mark--full img { height: 120px; } }
+.vd-foot__ville { display: block; height: 30px; width: auto; margin-bottom: 12px; }
 .vd-nav__links { display: none; gap: 2px; margin-left: 28px; }
 .vd-nav__link { background: none; border: 0; padding: 8px 12px; border-radius: 10px; font-size: 14.5px; font-weight: 550; color: var(--vd-text); cursor: pointer; }
 .vd-nav__link:hover { background: var(--vd-lav); color: var(--vd-deep); }
@@ -115,8 +116,8 @@
 .vd-hero__lede { font-size: 16.5px; color: var(--vd-text); margin-top: 14px; max-width: 34ch; }
 .vd-hero__ctas { display: flex; gap: 10px; margin-top: 22px; flex-wrap: wrap; }
 .vd-hero__ctas .vd-btn { flex: 1 1 160px; }
-.vd-hero__art { border-radius: 28px; overflow: hidden; background: var(--vd-lav); aspect-ratio: 16 / 10; }
-.vd-hero__art svg { display: block; width: 100%; height: 100%; }
+.vd-hero__art { border-radius: 28px; overflow: hidden; background: #fff; aspect-ratio: 4 / 3; }
+.vd-hero__art img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .vd-hero__note { margin-top: 14px; font-size: 13.5px; color: var(--vd-muted); }
 @media (min-width: 900px) {
   .vd-hero { padding: 48px 0 24px; }
@@ -124,18 +125,9 @@
   .vd-hero h1 { font-size: 76px; }
   .vd-hero__lede { font-size: 18.5px; }
   .vd-hero__ctas .vd-btn { flex: 0 0 auto; }
-  .vd-hero__art { aspect-ratio: 5 / 4; }
+  .vd-hero__art { aspect-ratio: 4 / 3; }
 }
 @media (min-width: 400px) and (max-width: 899px) { .vd-hero h1 { font-size: 50px; } }
-
-/* Route draw — the one orchestrated motion on the page */
-.vd-route { stroke-dasharray: 6 9; }
-@media (prefers-reduced-motion: no-preference) {
-  .vd-route-reveal { stroke-dasharray: 1400; stroke-dashoffset: 1400; animation: vd-draw 1.6s .2s cubic-bezier(.4,.1,.2,1) forwards; }
-  .vd-rider-in { animation: vd-ride 1.6s .2s cubic-bezier(.4,.1,.2,1) both; }
-}
-@keyframes vd-draw { to { stroke-dashoffset: 0; } }
-@keyframes vd-ride { from { transform: translateX(-40px); opacity: 0; } to { transform: none; opacity: 1; } }
 
 /* ── Service cards ───────────────────────────────────────────────────────── */
 .vd-services { display: grid; gap: 14px; }
@@ -148,7 +140,7 @@
 .vd-service p { color: var(--vd-muted); font-size: 14.5px; margin-top: 4px; }
 .vd-service__cta { display: inline-flex; margin-top: 14px; color: var(--vd-deep); font-weight: 700; font-size: 14.5px; border-bottom: 2px solid var(--vd-lav-2); padding-bottom: 2px; }
 .vd-service__art { grid-row: span 3; width: 112px; height: 112px; border-radius: 18px; background: var(--vd-lav); overflow: hidden; }
-.vd-service__art svg { width: 100%; height: 100%; display: block; }
+.vd-service__art svg, .vd-service__art img { width: 100%; height: 100%; display: block; object-fit: cover; }
 @media (min-width: 900px) { .vd-service { padding: 26px; grid-template-columns: 1fr 150px; } .vd-service__art { width: 150px; height: 150px; } .vd-service h3 { font-size: 24px; } }
 
 /* ── Search ──────────────────────────────────────────────────────────────── */

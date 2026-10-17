@@ -66,6 +66,8 @@ const check = (name, ok, extra = '') => results.push(`${ok ? 'PASS' : 'FAIL'} ${
   check('categories: packages opens send', (await nav(p)) === 'dash-send');
   const imgs = await p.$$eval('.vd-cat img', (els) => els.map((e) => e.complete && e.naturalWidth > 0 && !!e.alt));
   check('categories: 6 images loaded with alt text', imgs.length === 6 && imgs.every(Boolean), JSON.stringify(imgs));
+  const brand = await p.$$eval('.vd-hero__art img, .vd-service__art img, .vd-mark img, .vd-foot__ville', (els) => els.map((e) => e.complete && e.naturalWidth > 0 && !!e.alt));
+  check('home: hero, service images and logos load with alt text', brand.length >= 5 && brand.every(Boolean), JSON.stringify(brand));
   check('home: cart badge shows 3', (await p.locator('.vd-badge').first().textContent()) === '3');
   await p.close();
 

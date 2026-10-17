@@ -6,6 +6,7 @@ import { C, st, Pill, statusTone, Spinner } from './ui';
 import { useMyOrders, OrderRow } from './Marketplace';
 import { ORDER_FINAL } from './dashApi';
 import { FamilyBar, HouseAd } from './sites';
+import logoVille from './img/logo-ville-row.webp';
 
 const ACTIVE_RIDE = ['searching', 'active', 'arrived', 'enroute', 'scheduled'];
 const ACTIVE_DELIVERY = ['requested', 'assigned', 'to_pickup', 'at_pickup', 'collected', 'to_dropoff', 'at_dropoff'];
@@ -79,7 +80,7 @@ export function VilleHome({ go, user, setBookingId, openDelivery, openOrder, sit
       <div style={{ background: `linear-gradient(160deg, ${C.purple}, ${C.purpleDark})`, color: C.white }}>
         <div style={{ maxWidth: 560, margin: '0 auto', padding: '26px 18px 30px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <img src="/logo.png" alt="VILLE" style={{ height: 28, objectFit: 'contain', background: C.white, borderRadius: 8, padding: '3px 6px' }} />
+            <img src={logoVille} alt="VILLE" style={{ height: 34, width: 'auto', background: C.white, borderRadius: 10, padding: '5px 10px' }} />
             <button onClick={() => go('customer-profile')} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', color: C.white, borderRadius: 20, padding: '6px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
               {first || 'Account'}
             </button>

@@ -7,6 +7,9 @@ import '@fontsource-variable/bricolage-grotesque';
 import '@fontsource-variable/instrument-sans';
 import './dash.css';
 import { useCart } from './dashApi';
+import logoDash from './img/logo-villedash-row.webp';
+import logoDashFull from './img/logo-villedash-full.webp';
+import logoVille from './img/logo-ville-row.webp';
 
 // ── Icons (24px stroke) ─────────────────────────────────────────────────────
 const P = {
@@ -49,11 +52,10 @@ const openOrders = (go, filter) => {
   go('dash-history');
 };
 
-export function Wordmark({ onClick }) {
+export function Wordmark({ onClick, full }) {
   return (
-    <button className="vd-mark" onClick={onClick} aria-label="VilleDash home">
-      <span className="vd-mark__name">Ville<i>Dash</i></span>
-      <span className="vd-mark__by">a VILLE service</span>
+    <button className={`vd-mark${full ? ' vd-mark--full' : ''}`} onClick={onClick} aria-label="VilleDash home">
+      <img src={full ? logoDashFull : logoDash} alt="VilleDash" width={full ? 308 : 495} height={full ? 200 : 96} decoding="async" />
     </button>
   );
 }
@@ -124,7 +126,7 @@ export function Footer({ go, domains = {}, publicMode }) {
       <div className="vd-wrap">
         <div className="vd-foot__grid">
           <div className="vd-foot__brand">
-            <Wordmark onClick={() => go(publicMode ? 'splash' : 'dash-home')} />
+            <Wordmark full onClick={() => go(publicMode ? 'splash' : 'dash-home')} />
             <p>Package delivery and local shopping across Mandeville and nearby areas of Manchester, Jamaica.</p>
           </div>
           <div>
@@ -145,6 +147,7 @@ export function Footer({ go, domains = {}, publicMode }) {
           </div>
           <div>
             <h4>Part of VILLE</h4>
+            <img className="vd-foot__ville" src={logoVille} alt="VILLE" width="374" height="96" />
             <ul>
               <li><button onClick={toCabs}>VilleCabs rides</button></li>
               <li><button onClick={() => go('ville-events')}>VilleEvents</button></li>

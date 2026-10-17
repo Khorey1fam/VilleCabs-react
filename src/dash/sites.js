@@ -7,6 +7,7 @@
 // Domains come from config/sites in Firestore (Admin → VilleDash → Sites & ads),
 // falling back to REACT_APP_SITE_* build variables. On preview URLs
 // (vercel.app, localhost) add ?site=dash or ?site=ville to try a brand.
+import logoVille from './img/logo-ville-row.webp';
 import React, { useEffect, useState } from 'react';
 import { doc, onSnapshot, collection, query, where } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -187,7 +188,8 @@ export function SiteLanding({ site, domains, go, dashOn }) {
       <FamilyBar site={site} domains={domains} go={go} />
       <div style={{ background: `linear-gradient(160deg, ${C.purple}, ${C.purpleDark})`, color: C.white }}>
         <div style={{ maxWidth: 720, margin: '0 auto', padding: '40px 20px 46px' }}>
-          <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: 1.2, opacity: 0.85 }}>{info.emoji} {info.name.toUpperCase()}</div>
+          {isDash ? <div style={{ fontSize: 13, fontWeight: 800, letterSpacing: 1.2, opacity: 0.85 }}>{info.emoji} {info.name.toUpperCase()}</div>
+            : <img src={logoVille} alt="VILLE" style={{ height: 40, width: 'auto', background: C.white, borderRadius: 12, padding: '6px 12px' }} />}
           <h1 style={{ fontSize: 34, lineHeight: 1.15, margin: '10px 0 8px', fontWeight: 800 }}>{isDash ? 'Send It. Track It. Delivered.' : 'Welcome to VILLE'}</h1>
           <div style={{ fontSize: 16, opacity: 0.9 }}>{isDash ? 'Delivery and local shopping for Mandeville.' : 'Your City. One App. Rides, deliveries and events in Mandeville.'}</div>
           {!dashOn && <div style={{ marginTop: 14, background: 'rgba(255,255,255,0.15)', borderRadius: 10, padding: '10px 12px', fontSize: 13.5 }}>
