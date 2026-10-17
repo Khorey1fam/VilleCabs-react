@@ -3,7 +3,13 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { addDoc, collection, getDocs, query, serverTimestamp, where } from 'firebase/firestore';
 import { dashDb, MERCHANT_CATEGORIES, isOpenAt, hoursToday, formatJMD } from './dashApi';
 import { Shell, Icon, Chip, Skeleton, EmptyState, ErrorState, useLive, docsOf } from './kit';
-import { HeroArt, ParcelArt, StoreArt, CategoryArt, StoreCoverArt, EmptyRouteArt } from './art';
+import { HeroArt, ParcelArt, StoreArt, StoreCoverArt, EmptyRouteArt } from './art';
+import imgFood from './img/cat-food.webp';
+import imgGroceries from './img/cat-groceries.webp';
+import imgConvenience from './img/cat-convenience.webp';
+import imgShops from './img/cat-shops.webp';
+import imgGifts from './img/cat-gifts.webp';
+import imgPackages from './img/cat-packages.webp';
 import { ActiveDeliveries, useActivity } from './Orders';
 
 // ── Shared data ─────────────────────────────────────────────────────────────
@@ -181,19 +187,34 @@ function ServiceCards({ onSend, onStores, prelaunch }) {
   );
 }
 
+// Category photos: supplied images, cropped and converted to WebP (~6–18 KB each).
+const CATEGORY_IMG = {
+  food: [imgFood, 'A burger, fries and an iced drink'],
+  groceries: [imgGroceries, 'A tote bag of fresh vegetables, milk, bread and bananas'],
+  convenience: [imgConvenience, 'Bottled water, a soft drink, chips, soap and toilet paper'],
+  shops: [imgShops, 'Shopping bags, a white handbag and sunglasses'],
+  gifts: [imgGifts, 'A wrapped gift box with a purple ribbon beside a bouquet of flowers'],
+  packages: [imgPackages, 'Stacked parcels marked with the VilleDash logo'],
+};
+
 function Categories({ merchants, onPick }) {
   const live = (g) => g.send || (merchants || []).some((m) => (g.cats || []).includes(m.category));
   return (
     <div className="vd-cats">
       {CATEGORY_GROUPS.map((g) => {
         const on = merchants === undefined ? true : live(g);
-        const Art = CategoryArt[g.key];
+        const [src, alt] = CATEGORY_IMG[g.key];
         return (
           <button key={g.key} className="vd-cat" aria-disabled={!on} onClick={() => on && onPick(g)}
-            aria-label={on ? g.name : `${g.name}, coming soon`}>
-            <span className="vd-cat__art"><Art /></span>
-            <span className="vd-cat__name">{g.name}</span>
-            {!on && <span className="vd-cat__state">Coming soon</span>}
+            aria-label={on ? (g.send ? `${g.name}: send a package` : `${g.name}: see stores`) : `${g.name}, coming soon`}>
+            <span className="vd-cat__art">
+              <img src={src} alt={alt} width="300" height="300" loading="lazy" decoding="async" />
+              {!on && <span className="vd-cat__soon">Coming soon</span>}
+            </span>
+            <span className="vd-cat__row">
+              <span className="vd-cat__name">{g.name}</span>
+              {on && <span className="vd-cat__go" aria-hidden="true"><Icon name="chevR" size={16} stroke={2.4} /></span>}
+            </span>
           </button>
         );
       })}

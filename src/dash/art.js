@@ -136,55 +136,6 @@ export function StoreArt() {
   );
 }
 
-// Category tiles, viewBox 160×120.
-const catBg = (children) => (<Svg vb="0 0 160 120"><rect width="160" height="120" fill={LAV} />{children}</Svg>);
-export const CategoryArt = {
-  food: () => catBg(<>
-    <ellipse cx="80" cy="96" rx="50" ry="7" fill={LAV2} />
-    <path d="M36 62 h88 a44 30 0 0 1 -88 0z" fill={DEEP} />
-    <ellipse cx="80" cy="62" rx="44" ry="9" fill={SUN} />
-    <circle cx="66" cy="58" r="6" fill="#d97b29" /><circle cx="86" cy="60" r="7" fill={LEAF} /><circle cx="98" cy="56" r="5" fill="#d97b29" />
-    <path d="M66 40 q5 -9 0 -18 M80 40 q5 -9 0 -18 M94 40 q5 -9 0 -18" stroke={MID} strokeWidth="3" fill="none" strokeLinecap="round" />
-  </>),
-  groceries: () => catBg(<>
-    <ellipse cx="80" cy="100" rx="48" ry="6" fill={LAV2} />
-    <path d="M48 46 h64 l-6 54 h-52 z" fill={W} stroke={DEEP} strokeWidth="3" />
-    <rect x="58" y="22" width="16" height="34" rx="6" fill="#e2a65a" />
-    <circle cx="90" cy="38" r="12" fill={LEAF} /><path d="M100 28 q10 -10 16 -4" stroke={LEAF} strokeWidth="4" fill="none" />
-    <circle cx="70" cy="48" r="9" fill="#d94b3b" />
-    <rect x="58" y="66" width="44" height="6" rx="3" fill={LAV2} />
-  </>),
-  convenience: () => catBg(<>
-    <ellipse cx="80" cy="100" rx="48" ry="6" fill={LAV2} />
-    <rect x="48" y="30" width="22" height="70" rx="8" fill={BRAND} /><rect x="54" y="20" width="10" height="12" rx="2" fill={DEEP} />
-    <rect x="50" y="56" width="18" height="16" fill={SUN} />
-    <path d="M80 50 h40 l-4 50 h-32 z" fill={W} stroke={INK} strokeWidth="3" strokeLinejoin="round" />
-    <path d="M86 50 l4 -10 h20 l4 10" fill="#e9d07b" stroke={INK} strokeWidth="3" strokeLinejoin="round" />
-  </>),
-  shops: () => catBg(<>
-    <rect x="34" y="44" width="92" height="56" rx="3" fill={W} />
-    <path d="M28 44 h104 l-8 -20 h-88 z" fill={DEEP} />
-    {[0, 1, 2, 3, 4].map((i) => <path key={i} d={`M${28 + i * 20.8} 44 h10.4 l-2.5 -20 h-8 z`} fill={W} opacity=".9" />)}
-    <rect x="70" y="64" width="22" height="36" rx="2" fill={BRAND} />
-    <rect x="42" y="58" width="20" height="18" rx="2" fill={LAV2} /><rect x="100" y="58" width="18" height="18" rx="2" fill={LAV2} />
-    <circle cx="88" cy="83" r="2" fill={SUN} />
-  </>),
-  gifts: () => catBg(<>
-    <ellipse cx="80" cy="102" rx="44" ry="6" fill={LAV2} />
-    <rect x="46" y="54" width="68" height="46" rx="5" fill={DEEP} />
-    <rect x="42" y="42" width="76" height="16" rx="4" fill={BRAND} />
-    <rect x="74" y="42" width="12" height="58" fill={SUN} />
-    <path d="M80 42 c-14 -20 -32 -6 -18 0 z M80 42 c14 -20 32 -6 18 0 z" fill={SUN} />
-  </>),
-  packages: () => catBg(<>
-    <ellipse cx="80" cy="102" rx="50" ry="6" fill={LAV2} />
-    <rect x="40" y="46" width="62" height="56" rx="5" fill="#d9b98a" />
-    <rect x="65" y="46" width="12" height="56" fill={SUN} opacity=".8" />
-    <rect x="86" y="30" width="38" height="34" rx="5" fill={DEEP} transform="rotate(10 105 47)" />
-    <rect x="48" y="80" width="18" height="12" rx="2" fill={W} />
-  </>),
-};
-
 export function EmptyRouteArt() {
   return (
     <svg viewBox="0 0 120 90" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" style={{ width: '100%', height: '100%' }}>

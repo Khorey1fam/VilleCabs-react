@@ -57,6 +57,15 @@ const check = (name, ok, extra = '') => results.push(`${ok ? 'PASS' : 'FAIL'} ${
   check('search: product hand-off set', (await p.evaluate(() => sessionStorage.getItem('vd_open_product'))) === 'jerk');
   await p.fill('#vd-search', 'zzzz'); await p.waitForTimeout(200);
   check('search: empty result message', await p.locator('text=No stores or products match').count() === 1);
+  await p.evaluate(() => { window.__nav = null; });
+  await p.click('role=button[name="Groceries, coming soon"]', { force: true });
+  check('categories: coming soon does nothing', (await nav(p)) === null);
+  await p.click('role=button[name="Food & drinks: see stores"]');
+  check('categories: live category opens stores', (await nav(p)) === 'dash-stores' && (await p.evaluate(() => sessionStorage.getItem('vd_store_group'))) === 'food');
+  await p.click('role=button[name="Packages: send a package"]');
+  check('categories: packages opens send', (await nav(p)) === 'dash-send');
+  const imgs = await p.$$eval('.vd-cat img', (els) => els.map((e) => e.complete && e.naturalWidth > 0 && !!e.alt));
+  check('categories: 6 images loaded with alt text', imgs.length === 6 && imgs.every(Boolean), JSON.stringify(imgs));
   check('home: cart badge shows 3', (await p.locator('.vd-badge').first().textContent()) === '3');
   await p.close();
 
