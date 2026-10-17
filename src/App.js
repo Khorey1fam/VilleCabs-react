@@ -18,8 +18,11 @@ import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'fire
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 // VilleDash (VILLE ecosystem) — new screens live in src/dash, gated by config/features
-import { VilleHome, DashHome, DashHistory } from './dash/CustomerScreens';
-import { StoresList, StorePage, Checkout, OrderTrack } from './dash/Marketplace';
+import { VilleHome } from './dash/CustomerScreens';
+import { DashHome, DashPublic } from './dash/Home';
+import { MyOrders } from './dash/Orders';
+import { DashAbout, DashTerms } from './dash/Info';
+import { StoresList, StorePage, Cart, Checkout, OrderTrack } from './dash/Marketplace';
 import SendPackage from './dash/SendPackage';
 import DeliveryTrack from './dash/DeliveryTrack';
 import { useDashEnabled } from './dash/dashApi';
@@ -13112,7 +13115,7 @@ export default function App() {
   const dash = (el) => (dashOn ? el : <CustomerDash {...props}/>);
 
   const screens = {
-    splash:           site === 'cabs' ? <Splash {...props}/> : <SiteLanding site={site} domains={domains} go={setScreen} dashOn={dashOn}/>,
+    splash:           site === 'cabs' ? <Splash {...props}/> : site === 'dash' ? <DashPublic go={setScreen} domains={domains} launched={dashOn}/> : <SiteLanding site={site} domains={domains} go={setScreen} dashOn={dashOn}/>,
     role:             <RoleSelect {...props}/>,
     'customer-signup':<CustomerSignup {...props}/>,
     'customer-login': <CustomerLogin {...props}/>,
@@ -13168,7 +13171,10 @@ export default function App() {
     'dash-home':              dash(<DashHome {...dashProps}/>),
     'dash-send':              dash(<SendPackage {...dashProps}/>),
     'dash-track':             dash(<DeliveryTrack {...dashProps}/>),
-    'dash-history':           dash(<DashHistory {...dashProps}/>),
+    'dash-history':           dash(<MyOrders {...dashProps}/>),
+    'dash-cart':              dash(<Cart {...dashProps}/>),
+    'dash-about':             <DashAbout {...dashProps} publicMode={!user || !dashOn}/>,
+    'dash-terms':             <DashTerms {...dashProps} publicMode={!user || !dashOn}/>,
     'dash-stores':            dash(<StoresList {...dashProps}/>),
     'dash-store':             dash(<StorePage {...dashProps}/>),
     'dash-checkout':          dash(<Checkout {...dashProps}/>),

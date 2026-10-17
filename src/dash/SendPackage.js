@@ -1,49 +1,67 @@
-// Send a Package — 4 steps: pickup, drop-off, package, review & confirm.
-// The price shown comes from the server (dashQuoteDelivery) and is re-checked
-// when the booking is created; nothing about the price is decided here.
+// Send a Package: Route → Package → Review → Done.
+// The price comes from the server (dashQuoteDelivery) and is re-checked when the
+// booking is created; one idempotency key per attempt stops double bookings.
 import React, { useMemo, useRef, useState } from 'react';
 import { api, errText, formatJMD, newRequestKey, PACKAGE_CATEGORIES, PACKAGE_SIZES, PROHIBITED_SUMMARY } from './dashApi';
-import { C, st, Header } from './ui';
+import { Shell, PageHead, Field, Steps, Chip } from './kit';
+import { DoneArt } from './art';
 
 const MANDEVILLE = { lat: 18.0416, lng: -77.5036 };
+const STEPS = ['Route', 'Package', 'Review', 'Done'];
+const digits = (v) => (v || '').replace(/\D/g, '');
 
-function LocationStep({ shared, value, onChange, kind }) {
-  const { AddressAutocompleteInput, VilleMap, geocodeLatLng } = shared;
-  const pos = value.lat != null ? { lat: value.lat, lng: value.lng } : null;
-  const setPin = async (lat, lng) => {
-    onChange({ ...value, lat, lng });
-    try {
-      const addr = await geocodeLatLng(lat, lng);
-      if (addr) onChange({ ...value, lat, lng, address: addr });
-    } catch (e) { /* keep the pin even without an address */ }
-  };
+function AddressBlock({ shared, value, onChange, kind, error }) {
+  const { AddressAutocompleteInput } = shared;
+  const pickup = kind === 'pickup';
   return (
     <>
-      <label style={st.label}>{kind === 'pickup' ? 'Pickup address' : 'Delivery address'}</label>
-      <AddressAutocompleteInput
-        value={value.address || ''}
-        onChange={(t) => onChange({ ...value, address: t })}
-        onPlaceSelect={(p) => onChange({ ...value, address: p.formattedAddress || p.name, lat: p.lat, lng: p.lng })}
-        placeholder={kind === 'pickup' ? 'Where should the rider collect it?' : 'Where is it going?'}
-      />
-      <div style={{ borderRadius: 12, overflow: 'hidden', marginTop: 10, border: `1px solid ${C.line}` }}>
-        <VilleMap height={220} center={pos || MANDEVILLE} zoom={pos ? 16 : 13}
-          markers={pos ? [{ position: pos, title: kind === 'pickup' ? 'Pickup' : 'Drop-off' }] : []}
-          onClick={(e) => setPin(e.latLng.lat(), e.latLng.lng())} />
-      </div>
-      <div style={{ fontSize: 12, color: C.quiet, marginTop: 6 }}>
-        {pos ? 'Pin set. Tap the map to move it if the address isn’t quite right.' : 'Search an address or tap the map to drop a pin.'}
-      </div>
-      <label style={st.label}>Building or landmark</label>
-      <input style={st.input} value={value.landmark || ''} maxLength={150}
-        onChange={(e) => onChange({ ...value, landmark: e.target.value })} placeholder="e.g. Green gate beside the church" />
+      <Field label={pickup ? 'Pickup address' : 'Delivery address'} error={error}
+        hint={value.lat != null ? 'Pin set. Tap the map below to adjust it.' : 'Search an address, or tap the map to drop a pin.'}>
+        <div>
+          <AddressAutocompleteInput value={value.address || ''} onChange={(t) => onChange({ ...value, address: t })}
+            onPlaceSelect={(p) => onChange({ ...value, address: p.formattedAddress || p.name, lat: p.lat, lng: p.lng })}
+            placeholder={pickup ? 'Where should the rider collect it?' : 'Where is it going?'} />
+        </div>
+      </Field>
+      <Field label="Building or landmark (optional)">
+        <input className="vd-input" value={value.landmark || ''} maxLength={150} onChange={(e) => onChange({ ...value, landmark: e.target.value })}
+          placeholder={pickup ? 'e.g. Beside the pharmacy' : 'e.g. Green gate beside the church'} />
+      </Field>
     </>
   );
 }
 
-export default function SendPackage({ go, user, shared, openDelivery }) {
+function Optional({ label, children, initiallyOpen }) {
+  const [open, setOpen] = useState(!!initiallyOpen);
+  if (!open) return <button type="button" className="vd-link" style={{ marginTop: 10 }} onClick={() => setOpen(true)}>{label}</button>;
+  return children;
+}
+
+function Summary({ pickup, dropoff, pkg, quote }) {
+  const sizeName = (PACKAGE_SIZES.find(([k]) => k === pkg.size) || [])[1];
+  const catName = (PACKAGE_CATEGORIES.find(([k]) => k === pkg.category) || [])[1];
+  return (
+    <div className="vd-panel">
+      <div className="vd-panel__title">Your delivery</div>
+      <ol className="vd-timeline">
+        <li data-state={pickup.lat != null ? 'done' : 'todo'}><span className="vd-timeline__dot" />
+          <div className="vd-timeline__t">{pickup.address || 'Pickup not set'}</div>
+          {pickup.contactName && <div className="vd-timeline__s">From {pickup.contactName}</div>}</li>
+        <li data-state={dropoff.lat != null ? 'done' : 'todo'}><span className="vd-timeline__dot" />
+          <div className="vd-timeline__t">{dropoff.address || 'Drop-off not set'}</div>
+          {dropoff.recipientName && <div className="vd-timeline__s">To {dropoff.recipientName}</div>}</li>
+      </ol>
+      {catName && <div className="vd-row" style={{ marginTop: 12 }}><span>Package</span><span>{[catName, sizeName && `${sizeName.toLowerCase()} size`].filter(Boolean).join(', ')}{pkg.fragile ? ', fragile' : ''}</span></div>}
+      {quote && <div className="vd-row"><span>Distance</span><span>About {quote.distanceKm} km</span></div>}
+      {quote && <div className="vd-total"><span>Total, cash</span><b>{formatJMD(quote.totalCents)}</b></div>}
+    </div>
+  );
+}
+
+export default function SendPackage({ go, user, shared, openDelivery, domains }) {
+  const { VilleMap, geocodeLatLng } = shared;
   const [step, setStep] = useState(0);
-  const [pickup, setPickup] = useState({ contactName: user?.name || '', contactPhone: '' });
+  const [pickup, setPickup] = useState({ contactName: user?.name || '', contactPhone: user?.phone || '' });
   const [dropoff, setDropoff] = useState({});
   const [pkg, setPkg] = useState({ category: '', size: 'small', description: '', weightKg: '', fragile: false, handling: '' });
   const [payer, setPayer] = useState('sender');
@@ -51,168 +69,256 @@ export default function SendPackage({ go, user, shared, openDelivery }) {
   const [quote, setQuote] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const keyRef = useRef(newRequestKey()); // one key per booking attempt → no double bookings
+  const [tried, setTried] = useState({});
+  const [pinFor, setPinFor] = useState('pickup');
+  const [doneId, setDoneId] = useState(null);
+  const keyRef = useRef(newRequestKey());
+  const top = () => { try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) { /* ignore */ } };
 
-  const stepOk = useMemo(() => [
-    pickup.lat != null && pickup.contactName?.trim() && (pickup.contactPhone || '').replace(/\D/g, '').length >= 7,
-    dropoff.lat != null && dropoff.recipientName?.trim() && (dropoff.recipientPhone || '').replace(/\D/g, '').length >= 7,
-    pkg.category && pkg.size && pkg.description.trim().length >= 3 && rulesOk,
-  ], [pickup, dropoff, pkg, rulesOk]);
+  const routeErrors = useMemo(() => ({
+    pickupAddr: pickup.lat == null ? 'Choose a pickup address or drop a pin.' : '',
+    sender: !pickup.contactName?.trim() ? 'Enter the sender’s name.' : '',
+    senderPhone: digits(pickup.contactPhone).length < 7 ? 'Enter a phone number the rider can call.' : '',
+    dropAddr: dropoff.lat == null ? 'Choose a delivery address or drop a pin.' : '',
+    recipient: !dropoff.recipientName?.trim() ? 'Enter the recipient’s name.' : '',
+    recipientPhone: digits(dropoff.recipientPhone).length < 7 ? 'Enter the recipient’s phone number.' : '',
+  }), [pickup, dropoff]);
+  const pkgErrors = useMemo(() => ({
+    category: !pkg.category ? 'Choose what you’re sending.' : '',
+    description: pkg.description.trim().length < 3 ? 'Describe the package in a few words.' : '',
+    weight: pkg.weightKg !== '' && !(Number(pkg.weightKg) > 0 && Number(pkg.weightKg) <= 20) ? 'Enter a weight up to 20 kg.' : '',
+    rules: !rulesOk ? 'Confirm the package has none of these items.' : '',
+  }), [pkg, rulesOk]);
+  const ok = (errs) => Object.values(errs).every((v) => !v);
+  const show = (s, errs, k) => (tried[s] ? errs[k] : '');
 
+  const setPinAt = async (lat, lng) => {
+    const set = pinFor === 'pickup' ? setPickup : setDropoff;
+    set((v) => ({ ...v, lat, lng }));
+    try { const a = await geocodeLatLng(lat, lng); if (a) set((v) => ({ ...v, address: a })); } catch (e) { /* keep the pin */ }
+  };
+
+  const nextFromRoute = () => { setTried((t) => ({ ...t, 0: true })); if (ok(routeErrors)) { setStep(1); top(); } };
   const getQuote = async () => {
+    setTried((t) => ({ ...t, 1: true }));
+    if (!ok(pkgErrors)) return;
     setBusy(true); setErr(''); setQuote(null);
     try {
       const q = await api.quote({
         pickup: { lat: pickup.lat, lng: pickup.lng }, dropoff: { lat: dropoff.lat, lng: dropoff.lng },
         size: pkg.size, fragile: pkg.fragile, weightKg: pkg.weightKg === '' ? null : Number(pkg.weightKg),
       });
-      setQuote(q); setStep(3);
+      setQuote(q); setStep(2); top();
     } catch (e) { setErr(errText(e)); }
     setBusy(false);
   };
-
-  const confirm = async () => {
+  const place = async () => {
+    if (busy) return;
     setBusy(true); setErr('');
     try {
       const res = await api.create({
-        idempotencyKey: keyRef.current,
-        expectedTotalCents: quote.totalCents,
-        pickup, dropoff,
-        package: { ...pkg, weightKg: pkg.weightKg === '' ? null : Number(pkg.weightKg) },
-        payer, acceptedRules: rulesOk,
+        idempotencyKey: keyRef.current, expectedTotalCents: quote.totalCents, pickup, dropoff,
+        package: { ...pkg, weightKg: pkg.weightKg === '' ? null : Number(pkg.weightKg) }, payer, acceptedRules: rulesOk,
       });
-      openDelivery(res.deliveryId);
+      setDoneId(res.deliveryId); setStep(3); top();
     } catch (e) {
       if (e.code === 'functions/aborted' && e.details?.totalCents) {
         setQuote((q) => ({ ...q, totalCents: e.details.totalCents }));
-        setErr('The price changed while you were booking. Please check the new total and confirm again.');
-        // A changed price is a new attempt — use a fresh key.
+        setErr('The price changed while you were booking. Check the new total and place the request again.');
         keyRef.current = newRequestKey();
-      } else {
-        setErr(errText(e));
-      }
+      } else setErr(errText(e));
     }
     setBusy(false);
   };
+  const restart = () => {
+    keyRef.current = newRequestKey();
+    setDropoff({}); setPkg({ category: '', size: 'small', description: '', weightKg: '', fragile: false, handling: '' });
+    setRulesOk(false); setQuote(null); setTried({}); setDoneId(null); setErr(''); setStep(0); top();
+  };
 
-  const titles = ['Pickup', 'Drop-off', 'Package', 'Review'];
-  const back = () => (step === 0 ? go('dash-home') : setStep(step - 1));
+  const markers = [
+    ...(pickup.lat != null ? [{ position: { lat: pickup.lat, lng: pickup.lng }, title: 'Pickup' }] : []),
+    ...(dropoff.lat != null ? [{ position: { lat: dropoff.lat, lng: dropoff.lng }, title: 'Drop-off' }] : []),
+  ];
+  const focusPos = pinFor === 'pickup' ? (pickup.lat != null ? pickup : null) : (dropoff.lat != null ? dropoff : null);
 
   return (
-    <div style={st.page}>
-      <Header title={`Send a Package · ${titles[step]}`} onBack={back} />
-      <div style={st.wrap}>
-        <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-          {titles.map((t, i) => <div key={t} style={{ flex: 1, height: 4, borderRadius: 4, background: i <= step ? C.purple : C.purpleLine }} />)}
-        </div>
+    <Shell go={go} active="send" domains={domains}>
+      <div className="vd-wrap">
+        <PageHead title={step === 3 ? 'Request placed' : 'Send a Package'} sub={step === 3 ? null : 'Motorcycle delivery across Mandeville and nearby areas.'} />
+        <Steps steps={STEPS} current={step} />
 
-        {step === 0 && (
-          <div style={st.card}>
-            <LocationStep shared={shared} value={pickup} onChange={setPickup} kind="pickup" />
-            <label style={st.label}>Sender name</label>
-            <input style={st.input} value={pickup.contactName || ''} maxLength={80} onChange={(e) => setPickup({ ...pickup, contactName: e.target.value })} />
-            <label style={st.label}>Sender phone</label>
-            <input style={st.input} type="tel" value={pickup.contactPhone || ''} maxLength={20} onChange={(e) => setPickup({ ...pickup, contactPhone: e.target.value })} placeholder="876…" />
-            <label style={st.label}>Pickup instructions (optional)</label>
-            <textarea style={{ ...st.input, minHeight: 60 }} value={pickup.instructions || ''} maxLength={300} onChange={(e) => setPickup({ ...pickup, instructions: e.target.value })} />
-            <button style={{ ...st.btn, marginTop: 14, opacity: stepOk[0] ? 1 : 0.5 }} disabled={!stepOk[0]} onClick={() => setStep(1)}>Next: drop-off</button>
+        {step === 3 ? (
+          <div className="vd-panel vd-done" style={{ maxWidth: 560, margin: '0 auto 40px' }}>
+            <div className="vd-done__art"><DoneArt /></div>
+            <h1>We’re finding your rider</h1>
+            <p>You’ll get a notification when a rider accepts. You can cancel free of charge until the package is collected.</p>
+            <span className="vd-done__id">Delivery ID {String(doneId || '').toUpperCase()}</span>
+            <div style={{ display: 'grid', gap: 10, marginTop: 22 }}>
+              <button className="vd-btn vd-btn--primary vd-btn--block" onClick={() => openDelivery(doneId)}>Track delivery</button>
+              <button className="vd-btn vd-btn--secondary vd-btn--block" onClick={restart}>Send another package</button>
+            </div>
           </div>
-        )}
+        ) : (
+          <div className="vd-split" style={{ paddingBottom: 40 }}>
+            <div>
+              {step === 0 && (
+                <>
+                  <div className="vd-panel">
+                    <div className="vd-panel__title">Pickup</div>
+                    <AddressBlock shared={shared} kind="pickup" value={pickup} onChange={setPickup} error={show(0, routeErrors, 'pickupAddr')} />
+                    <div className="vd-choice vd-choice--2 vd-choice--stack" style={{ marginTop: 14 }}>
+                      <Field label="Sender name" error={show(0, routeErrors, 'sender')}>
+                        <input className="vd-input" value={pickup.contactName || ''} maxLength={80} autoComplete="name" onChange={(e) => setPickup({ ...pickup, contactName: e.target.value })} />
+                      </Field>
+                      <Field label="Sender phone" error={show(0, routeErrors, 'senderPhone')}>
+                        <input className="vd-input" type="tel" inputMode="tel" autoComplete="tel" value={pickup.contactPhone || ''} maxLength={20} placeholder="876…" onChange={(e) => setPickup({ ...pickup, contactPhone: e.target.value })} />
+                      </Field>
+                    </div>
+                    <Optional label="Add pickup instructions" initiallyOpen={!!pickup.instructions}>
+                      <Field label="Pickup instructions (optional)">
+                        <textarea className="vd-input" value={pickup.instructions || ''} maxLength={300} onChange={(e) => setPickup({ ...pickup, instructions: e.target.value })} placeholder="e.g. Ask for Marcia at the front desk" />
+                      </Field>
+                    </Optional>
+                  </div>
 
-        {step === 1 && (
-          <div style={st.card}>
-            <LocationStep shared={shared} value={dropoff} onChange={setDropoff} kind="dropoff" />
-            <label style={st.label}>Recipient name</label>
-            <input style={st.input} value={dropoff.recipientName || ''} maxLength={80} onChange={(e) => setDropoff({ ...dropoff, recipientName: e.target.value })} />
-            <label style={st.label}>Recipient phone</label>
-            <input style={st.input} type="tel" value={dropoff.recipientPhone || ''} maxLength={20} onChange={(e) => setDropoff({ ...dropoff, recipientPhone: e.target.value })} placeholder="876…" />
-            <label style={st.label}>Alternative contact (optional)</label>
-            <input style={st.input} type="tel" value={dropoff.altPhone || ''} maxLength={20} onChange={(e) => setDropoff({ ...dropoff, altPhone: e.target.value })} />
-            <label style={st.label}>Delivery instructions (optional)</label>
-            <textarea style={{ ...st.input, minHeight: 60 }} value={dropoff.instructions || ''} maxLength={300} onChange={(e) => setDropoff({ ...dropoff, instructions: e.target.value })} />
-            <button style={{ ...st.btn, marginTop: 14, opacity: stepOk[1] ? 1 : 0.5 }} disabled={!stepOk[1]} onClick={() => setStep(2)}>Next: package</button>
+                  <div className="vd-panel">
+                    <div className="vd-panel__title">Drop-off</div>
+                    <AddressBlock shared={shared} kind="dropoff" value={dropoff} onChange={setDropoff} error={show(0, routeErrors, 'dropAddr')} />
+                    <div className="vd-choice vd-choice--2 vd-choice--stack" style={{ marginTop: 14 }}>
+                      <Field label="Recipient name" error={show(0, routeErrors, 'recipient')}>
+                        <input className="vd-input" value={dropoff.recipientName || ''} maxLength={80} onChange={(e) => setDropoff({ ...dropoff, recipientName: e.target.value })} />
+                      </Field>
+                      <Field label="Recipient phone" error={show(0, routeErrors, 'recipientPhone')}>
+                        <input className="vd-input" type="tel" inputMode="tel" value={dropoff.recipientPhone || ''} maxLength={20} placeholder="876…" onChange={(e) => setDropoff({ ...dropoff, recipientPhone: e.target.value })} />
+                      </Field>
+                    </div>
+                    <Optional label="Add another contact or delivery instructions" initiallyOpen={!!(dropoff.altPhone || dropoff.instructions)}>
+                      <Field label="Alternative phone (optional)">
+                        <input className="vd-input" type="tel" inputMode="tel" value={dropoff.altPhone || ''} maxLength={20} onChange={(e) => setDropoff({ ...dropoff, altPhone: e.target.value })} />
+                      </Field>
+                      <Field label="Delivery instructions (optional)">
+                        <textarea className="vd-input" value={dropoff.instructions || ''} maxLength={300} onChange={(e) => setDropoff({ ...dropoff, instructions: e.target.value })} />
+                      </Field>
+                    </Optional>
+                  </div>
+
+                  <div className="vd-panel">
+                    <div className="vd-panel__title">Check the map</div>
+                    <div className="vd-tabs" role="tablist" aria-label="Tap the map to place">
+                      {[['pickup', 'Place pickup pin'], ['dropoff', 'Place drop-off pin']].map(([k, l]) => (
+                        <button key={k} role="tab" aria-selected={pinFor === k} onClick={() => setPinFor(k)}>{l}</button>
+                      ))}
+                    </div>
+                    <div className="vd-map">
+                      <VilleMap height={260} center={focusPos ? { lat: focusPos.lat, lng: focusPos.lng } : MANDEVILLE} zoom={focusPos ? 16 : 13}
+                        markers={markers} onClick={(e) => setPinAt(e.latLng.lat(), e.latLng.lng())} />
+                    </div>
+                    <span className="vd-field__hint">Tap the map to put the {pinFor === 'pickup' ? 'pickup' : 'drop-off'} pin exactly where the rider should go.</span>
+                  </div>
+                  <div style={{ marginTop: 16 }}>
+                    <button className="vd-btn vd-btn--primary vd-btn--block" onClick={nextFromRoute}>Continue to package details</button>
+                    {tried[0] && !ok(routeErrors) && <div className="vd-errbox">Some details are missing. Check the highlighted fields.</div>}
+                  </div>
+                </>
+              )}
+
+              {step === 1 && (
+                <>
+                  <div className="vd-panel">
+                    <div className="vd-panel__title">What are you sending?</div>
+                    <div className="vd-pills" role="radiogroup" aria-label="Package category">
+                      {PACKAGE_CATEGORIES.map(([k, l]) => (
+                        <button key={k} className="vd-filter" role="radio" aria-checked={pkg.category === k} aria-pressed={pkg.category === k} onClick={() => setPkg({ ...pkg, category: k })}>{l}</button>
+                      ))}
+                    </div>
+                    {show(1, pkgErrors, 'category') && <span className="vd-field__err">{pkgErrors.category}</span>}
+                    <Field label="Description" error={show(1, pkgErrors, 'description')}>
+                      <input className="vd-input" value={pkg.description} maxLength={300} onChange={(e) => setPkg({ ...pkg, description: e.target.value })} placeholder="e.g. Birthday gift in a small box" />
+                    </Field>
+                  </div>
+                  <div className="vd-panel">
+                    <div className="vd-panel__title">Size and weight</div>
+                    <div className="vd-choice" role="radiogroup" aria-label="Package size">
+                      {PACKAGE_SIZES.map(([k, l, d]) => (
+                        <button key={k} className="vd-opt" role="radio" aria-checked={pkg.size === k} onClick={() => setPkg({ ...pkg, size: k })}>
+                          <span><b>{l}</b><small>{d}</small></span>
+                        </button>
+                      ))}
+                    </div>
+                    <Field label="Approximate weight in kg (optional)" error={show(1, pkgErrors, 'weight')}>
+                      <input className="vd-input" type="number" inputMode="decimal" min="0" max="20" step="0.5" value={pkg.weightKg} onChange={(e) => setPkg({ ...pkg, weightKg: e.target.value })} />
+                    </Field>
+                    <label className="vd-check" style={{ marginTop: 12 }}>
+                      <input type="checkbox" checked={pkg.fragile} onChange={(e) => setPkg({ ...pkg, fragile: e.target.checked })} />
+                      <span>Fragile, handle with care</span>
+                    </label>
+                    <Optional label="Add handling instructions" initiallyOpen={!!pkg.handling}>
+                      <Field label="Handling instructions (optional)">
+                        <input className="vd-input" value={pkg.handling} maxLength={200} onChange={(e) => setPkg({ ...pkg, handling: e.target.value })} placeholder="e.g. Keep upright" />
+                      </Field>
+                    </Optional>
+                  </div>
+                  <div className="vd-panel">
+                    <div className="vd-panel__title">Items we can’t carry</div>
+                    <ul style={{ margin: 0, paddingLeft: 20, fontSize: 14.5 }}>{PROHIBITED_SUMMARY.map((p) => <li key={p}>{p}</li>)}</ul>
+                    <label className="vd-check" style={{ marginTop: 10 }}>
+                      <input type="checkbox" checked={rulesOk} onChange={(e) => setRulesOk(e.target.checked)} />
+                      <span>This package contains none of these items. I understand the rider may refuse anything unsafe.</span>
+                    </label>
+                    {show(1, pkgErrors, 'rules') && <span className="vd-field__err">{pkgErrors.rules}</span>}
+                  </div>
+                  {err && <div className="vd-errbox" role="alert">{err}</div>}
+                  <div className="vd-choice vd-choice--2" style={{ marginTop: 16 }}>
+                    <button className="vd-btn vd-btn--secondary" onClick={() => { setStep(0); top(); }}>Back</button>
+                    <button className="vd-btn vd-btn--primary" disabled={busy} onClick={getQuote}>{busy ? 'Getting your price…' : 'See price'}</button>
+                  </div>
+                </>
+              )}
+
+              {step === 2 && quote && (
+                <>
+                  <div className="vd-show-mobile" style={{ marginBottom: 14 }}><Summary pickup={pickup} dropoff={dropoff} pkg={pkg} quote={null} /></div>
+                  <div className="vd-panel">
+                    <div className="vd-panel__title">Price</div>
+                    {quote.lines.map((l) => <div key={l.key} className="vd-row"><span>{l.label}</span><span>{formatJMD(l.cents)}</span></div>)}
+                    <div className="vd-total"><span>Total</span><b>{formatJMD(quote.totalCents)}</b></div>
+                    <p className="vd-field__hint">Distance is about {quote.distanceKm} km by road, estimated.</p>
+                    {quote.pricingPlaceholder && <div className="vd-warnbox" style={{ marginTop: 12 }}>Test pricing. Final VilleDash rates haven’t been published yet.</div>}
+                  </div>
+                  <div className="vd-panel">
+                    <div className="vd-panel__title">Payment</div>
+                    <p style={{ fontSize: 14.5, marginBottom: 10 }}>Pay the rider in cash. Who pays?</p>
+                    <div className="vd-choice vd-choice--2" role="radiogroup" aria-label="Who pays">
+                      {[['sender', 'Me, at pickup'], ['recipient', 'Recipient, on delivery']].map(([k, l]) => (
+                        <button key={k} className="vd-opt" role="radio" aria-checked={payer === k} onClick={() => setPayer(k)}><span><b>{l}</b></span></button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="vd-panel">
+                    <div className="vd-panel__title">Before you place it</div>
+                    <ul style={{ margin: 0, paddingLeft: 20, fontSize: 14.5, display: 'grid', gap: 6 }}>
+                      <li>You’re not charged anything if no rider can take it.</li>
+                      <li>You can cancel free of charge until the rider collects the package.</li>
+                      <li>We give you a 4-digit PIN. Share it with {dropoff.recipientName || 'the recipient'}; they give it to the rider only after receiving the package.</li>
+                    </ul>
+                  </div>
+                  {err && <div className="vd-errbox" role="alert">{err}</div>}
+                  <div className="vd-choice vd-choice--2" style={{ marginTop: 16 }}>
+                    <button className="vd-btn vd-btn--secondary" disabled={busy} onClick={() => { setStep(1); top(); }}>Back</button>
+                    <button className="vd-btn vd-btn--primary" disabled={busy} onClick={place}>{busy ? 'Placing request…' : `Place request, ${formatJMD(quote.totalCents)}`}</button>
+                  </div>
+                </>
+              )}
+            </div>
+            <aside className="vd-split__aside vd-hide-mobile">
+              <Summary pickup={pickup} dropoff={dropoff} pkg={pkg} quote={step === 2 ? quote : null} />
+              {step < 2 && <p className="vd-field__hint" style={{ marginTop: 10 }}><Chip tone="brand" plain>Cash</Chip> You’ll see the full price before you book.</p>}
+            </aside>
           </div>
-        )}
-
-        {step === 2 && (
-          <div style={st.card}>
-            <label style={st.label}>What are you sending?</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {PACKAGE_CATEGORIES.map(([k, l]) => (
-                <button key={k} onClick={() => setPkg({ ...pkg, category: k })}
-                  style={{ padding: '8px 12px', borderRadius: 20, fontSize: 13, cursor: 'pointer', fontWeight: 600,
-                    border: `1px solid ${pkg.category === k ? C.purple : C.line}`, background: pkg.category === k ? C.purpleSoft : C.white, color: pkg.category === k ? C.purple : C.ink }}>{l}</button>
-              ))}
-            </div>
-            <label style={st.label}>Size</label>
-            {PACKAGE_SIZES.map(([k, l, d]) => (
-              <label key={k} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '9px 10px', borderRadius: 10, marginBottom: 6, cursor: 'pointer',
-                border: `1px solid ${pkg.size === k ? C.purple : C.line}`, background: pkg.size === k ? C.purpleSoft : C.white }}>
-                <input type="radio" name="size" checked={pkg.size === k} onChange={() => setPkg({ ...pkg, size: k })} />
-                <span><b style={{ fontSize: 14 }}>{l}</b><br /><span style={{ fontSize: 12, color: C.quiet }}>{d}</span></span>
-              </label>
-            ))}
-            <label style={st.label}>Description</label>
-            <input style={st.input} value={pkg.description} maxLength={300} onChange={(e) => setPkg({ ...pkg, description: e.target.value })} placeholder="e.g. Birthday gift in a small box" />
-            <label style={st.label}>Approximate weight in kg (optional)</label>
-            <input style={st.input} type="number" min="0" step="0.5" value={pkg.weightKg} onChange={(e) => setPkg({ ...pkg, weightKg: e.target.value })} />
-            <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 14, margin: '12px 0 4px' }}>
-              <input type="checkbox" checked={pkg.fragile} onChange={(e) => setPkg({ ...pkg, fragile: e.target.checked })} /> Fragile — handle with care
-            </label>
-            <label style={st.label}>Special handling (optional)</label>
-            <input style={st.input} value={pkg.handling} maxLength={200} onChange={(e) => setPkg({ ...pkg, handling: e.target.value })} placeholder="e.g. Keep upright" />
-
-            <div style={st.note}>
-              <b>VilleDash can't carry:</b>
-              <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>{PROHIBITED_SUMMARY.map((p) => <li key={p}>{p}</li>)}</ul>
-            </div>
-            <label style={{ display: 'flex', gap: 8, alignItems: 'flex-start', fontSize: 13.5, margin: '8px 0' }}>
-              <input type="checkbox" checked={rulesOk} onChange={(e) => setRulesOk(e.target.checked)} style={{ marginTop: 3 }} />
-              <span>I confirm this package contains none of these items. The rider may refuse anything unsafe.</span>
-            </label>
-            {err && <div style={st.err}>{err}</div>}
-            <button style={{ ...st.btn, marginTop: 8, opacity: stepOk[2] && !busy ? 1 : 0.5 }} disabled={!stepOk[2] || busy} onClick={getQuote}>
-              {busy ? 'Getting your price…' : 'See price'}
-            </button>
-          </div>
-        )}
-
-        {step === 3 && quote && (
-          <>
-            <div style={st.card}>
-              <div style={st.h2}>Route</div>
-              <div style={{ fontSize: 13.5, lineHeight: 1.5 }}>
-                <div><b>From:</b> {pickup.address}</div>
-                <div><b>To:</b> {dropoff.address} ({dropoff.recipientName})</div>
-                <div style={{ color: C.quiet, fontSize: 12.5, marginTop: 4 }}>About {quote.distanceKm} km by road (estimate)</div>
-              </div>
-            </div>
-            <div style={st.card}>
-              <div style={st.h2}>Price</div>
-              {quote.lines.map((l) => (
-                <div key={l.key} style={st.row}><span style={{ color: C.quiet }}>{l.label}</span><span>{formatJMD(l.cents)}</span></div>
-              ))}
-              <div style={{ ...st.row, borderTop: `2px solid ${C.purpleLine}`, marginTop: 8, paddingTop: 10 }}>
-                <b style={{ fontSize: 15 }}>Total</b><b style={{ fontSize: 22, color: C.purple }}>{formatJMD(quote.totalCents)}</b>
-              </div>
-              {quote.pricingPlaceholder && <div style={st.note}>Test pricing — final VilleDash rates have not been published yet.</div>}
-              <label style={st.label}>Who pays the rider in cash?</label>
-              <div style={{ display: 'flex', gap: 8 }}>
-                {[['sender', 'Me, at pickup'], ['recipient', 'Recipient, on delivery']].map(([k, l]) => (
-                  <button key={k} onClick={() => setPayer(k)}
-                    style={{ flex: 1, padding: '10px 8px', borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                      border: `1px solid ${payer === k ? C.purple : C.line}`, background: payer === k ? C.purpleSoft : C.white, color: payer === k ? C.purple : C.ink }}>{l}</button>
-                ))}
-              </div>
-            </div>
-            {err && <div style={st.err}>{err}</div>}
-            <button style={{ ...st.btn, opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={confirm}>
-              {busy ? 'Booking…' : `Confirm — ${formatJMD(quote.totalCents)} cash`}
-            </button>
-            <div style={{ ...st.sub, textAlign: 'center', marginTop: 8, fontSize: 12 }}>You're not charged anything if no rider can take it.</div>
-          </>
         )}
       </div>
-    </div>
+    </Shell>
   );
 }
+

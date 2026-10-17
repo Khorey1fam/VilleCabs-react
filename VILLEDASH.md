@@ -19,7 +19,11 @@ customers see VilleCabs exactly as before.
 | Rider portal at `/rider` | `src/dash/RiderPortal.js` |
 | Admin → VilleDash tab (overview, dispatch, store orders, riders, merchants, settlements, pricing, launch) | `src/dash/AdminDash.js` |
 | Security rules + indexes | `firestore.rules`, `firestore.indexes.json` |
-| Screen check — renders every new screen with sample data, screenshots at phone width | `tools/screen-check/` |
+| Customer design system (nav, bottom bar, footer, cards, states, forms) and illustrations | `src/dash/kit.js`, `src/dash/dash.css`, `src/dash/art.js` |
+| VilleDash home, public landing, search, categories | `src/dash/Home.js` |
+| My Orders and active-delivery cards | `src/dash/Orders.js` |
+| About and Delivery terms pages | `src/dash/Info.js` |
+| Screen check — renders every new screen with sample data, screenshots at any width, and clicks through the main journeys (`flows.js`) | `tools/screen-check/` |
 
 Fixes to the existing app in the same branch:
 
@@ -90,6 +94,10 @@ Setup for villedash.com and villeapp.org (do each one):
 5. Nothing to enter in the app: `villeapp.org` and `villedash.com` are built in as defaults. Admin → VilleDash → **Sites & ads** can change them later.
 
 Sign-ins don't carry across domains: a customer signed in on villecabs.com signs in once more on the VilleDash domain (same account). To try a brand before the domain is live, open a Vercel preview with `?site=dash` or `?site=ville`.
+
+## Launch sign-ups
+
+Before launch, signed-out visitors to the VilleDash domain see a "launching soon" page with a **Notify me** box (email or phone). Entries go to `dash_interest` and are listed in Admin → VilleDash → Launch, with a Copy all button. The `firestore.rules` on this branch allow anyone to add one entry with only those fields; only admins can read them.
 
 ## Storage rules for images
 
