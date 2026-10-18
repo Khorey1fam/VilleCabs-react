@@ -4,8 +4,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, doc, query, where, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import {
   api, dashDb, errText, formatJMD, newRequestKey, ORDER_LABEL, ORDER_FINAL, STATUS_LABEL,
-  useCart, lineUnitCents,
+  useCart, lineUnitCents, useCardPayments, CARD_MIN_CENTS,
 } from './dashApi';
+import { goToCard, CardNote, PaymentPending } from './Payments';
 import { Shell, PageHead, Field, Icon, Chip, Skeleton, SkeletonRows, EmptyState, ErrorState, Timeline, useLive, docsOf, docOf, fmtWhen, shortId } from './kit';
 import { StoreCoverArt, StoreArt } from './art';
 import { CATEGORY_GROUPS, SearchBox, MerchantCard, useApprovedMerchants, catLabel, takeHandOff, storeState, todayHours } from './Home';
@@ -289,13 +290,13 @@ function useCartQuote(cart, pos) {
   return { ...s, items, refresh: () => setN((x) => x + 1) };
 }
 
-function Totals({ cart, q }) {
+function Totals({ cart, q, card }) {
   return (
     <>
       <div className="vd-row"><span>Items</span><span>{formatJMD(q.quote ? q.quote.subtotalCents : cartTotal(cart))}</span></div>
       <div className="vd-row"><span>Delivery fee{q.quote ? ` (about ${q.quote.distanceKm} km)` : ''}</span><span>{q.quote ? formatJMD(q.quote.deliveryCents) : q.loading ? 'Checking…' : 'Add your address'}</span></div>
       {q.quote?.serviceCents > 0 && <div className="vd-row"><span>Service fee</span><span>{formatJMD(q.quote.serviceCents)}</span></div>}
-      {q.quote && <div className="vd-total"><span>Total, cash on delivery</span><b>{formatJMD(q.quote.totalCents)}</b></div>}
+      {q.quote && <div className="vd-total"><span>{card ? 'Total, by card' : 'Total, cash on delivery'}</span><b>{formatJMD(q.quote.totalCents)}</b></div>}
       {q.quote?.pricingPlaceholder && <div className="vd-warnbox" style={{ marginTop: 12 }}>Test delivery pricing. Final rates haven’t been published yet.</div>}
     </>
   );
@@ -395,8 +396,12 @@ export function Checkout({ go, user, openOrder, domains }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const keyRef = useRef(newRequestKey());
+  const { cardOn, sandbox } = useCardPayments(user?.uid);
+  const [method, setMethod] = useState('cash');
   if (!cart.items.length) return <EmptyCart go={go} domains={domains} />;
   if (!pos) { setTimeout(() => go('dash-cart'), 0); return null; }
+  const canCard = cardOn && q.quote && q.quote.totalCents >= CARD_MIN_CENTS;
+  const byCard = method === 'card' && canCard;
   const setDrop = (patch) => saveDraft((d) => ({ ...d, drop: { ...(d.drop || {}), ...patch } }));
   const phone = draft.phone ?? '';
 
@@ -407,9 +412,13 @@ export function Checkout({ go, user, openOrder, domains }) {
       const r = await api.marketCreate({
         idempotencyKey: keyRef.current, merchantId: cart.merchantId, items: q.items, expectedTotalCents: q.quote.totalCents,
         dropoff: { ...drop, address: drop.address || 'Pinned location' }, phone, note: draft.note || '',
+        paymentMethod: byCard ? 'card' : 'cash',
       });
       saveCart({ merchantId: null, items: [] });
       try { sessionStorage.removeItem(DRAFT_KEY); } catch (e) { /* ignore */ }
+      if (r.needsPayment) {
+        try { await goToCard('order', r.orderId); return; } catch (e) { /* the order page offers card again or cash */ }
+      }
       openOrder(r.orderId);
     } catch (e) {
       if (e.code === 'functions/aborted' && e.details?.totalCents) {
@@ -447,9 +456,17 @@ export function Checkout({ go, user, openOrder, domains }) {
             </div>
             <div className="vd-panel">
               <div className="vd-panel__title">Payment</div>
-              <div className="vd-opt" aria-checked="true" role="radio" style={{ cursor: 'default' }}>
-                <span><b>Cash on delivery</b><small>Pay the rider when your order arrives.</small></span>
+              <div className="vd-choice" role="radiogroup" aria-label="Payment">
+                <button className="vd-opt" role="radio" aria-checked={!byCard} onClick={() => setMethod('cash')} style={canCard ? undefined : { cursor: 'default' }}>
+                  <span><b>Cash on delivery</b><small>Pay the rider when your order arrives.</small></span>
+                </button>
+                {canCard && (
+                  <button className="vd-opt" role="radio" aria-checked={byCard} onClick={() => setMethod('card')}>
+                    <span><b>Card now</b><small>Visa or Mastercard. The store gets your order once it’s paid.</small></span>
+                  </button>
+                )}
               </div>
+              {byCard && <CardNote sandbox={sandbox} />}
             </div>
           </div>
           <aside className="vd-split__aside">
@@ -458,7 +475,7 @@ export function Checkout({ go, user, openOrder, domains }) {
               {cart.items.map((i) => (
                 <div key={i.key} className="vd-row"><span>{i.qty} × {i.name}</span><span>{formatJMD(i.unitCents * i.qty)}</span></div>
               ))}
-              <div style={{ borderTop: '1px solid var(--vd-line)', margin: '8px 0 0', paddingTop: 6 }}><Totals cart={cart} q={q} /></div>
+              <div style={{ borderTop: '1px solid var(--vd-line)', margin: '8px 0 0', paddingTop: 6 }}><Totals cart={cart} q={q} card={byCard} /></div>
               {q.err && <div className="vd-errbox" role="alert">{q.err} <button className="vd-link" onClick={q.refresh}>Try again</button></div>}
               {err && <div className="vd-errbox" role="alert">{err}</div>}
               <p className="vd-field__hint" style={{ marginTop: 12 }}>The store confirms your order before preparing it. You can cancel until they start preparing.</p>
@@ -468,7 +485,7 @@ export function Checkout({ go, user, openOrder, domains }) {
       </div>
       <div className="vd-cartbar vd-cartbar--flush">
         <button className="vd-btn vd-btn--primary" disabled={!q.quote || busy} onClick={place}>
-          <span>{busy ? 'Placing order…' : q.loading ? 'Checking prices…' : 'Place order'}</span>
+          <span>{busy ? (byCard ? 'Opening WiPay…' : 'Placing order…') : q.loading ? 'Checking prices…' : byCard ? 'Pay by card' : 'Place order'}</span>
           <span>{q.quote ? formatJMD(q.quote.totalCents) : ''}</span>
         </button>
       </div>
@@ -535,6 +552,7 @@ export function OrderTrack({ go, orderId, shared, openDelivery, domains }) {
     try { await api.marketCancel({ orderId: o.id, reason: 'Cancelled by customer' }); } catch (e) { setErr(errText(e)); }
   };
   const chip = <Chip tone={orderTone(o.status)}>{ORDER_LABEL[o.status] || o.status}</Chip>;
+  const paidCard = o.payment && o.payment.method === 'card';
 
   return shell(
     <>
@@ -551,7 +569,8 @@ export function OrderTrack({ go, orderId, shared, openDelivery, domains }) {
               {!fresh && <p className="vd-field__hint">Live rider location isn’t available right now. Status updates still arrive here.</p>}
             </div>
           )}
-          {!ORDER_FINAL.includes(o.status) && pin && (
+          {o.status === 'awaiting_payment' && <PaymentPending kind="order" id={o.id} target={o} />}
+          {!ORDER_FINAL.includes(o.status) && o.status !== 'awaiting_payment' && pin && (
             <div className="vd-pin">
               <div style={{ fontWeight: 650, color: 'var(--vd-deep)' }}>Your delivery PIN</div>
               <div className="vd-pin__code" aria-label={`PIN ${String(pin).split('').join(' ')}`}>{pin}</div>
@@ -581,12 +600,13 @@ export function OrderTrack({ go, orderId, shared, openDelivery, domains }) {
             ))}
             <div className="vd-row"><span>Delivery fee</span><span>{formatJMD(o.deliveryCents)}</span></div>
             {o.serviceCents > 0 && <div className="vd-row"><span>Service fee</span><span>{formatJMD(o.serviceCents)}</span></div>}
-            <div className="vd-total"><span>Total, cash</span><b>{formatJMD(o.totalCents)}</b></div>
+            <div className="vd-total"><span>{paidCard ? (o.payment.status === 'paid' ? 'Total, paid by card' : 'Total, by card') : 'Total, cash'}</span><b>{formatJMD(o.totalCents)}</b></div>
+            {paidCard && ['refund_due', 'refunded'].includes(o.payment.status) && <p className="vd-note" style={{ marginTop: 10 }}>{o.payment.status === 'refunded' ? 'Your card payment was refunded.' : 'VilleDash will refund your card payment.'}</p>}
             <p className="vd-field__hint">Delivering to {o.dropoff?.address}</p>
           </div>
           {err && <div className="vd-errbox" role="alert">{err}</div>}
           <div style={{ display: 'grid', gap: 10, marginTop: 14 }}>
-            {['awaiting_merchant', 'accepted'].includes(o.status) && <button className="vd-btn vd-btn--danger vd-btn--block" onClick={cancel}>Cancel order</button>}
+            {['awaiting_payment', 'awaiting_merchant', 'accepted'].includes(o.status) && <button className="vd-btn vd-btn--danger vd-btn--block" onClick={cancel}>Cancel order</button>}
             {o.deliveryId && <button className="vd-btn vd-btn--secondary vd-btn--block" onClick={() => openDelivery(o.deliveryId)}>Delivery details or report a problem</button>}
           </div>
         </aside>

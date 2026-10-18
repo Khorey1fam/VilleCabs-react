@@ -8,6 +8,7 @@ const check = (name, ok, extra = '') => results.push(`${ok ? 'PASS' : 'FAIL'} ${
   const page = async (s, w = 390) => {
     const p = await b.newPage({ viewport: { width: w, height: 844 } });
     p.errs = []; p.on('pageerror', (e) => p.errs.push(e.message));
+    p.calls = []; p.on('console', (m) => { const t = m.text(); if (t.startsWith('CALL ')) { const [, n, ...rest] = t.split(' '); p.calls.push([n, JSON.parse(rest.join(' ') || 'null')]); } });
     await p.goto(URL(s)); await p.waitForTimeout(500); return p;
   };
   const nav = (p) => p.evaluate(() => window.__nav);
@@ -109,7 +110,52 @@ const check = (name, ok, extra = '') => results.push(`${ok ? 'PASS' : 'FAIL'} ${
   check('orders: tabs and filters', all > stores && stores > done && done >= 1, `${all}/${stores}/${done}`);
   await p.close();
 
-  // 6. No sideways scroll on any customer screen at 360px.
+  // 6. Card payments: hidden when off; when on, card goes to WiPay's page
+  const sendToReview = async (p) => {
+    const addr = p.locator('[data-mock="address"]');
+    await addr.nth(0).fill('A'); await p.locator('[data-mock="map"]').click();
+    await p.fill('input[autocomplete="tel"]', '8765550101');
+    await addr.nth(1).fill('B'); await p.click('text=Place drop-off pin'); await p.locator('[data-mock="map"]').click();
+    await p.getByLabel('Recipient name').fill('Tasha'); await p.getByLabel('Recipient phone').fill('8765550202');
+    await p.click('text=Continue to package details');
+    await p.click('role=radio[name="Gift"]'); await p.getByLabel('Description').fill('Gift box');
+    await p.check('text=This package contains none of these items. I understand the rider may refuse anything unsafe.');
+    await p.click('text=See price'); await p.waitForTimeout(200);
+  };
+  p = await page('dash-send'); await sendToReview(p);
+  check('card off: no card option', await p.locator('role=radio[name="Card now (Visa or Mastercard)"]').count() === 0);
+  await p.close();
+  p = await page('dash-send&card=1');
+  await p.route('https://jm.wipayfinancial.com/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<h1>WIPAY TEST PAGE</h1>' }));
+  await sendToReview(p);
+  await p.click('role=radio[name="Card now (Visa or Mastercard)"]');
+  check('card on: test-mode note shown', await p.locator('text=Test mode').count() === 1);
+  await p.click('button:has-text("by card")'); await p.waitForTimeout(1200);
+  const created = p.calls.find((c) => c[0] === 'dashCreateDelivery')?.[1];
+  const started = p.calls.find((c) => c[0] === 'payCardStart')?.[1];
+  check('card on: booking made as card, then WiPay page opened', created?.paymentMethod === 'card' && started?.kind === 'delivery' && p.url().startsWith('https://jm.wipayfinancial.com/'), p.url());
+  await p.close();
+  p = await page('dash-checkout&card=1');
+  await p.route('https://jm.wipayfinancial.com/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: 'WIPAY' }));
+  await p.waitForTimeout(300);
+  await p.click('role=radio[name*="Card now"]');
+  await p.click('button:has-text("Pay by card")'); await p.waitForTimeout(1000);
+  const ord = p.calls.find((c) => c[0] === 'marketCreateOrder')?.[1];
+  check('checkout: card order then WiPay page', ord?.paymentMethod === 'card' && p.url().startsWith('https://jm.wipayfinancial.com/'), p.url());
+  await p.close();
+  p = await page('dash-order-unpaid');
+  check('unpaid order: shows pay panel with last error', await p.locator('text=Finish paying by card').count() === 1 && await p.locator('text=Declined by issuer').count() === 1);
+  await p.click('text=Pay cash on delivery'); await p.waitForTimeout(200);
+  check('unpaid order: switch to cash calls server', (await calls(p, 'payUseCash')).length === 1);
+  await p.close();
+  p = await page('pay-failed');
+  check('payment failed page', await p.locator('text=Payment didn’t go through').count() === 1);
+  await p.close();
+  p = await page('pay-ok'); await p.waitForTimeout(2800);
+  check('payment ok page then opens the order', (await p.locator('text=Payment received').count()) >= 1 && (await nav(p)) === 'O1');
+  await p.close();
+
+  // 7. No sideways scroll on any customer screen at 360px.
   for (const s of ['dash-home', 'dash-send', 'dash-stores', 'dash-store', 'dash-cart', 'dash-checkout', 'dash-order', 'dash-track', 'dash-history', 'land-dash-soon', 'dash-terms']) {
     p = await page(s, 360);
     const w = await p.evaluate(() => document.documentElement.scrollWidth);

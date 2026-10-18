@@ -15,12 +15,14 @@ const { db, requireAdmin, audit } = require('./common');
 
 async function riderCashOwed(riderId) {
   const snap = await db().collection('ledger_entries').where('partyId', '==', riderId).get();
-  let held = 0; let received = 0;
+  let held = 0; let received = 0; let paidOut = 0;
   snap.docs.forEach((e) => {
     if (e.get('kind') === 'rider_cash_held') held += e.get('amountCents') || 0;
     if (e.get('kind') === 'rider_cash_received') received += e.get('amountCents') || 0;
+    if (e.get('kind') === 'rider_payout') paidOut += e.get('amountCents') || 0;
   });
-  return { held, received, owed: held - received };
+  // Negative = VilleDash owes the rider (card-paid jobs: they collected nothing).
+  return { held, received, paidOut, owed: held - received + paidOut };
 }
 
 exports.dashAdminRecordRiderCash = onCall(async (req) => {
@@ -44,6 +46,29 @@ exports.dashAdminRecordRiderCash = onCall(async (req) => {
     audit(tx, { actor: auth.uid, role: 'admin', action: 'finance.rider_cash', target: riderId, details: { amountCents, reference } });
   });
   return { ok: true, owedCents: before.owed - amountCents };
+});
+
+// Card-paid jobs leave VilleDash owing riders their pay; record each payout.
+exports.dashAdminRecordRiderPayout = onCall(async (req) => {
+  const auth = requireAdmin(req);
+  const riderId = L.cleanText(req.data && req.data.riderId, 128);
+  const amountCents = Number(req.data && req.data.amountCents);
+  const reference = L.cleanText(req.data && req.data.reference, 120);
+  if (!Number.isInteger(amountCents) || amountCents <= 0) throw new HttpsError('invalid-argument', 'Enter the amount paid.');
+  if (!reference) throw new HttpsError('invalid-argument', 'Enter a payment reference.');
+  const rider = await db().doc(`riders/${riderId}`).get();
+  if (!rider.exists) throw new HttpsError('not-found', 'Rider not found.');
+  const before = await riderCashOwed(riderId);
+  if (amountCents > -before.owed) throw new HttpsError('failed-precondition', `That's more than VilleDash owes ${rider.get('name')} (${L.formatJMD(Math.max(0, -before.owed))}).`);
+  const ref = db().collection('ledger_entries').doc();
+  await db().runTransaction(async (tx) => {
+    tx.set(ref, {
+      kind: 'rider_payout', direction: 'out', amountCents, currency: 'JMD', party: 'rider', partyId: riderId,
+      reference, service: 'dash', recordedBy: auth.uid, createdAt: FieldValue.serverTimestamp(),
+    });
+    audit(tx, { actor: auth.uid, role: 'admin', action: 'finance.rider_payout', target: riderId, details: { amountCents, reference } });
+  });
+  return { ok: true, owedCents: before.owed + amountCents };
 });
 
 exports.dashAdminRecordFleetCharge = onCall(async (req) => {

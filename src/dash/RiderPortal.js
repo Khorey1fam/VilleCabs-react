@@ -206,7 +206,9 @@ function ActiveJob({ rider, job }) {
           <a href={`tel:${toPickup ? contact.senderPhone : contact.recipientPhone}`} style={{ ...st.btnGhost, textAlign: 'center', textDecoration: 'none' }}>📞 Call</a>
         </div>
         <div style={{ ...st.row, marginTop: 10 }}><span style={{ color: C.quiet }}>Package</span><span>{job.package.description}{job.package.fragile ? ' · FRAGILE' : ''}</span></div>
-        <div style={st.row}><span style={{ color: C.quiet }}>Collect cash</span><b>{formatJMD(job.cashToCollectCents ?? job.quote.totalCents)} from {job.payment.collectFrom === 'recipient' ? 'recipient' : 'sender'}</b></div>
+        {job.payment.method === 'card'
+          ? <div style={st.row}><span style={{ color: C.quiet }}>Payment</span><b style={{ color: C.green }}>Paid by card · collect nothing</b></div>
+          : <div style={st.row}><span style={{ color: C.quiet }}>Collect cash</span><b>{formatJMD(job.cashToCollectCents ?? job.quote.totalCents)} from {job.payment.collectFrom === 'recipient' ? 'recipient' : 'sender'}</b></div>}
         <div style={st.row}><span style={{ color: C.quiet }}>Your pay</span><b>{formatJMD(job.riderPayCents)}</b></div>
       </div>
       {job.type === 'market' && ['assigned', 'to_pickup', 'at_pickup'].includes(job.status) && (

@@ -556,6 +556,13 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Card payment attempts (WiPay). Written only by Cloud Functions; the
+    // customer can read their own to see the result after paying.
+    match /dash_payments/{id} {
+      allow read: if isAdmin() || (request.auth != null && resource.data.uid == request.auth.uid);
+      allow write: if false;
+    }
+
     // "Notify me" sign-ups from the VilleDash landing page before launch.
     match /dash_interest/{id} {
       allow create: if request.resource.data.keys().hasOnly(['contact', 'kind', 'source', 'createdAt'])

@@ -5,6 +5,7 @@ import { api, dashDb, errText, formatJMD, STATUS_LABEL, FINAL, ORDER_LABEL, MERC
 import { C, st, Pill, statusTone, Spinner } from './ui';
 import { FleetTab, ScheduleTab } from './AdminFleet';
 import { SitesTab } from './AdminSites';
+import { PaymentsTab } from './AdminPayments';
 import { FinanceTab, SupportTab, AuditTab } from './AdminFinance';
 
 const ACTIVE = ['requested', 'assigned', 'to_pickup', 'at_pickup', 'collected', 'to_dropoff', 'at_dropoff'];
@@ -90,7 +91,7 @@ function DeliveryCard({ d, riders }) {
         <Pill tone={statusTone(d.status)}>{STATUS_LABEL[d.status]}</Pill>
       </div>
       <div style={{ fontSize: 12.5, color: C.quiet, marginTop: 4 }}>
-        {d.id} · {ts(d.createdAt)} · collect {formatJMD(d.cashToCollectCents ?? d.quote.totalCents)} cash{d.type === 'market' ? ` (delivery ${formatJMD(d.quote.totalCents)})` : ''} · {d.quote.distanceKm} km · {d.package.size}{d.package.fragile ? ' fragile' : ''}
+        {d.id} · {ts(d.createdAt)} · {d.payment?.method === 'card' ? `paid by card (${d.payment.status})` : `collect ${formatJMD(d.cashToCollectCents ?? d.quote.totalCents)} cash`}{d.type === 'market' ? ` (delivery ${formatJMD(d.quote.totalCents)})` : ''} · {d.quote.distanceKm} km · {d.package.size}{d.package.fragile ? ' fragile' : ''}
         {d.riderName ? ` · Rider: ${d.riderName}` : d.offeredTo ? ` · Offered to ${riders.find((r) => r.id === d.offeredTo)?.name || 'a rider'}` : ' · No rider'}{d.pinLocked ? ' · PIN LOCKED' : ''}{d.needsDispatcher && d.status === 'requested' ? ' · ⚠ NO RIDER TOOK IT — assign by hand' : ''}
       </div>
       <button onClick={() => setOpen(!open)} style={{ ...small, marginTop: 8, background: C.purpleSoft, color: C.purple, border: `1px solid ${C.purpleLine}` }}>{open ? 'Hide' : 'Manage'}</button>
@@ -506,7 +507,7 @@ export default function AdminDashTab() {
   return (
     <div>
       <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
-        {[['overview', 'Overview'], ['deliveries', 'Dispatch'], ['orders', 'Store orders'], ['schedule', 'Schedule'], ['riders', 'Riders'], ['fleet', 'Fleet'], ['merchants', 'Merchants'], ['settlements', 'Settlements'], ['finance', 'Finance'], ['support', 'Support'], ['pricing', 'Pricing'], ['sites', 'Sites & ads'], ['audit', 'Audit log'], ['launch', 'Launch']].map(([k, l]) => (
+        {[['overview', 'Overview'], ['deliveries', 'Dispatch'], ['orders', 'Store orders'], ['schedule', 'Schedule'], ['riders', 'Riders'], ['fleet', 'Fleet'], ['merchants', 'Merchants'], ['settlements', 'Settlements'], ['finance', 'Finance'], ['payments', 'Card payments'], ['support', 'Support'], ['pricing', 'Pricing'], ['sites', 'Sites & ads'], ['audit', 'Audit log'], ['launch', 'Launch']].map(([k, l]) => (
           <button key={k} onClick={() => setSub(k)} style={{ ...small, padding: '7px 14px', borderRadius: 20, background: sub === k ? C.purple : '#f3f4f6', color: sub === k ? C.white : '#555', border: 'none' }}>{l}</button>
         ))}
       </div>
@@ -515,6 +516,7 @@ export default function AdminDashTab() {
       {sub === 'riders' && <Riders riders={riders} />}
       {sub === 'pricing' && <Pricing />}
       {sub === 'launch' && <Launch />}
+      {sub === 'payments' && <PaymentsTab />}
       {sub === 'orders' && <StoreOrders />}
       {sub === 'schedule' && <ScheduleTab riders={riders} perRiderHour={perRiderHour} />}
       {sub === 'fleet' && <FleetTab riders={riders} />}

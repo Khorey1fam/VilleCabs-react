@@ -22,6 +22,7 @@ import { VilleHome } from './dash/CustomerScreens';
 import { DashHome, DashPublic } from './dash/Home';
 import { MyOrders } from './dash/Orders';
 import { DashAbout, DashTerms } from './dash/Info';
+import { PaymentReturn } from './dash/Payments';
 import { StoresList, StorePage, Cart, Checkout, OrderTrack } from './dash/Marketplace';
 import SendPackage from './dash/SendPackage';
 import DeliveryTrack from './dash/DeliveryTrack';
@@ -12963,6 +12964,18 @@ export default function App() {
     setScreen(site === 'dash' ? 'dash-home' : 'ville-home');
   }, [dashOn, user, screen, site]);
 
+  // Back from WiPay's card page: ?vdpay=<paymentId> → show the payment result.
+  const [payId] = useState(() => { try { return new URLSearchParams(window.location.search).get('vdpay'); } catch (e) { return null; } });
+  useEffect(() => {
+    if (!payId || user?.role !== 'customer' || !dashOn) return;
+    siteHomeShownRef.current = true;
+    setScreen('dash-payment');
+    try {
+      const u = new URL(window.location.href); u.searchParams.delete('vdpay');
+      window.history.replaceState(null, '', u.pathname + (u.search || '') + u.hash);
+    } catch (e) { /* ignore */ }
+  }, [payId, user, dashOn]);
+
   // Scroll back to the top whenever we navigate to a new screen (SPA fix:
   // otherwise the browser keeps your old scroll position on the new page).
   useEffect(() => {
@@ -13173,6 +13186,7 @@ export default function App() {
     'dash-track':             dash(<DeliveryTrack {...dashProps}/>),
     'dash-history':           dash(<MyOrders {...dashProps}/>),
     'dash-cart':              dash(<Cart {...dashProps}/>),
+    'dash-payment':           dash(<PaymentReturn {...dashProps} paymentId={payId} />),
     'dash-about':             <DashAbout {...dashProps} publicMode={!user || !dashOn}/>,
     'dash-terms':             <DashTerms {...dashProps} publicMode={!user || !dashOn}/>,
     'dash-stores':            dash(<StoresList {...dashProps}/>),

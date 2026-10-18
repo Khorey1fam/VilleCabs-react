@@ -95,6 +95,25 @@ Setup for villedash.com and villeapp.org (do each one):
 
 Sign-ins don't carry across domains: a customer signed in on villecabs.com signs in once more on the VilleDash domain (same account). To try a brand before the domain is live, open a Vercel preview with `?site=dash` or `?site=ville`.
 
+## Card payments (WiPay) — built, switched OFF
+
+Card payments use WiPay's hosted payment page (WiPay Payments API v1.0.7). They are **off** until you turn them on in Admin → VilleDash → **Card payments**. While off, customers only see cash and nothing changes.
+
+How it works:
+
+1. At checkout (store orders) or on the Review step (packages) the customer picks **Card now**. The order is saved as *Waiting for card payment*; stores and riders don't see it yet.
+2. The server asks WiPay for a payment page and sends the customer there. VilleDash never sees card numbers.
+3. WiPay sends the customer back through the `wipayReturn` function. A "success" only counts if WiPay's hash matches `md5(transaction_id + total + API key)`, so a faked link can't mark an order paid. Then the store gets the order (or dispatch starts) and the customer sees "Payment received".
+4. If the card fails, the customer can try again or switch to cash. Unpaid card orders are cancelled after 30 minutes and reserved stock goes back.
+5. The rider collects nothing on card jobs ("Paid by card · collect nothing"). VilleDash then owes the rider their pay: Finance → Cash held by riders shows "VilleDash owes" and a **Record payout** button.
+6. If a card-paid order is cancelled, rejected or fails, it appears under **Refunds to make**. WiPay has no refund API: refund in the WiPay dashboard, then record the reference.
+
+To test (sandbox — no real money): in Card payments, keep **Sandbox**, add your customer ID under **Test customers**, then place an order and pay with a WiPay test card. Jamaica uses First Global Bank's page: Visa `4035874000424977` or Mastercard `5210000010001001`, any expiry and 3-digit code; if asked for a password, use the "Personal Message" shown.
+
+To go live: you need a verified WiPay Business account. Save the 10-digit account number and API key under **Live WiPay account** (the key is kept on the server only), switch Mode to **Live**, test with your own card, then **Turn card payments ON for everyone**. WiPay pays into your WiPay account; withdraw to the bank from WiPay (up to 7 working days, withdrawal fee applies). WiPay Jamaica fees: 4.2% + GCT (free plan) or 3.5% + GCT (paid plans); choose who pays the fee in the same tab.
+
+Deploy needed: `firebase deploy --only firestore:rules,functions` (new functions `payCardStart`, `wipayReturn`, `payUseCash`, `payWatchDelivery`, `payWatchOrder`, `payAdminSetWipay`, `payAdminResolveRefund`, `dashAdminRecordRiderPayout`).
+
 ## Launch sign-ups
 
 Before launch, signed-out visitors to the VilleDash domain see a "launching soon" page with a **Notify me** box (email or phone). Entries go to `dash_interest` and are listed in Admin → VilleDash → Launch, with a Copy all button. The `firestore.rules` on this branch allow anyone to add one entry with only those fields; only admins can read them.
@@ -128,8 +147,8 @@ existing document is changed.
 ## Not done yet
 
 - Substitutions (store offers a replacement, customer approves) — for now the store rejects with a reason or calls the customer
-- Refunds — cash only, so nothing is charged before delivery; card refunds come with online payments
-- Online payments (cash only at launch, as decided)
+- Card refunds are made by hand in the WiPay dashboard (WiPay has no refund API); the app lists what to refund
+- Card payments are built but switched off (see Card payments above)
 - Email notifications (push is wired; email needs EmailJS templates)
 - One store per login; multi-location chains need a merchant-users model
 - Distances are straight-line × 1.3, not road routes

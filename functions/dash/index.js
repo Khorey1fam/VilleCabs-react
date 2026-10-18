@@ -27,6 +27,7 @@ const crypto = require('crypto');
 const L = require('./logic');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { offerNext, sweepOffers } = require('./dispatch');
+const payments = require('./payments');
 
 const {
   db, requireAuth, isAdminToken, requireAdmin, loadPricing, dashEnabledFor,
@@ -97,6 +98,8 @@ exports.dashCreateDelivery = onCall(async (req) => {
     throw new HttpsError('failed-precondition', `VilleDash can't carry this item (${flagged.join(', ')}). See the prohibited items list.`);
   }
   if (d.acceptedRules !== true) throw new HttpsError('failed-precondition', 'Please confirm the package follows the delivery rules.');
+  const byCard = d.paymentMethod === 'card';
+  if (byCard) await payments.internal.assertCardAllowed(auth.uid);
 
   const pricing = await loadPricing();
   let quote;
@@ -161,10 +164,13 @@ exports.dashCreateDelivery = onCall(async (req) => {
     quote: { lines: quote.lines, totalCents: quote.totalCents, distanceKm: quote.distanceKm,
       distanceIsEstimate: true, pricingVersion: quote.pricingVersion, pricingPlaceholder: quote.pricingPlaceholder },
     riderPayCents: quote.riderPayCents,
-    cashToCollectCents: quote.totalCents,
-    payment: { method: 'cash', collectFrom: d.payer === 'recipient' ? 'recipient' : 'sender', status: 'unpaid' },
-    status: 'requested',
-    statusTimes: { requested: FieldValue.serverTimestamp() },
+    // Card: paid up front on WiPay's page, then released to dispatch.
+    cashToCollectCents: byCard ? 0 : quote.totalCents,
+    payment: byCard
+      ? { method: 'card', collectFrom: null, status: 'pending', provider: 'wipay' }
+      : { method: 'cash', collectFrom: d.payer === 'recipient' ? 'recipient' : 'sender', status: 'unpaid' },
+    status: byCard ? 'awaiting_payment' : 'requested',
+    statusTimes: { [byCard ? 'awaiting_payment' : 'requested']: FieldValue.serverTimestamp() },
     riderId: null, riderName: null, riderPhone: null, riderPlate: null,
     pinAttempts: 0, pinLocked: false,
     createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
@@ -179,10 +185,10 @@ exports.dashCreateDelivery = onCall(async (req) => {
       customerPhone: L.cleanPhone(cust.get('phone')), senderPhone, recipientPhone, altPhone: L.cleanPhone(dropoff.altPhone),
     });
     tx.set(db().doc(`dash_secrets/${deliveryId}`), { pinHash: pinRec.hash, pinSalt: pinRec.salt });
-    addEvent(tx, deliveryId, 'requested', auth.uid, 'customer');
+    addEvent(tx, deliveryId, byCard ? 'awaiting_payment' : 'requested', auth.uid, 'customer');
   });
   await db().collection('dash_demand_events').add({ ...demandBase, kind: 'booked', deliveryId });
-  return { deliveryId, pin: pinRec.pin, totalCents: quote.totalCents };
+  return { deliveryId, pin: pinRec.pin, totalCents: quote.totalCents, needsPayment: byCard };
 });
 
 // ── 3. Customer cancels ──────────────────────────────────────────────────────
@@ -329,9 +335,10 @@ exports.dashVerifyDropoffPin = onCall(async (req) => {
 
 // Shared by PIN success and admin exceptions.
 function completeDelivery(tx, ref, id, d, { by, role, method, note }) {
+  const card = d.payment && d.payment.method === 'card';
   tx.update(ref, statusPatch('delivered', {
     proofOfDelivery: { method, by, note: note || null, at: Timestamp.now() },
-    'payment.status': 'collected_cash',
+    'payment.status': card ? 'paid' : 'collected_cash',
   }));
   tx.update(db().doc(`riders/${d.riderId}`), {
     activeDeliveryId: null, completedCount: FieldValue.increment(1),
@@ -340,10 +347,13 @@ function completeDelivery(tx, ref, id, d, { by, role, method, note }) {
   if (d.type === 'market') { completeMarketLedger(tx, id, d); return; }
   // Money records. Cash is collected by the rider, so the rider holds the full
   // fee and owes the platform the difference between the fee and their pay.
+  // Card: the rider collected nothing, so the held amount is negative —
+  // VilleDash owes the rider their pay.
+  const cashHeld = card ? 0 : d.quote.totalCents;
   const entries = [
-    { kind: 'delivery_fee', direction: 'in', amountCents: d.quote.totalCents, party: 'customer', partyId: d.customerId, note: 'Cash collected by rider' },
+    { kind: 'delivery_fee', direction: 'in', amountCents: d.quote.totalCents, party: 'customer', partyId: d.customerId, paymentMethod: card ? 'card' : 'cash', note: card ? 'Paid by card (WiPay)' : 'Cash collected by rider' },
     { kind: 'rider_earning', direction: 'payable', amountCents: d.riderPayCents || 0, party: 'rider', partyId: d.riderId },
-    { kind: 'rider_cash_held', direction: 'receivable', amountCents: d.quote.totalCents - (d.riderPayCents || 0), party: 'rider', partyId: d.riderId, note: 'Cash fee minus rider pay, owed to VilleDash' },
+    { kind: 'rider_cash_held', direction: 'receivable', amountCents: cashHeld - (d.riderPayCents || 0), party: 'rider', partyId: d.riderId, note: card ? 'Paid by card: VilleDash owes the rider their pay' : 'Cash fee minus rider pay, owed to VilleDash' },
   ];
   entries.forEach((e) => tx.set(db().collection('ledger_entries').doc(), {
     ...e, currency: 'JMD', deliveryId: id, service: 'dash', settled: false, createdAt: FieldValue.serverTimestamp(),
@@ -354,16 +364,17 @@ function completeDelivery(tx, ref, id, d, { by, role, method, note }) {
 // merchant is owed (settled every two weeks), the delivery fee and rider pay.
 function completeMarketLedger(tx, id, d) {
   const m = d.market;
+  const card = d.payment && d.payment.method === 'card';
   tx.update(db().doc(`dash_orders/${d.orderId}`), statusPatch('delivered'));
   const base = { currency: 'JMD', deliveryId: id, orderId: d.orderId, merchantId: d.merchantId, service: 'dash_market', createdAt: FieldValue.serverTimestamp() };
   const entries = [
-    { kind: 'product_sales', direction: 'in', amountCents: m.subtotalCents, party: 'merchant', partyId: d.merchantId, note: 'Gross merchant sales (cash collected by rider)' },
+    { kind: 'product_sales', direction: 'in', amountCents: m.subtotalCents, party: 'merchant', partyId: d.merchantId, paymentMethod: card ? 'card' : 'cash', note: card ? 'Gross merchant sales (paid by card)' : 'Gross merchant sales (cash collected by rider)' },
     { kind: 'commission', direction: 'revenue', amountCents: m.commissionCents, party: 'merchant', partyId: d.merchantId, note: `${m.commissionPct}% platform commission` },
     { kind: 'merchant_payable', direction: 'payable', amountCents: m.merchantPayableCents, party: 'merchant', partyId: d.merchantId,
       grossCents: m.subtotalCents, commissionCents: m.commissionCents, settled: false, settlementId: null },
     { kind: 'delivery_fee', direction: 'in', amountCents: d.quote.totalCents, party: 'customer', partyId: d.customerId },
     { kind: 'rider_earning', direction: 'payable', amountCents: d.riderPayCents || 0, party: 'rider', partyId: d.riderId, settled: false },
-    { kind: 'rider_cash_held', direction: 'receivable', amountCents: d.cashToCollectCents - (d.riderPayCents || 0), party: 'rider', partyId: d.riderId, note: 'Cash collected minus rider pay, owed to VilleDash', settled: false },
+    { kind: 'rider_cash_held', direction: 'receivable', amountCents: (card ? 0 : d.cashToCollectCents) - (d.riderPayCents || 0), party: 'rider', partyId: d.riderId, note: card ? 'Paid by card: VilleDash owes the rider their pay' : 'Cash collected minus rider pay, owed to VilleDash', settled: false },
   ];
   if (m.serviceCents) entries.push({ kind: 'service_fee', direction: 'in', amountCents: m.serviceCents, party: 'customer', partyId: d.customerId });
   entries.forEach((e) => tx.set(db().collection('ledger_entries').doc(), { ...base, ...e }));
@@ -468,17 +479,22 @@ exports.checkReferralCode = onCall(async (req) => {
 // ── Push notifications ───────────────────────────────────────────────────────
 exports.dashNotifyNewDelivery = onDocumentCreated('dash_deliveries/{id}', async (event) => {
   const d = event.data && event.data.data();
-  if (!d || d.status !== 'requested') return;
+  if (!d || d.status !== 'requested') return;   // card orders wait for payment first
+  await announceDelivery(event.params.id, d);
+});
+
+// Find a rider for a delivery that has just become 'requested'.
+async function announceDelivery(id, d) {
   const pricing = await loadPricing();
-  if (pricing.autoDispatch) { await offerNext(event.params.id); return; }
+  if (pricing.autoDispatch) { await offerNext(id); return; }
   // Manual mode: tell every free rider; first to accept wins.
   const riders = await db().collection('riders')
     .where('status', '==', 'approved').where('isOnline', '==', true).get();
   const area = d.pickup && d.pickup.address ? ` from ${d.pickup.address.split(',')[0]}` : '';
   await Promise.all(riders.docs
     .filter((r) => !r.get('activeDeliveryId'))
-    .map((r) => pushTo('riders', r.id, '📦 New VilleDash delivery', `A package needs collecting${area}. Open VilleDash to accept.`, { tag: 'vd-new', deliveryId: event.params.id })));
-});
+    .map((r) => pushTo('riders', r.id, '📦 New VilleDash delivery', `A package needs collecting${area}. Open VilleDash to accept.`, { tag: 'vd-new', deliveryId: id })));
+}
 
 // Rider passes on an offer → it goes to the next nearest rider straight away.
 exports.dashDeclineOffer = onCall(async (req) => {
@@ -498,7 +514,10 @@ exports.dashDeclineOffer = onCall(async (req) => {
   return { ok: true };
 });
 
-exports.dashDispatchSweep = onSchedule({ schedule: 'every 1 minutes', timeZone: 'America/Jamaica' }, async () => { await sweepOffers(); });
+exports.dashDispatchSweep = onSchedule({ schedule: 'every 1 minutes', timeZone: 'America/Jamaica' }, async () => {
+  await sweepOffers();
+  await payments.internal.expireUnpaid();
+});
 
 const CUSTOMER_MESSAGES = {
   assigned:   ['🛵 Rider assigned', (d) => `${d.riderName || 'Your rider'} is collecting your ${d.type === 'market' ? 'order' : 'package'}.`],
@@ -513,6 +532,8 @@ exports.dashNotifyStatusChange = onDocumentUpdated('dash_deliveries/{id}', async
   const before = event.data.before.data() || {};
   const after = event.data.after.data() || {};
   if (before.status === after.status) return;
+  // Paid by card (or switched to cash) → now look for a rider.
+  if (before.status === 'awaiting_payment' && after.status === 'requested') { await announceDelivery(event.params.id, after); return; }
   const m = CUSTOMER_MESSAGES[after.status];
   const jobs = [];
   if (m && !(after.status === 'cancelled' && after.cancelledBy === 'customer')) {
@@ -528,6 +549,9 @@ exports.dashNotifyStatusChange = onDocumentUpdated('dash_deliveries/{id}', async
   await Promise.all(jobs);
 });
 
+// Card payments (WiPay) — off until enabled in config/payments
+for (const k of ['payCardStart', 'wipayReturn', 'payUseCash', 'payWatchDelivery', 'payWatchOrder', 'payAdminSetWipay', 'payAdminResolveRefund']) exports[k] = payments[k];
+
 // Marketplace (stores, orders, settlements)
 Object.assign(exports, require('./market'));
 
@@ -537,5 +561,6 @@ Object.assign(exports, require('./fleet'));
 // Money controls (rider cash, fleet charges)
 const finance = require('./finance');
 exports.dashAdminRecordRiderCash = finance.dashAdminRecordRiderCash;
+exports.dashAdminRecordRiderPayout = finance.dashAdminRecordRiderPayout;
 exports.dashAdminRecordFleetCharge = finance.dashAdminRecordFleetCharge;
 exports.dashAdminMarkFleetChargePaid = finance.dashAdminMarkFleetChargePaid;
