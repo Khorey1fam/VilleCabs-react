@@ -322,6 +322,30 @@ function Launch() {
       ))}
       {msg && <div style={st.note}>{msg}</div>}
       <AutoDispatchSwitch />
+      <InterestList />
+    </div>
+  );
+}
+
+// "Notify me" sign-ups from the public VilleDash page.
+function InterestList() {
+  const [list, setList] = useState(null);
+  useEffect(() => onSnapshot(query(collection(dashDb(), 'dash_interest'), orderBy('createdAt', 'desc'), limit(200)),
+    (s) => setList(s.docs.map((d) => ({ id: d.id, ...d.data() }))), () => setList([])), []);
+  if (!list) return null;
+  const copy = () => { try { navigator.clipboard.writeText(list.map((x) => x.contact).join('\n')); } catch (e) { /* ignore */ } };
+  return (
+    <div style={{ marginTop: 16, paddingTop: 12, borderTop: `1px solid ${C.line}` }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={st.h2}>Launch sign-ups ({list.length}{list.length === 200 ? '+' : ''})</div>
+        {list.length > 0 && <button onClick={copy} style={{ ...small }}>Copy all</button>}
+      </div>
+      <div style={{ fontSize: 13, color: C.quiet, marginBottom: 6 }}>People who asked to be told when VilleDash opens, from the public VilleDash page.</div>
+      {list.slice(0, 30).map((x) => (
+        <div key={x.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, padding: '5px 0', borderBottom: `1px solid ${C.line}` }}>
+          <span>{x.contact}</span><span style={{ color: C.quiet }}>{x.createdAt?.toDate ? x.createdAt.toDate().toLocaleDateString('en-JM') : ''}</span>
+        </div>
+      ))}
     </div>
   );
 }

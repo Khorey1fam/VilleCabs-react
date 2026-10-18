@@ -556,6 +556,19 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // "Notify me" sign-ups from the VilleDash landing page before launch.
+    match /dash_interest/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['contact', 'kind', 'source', 'createdAt'])
+                    && request.resource.data.contact is string
+                    && request.resource.data.contact.size() > 4
+                    && request.resource.data.contact.size() <= 120
+                    && request.resource.data.kind in ['email', 'phone']
+                    && request.resource.data.source is string
+                    && request.resource.data.source.size() <= 80
+                    && request.resource.data.createdAt == request.time;
+      allow read, delete: if isAdmin();
+    }
+
     // ── Default deny for anything not explicitly listed ──────────────────────
     match /{document=**} {
       allow read, write: if false;

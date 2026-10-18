@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Timestamp } from 'firebase/firestore';
-import { VilleHome, DashHome, DashHistory } from '@src/dash/CustomerScreens';
+import { VilleHome } from '@src/dash/CustomerScreens';
+import { DashHome, DashPublic } from '@src/dash/Home';
+import { MyOrders } from '@src/dash/Orders';
+import { DashAbout, DashTerms } from '@src/dash/Info';
 import SendPackage from '@src/dash/SendPackage';
 import DeliveryTrack from '@src/dash/DeliveryTrack';
-import { StoresList, StorePage, Checkout, OrderTrack } from '@src/dash/Marketplace';
+import { StoresList, StorePage, Cart, Checkout, OrderTrack } from '@src/dash/Marketplace';
 import RiderPortal from '@src/dash/RiderPortal';
 import MerchantPortal from '@src/dash/MerchantPortal';
 import AdminDashTab from '@src/dash/AdminDash';
@@ -73,8 +76,11 @@ put('site_ads/ad1', { title: 'Free delivery this weekend', body: 'Orders over J$
 
 window.__callables = {
   dashQuoteDelivery: async () => quote,
+  dashCreateDelivery: async () => { await new Promise((r) => setTimeout(r, 400)); return { deliveryId: 'dnew1abc' }; },
+  marketCreateOrder: async () => { await new Promise((r) => setTimeout(r, 300)); return { orderId: 'ONEW' }; },
   marketQuoteOrder: async () => ({ lines: [], subtotalCents: 405000, deliveryCents: 60000, serviceCents: 0, totalCents: 465000, distanceKm: 2.4, pricingPlaceholder: true }),
 };
+try { sessionStorage.setItem('vd_checkout_draft', JSON.stringify({ drop: { address: '12 Caledonia Road, Mandeville', lat: 18.03, lng: -77.51 } })); } catch (e) {}
 try { localStorage.setItem('vd_cart_v1', JSON.stringify({ merchantId: 'shop1', merchantName: 'Juici Spot Mandeville', items: [{ key: 'k1', productId: 'jerk', name: 'Jerk chicken', qty: 2, options: { Size: ['Half'], Extras: ['Festival'] }, note: '', unitCents: 195000 }, { key: 'k2', productId: 'water', name: 'Bottled water', qty: 1, options: {}, unitCents: 15000 }] })); } catch (e) {}
 
 // ── Screens ──────────────────────────────────────────────────────────────────
@@ -91,7 +97,13 @@ const SCREENS = {
   'dash-home': <DashHome {...base} />,
   'dash-send': <SendPackage {...base} />,
   'dash-track': <DeliveryTrack {...base} deliveryId="D1" />,
-  'dash-history': <DashHistory {...base} />,
+  'dash-history': <MyOrders {...base} />,
+  'dash-cart': <Cart {...base} />,
+  'dash-about': <DashAbout {...base} />,
+  'dash-terms': <DashTerms {...base} publicMode />,
+  'dash-home-empty': <DashHome {...base} user={{ uid: 'nobody', name: 'New' }} />,
+  'dash-history-empty': <MyOrders {...base} user={{ uid: 'nobody' }} />,
+  'land-dash-soon': <DashPublic go={nav} domains={base.domains} launched={false} />,
   'dash-stores': <StoresList {...base} />,
   'dash-store': <StorePage {...base} storeId="shop1" />,
   'dash-checkout': <Checkout {...base} />,
@@ -99,7 +111,7 @@ const SCREENS = {
   rider: <RiderPortal />, riderjob: <RiderPortal />, pending: <RiderPortal />, apply: <RiderPortal />,
   merchant: <MerchantPortal />, merchantNew: <MerchantPortal />, merchantPending: <MerchantPortal />,
   admin: <div style={{ padding: 14, background: '#f5f6fa', minHeight: '100vh', fontFamily: 'Segoe UI, sans-serif' }}><AdminDashTab /></div>,
-  'land-dash': <SiteLanding site="dash" domains={base.domains} go={nav} dashOn />,
+  'land-dash': <DashPublic go={nav} domains={base.domains} launched />,
   'land-ville': <SiteLanding site="ville" domains={base.domains} go={nav} dashOn={false} />,
 };
 class Boundary extends React.Component {
