@@ -360,7 +360,7 @@ exports.marketNotifyNewOrder = onDocumentCreated('dash_orders/{id}', async (even
 const ORDER_MESSAGES = {
   accepted: ['✅ Order accepted', (o) => `${o.merchantName} is preparing your order (about ${o.prepMinutes} min).`],
   ready:    ['🍽️ Order ready', (o) => `${o.merchantName} has your order ready for the rider.`],
-  rejected: ['Order not accepted', (o) => `${o.merchantName} couldn’t take your order${o.rejectReason ? `: ${o.rejectReason}` : ''}. ${o.payment && o.payment.method === 'card' && o.payment.status === 'paid' ? 'Your card payment will be refunded.' : 'You have not been charged.'}`],
+  rejected: ['Order not accepted', (o) => `${o.merchantName} couldn’t take your order${o.rejectReason ? `: ${o.rejectReason}` : ''}. ${o.payment && o.payment.method === 'card' && o.payment.status === 'paid' ? 'VilleDash will review a refund of your card payment.' : 'You have not been charged.'}`],
 };
 exports.marketNotifyOrderChange = onDocumentUpdated('dash_orders/{id}', async (event) => {
   const before = event.data.before.data() || {};

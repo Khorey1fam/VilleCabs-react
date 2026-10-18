@@ -113,6 +113,17 @@ service cloud.firestore {
     //      from taking the same ride), or
     //   • the driver already assigned to this ride (arrive / complete / location)
     // Delete: admin only.
+    function rideCreatePaymentOk(d) {
+      return (d.get('paymentMethod', 'Cash') != 'Card' && !('payment' in d))
+          || (d.get('paymentMethod', '') == 'Card' && d.status == 'awaiting_payment'
+              && d.get('payment', {}).get('method', '') == 'card'
+              && d.get('payment', {}).get('status', '') == 'pending');
+    }
+    function ridePaymentUntouched() {
+      return request.resource.data.get('payment', null) == resource.data.get('payment', null)
+          && request.resource.data.get('paymentMethod', null) == resource.data.get('paymentMethod', null);
+    }
+
     match /bookings/{bookingId} {
       // Read: admin, the ride's customer, the assigned driver, or an approved
       // driver looking at OPEN rides (searching / scheduled). This stops any
@@ -123,9 +134,13 @@ service cloud.firestore {
                     || (signedIn() && resource.data.driverId == request.auth.uid)
                     || (isDriver() && resource.data.status == 'searching')
                     || (isDriver() && resource.data.status == 'scheduled');
+      // Card rides (WiPay): created 'awaiting_payment' with payment.status
+      // 'pending'. Only Cloud Functions may mark them paid and release them to
+      // drivers, so customers and drivers can never edit the payment block.
       allow create: if (signedIn()
                         && request.resource.data.customerId == request.auth.uid
-                        && isCustomerInGoodStanding())
+                        && isCustomerInGoodStanding()
+                        && rideCreatePaymentOk(request.resource.data))
                     // CHARTER TRIP: an approved driver starts a day of a charter
                     // they have been assigned. They create the trip for someone
                     // else's charter, so the customer-owns-it check can't apply —
@@ -138,12 +153,14 @@ service cloud.firestore {
                         && exists(/databases/$(database)/documents/charterRequests/$(request.resource.data.charterId))
                         && get(/databases/$(database)/documents/charterRequests/$(request.resource.data.charterId)).data.assignedDriverId == request.auth.uid);
       allow update: if isAdmin()
-                    || (signedIn() && resource.data.customerId == request.auth.uid)
+                    || (signedIn() && resource.data.customerId == request.auth.uid && ridePaymentUntouched()
+                        && (resource.data.status != 'awaiting_payment'
+                            || request.resource.data.status in ['awaiting_payment', 'cancelled']))
                     // the driver already assigned to this ride may keep updating it
                     // (arrive / complete / location). No isDriver() get() here —
                     // this is the hot path (location writes every few seconds) and
                     // they were already verified as approved when they claimed it.
-                    || (signedIn() && resource.data.driverId == request.auth.uid)
+                    || (signedIn() && resource.data.driverId == request.auth.uid && ridePaymentUntouched())
                     // any APPROVED driver may DECLINE an open ride — this only
                     // appends their uid to declinedBy, nothing else may change
                     || (isDriver() && onlyChanges(['declinedBy']))
@@ -153,7 +170,8 @@ service cloud.firestore {
                     || (isDriver()
                         && (resource.data.status == 'searching' || resource.data.status == 'scheduled')
                         && (!('driverId' in resource.data) || resource.data.driverId == null)
-                        && request.resource.data.driverId == request.auth.uid);
+                        && request.resource.data.driverId == request.auth.uid
+                        && ridePaymentUntouched());
       allow delete: if isAdmin();
 
       // In-ride chat messages — participants send/read; recipient marks read

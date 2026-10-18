@@ -550,7 +550,7 @@ exports.dashNotifyStatusChange = onDocumentUpdated('dash_deliveries/{id}', async
 });
 
 // Card payments (WiPay) — off until enabled in config/payments
-for (const k of ['payCardStart', 'wipayReturn', 'payUseCash', 'payWatchDelivery', 'payWatchOrder', 'payAdminSetWipay', 'payAdminResolveRefund']) exports[k] = payments[k];
+for (const k of ['payCardStart', 'wipayReturn', 'payUseCash', 'payWatchDelivery', 'payWatchOrder', 'payWatchRide', 'payAdminSetWipay', 'payAdminResolveRefund']) exports[k] = payments[k];
 
 // Marketplace (stores, orders, settlements)
 Object.assign(exports, require('./market'));

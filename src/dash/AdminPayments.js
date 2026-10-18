@@ -29,6 +29,7 @@ export function PaymentsTab() {
   const refunds = useList(() => query(collection(dashDb(), 'dash_payments'), where('refundDue', '==', true)), 'refunds');
   const recent = useList(() => query(collection(dashDb(), 'dash_payments'), orderBy('createdAt', 'desc'), limit(30)), 'recent');
   const [refs, setRefs] = useState({});
+  const [amts, setAmts] = useState({});
   if (!cfg) return <Spinner />;
 
   const env = cfg.environment === 'live' ? 'live' : 'sandbox';
@@ -58,7 +59,9 @@ export function PaymentsTab() {
   };
   const resolve = async (p, outcome) => {
     setMsg('');
-    try { await api.payResolveRefund({ paymentId: p.id, outcome, reference: refs[p.id] || '' }); setMsg(outcome === 'refunded' ? 'Marked refunded.' : 'Marked as no refund due.'); } catch (e) { setMsg(errText(e)); }
+    const raw = (amts[p.id] || '').replace(/[^0-9.]/g, '');
+    const amountCents = raw ? Math.round(Number(raw) * 100) : undefined;
+    try { await api.payResolveRefund({ paymentId: p.id, outcome, reference: refs[p.id] || '', ...(amountCents ? { amountCents } : {}) }); setMsg(outcome === 'refunded' ? 'Marked refunded.' : 'Marked as no refund due.'); } catch (e) { setMsg(errText(e)); }
   };
   const returnUrl = cfg.responseUrl || `https://us-central1-${PROJECT}.cloudfunctions.net/wipayReturn`;
 
@@ -66,11 +69,11 @@ export function PaymentsTab() {
     <div>
       <div style={card}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <div style={st.h2}>Card payments (WiPay)</div>
+          <div style={st.h2}>Card payments (WiPay) · VilleCabs rides and VilleDash</div>
           <Pill tone={cfg.cardEnabled ? 'green' : testers.length ? 'amber' : 'grey'}>{cfg.cardEnabled ? `ON for everyone · ${env}` : testers.length ? `Testers only · ${env}` : 'OFF'}</Pill>
         </div>
         <div style={{ fontSize: 13, color: C.quiet, margin: '4px 0 10px' }}>
-          Customers pay on WiPay’s secure page; VilleDash never handles card numbers. A card order reaches the store (or dispatch) only after WiPay confirms the payment. Unpaid card orders are cancelled after {cfg.unpaidExpiryMinutes || 30} minutes. Cash keeps working either way.
+          Customers pay on WiPay’s secure page; VILLE never handles card numbers. A card ride reaches drivers, and a card order reaches the store or dispatch, only after WiPay confirms the payment. Unpaid card orders are cancelled after {cfg.unpaidExpiryMinutes || 30} minutes. Cash keeps working either way.
         </div>
         <label style={st.label}>Mode</label>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -80,11 +83,11 @@ export function PaymentsTab() {
         </div>
         <label style={st.label}>Who pays WiPay’s fee</label>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {[['merchant_absorb', 'VilleDash absorbs it'], ['customer_pay', 'Customer pays it'], ['split', 'Split 50/50']].map(([k, l]) => (
-            <button key={k} onClick={() => save({ feeStructure: k })} style={{ ...small, background: (cfg.feeStructure || 'merchant_absorb') === k ? C.purple : C.white, color: (cfg.feeStructure || 'merchant_absorb') === k ? C.white : C.ink, border: `1px solid ${C.line}` }}>{l}</button>
+          {[['customer_pay', 'Customer pays it'], ['merchant_absorb', 'VILLE absorbs it'], ['split', 'Split 50/50']].map(([k, l]) => (
+            <button key={k} onClick={() => save({ feeStructure: k })} style={{ ...small, background: (cfg.feeStructure || 'customer_pay') === k ? C.purple : C.white, color: (cfg.feeStructure || 'customer_pay') === k ? C.white : C.ink, border: `1px solid ${C.line}` }}>{l}</button>
           ))}
         </div>
-        <div style={{ fontSize: 12, color: C.quiet, marginTop: 4 }}>WiPay Jamaica fee: 4.2% + GCT on the free plan, 3.5% + GCT on paid plans. If the customer pays it, WiPay adds it on their page.</div>
+        <div style={{ fontSize: 12, color: C.quiet, marginTop: 4 }}>WiPay Jamaica fee: 4.2% + GCT on the free plan, 3.5% + GCT on paid plans. With “Customer pays it”, WiPay adds the fee on its own page, so VILLE receives the full fare or order total.</div>
 
         <label style={st.label}>Test customers (card shown only to them)</label>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -117,11 +120,12 @@ export function PaymentsTab() {
       </div>
 
       <div style={card}>
-        <div style={st.h2}>Refunds to make</div>
-        <div style={{ fontSize: 13, color: C.quiet, marginBottom: 8 }}>Card-paid orders that were cancelled, rejected or failed. WiPay has no refund API: refund in the WiPay dashboard, then record the reference here.</div>
+        <div style={st.h2}>Refunds to review</div>
+        <div style={{ fontSize: 13, color: C.quiet, marginBottom: 8 }}>Card-paid rides and orders that were cancelled, rejected or failed. Nothing is refunded automatically: decide the amount (leave blank for the full amount, or enter less to keep a fee), refund it in the WiPay dashboard, then record the reference here. Or choose No refund with a reason.</div>
         {!refunds ? <Spinner /> : refunds.length === 0 ? <div style={{ fontSize: 13, color: C.quiet }}>Nothing to refund.</div> : refunds.map((p) => (
           <div key={p.id} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '8px 0', borderTop: `1px solid ${C.line}` }}>
             <div style={{ flex: 1, minWidth: 160 }}><b>{formatJMD(p.amountCents)}</b> · {p.targetKind} {p.targetId}<div style={{ fontSize: 12, color: C.quiet }}>{p.refundReason} · WiPay {p.resultTransactionId || p.id}</div></div>
+            <input style={{ ...st.input, width: 110, padding: '6px 8px' }} placeholder={`J$ (max ${formatJMD(p.amountCents)})`} value={amts[p.id] || ''} onChange={(e) => setAmts({ ...amts, [p.id]: e.target.value })} />
             <input style={{ ...st.input, width: 170, padding: '6px 8px' }} placeholder="Refund ref / reason" value={refs[p.id] || ''} onChange={(e) => setRefs({ ...refs, [p.id]: e.target.value })} />
             <button onClick={() => resolve(p, 'refunded')} style={{ ...small, background: C.green, color: C.white, border: 'none' }}>Refunded</button>
             <button onClick={() => resolve(p, 'not_refunded')} style={{ ...small, background: C.white, border: `1px solid ${C.line}` }}>No refund</button>

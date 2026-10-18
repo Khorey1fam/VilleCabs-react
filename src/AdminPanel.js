@@ -1319,8 +1319,10 @@ function RevenueTab() {
   // what each payout should be (85% after the 15% platform fee).
   const driverRows = Object.values(periodRides.reduce((acc, r) => {
     const id = r.driverId || 'unassigned';
-    if (!acc[id]) acc[id] = { id, name: r.driverName || 'Unassigned', gross:0, count:0 };
+    if (!acc[id]) acc[id] = { id, name: r.driverName || 'Unassigned', gross:0, count:0, card:0 };
     acc[id].gross += (r.fare || 0);
+    // Card rides (WiPay): VilleCabs holds the fare, so the driver is owed their full 85% share.
+    if (r.payment?.method === 'card' && r.payment?.status === 'paid') acc[id].card += (r.fare || 0);
     acc[id].count += 1;
     return acc;
   }, {}))
@@ -1404,6 +1406,7 @@ function RevenueTab() {
                   <th style={{ padding:'6px 8px 8px 0' }}>Driver</th>
                   <th style={{ padding:'6px 8px 8px', textAlign:'right' }}>Rides</th>
                   <th style={{ padding:'6px 8px 8px', textAlign:'right' }}>Gross</th>
+                  <th style={{ padding:'6px 8px 8px', textAlign:'right' }}>Paid by card</th>
                   <th style={{ padding:'6px 8px 8px', textAlign:'right' }}>Fee (15%)</th>
                   <th style={{ padding:'6px 0 8px 8px', textAlign:'right' }}>Payout (85%)</th>
                 </tr>
@@ -1414,6 +1417,7 @@ function RevenueTab() {
                     <td style={{ padding:'9px 8px 9px 0', color:'#1a1a2e', fontWeight:600 }}>{d.name}</td>
                     <td style={{ padding:'9px 8px', textAlign:'right', color:'#6b7280' }}>{d.count}</td>
                     <td style={{ padding:'9px 8px', textAlign:'right', color:'#1a1a2e' }}>J${d.gross.toLocaleString()}</td>
+                    <td style={{ padding:'9px 8px', textAlign:'right', color:'#6b21a8' }}>{d.card ? `J$${d.card.toLocaleString()}` : '—'}</td>
                     <td style={{ padding:'9px 8px', textAlign:'right', color:'#b45309' }}>J${d.fee.toLocaleString()}</td>
                     <td style={{ padding:'9px 0 9px 8px', textAlign:'right', color:GREEN, fontWeight:700 }}>J${d.payout.toLocaleString()}</td>
                   </tr>
@@ -1422,6 +1426,7 @@ function RevenueTab() {
                   <td style={{ padding:'10px 8px 0 0', color:'#1a1a2e' }}>Total</td>
                   <td style={{ padding:'10px 8px 0', textAlign:'right', color:'#6b7280' }}>{periodRides.length}</td>
                   <td style={{ padding:'10px 8px 0', textAlign:'right', color:'#1a1a2e' }}>J${totalRev.toLocaleString()}</td>
+                  <td style={{ padding:'10px 8px 0', textAlign:'right', color:'#6b21a8' }}>{(() => { const c = driverRows.reduce((t, d) => t + d.card, 0); return c ? `J$${c.toLocaleString()}` : '—'; })()}</td>
                   <td style={{ padding:'10px 8px 0', textAlign:'right', color:'#b45309' }}>J${villeCut.toLocaleString()}</td>
                   <td style={{ padding:'10px 0 0 8px', textAlign:'right', color:GREEN }}>J${driverCut.toLocaleString()}</td>
                 </tr>

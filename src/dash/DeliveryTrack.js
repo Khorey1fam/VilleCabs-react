@@ -119,7 +119,7 @@ export default function DeliveryTrack({ go, deliveryId, shared, domains }) {
             {(d.quote?.lines || []).map((l) => <div key={l.key} className="vd-row"><span>{l.label}</span><span>{formatJMD(l.cents)}</span></div>)}
             <div className="vd-total"><span>{card ? 'Total, by card' : 'Total, cash'}</span><b>{formatJMD(card ? d.quote.totalCents : (d.cashToCollectCents ?? d.quote.totalCents))}</b></div>
             <p className="vd-field__hint">{card
-              ? ({ paid: 'Paid by card.', refund_due: 'VilleDash will refund your card payment.', refunded: 'Your card payment was refunded.' }[d.payment.status] || 'Waiting for your card payment.')
+              ? ({ paid: 'Paid by card.', refund_due: 'VilleDash is reviewing a refund of your card payment.', refunded: `${formatJMD(d.payment.refundedCents || d.quote.totalCents)} was refunded to your card.` }[d.payment.status] || 'Waiting for your card payment.')
               : `Paid in cash by the ${d.payment?.collectFrom === 'recipient' ? 'recipient on delivery' : 'sender at pickup'}.`}</p>
             {d.proofPhotos && (d.proofPhotos.pickup || d.proofPhotos.dropoff) && (
               <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>

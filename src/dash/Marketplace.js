@@ -601,7 +601,7 @@ export function OrderTrack({ go, orderId, shared, openDelivery, domains }) {
             <div className="vd-row"><span>Delivery fee</span><span>{formatJMD(o.deliveryCents)}</span></div>
             {o.serviceCents > 0 && <div className="vd-row"><span>Service fee</span><span>{formatJMD(o.serviceCents)}</span></div>}
             <div className="vd-total"><span>{paidCard ? (o.payment.status === 'paid' ? 'Total, paid by card' : 'Total, by card') : 'Total, cash'}</span><b>{formatJMD(o.totalCents)}</b></div>
-            {paidCard && ['refund_due', 'refunded'].includes(o.payment.status) && <p className="vd-note" style={{ marginTop: 10 }}>{o.payment.status === 'refunded' ? 'Your card payment was refunded.' : 'VilleDash will refund your card payment.'}</p>}
+            {paidCard && ['refund_due', 'refunded'].includes(o.payment.status) && <p className="vd-note" style={{ marginTop: 10 }}>{o.payment.status === 'refunded' ? `${formatJMD(o.payment.refundedCents || o.totalCents)} was refunded to your card.` : 'This order didn’t go ahead. VilleDash is reviewing a refund of your card payment.'}</p>}
             <p className="vd-field__hint">Delivering to {o.dropoff?.address}</p>
           </div>
           {err && <div className="vd-errbox" role="alert">{err}</div>}

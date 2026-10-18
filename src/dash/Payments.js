@@ -15,7 +15,7 @@ export async function goToCard(kind, id) {
 export function CardNote({ sandbox }) {
   return (
     <p className="vd-field__hint" style={{ marginTop: 8 }}>
-      You’ll pay on WiPay’s secure page (Visa or Mastercard). VilleDash never sees your card number.
+      You’ll pay on WiPay’s secure page (Visa or Mastercard), where WiPay adds its card processing fee. VilleDash never sees your card number.
       {sandbox ? ' Test mode: use a WiPay test card; no real money moves.' : ''}
     </p>
   );
@@ -53,7 +53,7 @@ export function PaymentPending({ kind, id, target, onCashPicked }) {
 }
 
 // The page WiPay sends the customer back to (?vdpay=<paymentId>).
-export function PaymentReturn({ go, paymentId, openDelivery, openOrder, domains }) {
+export function PaymentReturn({ go, paymentId, openDelivery, openOrder, openRide, domains }) {
   const valid = /^VD[0-9A-Z]{14}$/.test(paymentId || '');
   const live = useLive(() => (valid ? doc(dashDb(), 'dash_payments', paymentId) : null), [paymentId], docOf);
   const [slow, setSlow] = useState(false);
@@ -61,7 +61,9 @@ export function PaymentReturn({ go, paymentId, openDelivery, openOrder, domains 
   const [err, setErr] = useState('');
   useEffect(() => { const t = setTimeout(() => setSlow(true), 20000); return () => clearTimeout(t); }, []);
   const p = live.data;
-  const open = () => (p.targetKind === 'order' ? openOrder(p.targetId) : openDelivery(p.targetId));
+  const ride = p && p.targetKind === 'ride';
+  const open = () => (ride ? openRide(p.targetId) : p.targetKind === 'order' ? openOrder(p.targetId) : openDelivery(p.targetId));
+  const what = ride ? 'Ride' : p && p.targetKind === 'order' ? 'Order' : 'Delivery';
   useEffect(() => {
     if (p && p.status === 'paid' && !p.refundDue) { const t = setTimeout(open, 2500); return () => clearTimeout(t); }
     return undefined;
@@ -95,10 +97,10 @@ export function PaymentReturn({ go, paymentId, openDelivery, openOrder, domains 
         <div className="vd-done__art"><DoneArt /></div>
         <h1>{p.refundDue ? 'Payment received' : 'Payment received, thank you'}</h1>
         <p>{p.refundDue
-          ? 'Your order had already closed when the payment arrived, so VilleDash will refund it to your card.'
-          : `${formatJMD(p.amountCents)} paid by card${p.card ? ` (${p.card})` : ''}. ${p.targetKind === 'order' ? 'Your order is on its way to the store.' : 'We’re finding your rider now.'}`}</p>
-        <span className="vd-done__id">{p.targetKind === 'order' ? 'Order' : 'Delivery'} {shortId(p.targetId)}</span>
-        <div style={{ marginTop: 20 }}><button className="vd-btn vd-btn--primary vd-btn--block" onClick={open}>{p.targetKind === 'order' ? 'Track order' : 'Track delivery'}</button></div>
+          ? `Your ${ride ? 'ride' : 'order'} had already closed when the payment arrived. We’ll review a refund to your card.`
+          : `${formatJMD(p.amountCents)} paid by card${p.card ? ` (${p.card})` : ''}. ${ride ? 'We’re finding your driver now.' : p.targetKind === 'order' ? 'Your order is on its way to the store.' : 'We’re finding your rider now.'}`}</p>
+        <span className="vd-done__id">{what} {shortId(p.targetId)}</span>
+        <div style={{ marginTop: 20 }}><button className="vd-btn vd-btn--primary vd-btn--block" onClick={open}>{ride ? 'Continue to your ride' : p.targetKind === 'order' ? 'Track order' : 'Track delivery'}</button></div>
       </div>
     );
   } else {
@@ -106,13 +108,24 @@ export function PaymentReturn({ go, paymentId, openDelivery, openOrder, domains 
       <div className="vd-panel vd-done">
         <div style={{ width: 64, height: 64, borderRadius: 32, background: '#fdecec', color: 'var(--vd-red)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}><Icon name="close" size={30} stroke={2.4} /></div>
         <h1>Payment didn’t go through</h1>
-        <p>{p.message || 'Your card wasn’t charged.'} You can try again, pay cash instead, or cancel from your order.</p>
+        <p>{p.message || 'Your card wasn’t charged.'} You can try again, pay cash instead, or cancel from your {ride ? 'ride' : 'order'}.</p>
         {err && <div className="vd-errbox" role="alert">{err}</div>}
         <div style={{ display: 'grid', gap: 10, marginTop: 20 }}>
           <button className="vd-btn vd-btn--primary vd-btn--block" disabled={!!busy} onClick={retry}>{busy === 'card' ? 'Opening WiPay…' : 'Try card again'}</button>
           <button className="vd-btn vd-btn--secondary vd-btn--block" disabled={!!busy} onClick={cash}>{busy === 'cash' ? 'Switching…' : 'Pay cash instead'}</button>
-          <button className="vd-link" style={{ justifySelf: 'center' }} onClick={open}>View order</button>
+          <button className="vd-link" style={{ justifySelf: 'center' }} onClick={open}>{ride ? 'View ride' : 'View order'}</button>
         </div>
+      </div>
+    );
+  }
+  // VilleCabs rides come back to a plain VilleCabs-branded page, not the VilleDash shell.
+  if (ride) {
+    return (
+      <div className="vd-root vd-root--tabbar-off" style={{ background: '#f5f6fa' }}>
+        <div style={{ background: '#fff', borderBottom: '1px solid var(--vd-line)', padding: '10px 16px' }}>
+          <img src="/logo.png" alt="VilleCabs" style={{ height: 36, width: 'auto' }} />
+        </div>
+        <div className="vd-wrap vd-narrow" style={{ maxWidth: 560, paddingTop: 24, paddingBottom: 40 }}>{body}</div>
       </div>
     );
   }

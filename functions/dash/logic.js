@@ -378,7 +378,7 @@ const DEFAULT_PAYMENTS = {
   environment: 'sandbox',      // 'sandbox' | 'live'
   countryCode: 'JM',
   currency: 'JMD',
-  feeStructure: 'merchant_absorb', // 'customer_pay' | 'merchant_absorb' | 'split'
+  feeStructure: 'customer_pay',    // customer pays WiPay's fee ('customer_pay' | 'merchant_absorb' | 'split')
   unpaidExpiryMinutes: 30,
 };
 const WIPAY_SANDBOX = { accountNumber: '1234567890', apiKey: '123' };
