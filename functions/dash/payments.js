@@ -32,8 +32,20 @@ const { db, requireAuth, requireAdmin, audit, addEvent, statusPatch, pushTo, das
 const { restoreStock, readStockProducts } = require('./stock');
 
 // What can be paid by card: VilleDash parcels and store orders, VilleCabs rides.
-const TARGETS = { delivery: 'dash_deliveries', order: 'dash_orders', ride: 'bookings' };
+// 'extra' = an extra-fare request on a ride: bookings/{rideId}/extras/{extraId},
+// addressed as "rideId/extraId".
+const TARGETS = { delivery: 'dash_deliveries', order: 'dash_orders', ride: 'bookings', extra: 'bookings' };
 const kindOf = (k) => (TARGETS[k] ? k : null);
+const EXTRA_ID = /^[A-Za-z0-9_-]{1,64}\/[A-Za-z0-9_-]{1,64}$/;
+function pathOf(kind, id) {
+  if (kind === 'extra') {
+    if (!EXTRA_ID.test(id)) throw new HttpsError('invalid-argument', 'Unknown payment.');
+    const [ride, extra] = id.split('/');
+    return `bookings/${ride}/extras/${extra}`;
+  }
+  return `${TARGETS[kind]}/${id}`;
+}
+const cleanId = (kind, v) => L.cleanText(v, kind === 'extra' ? 130 : 40);
 const PID_RE = /^VD[0-9A-Z]{14}$/;
 const FALLBACK_ORIGIN = 'https://villecabs.com';
 
@@ -57,7 +69,8 @@ function projectId() {
 function responseUrl(cfg) {
   return cfg.responseUrl || `https://us-central1-${projectId()}.cloudfunctions.net/wipayReturn`;
 }
-const amountOf = (kind, t) => (kind === 'order' ? t.totalCents : kind === 'ride' ? Math.round(Number(t.fare || 0) * 100) : (t.quote && t.quote.totalCents));
+const amountOf = (kind, t) => (kind === 'order' || kind === 'extra' ? (kind === 'order' ? t.totalCents : t.amountCents)
+  : kind === 'ride' ? Math.round(Number(t.fare || 0) * 100) : (t.quote && t.quote.totalCents));
 
 // Is the card option available to this customer? (Used by create callables.)
 async function assertCardAllowed(uid) {
@@ -72,14 +85,14 @@ exports.payCardStart = onCall(async (req) => {
   const d = req.data || {};
   const kind = kindOf(d.kind);
   if (!kind) throw new HttpsError('invalid-argument', 'Unknown payment.');
-  const id = L.cleanText(d.id, 40);
+  const id = cleanId(kind, d.id);
   const cfg = await assertCardAllowed(auth.uid);
-  const ref = db().doc(`${TARGETS[kind]}/${id}`);
+  const ref = db().doc(pathOf(kind, id));
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError('not-found', 'Order not found.');
   const t = snap.data();
   if (t.customerId !== auth.uid) throw new HttpsError('permission-denied', 'Not your order.');
-  if (kind !== 'ride' && !(await dashEnabledFor(auth))) throw new HttpsError('failed-precondition', 'VilleDash is not open yet.');
+  if (kind !== 'ride' && kind !== 'extra' && !(await dashEnabledFor(auth))) throw new HttpsError('failed-precondition', 'VilleDash is not open yet.');
   if (t.status !== 'awaiting_payment' || !t.payment || t.payment.method !== 'card') {
     throw new HttpsError('failed-precondition', 'This order isn’t waiting for a card payment.');
   }
@@ -97,7 +110,7 @@ exports.payCardStart = onCall(async (req) => {
   const totalStr = L.wipayTotal(amountCents);
   const payRef = db().doc(`dash_payments/${pid}`);
   await payRef.create({
-    uid: auth.uid, targetKind: kind, targetId: id, service: kind === 'ride' ? 'cabs' : 'dash', amountCents, totalStr, currency: cfg.currency,
+    uid: auth.uid, targetKind: kind, targetId: id, service: kind === 'ride' || kind === 'extra' ? 'cabs' : 'dash', amountCents, totalStr, currency: cfg.currency,
     environment: cfg.environment, feeStructure: cfg.feeStructure, wipayOrderId: pid, provider: 'wipay',
     status: 'creating', returnOrigin, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
@@ -132,7 +145,17 @@ exports.payCardStart = onCall(async (req) => {
 
 // Move a paid (or switched-to-cash) order on to the store / dispatch.
 function releaseTarget(tx, kind, ref, id, t, patch, note) {
-  if (kind === 'ride') {
+  if (kind === 'extra') {
+    // Extra fare settled: by card ('paid') or the customer switched to cash.
+    const card = patch['payment.status'] === 'paid';
+    const { cashToCollectCents, ...rest } = patch; void cashToCollectCents;
+    tx.update(ref, { ...rest, status: card ? 'paid' : 'approved_cash', settledAt: FieldValue.serverTimestamp() });
+    const j = Math.round(t.amountCents / 100);
+    tx.update(db().doc(`bookings/${id.split('/')[0]}`), {
+      extrasApprovedTotal: FieldValue.increment(j),
+      [card ? 'extrasCardTotal' : 'extrasCashTotal']: FieldValue.increment(j),
+    });
+  } else if (kind === 'ride') {
     // Back into the open-ride pool; notifyDriversPaidRide (functions/index.js) tells drivers.
     tx.update(ref, { ...patch, status: 'searching', paidAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp() });
   } else if (kind === 'delivery') {
@@ -164,7 +187,7 @@ async function settlePayment(pid, query) {
     const ps = await tx.get(payRef);
     const p = ps.data();
     if (p.status === 'paid') return { outcome: 'paid', already: true, payment: p };
-    const tRef = db().doc(`${TARGETS[p.targetKind]}/${p.targetId}`);
+    const tRef = db().doc(pathOf(p.targetKind, p.targetId));
     const ts = await tx.get(tRef);
     const t = ts.exists ? ts.data() : null;
     if (!check.ok) {
@@ -218,8 +241,8 @@ exports.payUseCash = onCall(async (req) => {
   const d = req.data || {};
   const kind = kindOf(d.kind);
   if (!kind) throw new HttpsError('invalid-argument', 'Unknown order.');
-  const id = L.cleanText(d.id, 40);
-  const ref = db().doc(`${TARGETS[kind]}/${id}`);
+  const id = cleanId(kind, d.id);
+  const ref = db().doc(pathOf(kind, id));
   await db().runTransaction(async (tx) => {
     const s = await tx.get(ref);
     if (!s.exists) throw new HttpsError('not-found', 'Order not found.');
@@ -229,6 +252,7 @@ exports.payUseCash = onCall(async (req) => {
     const cash = kind === 'delivery'
       ? { payment: { method: 'cash', collectFrom: d.payer === 'recipient' ? 'recipient' : 'sender', status: 'unpaid' }, cashToCollectCents: t.quote.totalCents }
       : kind === 'ride' ? { payment: { method: 'cash', status: 'unpaid' }, paymentMethod: 'Cash' }
+        : kind === 'extra' ? { payment: { method: 'cash', status: 'unpaid' } }
         : { payment: { method: 'cash', status: 'unpaid' } };
     releaseTarget(tx, kind, ref, id, t, cash, 'Switched to cash');
   });
@@ -268,7 +292,7 @@ async function flagRefund(after, id, kind) {
   const pid = after.payment && after.payment.paymentId;
   if (!pid) return;
   await db().doc(`dash_payments/${pid}`).set({ refundDue: true, refundReason: `${kind} ${id} ${after.status}`, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
-  await db().doc(`${TARGETS[kind]}/${id}`).update({ 'payment.status': 'refund_due' });
+  await db().doc(pathOf(kind, id)).update({ 'payment.status': 'refund_due' });
   // Refunds are confirmed by an admin (amount may be partial), so promise a review, not a refund.
   if (kind !== 'order') {
     const what = kind === 'ride' ? ['VilleCabs', 'ride'] : ['VilleDash', 'delivery'];
@@ -331,7 +355,7 @@ exports.payAdminResolveRefund = onCall(async (req) => {
     const s = await tx.get(ref);
     if (!s.exists || !s.get('refundDue')) throw new HttpsError('failed-precondition', 'This payment has no refund pending.');
     const p = s.data();
-    const tRef = db().doc(`${TARGETS[p.targetKind]}/${p.targetId}`);
+    const tRef = db().doc(pathOf(p.targetKind, p.targetId));
     const tSnap = await tx.get(tRef);   // all reads before any write
     const amountCents = askCents == null ? p.amountCents : askCents;
     if (outcome === 'refunded' && (!Number.isInteger(amountCents) || amountCents <= 0 || amountCents > p.amountCents)) {

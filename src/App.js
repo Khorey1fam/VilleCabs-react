@@ -23,6 +23,7 @@ import { DashHome, DashPublic } from './dash/Home';
 import { MyOrders } from './dash/Orders';
 import { DashAbout, DashTerms } from './dash/Info';
 import { PaymentReturn, goToCard } from './dash/Payments';
+import { ExtraFareRequest, ExtraFareList, ExtraFareCustomer, usePendingExtraRides } from './RideExtras';
 import { StoresList, StorePage, Cart, Checkout, OrderTrack } from './dash/Marketplace';
 import SendPackage from './dash/SendPackage';
 import DeliveryTrack from './dash/DeliveryTrack';
@@ -3490,6 +3491,7 @@ function DashFAQ({ go }) {
 
 function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupData, setDropoffData, site, domains }) {
   const dashOn = useDashEnabled(user?.uid);
+  const extraRides = usePendingExtraRides(user?.uid);
   // Verification gate: a password (email/password) account that hasn't verified
   // its email must not reach the dashboard via any navigation path (logo tap,
   // back button, etc). Bounce them back to the verify screen. Google accounts
@@ -3743,6 +3745,13 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
 
       {/* VILLE family: cross-promotion for VilleDash / VilleEvents */}
       {dashOn && <HouseAd site={site || 'cabs'} domains={domains || {}} go={go} variant="banner"/>}
+
+      {/* Extra fare requests waiting for this customer's answer (e.g. sent by admin after a ride) */}
+      {extraRides.map(r => (
+        <div key={r.id} style={{ margin:'10px 12px 0' }}>
+          <ExtraFareCustomer bookingId={r.id} user={user} />
+        </div>
+      ))}
 
       {/* Side drawer menu */}
       {menuOpen && (
@@ -6980,9 +6989,14 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
                 <div style={{ fontSize:11, color:'#8a83a0', textTransform:'uppercase', letterSpacing:1 }}>Total Paid</div>
                 {booking.promoCode && <div style={{ fontSize:11, color:GREEN, marginTop:2 }}>🎟️ {booking.promoCode} applied</div>}
               </div>
-              <div style={{ fontSize:24, fontWeight:700, color:GREEN }}>J${booking.fare?.toLocaleString()}</div>
+              <div style={{ textAlign:'right' }}>
+                <div style={{ fontSize:24, fontWeight:700, color:GREEN }}>J${((booking.fare||0) + (booking.extrasApprovedTotal||0)).toLocaleString()}</div>
+                {booking.extrasApprovedTotal > 0 && <div style={{ fontSize:11, color:'#8a83a0' }}>fare J${(booking.fare||0).toLocaleString()} + extras J${booking.extrasApprovedTotal.toLocaleString()}</div>}
+              </div>
             </div>
           </div>
+          {/* Requests that arrive after the ride (e.g. from admin) can still be answered here */}
+          <div style={{ width:'100%', maxWidth:400 }}><ExtraFareCustomer bookingId={booking?.id || bookingId} user={user} /></div>
 
           {/* Rating & Review */}
           {!rated ? (
@@ -7158,6 +7172,9 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
                 )}
               </div>
             </div>
+
+            {/* Extra fare requests from the driver (approve / decline / pay) */}
+            <ExtraFareCustomer bookingId={booking?.id || bookingId} user={user} />
 
             {/* Cancel — available the whole time the driver is on the way to
                 pickup. Once the driver taps "I've arrived" the status becomes
@@ -9441,17 +9458,19 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     });
   }
 
-  const fare = booking?.fare || 0;
+  // Approved extra fares count toward the trip total (same 15% / 85% split).
+  const fare = (booking?.fare || 0) + (booking?.extrasApprovedTotal || 0);
   const fee  = Math.round(fare * 0.15);
   const earn = Math.round(fare * 0.85);
   const paidByCard = booking?.payment?.method === 'card' && booking?.payment?.status === 'paid';
+  const extrasTotal = booking?.extrasApprovedTotal || 0;   // approved extra fares (J$)
 
   // Completed screen - rendered as conditional JSX (not early return) to preserve hook count
   if (completed) return (
     <div style={{ ...s.content, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24, minHeight:'100vh' }}>
       <div style={{ width:80, height:80, borderRadius:'50%', background:'rgba(26,158,90,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:36, marginBottom:16 }}>✅</div>
       <div style={{ fontSize:22, fontWeight:800, color:'#1a1a2e', marginBottom:6 }}>Ride Complete!</div>
-      <div style={{ fontSize:14, color:'#888', marginBottom:24, textAlign:'center' }}>Great job! Your earnings have been recorded.{paidByCard ? ' The rider paid by card, so VilleCabs pays you your earnings.' : ''}</div>
+      <div style={{ fontSize:14, color:'#888', marginBottom:24, textAlign:'center' }}>Great job! Your earnings have been recorded.{paidByCard ? ' The rider paid by card, so VilleCabs pays you your earnings.' : ''}{extrasTotal > 0 ? ` Approved extras: J$${extrasTotal.toLocaleString()} (${(booking?.extrasCashTotal||0) ? `collect J$${(booking.extrasCashTotal).toLocaleString()} cash` : 'paid by card'}).` : ''}</div>
       <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:16, padding:'20px 24px', width:'100%', maxWidth:340, marginBottom:20 }}>
         <div style={{ display:'flex', justifyContent:'space-between', marginBottom:10 }}>
           <span style={{ fontSize:13, color:'#888' }}>Total fare</span>
@@ -9573,6 +9592,10 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
                 <div style={{ fontSize:10.5, fontWeight:700, color: paidByCard ? '#86efac' : '#fcd34d' }}>{paidByCard ? 'PAID BY CARD · NO CASH' : 'COLLECT CASH'}</div>
               </div>
             </div>
+
+            {/* Extra fare: ask the customer (they approve in their app), and see what to collect */}
+            <ExtraFareList bookingId={booking?.id || bookingId} theme="dark" />
+            {['active','arrived','enroute'].includes(booking?.status) && <ExtraFareRequest bookingId={booking?.id || bookingId} theme="dark" compact />}
 
             {/* Safety controls */}
             {sosSent ? (
@@ -13265,7 +13288,7 @@ export default function App() {
     'dash-track':             dash(<DeliveryTrack {...dashProps}/>),
     'dash-history':           dash(<MyOrders {...dashProps}/>),
     'dash-cart':              dash(<Cart {...dashProps}/>),
-    'pay-result':             <PaymentReturn {...dashProps} paymentId={payId} openRide={(id) => { setBookingId(id); setScreen('booking-confirm'); }} />,
+    'pay-result':             <PaymentReturn {...dashProps} paymentId={payId} openRide={(id, kind) => { setBookingId(id); setScreen(kind === 'extra' ? 'live-ride' : 'booking-confirm'); }} />,
     'dash-about':             <DashAbout {...dashProps} publicMode={!user || !dashOn}/>,
     'dash-terms':             <DashTerms {...dashProps} publicMode={!user || !dashOn}/>,
     'dash-stores':            dash(<StoresList {...dashProps}/>),

@@ -723,3 +723,52 @@ test('VilleCabs ride by card: held from drivers until paid; cancellation is flag
   r = store.get('bookings/R2');
   assert.equal(r.status, 'searching'); assert.equal(r.paymentMethod, 'Cash'); assert.equal(r.payment.method, 'cash');
 });
+
+test('extra fare: driver asks with a reason, customer approves cash or pays by card; admin can ask after the ride', async () => {
+  store.set('config/payments', { cardTesters: ['cust1'] });
+  mockWipay();
+  store.set('drivers/drv1', { name: 'Dee', fcmToken: 'tok-d1' });
+  store.set('customers/cust1', { name: 'Keneile Davis', phone: '8765550101', fcmToken: 'tok-c1' });
+  store.set('bookings/R9', { customerId: 'cust1', driverId: 'drv1', driverName: 'Dee', fare: 1200, status: 'searching' });
+  const ask = (uid, data) => call('rideExtraRequest', uid, { bookingId: 'R9', ...data });
+  await assert.rejects(ask('drv1', { reason: 'waiting', amount: 300 }), errCode('failed-precondition'), 'not during a ride yet');
+  store.set('bookings/R9', { ...store.get('bookings/R9'), status: 'enroute' });
+  await assert.rejects(ask('drv2', { reason: 'waiting', amount: 300 }), errCode('permission-denied'));
+  await assert.rejects(ask('drv1', { reason: 'nonsense', amount: 300 }), errCode('invalid-argument'));
+  await assert.rejects(ask('drv1', { reason: 'other', amount: 300 }), errCode('invalid-argument'), 'other needs a note');
+  await assert.rejects(ask('drv1', { reason: 'toll', amount: 999999 }), errCode('invalid-argument'));
+  const a = await ask('drv1', { reason: 'waiting', amount: 300, note: '15 min at the bank' });
+  assert.equal(store.get('bookings/R9').extraPending, true);
+  assert.equal(store.get(`bookings/R9/extras/${a.extraId}`).amountCents, 30000);
+
+  // Only the ride's customer answers; cash approval adds to the ride's totals
+  const answer = (uid, extraId, data) => call('rideExtraRespond', uid, { bookingId: 'R9', extraId, ...data });
+  await assert.rejects(answer('cust2', a.extraId, { decision: 'approve' }), errCode('permission-denied'));
+  await answer('cust1', a.extraId, { decision: 'approve', payWith: 'cash' });
+  assert.equal(store.get(`bookings/R9/extras/${a.extraId}`).status, 'approved_cash');
+  assert.equal(store.get('bookings/R9').extrasApprovedTotal, 300);
+  assert.equal(store.get('bookings/R9').extraPending, false);
+  await assert.rejects(answer('cust1', a.extraId, { decision: 'decline' }), errCode('failed-precondition'), 'answered once');
+
+  // Second request paid by card through WiPay
+  const b = await ask('drv1', { reason: 'extra_stop', amount: 500 });
+  const r = await answer('cust1', b.extraId, { decision: 'approve', payWith: 'card' });
+  assert.equal(r.status, 'awaiting_payment');
+  const start = await call('payCardStart', 'cust1', { kind: 'extra', id: r.payId, returnOrigin: 'https://villecabs.com' });
+  assert.equal(wipayCalls[0].body.total, '500.00');
+  await wipayReturn(successQuery(start.paymentId, '500.00'));
+  assert.equal(store.get(`bookings/R9/extras/${b.extraId}`).status, 'paid');
+  const ride = store.get('bookings/R9');
+  assert.equal(ride.extrasApprovedTotal, 800); assert.equal(ride.extrasCardTotal, 500); assert.equal(ride.extrasCashTotal, 300);
+  assert.equal(ride.status, 'enroute', 'the ride itself is untouched');
+
+  // Declined, and the driver can't ask once the ride is over — the admin can
+  const c = await ask('drv1', { reason: 'toll', amount: 200 });
+  await answer('cust1', c.extraId, { decision: 'decline' });
+  assert.equal(store.get(`bookings/R9/extras/${c.extraId}`).status, 'declined');
+  store.set('bookings/R9', { ...store.get('bookings/R9'), status: 'completed' });
+  await assert.rejects(ask('drv1', { reason: 'toll', amount: 200 }), errCode('failed-precondition'));
+  const d = await asAdmin('rideExtraRequest', { bookingId: 'R9', reason: 'cleaning', amount: 1000 });
+  assert.equal(store.get(`bookings/R9/extras/${d.extraId}`).requestedBy, 'admin');
+  assert.ok([...store.values()].some((v) => v.action === 'ride.extra_request'), 'admin request audited');
+});

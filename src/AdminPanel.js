@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { ExtraFareRequest, ExtraFareList } from './RideExtras';
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail } from 'firebase/auth';
 import { getFirestore, collection, query, where, onSnapshot, updateDoc, doc, orderBy, addDoc, deleteDoc, setDoc, serverTimestamp, arrayUnion, arrayRemove } from 'firebase/firestore';
@@ -934,9 +935,18 @@ function RidesTab() {
             <div style={{ textAlign:'right' }}>
               <div style={{ fontSize:10, color:'#9199ad', marginBottom:4 }}>Fare</div>
               <div style={{ fontSize:16, fontWeight:600, color:GREEN }}>J${r.fare?.toLocaleString()||'--'}</div>
+              {r.extrasApprovedTotal > 0 && <div style={{ fontSize:10.5, color:'#6b21a8' }}>+ J${r.extrasApprovedTotal.toLocaleString()} extras</div>}
               <div style={{ fontSize:10, color:'#9199ad', marginTop:2 }}>{r.paymentMethod||'cash'}</div>
             </div>
           </div>
+
+          {/* Extra fare: see requests on this ride, or ask the customer for one */}
+          {['active','arrived','enroute','completed'].includes(r.status) && (
+            <div style={{ marginTop:12 }}>
+              <ExtraFareList bookingId={r.id} />
+              {r.customerId && <ExtraFareRequest bookingId={r.id} compact />}
+            </div>
+          )}
         </div>
       ))}
     </div>
@@ -1311,7 +1321,8 @@ function RevenueTab() {
   const periodLabel = customActive
     ? `${new Date(fromDate+'T00:00:00').toLocaleDateString('en-JM',{day:'numeric',month:'short',year:'numeric'})} – ${new Date(toDate+'T00:00:00').toLocaleDateString('en-JM',{day:'numeric',month:'short',year:'numeric'})}`
     : period==='today' ? 'Today' : period==='week' ? 'Last 7 Days' : 'Last 30 Days';
-  const totalRev=periodRides.reduce((s,r)=>s+(r.fare||0),0);
+  // Gross includes approved extra fares (waiting time, extra stops…).
+  const totalRev=periodRides.reduce((s,r)=>s+(r.fare||0)+(r.extrasApprovedTotal||0),0);
   const villeCut=Math.round(totalRev*0.15);
   const driverCut=Math.round(totalRev*0.85);
 
@@ -1320,9 +1331,10 @@ function RevenueTab() {
   const driverRows = Object.values(periodRides.reduce((acc, r) => {
     const id = r.driverId || 'unassigned';
     if (!acc[id]) acc[id] = { id, name: r.driverName || 'Unassigned', gross:0, count:0, card:0 };
-    acc[id].gross += (r.fare || 0);
+    acc[id].gross += (r.fare || 0) + (r.extrasApprovedTotal || 0);
     // Card rides (WiPay): VilleCabs holds the fare, so the driver is owed their full 85% share.
     if (r.payment?.method === 'card' && r.payment?.status === 'paid') acc[id].card += (r.fare || 0);
+    acc[id].card += (r.extrasCardTotal || 0);
     acc[id].count += 1;
     return acc;
   }, {}))

@@ -118,6 +118,14 @@ To go live: you need a verified WiPay Business account. Save the 10-digit accoun
 
 Deploy needed: `firebase deploy --only firestore:rules,functions` (new functions `payCardStart`, `wipayReturn`, `payUseCash`, `payWatchDelivery`, `payWatchOrder`, `payWatchRide`, `notifyDriversPaidRide`, `payAdminSetWipay`, `payAdminResolveRefund`, `dashAdminRecordRiderPayout`). The rules change also stops customers and drivers editing a ride's payment details.
 
+## Extra fare requests (VilleCabs rides)
+
+Drivers can ask for more than the quoted fare during a ride, and admins can ask at any time (Admin → Rides → the ride → *Request extra fare*). They pick a reason — waiting time, extra stop, route change or detour, toll or parking, extra luggage, extra passenger, cleaning fee, or other (with a note) — and an amount (J$50–J$20,000). At most 3 can wait for an answer at once, 6 per ride.
+
+The customer gets a push and sees the request on the ride screen (or their home screen if the ride has ended). They **approve and pay cash** to the driver, **approve and pay by card** (only when card payments are on for them and the amount is at least J$160), or **decline**. Nothing is added without their tap. The driver gets a push with the answer and sees "Collect J$X extra in cash" or "Paid by card". Declined requests stay visible to admin.
+
+Approved extras are added to the ride (`extrasApprovedTotal`, split into cash and card) and count in Revenue with the usual 15% / 85% split. Only Cloud Functions can write these totals or the requests (`rideExtraRequest`, `rideExtraRespond`, plus push triggers).
+
 ## Launch sign-ups
 
 Before launch, signed-out visitors to the VilleDash domain see a "launching soon" page with a **Notify me** box (email or phone). Entries go to `dash_interest` and are listed in Admin → VilleDash → Launch, with a Copy all button. The `firestore.rules` on this branch allow anyone to add one entry with only those fields; only admins can read them.

@@ -114,14 +114,17 @@ service cloud.firestore {
     //   • the driver already assigned to this ride (arrive / complete / location)
     // Delete: admin only.
     function rideCreatePaymentOk(d) {
-      return (d.get('paymentMethod', 'Cash') != 'Card' && !('payment' in d))
+      return !d.keys().hasAny(['extrasApprovedTotal', 'extrasCashTotal', 'extrasCardTotal', 'extrasOpenCount', 'extrasCount', 'extraPending'])
+        && ((d.get('paymentMethod', 'Cash') != 'Card' && !('payment' in d))
           || (d.get('paymentMethod', '') == 'Card' && d.status == 'awaiting_payment'
               && d.get('payment', {}).get('method', '') == 'card'
-              && d.get('payment', {}).get('status', '') == 'pending');
+              && d.get('payment', {}).get('status', '') == 'pending'));
     }
+    // Payment details and extra-fare totals are set only by Cloud Functions.
     function ridePaymentUntouched() {
-      return request.resource.data.get('payment', null) == resource.data.get('payment', null)
-          && request.resource.data.get('paymentMethod', null) == resource.data.get('paymentMethod', null);
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'payment', 'paymentMethod', 'extrasApprovedTotal', 'extrasCashTotal', 'extrasCardTotal',
+        'extrasOpenCount', 'extrasCount', 'extraPending']);
     }
 
     match /bookings/{bookingId} {
@@ -173,6 +176,15 @@ service cloud.firestore {
                         && request.resource.data.driverId == request.auth.uid
                         && ridePaymentUntouched());
       allow delete: if isAdmin();
+
+      // Extra fare requests (driver/admin asks, customer answers) — written
+      // only by Cloud Functions; the ride's customer and driver can read them.
+      match /extras/{extraId} {
+        allow read: if isAdmin()
+                    || (signedIn() && (get(/databases/$(database)/documents/bookings/$(bookingId)).data.get('customerId', '') == request.auth.uid
+                        || get(/databases/$(database)/documents/bookings/$(bookingId)).data.get('driverId', '') == request.auth.uid));
+        allow write: if false;
+      }
 
       // In-ride chat messages — participants send/read; recipient marks read
       // (adds uid to readBy). Delete is admin-only.

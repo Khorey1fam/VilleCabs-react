@@ -61,9 +61,9 @@ export function PaymentReturn({ go, paymentId, openDelivery, openOrder, openRide
   const [err, setErr] = useState('');
   useEffect(() => { const t = setTimeout(() => setSlow(true), 20000); return () => clearTimeout(t); }, []);
   const p = live.data;
-  const ride = p && p.targetKind === 'ride';
-  const open = () => (ride ? openRide(p.targetId) : p.targetKind === 'order' ? openOrder(p.targetId) : openDelivery(p.targetId));
-  const what = ride ? 'Ride' : p && p.targetKind === 'order' ? 'Order' : 'Delivery';
+  const ride = p && (p.targetKind === 'ride' || p.targetKind === 'extra');
+  const open = () => (ride ? openRide(String(p.targetId).split('/')[0], p.targetKind) : p.targetKind === 'order' ? openOrder(p.targetId) : openDelivery(p.targetId));
+  const what = p && p.targetKind === 'extra' ? 'Extra fare for ride' : ride ? 'Ride' : p && p.targetKind === 'order' ? 'Order' : 'Delivery';
   useEffect(() => {
     if (p && p.status === 'paid' && !p.refundDue) { const t = setTimeout(open, 2500); return () => clearTimeout(t); }
     return undefined;
@@ -98,8 +98,8 @@ export function PaymentReturn({ go, paymentId, openDelivery, openOrder, openRide
         <h1>{p.refundDue ? 'Payment received' : 'Payment received, thank you'}</h1>
         <p>{p.refundDue
           ? `Your ${ride ? 'ride' : 'order'} had already closed when the payment arrived. We’ll review a refund to your card.`
-          : `${formatJMD(p.amountCents)} paid by card${p.card ? ` (${p.card})` : ''}. ${ride ? 'We’re finding your driver now.' : p.targetKind === 'order' ? 'Your order is on its way to the store.' : 'We’re finding your rider now.'}`}</p>
-        <span className="vd-done__id">{what} {shortId(p.targetId)}</span>
+          : `${formatJMD(p.amountCents)} paid by card${p.card ? ` (${p.card})` : ''}. ${p.targetKind === 'extra' ? 'Your driver has been told.' : ride ? 'We’re finding your driver now.' : p.targetKind === 'order' ? 'Your order is on its way to the store.' : 'We’re finding your rider now.'}`}</p>
+        <span className="vd-done__id">{what} {shortId(String(p.targetId).split('/')[0])}</span>
         <div style={{ marginTop: 20 }}><button className="vd-btn vd-btn--primary vd-btn--block" onClick={open}>{ride ? 'Continue to your ride' : p.targetKind === 'order' ? 'Track order' : 'Track delivery'}</button></div>
       </div>
     );

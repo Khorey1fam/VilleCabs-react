@@ -43,5 +43,27 @@ const out = []; const check = (n, ok, x = '') => out.push(`${ok ? 'PASS' : 'FAIL
   await p.screenshot({ path: 'shots/ride-paid.png' });
   check('paid ride: says paid by card, continue button', await p.locator('text=Paid by card').count() >= 1 && await p.locator('text=Continue — paid by card').count() === 1);
   await p.close();
+  // Extra fare: driver asks, customer answers
+  p = await page('extras-driver');
+  check('driver: sees requests and cash to collect', await p.locator('text=Collect J$300 extra in cash.').count() === 1);
+  await p.click('text=Request extra fare'); await p.click('text=Extra stop');
+  await p.fill('input[aria-label="Amount in J$"]', '400'); await p.click('text=Send to customer'); await p.waitForTimeout(300);
+  const req = p.calls.find((c) => c[0] === 'rideExtraRequest');
+  check('driver: request sent with reason and amount', req && req[1].reason === 'extra_stop' && req[1].amount === 400 && req[1].bookingId === 'RX', JSON.stringify(req));
+  await p.screenshot({ path: 'shots/extras-driver.png', fullPage: true });
+  await p.close();
+  p = await page('extras-customer');
+  await p.screenshot({ path: 'shots/extras-customer.png', fullPage: true });
+  check('customer: card option hidden when card payments are off', await p.locator('text=Approve · pay by card').count() === 0);
+  await p.click('text=Approve · pay J$500 cash to driver'); await p.waitForTimeout(300);
+  const ans = p.calls.find((c) => c[0] === 'rideExtraRespond');
+  check('customer: approve cash', ans && ans[1].decision === 'approve' && ans[1].payWith === 'cash' && ans[1].extraId === 'e1', JSON.stringify(ans));
+  await p.close();
+  p = await page('extras-customer&card=1');
+  await p.click('text=Approve · pay by card'); await p.waitForTimeout(1200);
+  const st = p.calls.find((c) => c[0] === 'payCardStart');
+  check('customer: approve by card goes to WiPay', st && st[1].kind === 'extra' && st[1].id === 'RX/e1' && p.url().startsWith('https://jm.wipayfinancial.com/'), p.url());
+  await p.close();
+
   console.log(out.join('\n')); await b.close();
 })();

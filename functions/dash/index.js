@@ -552,6 +552,10 @@ exports.dashNotifyStatusChange = onDocumentUpdated('dash_deliveries/{id}', async
 // Card payments (WiPay) — off until enabled in config/payments
 for (const k of ['payCardStart', 'wipayReturn', 'payUseCash', 'payWatchDelivery', 'payWatchOrder', 'payWatchRide', 'payAdminSetWipay', 'payAdminResolveRefund']) exports[k] = payments[k];
 
+// VilleCabs extra fare requests (driver/admin asks, customer approves)
+const extras = require('./extras');
+for (const k of ['rideExtraRequest', 'rideExtraRespond', 'rideExtraNotifyNew', 'rideExtraNotifyAnswer']) exports[k] = extras[k];
+
 // Marketplace (stores, orders, settlements)
 Object.assign(exports, require('./market'));
 
