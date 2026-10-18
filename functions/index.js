@@ -157,25 +157,41 @@ exports.notifyDriversNewRequest = onDocumentCreated(
     const b = event.data && event.data.data();
     if (!b) return;
     if (b.status !== 'searching') return;         // only genuine open requests
-
-    // Collect tokens of online, approved drivers.
-    const snap = await db.collection('drivers')
-      .where('isOnline', '==', true)
-      .where('status', '==', 'approved')
-      .get();
-    const tokens = [];
-    snap.forEach((d) => { const t = d.get('fcmToken'); if (t) tokens.push(t); });
-    if (tokens.length === 0) return;
-
-    const where = b.pickup && b.pickup.address ? ` near ${b.pickup.address}` : '';
-    await pushToMany(
-      tokens,
-      '🚕 New ride request!',
-      `A rider needs a pickup${where}. Open VilleCabs to accept.`,
-      { tag: 'vc-new-request', bookingId: event.params.bookingId }
-    );
+    await broadcastNewRide(b, event.params.bookingId);
   }
 );
+
+/* 1b) CARD-PAID RIDE → drivers. A card ride is created as 'awaiting_payment'
+   and only becomes an open request once WiPay confirms payment (or the rider
+   switches to cash). Card payments are off unless config/payments enables them. */
+exports.notifyDriversPaidRide = onDocumentUpdated(
+  'bookings/{bookingId}',
+  async (event) => {
+    const before = event.data.before.data() || {};
+    const after  = event.data.after.data()  || {};
+    if (before.status !== 'awaiting_payment' || after.status !== 'searching') return;
+    await broadcastNewRide(after, event.params.bookingId);
+  }
+);
+
+async function broadcastNewRide(b, bookingId) {
+  // Collect tokens of online, approved drivers.
+  const snap = await db.collection('drivers')
+    .where('isOnline', '==', true)
+    .where('status', '==', 'approved')
+    .get();
+  const tokens = [];
+  snap.forEach((d) => { const t = d.get('fcmToken'); if (t) tokens.push(t); });
+  if (tokens.length === 0) return;
+
+  const where = b.pickup && b.pickup.address ? ` near ${b.pickup.address}` : '';
+  await pushToMany(
+    tokens,
+    '🚕 New ride request!',
+    `A rider needs a pickup${where}. Open VilleCabs to accept.`,
+    { tag: 'vc-new-request', bookingId }
+  );
+}
 
 /* 2) DRIVER ACCEPTED → the customer ----------------------------------------
    Fires when the booking transitions into an accepted/active state with a

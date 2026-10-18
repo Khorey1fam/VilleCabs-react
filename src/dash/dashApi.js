@@ -43,6 +43,12 @@ export const api = {
   // Fleet
   assignBike:     (data) => fn('dashAdminAssignMotorcycle')(data).then((r) => r.data),
   bikeStatus:     (data) => fn('dashAdminSetMotorcycleStatus')(data).then((r) => r.data),
+  // Card payments (WiPay) — off unless config/payments enables them
+  payCardStart:   (data) => fn('payCardStart')(data).then((r) => r.data),
+  payUseCash:     (data) => fn('payUseCash')(data).then((r) => r.data),
+  paySetWipay:    (data) => fn('payAdminSetWipay')(data).then((r) => r.data),
+  payResolveRefund: (data) => fn('payAdminResolveRefund')(data).then((r) => r.data),
+  riderPayout:    (data) => fn('dashAdminRecordRiderPayout')(data).then((r) => r.data),
 };
 
 // Callable errors carry a friendly message written on the server.
@@ -61,6 +67,7 @@ export const formatJMD = (cents) => {
 };
 
 export const STATUS_LABEL = {
+  awaiting_payment: 'Waiting for card payment',
   requested:  'Finding a rider',
   assigned:   'Rider assigned',
   to_pickup:  'Rider heading to pickup',
@@ -110,6 +117,19 @@ export function useDashEnabled(uid) {
   return on;
 }
 
+// Card payments: shown only when config/payments enables them for this user.
+export function useCardPayments(uid) {
+  const [cfg, setCfg] = useState(null);
+  useEffect(() => {
+    let unsub = () => {};
+    try { unsub = onSnapshot(doc(dashDb(), 'config', 'payments'), (s) => setCfg(s.exists() ? s.data() : {}), () => setCfg({})); } catch (e) { setCfg({}); }
+    return () => unsub();
+  }, []);
+  const on = !!cfg && (cfg.cardEnabled === true || (!!uid && Array.isArray(cfg.cardTesters) && cfg.cardTesters.includes(uid)));
+  return { cardOn: on, sandbox: (cfg && cfg.environment) !== 'live', loading: cfg === null };
+}
+export const CARD_MIN_CENTS = 16000;
+
 export function newRequestKey() {
   const a = new Uint8Array(12);
   (window.crypto || {}).getRandomValues ? window.crypto.getRandomValues(a) : a.forEach((_, i) => { a[i] = Math.floor(Math.random() * 256); });
@@ -123,7 +143,7 @@ export const MERCHANT_CATEGORIES = [
   ['gift_shop', 'Gift shops'], ['retail', 'General retail'],
 ];
 export const ORDER_LABEL = {
-  awaiting_merchant: 'Waiting for the store', accepted: 'Accepted', preparing: 'Being prepared',
+  awaiting_payment: 'Waiting for card payment', awaiting_merchant: 'Waiting for the store', accepted: 'Accepted', preparing: 'Being prepared',
   ready: 'Ready for pickup', collected: 'On the way', delivered: 'Delivered',
   rejected: 'Not accepted', cancelled: 'Cancelled', failed: 'Could not be delivered',
 };

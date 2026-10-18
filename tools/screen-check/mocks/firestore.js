@@ -67,7 +67,7 @@ export function onSnapshot(ref, next, err) {
 export async function getDoc(ref) { return snapOf(ref.path); }
 export async function getDocs(q) { return runQuery(q); }
 export async function setDoc(ref, data, opt) { store.set(ref.path, opt && opt.merge ? { ...(store.get(ref.path) || {}), ...resolve(data) } : resolve(data)); window.__writes.push(['set', ref.path, data]); emit(); }
-export async function addDoc(col, data) { const r = doc(col); await setDoc(r, data); return r; }
+export async function addDoc(col, data) { const r = doc(col); await setDoc(r, data); try { console.log('ADD ' + r.path + ' ' + JSON.stringify(data)); } catch (e) { /* ignore */ } return r; }
 export async function updateDoc(ref, patch) {
   if (!store.has(ref.path)) throw Object.assign(new Error('not-found'), { code: 'not-found' });
   const d = JSON.parse(JSON.stringify(store.get(ref.path)));
@@ -82,3 +82,8 @@ export const arrayUnion = (...a) => a;
 export const arrayRemove = () => [];
 export const increment = (n) => n;
 window.__writes = window.__writes || [];
+
+export async function runTransaction(db, fn) {
+  const tx = { get: (r) => getDoc(r), set: (r, d, o) => setDoc(r, d, o), update: (r, p) => updateDoc(r, p) };
+  return fn(tx);
+}

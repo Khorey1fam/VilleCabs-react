@@ -5,20 +5,20 @@ import { dashDb, STATUS_LABEL, ORDER_LABEL, FINAL, ORDER_FINAL, formatJMD } from
 import { Shell, PageHead, Icon, Chip, SkeletonRows, EmptyState, ErrorState, useLive, docsOf, fmtWhen, shortId, ORDERS_FILTER_KEY } from './kit';
 import { EmptyRouteArt } from './art';
 
-const ACTIVE_DELIVERY = ['requested', 'assigned', 'to_pickup', 'at_pickup', 'collected', 'to_dropoff', 'at_dropoff'];
+const ACTIVE_DELIVERY = ['awaiting_payment', 'requested', 'assigned', 'to_pickup', 'at_pickup', 'collected', 'to_dropoff', 'at_dropoff'];
 
 export function deliveryTone(s) {
   if (s === 'delivered') return 'ok';
   if (s === 'cancelled') return 'off';
   if (s === 'failed') return 'bad';
-  if (s === 'requested') return 'warn';
+  if (s === 'requested' || s === 'awaiting_payment') return 'warn';
   return 'brand';
 }
 export function orderTone(s) {
   if (s === 'delivered') return 'ok';
   if (['rejected', 'failed'].includes(s)) return 'bad';
   if (s === 'cancelled') return 'off';
-  if (s === 'awaiting_merchant') return 'warn';
+  if (s === 'awaiting_merchant' || s === 'awaiting_payment') return 'warn';
   return 'brand';
 }
 

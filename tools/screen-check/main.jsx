@@ -12,6 +12,8 @@ import RiderPortal from '@src/dash/RiderPortal';
 import MerchantPortal from '@src/dash/MerchantPortal';
 import AdminDashTab from '@src/dash/AdminDash';
 import { SiteLanding } from '@src/dash/sites';
+import { PaymentReturn } from '@src/dash/Payments';
+import { PaymentsTab } from '@src/dash/AdminPayments';
 import { AddressAutocompleteInput, VilleMap, geocodeLatLng } from './mocks/appshell';
 
 const H = 3600000; const T = (ms) => Timestamp.fromMillis(ms); const now = Date.now();
@@ -74,10 +76,17 @@ put('audit_logs/a1', { action: 'dash.assign', target: 'D1', details: { riderId: 
 put('audit_logs/a2', { action: 'finance.rider_cash', target: 'riderA', details: { amountCents: 100000, reference: 'R-001' }, at: T(now - 30 * 60000) });
 put('site_ads/ad1', { title: 'Free delivery this weekend', body: 'Orders over J$3,000 from Juici Spot.', ctaLabel: 'Order now', target: 'dash', showOn: ['cabs', 'ville'], active: true, clicks: 14, clicksBySite: { cabs: 10, ville: 4 } });
 
+if (new URLSearchParams(location.search).get('card')) put('config/payments', { cardTesters: ['cust1'], environment: 'sandbox' });
+put('dash_orders/O4', { customerId: 'cust1', customerName: 'Keneile Davis', merchantId: 'shop1', merchantName: 'Juici Spot Mandeville', items, subtotalCents: 390000, deliveryCents: 60000, serviceCents: 0, totalCents: 450000, commissionPct: 15, merchantPayableCents: 331500, dropoff: DROP, status: 'awaiting_payment', payment: { method: 'card', status: 'pending', lastError: '[N-R05]: Declined by issuer.' }, createdAt: T(now - 5 * 60000) });
+put('dash_payments/VDPAIDAAAAAAAAAA', { uid: 'cust1', targetKind: 'order', targetId: 'O1', amountCents: 450000, status: 'paid', card: '(VISA) ... 0007', environment: 'sandbox', createdAt: T(now - 60000) });
+put('dash_payments/VDFAILAAAAAAAAAA', { uid: 'cust1', targetKind: 'order', targetId: 'O4', amountCents: 450000, status: 'failed', message: '[N-R05]: Declined by issuer.', environment: 'sandbox', createdAt: T(now - 120000) });
+put('dash_payments/VDWAITAAAAAAAAAA', { uid: 'cust1', targetKind: 'delivery', targetId: 'D1', amountCents: 50000, status: 'started', environment: 'sandbox', createdAt: T(now - 30000) });
+put('dash_payments/VDREFUNDAAAAAAAA', { uid: 'cust1', targetKind: 'order', targetId: 'O9', amountCents: 75000, status: 'paid', refundDue: true, refundReason: 'order O9 rejected', environment: 'sandbox', createdAt: T(now - 3 * H) });
 window.__callables = {
   dashQuoteDelivery: async () => quote,
-  dashCreateDelivery: async () => { await new Promise((r) => setTimeout(r, 400)); return { deliveryId: 'dnew1abc' }; },
-  marketCreateOrder: async () => { await new Promise((r) => setTimeout(r, 300)); return { orderId: 'ONEW' }; },
+  payCardStart: async () => ({ url: 'https://jm.wipayfinancial.com/hosted/test-page', paymentId: 'VDTESTAAAAAAAAAA' }),
+  dashCreateDelivery: async (d) => { await new Promise((r) => setTimeout(r, 400)); return { deliveryId: 'dnew1abc', needsPayment: d.paymentMethod === 'card' }; },
+  marketCreateOrder: async (d) => { await new Promise((r) => setTimeout(r, 300)); return { orderId: 'ONEW', needsPayment: d.paymentMethod === 'card' }; },
   marketQuoteOrder: async () => ({ lines: [], subtotalCents: 405000, deliveryCents: 60000, serviceCents: 0, totalCents: 465000, distanceKm: 2.4, pricingPlaceholder: true }),
 };
 try { sessionStorage.setItem('vd_checkout_draft', JSON.stringify({ drop: { address: '12 Caledonia Road, Mandeville', lat: 18.03, lng: -77.51 } })); } catch (e) {}
@@ -111,6 +120,11 @@ const SCREENS = {
   rider: <RiderPortal />, riderjob: <RiderPortal />, pending: <RiderPortal />, apply: <RiderPortal />,
   merchant: <MerchantPortal />, merchantNew: <MerchantPortal />, merchantPending: <MerchantPortal />,
   admin: <div style={{ padding: 14, background: '#f5f6fa', minHeight: '100vh', fontFamily: 'Segoe UI, sans-serif' }}><AdminDashTab /></div>,
+  'dash-order-unpaid': <OrderTrack {...base} orderId="O4" />,
+  'pay-ok': <PaymentReturn {...base} paymentId="VDPAIDAAAAAAAAAA" />,
+  'pay-failed': <PaymentReturn {...base} paymentId="VDFAILAAAAAAAAAA" />,
+  'pay-wait': <PaymentReturn {...base} paymentId="VDWAITAAAAAAAAAA" />,
+  'admin-pay': <div style={{ padding: 14, background: '#f5f6fa', minHeight: '100vh', fontFamily: 'Segoe UI, sans-serif' }}><PaymentsTab /></div>,
   'land-dash': <DashPublic go={nav} domains={base.domains} launched />,
   'land-ville': <SiteLanding site="ville" domains={base.domains} go={nav} dashOn={false} />,
 };

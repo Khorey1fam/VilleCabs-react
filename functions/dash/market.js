@@ -21,6 +21,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { restoreStock, readStockProducts } = require('./stock');
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { FieldValue, Timestamp } = require('firebase-admin/firestore');
 const crypto = require('crypto');
@@ -118,6 +119,8 @@ exports.marketCreateOrder = onCall(async (req) => {
   if (!phone) throw new HttpsError('invalid-argument', 'Add a phone number so the rider can reach you.');
   const items = cleanItems(d.items);
   const pricing = await loadPricing();
+  const byCard = d.paymentMethod === 'card';
+  if (byCard) await require('./payments').internal.assertCardAllowed(auth.uid);
 
   const riders = await ridersAvailable(pricing);
   const demand = { type: 'market', customerId: auth.uid, merchantId, dropoffArea: L.coarseArea(dropoff),
@@ -172,13 +175,16 @@ exports.marketCreateOrder = onCall(async (req) => {
         landmark: L.cleanText(dropoff.landmark, 150), instructions: L.cleanText(dropoff.instructions, 300),
       },
       note: L.cleanText(d.note, 300),
-      payment: { method: 'cash', status: 'unpaid' },
-      status: 'awaiting_merchant', statusTimes: { awaiting_merchant: FieldValue.serverTimestamp() },
+      // Card orders reach the store only after WiPay confirms payment.
+      payment: byCard ? { method: 'card', status: 'pending', provider: 'wipay' } : { method: 'cash', status: 'unpaid' },
+      status: byCard ? 'awaiting_payment' : 'awaiting_merchant',
+      statusTimes: { [byCard ? 'awaiting_payment' : 'awaiting_merchant']: FieldValue.serverTimestamp() },
       deliveryId: null, reservedDeliveryId: deliveryId, prepMinutes: null,
       createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
     });
     tx.set(orderRef.collection('customer').doc('pin'), { pin: pinRec.pin, createdAt: FieldValue.serverTimestamp() });
     tx.set(db().doc(`dash_secrets/${deliveryId}`), { pinHash: pinRec.hash, pinSalt: pinRec.salt });
+    if (byCard && split.totalCents < L.WIPAY_MIN_CENTS) throw new HttpsError('failed-precondition', `Card payments need a total of at least ${L.formatJMD(L.WIPAY_MIN_CENTS)}. Please pay cash.`);
     return { totalCents: split.totalCents };
   });
   if (result.duplicate) {
@@ -186,24 +192,8 @@ exports.marketCreateOrder = onCall(async (req) => {
     return { orderId, pin: pin.exists ? pin.get('pin') : null, duplicate: true };
   }
   await db().collection('dash_demand_events').add({ ...demand, kind: 'booked', orderId, quotedCents: result.totalCents });
-  return { orderId, pin: pinRec.pin, totalCents: result.totalCents };
+  return { orderId, pin: pinRec.pin, totalCents: result.totalCents, needsPayment: byCard };
 });
-
-// Puts reserved stock back. Reads must happen before writes in a transaction,
-// so callers pass in product snapshots they already read.
-function restoreStock(tx, order, productSnaps) {
-  Object.entries(order.stockTaken || {}).forEach(([pid, qty]) => {
-    const s = productSnaps[pid];
-    if (s && s.exists && qty > 0) tx.update(s.ref, { stock: FieldValue.increment(qty) });
-  });
-}
-async function readStockProducts(tx, order) {
-  const out = {};
-  const ids = Object.keys(order.stockTaken || {});
-  const snaps = await Promise.all(ids.map((pid) => tx.get(db().doc(`merchants/${order.merchantId}/products/${pid}`))));
-  snaps.forEach((s, i) => { out[ids[i]] = s; });
-  return out;
-}
 
 // ── Merchant moves an order forward ──────────────────────────────────────────
 exports.marketMerchantUpdateOrder = onCall(async (req) => {
@@ -235,6 +225,7 @@ exports.marketMerchantUpdateOrder = onCall(async (req) => {
       const merchant = await tx.get(db().doc(`merchants/${o.merchantId}`));
       const m = merchant.data();
       const deliveryId = o.reservedDeliveryId;
+      const paidByCard = !!(o.payment && o.payment.method === 'card' && o.payment.status === 'paid');
       const readyAt = Timestamp.fromDate(new Date(Date.now() + mins * 60000));
       tx.update(orderRef, statusPatch('accepted', { prepMinutes: mins, estimatedReadyAt: readyAt, deliveryId }));
       // Create the delivery now so a rider can head over while food is prepared.
@@ -248,13 +239,15 @@ exports.marketMerchantUpdateOrder = onCall(async (req) => {
         dropoff: { ...o.dropoff, recipientName: o.customerName },
         package: { category: 'retail', description: `${o.merchantName} order · ${o.items.reduce((s, i) => s + i.qty, 0)} item(s)`, size: pricing.marketDeliverySize, weightKg: null, fragile: false, handling: '' },
         quote: { lines: [], totalCents: o.deliveryCents, distanceKm: o.distanceKm, distanceIsEstimate: true },
-        riderPayCents: o.riderPayCents, cashToCollectCents: o.totalCents,
+        riderPayCents: o.riderPayCents, cashToCollectCents: paidByCard ? 0 : o.totalCents,
         market: {
           subtotalCents: o.subtotalCents, serviceCents: o.serviceCents, commissionPct: o.commissionPct,
           commissionCents: o.commissionCents, merchantPayableCents: o.merchantPayableCents,
         },
         merchantReady: false, estimatedReadyAt: readyAt,
-        payment: { method: 'cash', collectFrom: 'recipient', status: 'unpaid' },
+        payment: paidByCard
+          ? { method: 'card', collectFrom: null, status: 'paid', paymentId: o.payment.paymentId || null }
+          : { method: 'cash', collectFrom: 'recipient', status: 'unpaid' },
         status: 'requested', statusTimes: { requested: FieldValue.serverTimestamp() },
         riderId: null, riderName: null, riderPhone: null, riderPlate: null,
         pinAttempts: 0, pinLocked: false,
@@ -284,8 +277,8 @@ exports.marketCancelOrder = onCall(async (req) => {
     if (!snap.exists) throw new HttpsError('not-found', 'Order not found.');
     const o = snap.data();
     if (!admin && o.customerId !== auth.uid) throw new HttpsError('permission-denied', 'Not your order.');
-    const customerOk = ['awaiting_merchant', 'accepted'];
-    const adminOk = ['awaiting_merchant', 'accepted', 'preparing', 'ready'];
+    const customerOk = ['awaiting_payment', 'awaiting_merchant', 'accepted'];
+    const adminOk = ['awaiting_payment', 'awaiting_merchant', 'accepted', 'preparing', 'ready'];
     if (!(admin ? adminOk : customerOk).includes(o.status)) {
       throw new HttpsError('failed-precondition', admin ? 'This order can no longer be cancelled.' : 'The store is already preparing your order. Contact support to cancel.');
     }
@@ -359,7 +352,7 @@ exports.marketMarkSettlementPaid = onCall(async (req) => {
 // ── Notifications ────────────────────────────────────────────────────────────
 exports.marketNotifyNewOrder = onDocumentCreated('dash_orders/{id}', async (event) => {
   const o = event.data && event.data.data();
-  if (!o) return;
+  if (!o || o.status !== 'awaiting_merchant') return;   // card orders: told once paid
   const count = (o.items || []).reduce((s, i) => s + i.qty, 0);
   await pushTo('merchants', o.merchantId, '🛍️ New VilleDash order', `${count} item(s) · accept it in your VilleDash store portal.`, { tag: 'vd-order', orderId: event.params.id });
 });
@@ -367,13 +360,19 @@ exports.marketNotifyNewOrder = onDocumentCreated('dash_orders/{id}', async (even
 const ORDER_MESSAGES = {
   accepted: ['✅ Order accepted', (o) => `${o.merchantName} is preparing your order (about ${o.prepMinutes} min).`],
   ready:    ['🍽️ Order ready', (o) => `${o.merchantName} has your order ready for the rider.`],
-  rejected: ['Order not accepted', (o) => `${o.merchantName} couldn’t take your order${o.rejectReason ? `: ${o.rejectReason}` : ''}. You have not been charged.`],
+  rejected: ['Order not accepted', (o) => `${o.merchantName} couldn’t take your order${o.rejectReason ? `: ${o.rejectReason}` : ''}. ${o.payment && o.payment.method === 'card' && o.payment.status === 'paid' ? 'VilleDash will review a refund of your card payment.' : 'You have not been charged.'}`],
 };
 exports.marketNotifyOrderChange = onDocumentUpdated('dash_orders/{id}', async (event) => {
   const before = event.data.before.data() || {};
   const after = event.data.after.data() || {};
   if (before.status === after.status) return;
   const jobs = [];
+  if (before.status === 'awaiting_payment' && after.status === 'awaiting_merchant') {
+    const count = (after.items || []).reduce((s, i) => s + i.qty, 0);
+    const paid = after.payment && after.payment.method === 'card' ? 'Paid by card · ' : '';
+    await pushTo('merchants', after.merchantId, '🛍️ New VilleDash order', `${paid}${count} item(s) · accept it in your VilleDash store portal.`, { tag: 'vd-order', orderId: event.params.id });
+    return;
+  }
   const m = ORDER_MESSAGES[after.status];
   if (m) jobs.push(pushTo('customers', after.customerId, m[0], m[1](after), { tag: `vd-order-${after.status}`, orderId: event.params.id }));
   if (after.status === 'cancelled' && after.cancelledBy === 'customer') {

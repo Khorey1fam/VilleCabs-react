@@ -34,6 +34,8 @@ function Report() {
   const deliveryFees = sum('delivery_fee'); const productSales = sum('product_sales'); const serviceFees = sum('service_fee');
   const commission = sum('commission'); const riderPay = sum('rider_earning'); const fleet = sum('fleet_charge');
   const collected = deliveryFees + productSales + serviceFees;
+  const byCard = rows.filter((e) => e.paymentMethod === 'card' && ['delivery_fee', 'product_sales', 'service_fee'].includes(e.kind)).reduce((s, e) => s + (e.amountCents || 0), 0);
+  const refunds = sum('card_refund');
   const revenue = deliveryFees + commission + serviceFees;
   const contribution = revenue - riderPay - fleet;
   const Row = ({ l, v, strong, sub, neg }) => (
@@ -50,7 +52,9 @@ function Report() {
         <span>to</span>
         <input type="date" value={to} onChange={(e) => setTo(e.target.value)} style={{ ...st.input, width: 'auto', padding: '6px 8px' }} />
       </div>
-      <Row l="Cash collected from customers" v={collected} sub="Gross order value — not revenue. Includes store sales that belong to merchants." />
+      <Row l="Collected from customers" v={collected} sub="Gross order value — not revenue. Includes store sales that belong to merchants." />
+      {byCard > 0 && <Row l="  of which paid by card (WiPay)" v={byCard} sub="Arrives in the WiPay account, less WiPay’s fee; withdraw it to the bank from WiPay." />}
+      {refunds > 0 && <Row l="Card refunds made" v={refunds} neg />}
       <Row l="  of which store sales (merchants' money)" v={productSales} />
       <div style={{ height: 8 }} />
       <Row l="Delivery fees" v={deliveryFees} />
@@ -65,12 +69,12 @@ function Report() {
 }
 
 function RiderCash({ riders }) {
-  const entries = useQuery('ledger_entries', [where('kind', 'in', ['rider_cash_held', 'rider_cash_received'])], 'cash');
+  const entries = useQuery('ledger_entries', [where('kind', 'in', ['rider_cash_held', 'rider_cash_received', 'rider_payout'])], 'cash');
   const [form, setForm] = useState({});
   const [msg, setMsg] = useState('');
   const owed = useMemo(() => {
     const o = {};
-    (entries || []).forEach((e) => { o[e.partyId] = (o[e.partyId] || 0) + (e.kind === 'rider_cash_held' ? 1 : -1) * (e.amountCents || 0); });
+    (entries || []).forEach((e) => { o[e.partyId] = (o[e.partyId] || 0) + (e.kind === 'rider_cash_received' ? -1 : 1) * (e.amountCents || 0); });
     return o;
   }, [entries]);
   if (!entries || !riders) return <Spinner />;
@@ -79,20 +83,26 @@ function RiderCash({ riders }) {
     setMsg('');
     const f = form[r.id] || {};
     const cents = centsFromJ(f.amount);
-    if (Number.isNaN(cents) || cents <= 0) { setMsg('Enter the amount received.'); return; }
-    try { const res = await call('dashAdminRecordRiderCash', { riderId: r.id, amountCents: cents, reference: f.ref || '' }); setMsg(`Recorded. ${r.name} now owes ${formatJMD(res.owedCents)}.`); setForm({ ...form, [r.id]: {} }); } catch (e) { setMsg(errText(e)); }
+    if (Number.isNaN(cents) || cents <= 0) { setMsg('Enter the amount.'); return; }
+    // Positive balance: rider hands in cash. Negative (card-paid jobs): VilleDash pays the rider.
+    const payout = owed[r.id] < 0;
+    try {
+      const res = await call(payout ? 'dashAdminRecordRiderPayout' : 'dashAdminRecordRiderCash', { riderId: r.id, amountCents: cents, reference: f.ref || '' });
+      setMsg(res.owedCents < 0 ? `Recorded. VilleDash still owes ${r.name} ${formatJMD(-res.owedCents)}.` : `Recorded. ${r.name} now owes ${formatJMD(res.owedCents)}.`);
+      setForm({ ...form, [r.id]: {} });
+    } catch (e) { setMsg(errText(e)); }
   };
   return (
     <div style={card}>
       <div style={st.h2}>Cash held by riders</div>
-      <div style={{ fontSize: 12.5, color: C.quiet, marginBottom: 8 }}>Riders keep their pay from the cash they collect and owe VilleDash the rest. Record each handover with a receipt or deposit reference.</div>
+      <div style={{ fontSize: 12.5, color: C.quiet, marginBottom: 8 }}>Riders keep their pay from the cash they collect and owe VilleDash the rest. On card-paid jobs they collect nothing, so VilleDash owes them their pay. Record each handover or payout with a reference.</div>
       {msg && <div style={st.note}>{msg}</div>}
       {list.length === 0 ? <div style={{ fontSize: 13, color: C.quiet }}>No rider owes anything right now.</div> : list.map((r) => (
         <div key={r.id} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '8px 0', borderTop: `1px solid ${C.line}` }}>
-          <div style={{ flex: 1, minWidth: 140 }}><b>{r.name}</b><div style={{ fontSize: 12.5, color: owed[r.id] > 0 ? C.red : C.green }}>owes {formatJMD(owed[r.id])}</div></div>
-          <input style={{ ...st.input, width: 110, padding: '6px 8px' }} placeholder="J$ received" value={form[r.id]?.amount || ''} onChange={(e) => setForm({ ...form, [r.id]: { ...form[r.id], amount: e.target.value } })} />
+          <div style={{ flex: 1, minWidth: 140 }}><b>{r.name}</b><div style={{ fontSize: 12.5, color: owed[r.id] > 0 ? C.red : C.green }}>{owed[r.id] > 0 ? `owes ${formatJMD(owed[r.id])}` : `VilleDash owes ${formatJMD(-owed[r.id])}`}</div></div>
+          <input style={{ ...st.input, width: 110, padding: '6px 8px' }} placeholder={owed[r.id] > 0 ? 'J$ received' : 'J$ paid out'} value={form[r.id]?.amount || ''} onChange={(e) => setForm({ ...form, [r.id]: { ...form[r.id], amount: e.target.value } })} />
           <input style={{ ...st.input, width: 150, padding: '6px 8px' }} placeholder="Receipt / deposit ref" value={form[r.id]?.ref || ''} onChange={(e) => setForm({ ...form, [r.id]: { ...form[r.id], ref: e.target.value } })} />
-          <button onClick={() => record(r)} style={{ ...small, background: C.green, color: C.white, border: 'none' }}>Record</button>
+          <button onClick={() => record(r)} style={{ ...small, background: C.green, color: C.white, border: 'none' }}>{owed[r.id] > 0 ? 'Record' : 'Record payout'}</button>
         </div>
       ))}
     </div>

@@ -512,3 +512,263 @@ test('phone numbers are kept off the delivery that every rider can see', async (
   assert.ok(!JSON.stringify(store.get(`dash_deliveries/${delId}`)).includes('8765550101'));
   assert.equal(store.get(`dash_deliveries/${delId}/private/contact`).recipientPhone, '8765550101');
 });
+
+// ── Card payments (WiPay) ────────────────────────────────────────────────────
+const crypto2 = require('crypto');
+const PAY = require('./payments').internal;
+let wipayCalls = [];
+function mockWipay(reply = (body) => ({ status: 200, json: { url: 'https://jm.wipayfinancial.com/hosted/abc', message: 'OK', transaction_id: `SB-12-1-${body.get('order_id')}-20261018120000` } })) {
+  wipayCalls = [];
+  global.fetch = async (url, opts) => {
+    const body = new URLSearchParams(opts.body);
+    wipayCalls.push({ url, body: Object.fromEntries(body), headers: opts.headers });
+    const r = reply(body);
+    return { status: r.status, json: async () => r.json };
+  };
+}
+const md5 = (s) => crypto2.createHash('md5').update(s).digest('hex');
+async function wipayReturn(query) {
+  let redirect = null;
+  const res = { set() {}, redirect(code, url) { redirect = { code, url }; } };
+  await F.wipayReturn({ query, method: 'GET', headers: {} }, res);
+  return redirect;
+}
+const successQuery = (pid, totalStr, key = '123', extra = {}) => {
+  const tx = `SB-12-1-${pid}-20261018120000`;
+  return { status: 'success', order_id: pid, transaction_id: tx, total: totalStr, hash: md5(`${tx}${totalStr}${key}`), message: '[Y-R00]: Approved', card: '(VISA) ... 0007', ...extra };
+};
+const triggerRun = (fn, before, after, id) => F[fn].run({ data: { before: { data: () => before }, after: { data: () => after } }, params: { id } });
+
+test('card payments are off unless config/payments turns them on', async () => {
+  await assert.rejects(call('dashCreateDelivery', 'cust1', booking('card-off-1', { paymentMethod: 'card' })), errCode('failed-precondition'));
+  store.set('config/payments', { cardTesters: ['cust2'] });
+  await assert.rejects(call('dashCreateDelivery', 'cust1', booking('card-off-2', { paymentMethod: 'card' })), errCode('failed-precondition'));
+  // Cash still works exactly as before
+  const r = await call('dashCreateDelivery', 'cust1', booking('cash-ok-1'));
+  assert.equal(store.get(`dash_deliveries/${r.deliveryId}`).status, 'requested');
+});
+
+test('parcel by card: held until paid, forged success refused, real success releases it, rider paid by VilleDash', async () => {
+  store.set('config/payments', { cardTesters: ['cust1'] });
+  mockWipay();
+  const { deliveryId: id, pin, needsPayment } = await call('dashCreateDelivery', 'cust1', booking('card-parcel-1', { paymentMethod: 'card' }));
+  assert.equal(needsPayment, true);
+  let d = store.get(`dash_deliveries/${id}`);
+  assert.equal(d.status, 'awaiting_payment'); assert.equal(d.cashToCollectCents, 0); assert.equal(d.payment.method, 'card');
+  await assert.rejects(call('dashAcceptDelivery', 'riderA', { deliveryId: id }), 'riders can’t take an unpaid job');
+
+  await assert.rejects(call('payCardStart', 'cust2', { kind: 'delivery', id, returnOrigin: 'https://villecabs.com' }), errCode('failed-precondition'));
+  const start = await call('payCardStart', 'cust1', { kind: 'delivery', id, returnOrigin: 'https://evil.example' });
+  assert.match(start.url, /^https:\/\/jm\.wipayfinancial\.com\//);
+  const sent = wipayCalls[0];
+  assert.equal(sent.url, 'https://jm.wipayfinancial.com/plugins/payments/request');
+  assert.equal(sent.headers.Accept, 'application/json');
+  assert.equal(sent.body.account_number, '1234567890'); assert.equal(sent.body.environment, 'sandbox');
+  assert.equal(sent.body.currency, 'JMD'); assert.equal(sent.body.method, 'credit_card');
+  assert.equal(sent.body.fee_structure, 'customer_pay', 'customer pays WiPay’s fee by default');
+  assert.equal(sent.body.total, (d.quote.totalCents / 100).toFixed(2));
+  assert.ok(sent.body.order_id.length <= 16 && /^VD[0-9A-Z]+$/.test(sent.body.order_id));
+  const pid = start.paymentId;
+  assert.equal(store.get(`dash_payments/${pid}`).returnOrigin, 'https://villecabs.com', 'unknown sites fall back to villecabs.com');
+
+  // Someone hand-crafts a "success" without the API key → refused
+  const forged = successQuery(pid, sent.body.total, 'wrong-key');
+  let r = await wipayReturn(forged);
+  assert.equal(r.url, `https://villecabs.com/?vdpay=${pid}`);
+  assert.equal(store.get(`dash_payments/${pid}`).status, 'rejected');
+  assert.equal(store.get(`dash_deliveries/${id}`).status, 'awaiting_payment');
+
+  // A fresh attempt that really succeeds
+  const start2 = await call('payCardStart', 'cust1', { kind: 'delivery', id, returnOrigin: 'https://villedash.com' });
+  r = await wipayReturn(successQuery(start2.paymentId, sent.body.total));
+  assert.equal(r.url, `https://villedash.com/?vdpay=${start2.paymentId}`);
+  d = store.get(`dash_deliveries/${id}`);
+  assert.equal(d.status, 'requested'); assert.equal(d.payment.status, 'paid'); assert.equal(d.payment.paymentId, start2.paymentId);
+  // The same redirect again changes nothing
+  await wipayReturn(successQuery(start2.paymentId, sent.body.total));
+  assert.equal(store.get(`dash_payments/${start2.paymentId}`).status, 'paid');
+
+  await call('dashAcceptDelivery', 'riderA', { deliveryId: id });
+  for (const s of ['to_pickup', 'at_pickup', 'collected', 'to_dropoff', 'at_dropoff']) await call('dashRiderUpdateStatus', 'riderA', { deliveryId: id, status: s });
+  await call('dashVerifyDropoffPin', 'riderA', { deliveryId: id, pin });
+  d = store.get(`dash_deliveries/${id}`);
+  assert.equal(d.status, 'delivered'); assert.equal(d.payment.status, 'paid');
+  const ledger = [...store.entries()].filter(([k]) => k.startsWith('ledger_entries/')).map(([, v]) => v);
+  const held = ledger.find((e) => e.kind === 'rider_cash_held');
+  assert.equal(held.amountCents, -d.riderPayCents, 'VilleDash owes the rider their pay');
+  await assert.rejects(asAdmin('dashAdminRecordRiderPayout', { riderId: 'riderA', amountCents: d.riderPayCents + 1, reference: 'P1' }), errCode('failed-precondition'));
+  const paid = await asAdmin('dashAdminRecordRiderPayout', { riderId: 'riderA', amountCents: d.riderPayCents, reference: 'NCB-P1' });
+  assert.equal(paid.owedCents, 0);
+});
+
+test('failed card payment: customer can switch to cash; unknown or unpaid orders expire', async () => {
+  store.set('config/payments', { cardEnabled: true });
+  mockWipay();
+  const { deliveryId: id } = await call('dashCreateDelivery', 'cust1', booking('card-parcel-2', { paymentMethod: 'card' }));
+  const start = await call('payCardStart', 'cust1', { kind: 'delivery', id });
+  await wipayReturn({ status: 'failed', order_id: start.paymentId, transaction_id: 'x', message: '[N-R05]: Declined' });
+  assert.equal(store.get(`dash_payments/${start.paymentId}`).status, 'failed');
+  assert.match(store.get(`dash_deliveries/${id}`).payment.lastError, /Declined/);
+  await assert.rejects(call('payUseCash', 'cust2', { kind: 'delivery', id }), errCode('permission-denied'));
+  await call('payUseCash', 'cust1', { kind: 'delivery', id, payer: 'recipient' });
+  const d = store.get(`dash_deliveries/${id}`);
+  assert.equal(d.status, 'requested'); assert.equal(d.payment.method, 'cash'); assert.equal(d.payment.collectFrom, 'recipient');
+  assert.equal(d.cashToCollectCents, d.quote.totalCents);
+
+  // Garbage return → bounced to the site, nothing changes
+  const r = await wipayReturn({ status: 'success', order_id: 'not-ours' });
+  assert.equal(r.url, 'https://villecabs.com/?vdpay=unknown');
+
+  // Left unpaid past the limit → cancelled; stock for store orders goes back
+  seedStore();
+  const o = await call('marketCreateOrder', 'cust1', order('card-ord-exp', { paymentMethod: 'card' }));
+  assert.equal(store.get(`dash_orders/${o.orderId}`).status, 'awaiting_payment');
+  assert.equal(store.get('merchants/shop1/products/water').stock, 2);
+  const { id: d2 } = { id: (await call('dashCreateDelivery', 'cust1', booking('card-parcel-3', { paymentMethod: 'card' }))).deliveryId };
+  assert.equal(await PAY.expireUnpaid(Date.now() + 10 * 60000), 0, 'not yet');
+  assert.equal(await PAY.expireUnpaid(Date.now() + 31 * 60000), 2);
+  assert.equal(store.get(`dash_orders/${o.orderId}`).status, 'cancelled');
+  assert.equal(store.get(`dash_deliveries/${d2}`).status, 'cancelled');
+  assert.equal(store.get('merchants/shop1/products/water').stock, 5, 'stock restored');
+});
+
+test('store order by card: store sees it only after payment; rider collects nothing; rejection flags a refund', async () => {
+  store.set('config/payments', { cardTesters: ['cust1'] });
+  seedStore(); mockWipay();
+  const { orderId } = await call('marketCreateOrder', 'cust1', order('card-ord-1', { paymentMethod: 'card' }));
+  await assert.rejects(call('marketMerchantUpdateOrder', 'shop1', { orderId, action: 'accepted', prepMinutes: 10 }), errCode('failed-precondition'));
+  const o0 = store.get(`dash_orders/${orderId}`);
+  const start = await call('payCardStart', 'cust1', { kind: 'order', id: orderId, returnOrigin: 'https://villecabs.com' });
+  assert.equal(wipayCalls[0].body.total, (o0.totalCents / 100).toFixed(2));
+  await wipayReturn(successQuery(start.paymentId, wipayCalls[0].body.total));
+  assert.equal(store.get(`dash_orders/${orderId}`).status, 'awaiting_merchant');
+  await call('marketMerchantUpdateOrder', 'shop1', { orderId, action: 'accepted', prepMinutes: 10 });
+  const del = store.get(`dash_deliveries/${store.get(`dash_orders/${orderId}`).deliveryId}`);
+  assert.equal(del.cashToCollectCents, 0); assert.equal(del.payment.method, 'card'); assert.equal(del.payment.status, 'paid');
+
+  // A second paid order that the store rejects → refund flagged, admin records it
+  const b = await call('marketCreateOrder', 'cust1', order('card-ord-2', { paymentMethod: 'card', items: [{ productId: 'jerk', qty: 1, options: { Size: ['Small'] } }] }));
+  const s2 = await call('payCardStart', 'cust1', { kind: 'order', id: b.orderId });
+  await wipayReturn(successQuery(s2.paymentId, wipayCalls[1].body.total));
+  const before = store.get(`dash_orders/${b.orderId}`);
+  await call('marketMerchantUpdateOrder', 'shop1', { orderId: b.orderId, action: 'rejected', reason: 'Out of chicken' });
+  await triggerRun('payWatchOrder', before, store.get(`dash_orders/${b.orderId}`), b.orderId);
+  assert.equal(store.get(`dash_payments/${s2.paymentId}`).refundDue, true);
+  assert.equal(store.get(`dash_orders/${b.orderId}`).payment.status, 'refund_due');
+  await assert.rejects(call('payAdminResolveRefund', 'cust1', { paymentId: s2.paymentId, reference: 'x' }), errCode('permission-denied'));
+  await assert.rejects(asAdmin('payAdminResolveRefund', { paymentId: s2.paymentId }), errCode('invalid-argument'));
+  await asAdmin('payAdminResolveRefund', { paymentId: s2.paymentId, reference: 'WIPAY-RF-1' });
+  assert.equal(store.get(`dash_payments/${s2.paymentId}`).refundDue, false);
+  assert.equal(store.get(`dash_orders/${b.orderId}`).payment.status, 'refunded');
+  assert.ok([...store.values()].some((v) => v.kind === 'card_refund' && v.reference === 'WIPAY-RF-1'));
+});
+
+test('live mode needs saved credentials; admin saves them without exposing the key', async () => {
+  store.set('config/payments', { cardEnabled: true, environment: 'live' });
+  mockWipay();
+  const { deliveryId: id } = await call('dashCreateDelivery', 'cust1', booking('card-live-1', { paymentMethod: 'card' }));
+  await assert.rejects(call('payCardStart', 'cust1', { kind: 'delivery', id }), errCode('failed-precondition'));
+  await assert.rejects(call('payAdminSetWipay', 'cust1', { accountNumber: '1234567890', apiKey: 'abc123' }), errCode('permission-denied'));
+  await assert.rejects(asAdmin('payAdminSetWipay', { accountNumber: '123', apiKey: 'abc123' }), errCode('invalid-argument'));
+  await asAdmin('payAdminSetWipay', { accountNumber: '9876543210', apiKey: 'liveKey99' });
+  assert.equal(store.get('config/payments').liveAccountLast4, '3210');
+  assert.ok(!JSON.stringify(store.get('config/payments')).includes('liveKey99'), 'key not in public config');
+  const start = await call('payCardStart', 'cust1', { kind: 'delivery', id });
+  assert.equal(wipayCalls[0].body.account_number, '9876543210'); assert.equal(wipayCalls[0].body.environment, 'live');
+  // A sandbox-signed success can't settle a live payment
+  await wipayReturn(successQuery(start.paymentId, wipayCalls[0].body.total, 'liveKey99'));
+  assert.equal(store.get(`dash_payments/${start.paymentId}`).status, 'rejected');
+  const tx = `12-77-${start.paymentId}-20261018120000`;
+  await wipayReturn({ status: 'success', order_id: start.paymentId, transaction_id: tx, total: '9.99', hash: md5(`${tx}${wipayCalls[0].body.total}liveKey99`) });
+  assert.equal(store.get(`dash_payments/${start.paymentId}`).status, 'paid');
+  assert.equal(store.get(`dash_deliveries/${id}`).status, 'requested');
+
+  // WiPay down → friendly error, payment recorded as start_failed
+  mockWipay(() => ({ status: 500, json: { message: 'Server error' } }));
+  const { deliveryId: id2 } = await call('dashCreateDelivery', 'cust2', booking('card-live-2', { paymentMethod: 'card' }));
+  await assert.rejects(call('payCardStart', 'cust2', { kind: 'delivery', id: id2 }), errCode('unavailable'));
+  assert.ok([...store.entries()].some(([k, v]) => k.startsWith('dash_payments/') && v.status === 'start_failed'));
+});
+
+test('VilleCabs ride by card: held from drivers until paid; cancellation is flagged for the admin to decide the refund', async () => {
+  store.set('config/payments', { cardTesters: ['cust1'] });
+  store.set('config/features', { dash: false });   // rides don't depend on VilleDash being open
+  store.set('customers/cust1', { name: 'Keneile Davis', phone: '8765550101', fcmToken: 'tok-c1' });
+  mockWipay();
+  store.set('bookings/R1', { customerId: 'cust1', customerName: 'Keneile', fare: 1250, status: 'awaiting_payment', paymentMethod: 'Card', payment: { method: 'card', status: 'pending', provider: 'wipay' } });
+  await assert.rejects(call('payCardStart', 'cust2', { kind: 'ride', id: 'R1' }), errCode('failed-precondition'));
+  const start = await call('payCardStart', 'cust1', { kind: 'ride', id: 'R1', returnOrigin: 'https://villecabs.com' });
+  assert.equal(wipayCalls[0].body.total, '1250.00');
+  assert.equal(store.get(`dash_payments/${start.paymentId}`).service, 'cabs');
+  await wipayReturn(successQuery(start.paymentId, '1250.00'));
+  let r = store.get('bookings/R1');
+  assert.equal(r.status, 'searching'); assert.equal(r.payment.status, 'paid'); assert.equal(r.paymentMethod, 'Card');
+
+  // Rider cancels after paying → flagged, not refunded automatically
+  const before = r;
+  store.set('bookings/R1', { ...r, status: 'cancelled', cancelledBy: 'customer' });
+  await triggerRun('payWatchRide', before, store.get('bookings/R1'), 'R1');
+  assert.equal(store.get(`dash_payments/${start.paymentId}`).refundDue, true);
+  assert.equal(store.get('bookings/R1').payment.status, 'refund_due');
+  assert.ok(pushes.some((m) => /review a refund/.test(JSON.stringify(m))), 'customer told it is under review');
+  // Admin refunds part of it (keeps a cancellation fee)
+  await assert.rejects(asAdmin('payAdminResolveRefund', { paymentId: start.paymentId, reference: 'R', amountCents: 999999 }), errCode('invalid-argument'));
+  await asAdmin('payAdminResolveRefund', { paymentId: start.paymentId, reference: 'WIPAY-RF-9', amountCents: 100000 });
+  assert.equal(store.get(`dash_payments/${start.paymentId}`).refundedCents, 100000);
+  assert.equal(store.get('bookings/R1').payment.refundedCents, 100000);
+
+  // Card fails → switch to cash puts it in front of drivers
+  store.set('bookings/R2', { customerId: 'cust1', fare: 900, status: 'awaiting_payment', paymentMethod: 'Card', payment: { method: 'card', status: 'pending' } });
+  await call('payUseCash', 'cust1', { kind: 'ride', id: 'R2' });
+  r = store.get('bookings/R2');
+  assert.equal(r.status, 'searching'); assert.equal(r.paymentMethod, 'Cash'); assert.equal(r.payment.method, 'cash');
+});
+
+test('extra fare: driver asks with a reason, customer approves cash or pays by card; admin can ask after the ride', async () => {
+  store.set('config/payments', { cardTesters: ['cust1'] });
+  mockWipay();
+  store.set('drivers/drv1', { name: 'Dee', fcmToken: 'tok-d1' });
+  store.set('customers/cust1', { name: 'Keneile Davis', phone: '8765550101', fcmToken: 'tok-c1' });
+  store.set('bookings/R9', { customerId: 'cust1', driverId: 'drv1', driverName: 'Dee', fare: 1200, status: 'searching' });
+  const ask = (uid, data) => call('rideExtraRequest', uid, { bookingId: 'R9', ...data });
+  await assert.rejects(ask('drv1', { reason: 'waiting', amount: 300 }), errCode('failed-precondition'), 'not during a ride yet');
+  store.set('bookings/R9', { ...store.get('bookings/R9'), status: 'enroute' });
+  await assert.rejects(ask('drv2', { reason: 'waiting', amount: 300 }), errCode('permission-denied'));
+  await assert.rejects(ask('drv1', { reason: 'nonsense', amount: 300 }), errCode('invalid-argument'));
+  await assert.rejects(ask('drv1', { reason: 'other', amount: 300 }), errCode('invalid-argument'), 'other needs a note');
+  await assert.rejects(ask('drv1', { reason: 'toll', amount: 999999 }), errCode('invalid-argument'));
+  const a = await ask('drv1', { reason: 'waiting', amount: 300, note: '15 min at the bank' });
+  assert.equal(store.get('bookings/R9').extraPending, true);
+  assert.equal(store.get(`bookings/R9/extras/${a.extraId}`).amountCents, 30000);
+
+  // Only the ride's customer answers; cash approval adds to the ride's totals
+  const answer = (uid, extraId, data) => call('rideExtraRespond', uid, { bookingId: 'R9', extraId, ...data });
+  await assert.rejects(answer('cust2', a.extraId, { decision: 'approve' }), errCode('permission-denied'));
+  await answer('cust1', a.extraId, { decision: 'approve', payWith: 'cash' });
+  assert.equal(store.get(`bookings/R9/extras/${a.extraId}`).status, 'approved_cash');
+  assert.equal(store.get('bookings/R9').extrasApprovedTotal, 300);
+  assert.equal(store.get('bookings/R9').extraPending, false);
+  await assert.rejects(answer('cust1', a.extraId, { decision: 'decline' }), errCode('failed-precondition'), 'answered once');
+
+  // Second request paid by card through WiPay
+  const b = await ask('drv1', { reason: 'extra_stop', amount: 500 });
+  const r = await answer('cust1', b.extraId, { decision: 'approve', payWith: 'card' });
+  assert.equal(r.status, 'awaiting_payment');
+  const start = await call('payCardStart', 'cust1', { kind: 'extra', id: r.payId, returnOrigin: 'https://villecabs.com' });
+  assert.equal(wipayCalls[0].body.total, '500.00');
+  await wipayReturn(successQuery(start.paymentId, '500.00'));
+  assert.equal(store.get(`bookings/R9/extras/${b.extraId}`).status, 'paid');
+  const ride = store.get('bookings/R9');
+  assert.equal(ride.extrasApprovedTotal, 800); assert.equal(ride.extrasCardTotal, 500); assert.equal(ride.extrasCashTotal, 300);
+  assert.equal(ride.status, 'enroute', 'the ride itself is untouched');
+
+  // Declined, and the driver can't ask once the ride is over — the admin can
+  const c = await ask('drv1', { reason: 'toll', amount: 200 });
+  await answer('cust1', c.extraId, { decision: 'decline' });
+  assert.equal(store.get(`bookings/R9/extras/${c.extraId}`).status, 'declined');
+  store.set('bookings/R9', { ...store.get('bookings/R9'), status: 'completed' });
+  await assert.rejects(ask('drv1', { reason: 'toll', amount: 200 }), errCode('failed-precondition'));
+  const d = await asAdmin('rideExtraRequest', { bookingId: 'R9', reason: 'cleaning', amount: 1000 });
+  assert.equal(store.get(`bookings/R9/extras/${d.extraId}`).requestedBy, 'admin');
+  assert.ok([...store.values()].some((v) => v.action === 'ride.extra_request'), 'admin request audited');
+});

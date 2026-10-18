@@ -95,6 +95,37 @@ Setup for villedash.com and villeapp.org (do each one):
 
 Sign-ins don't carry across domains: a customer signed in on villecabs.com signs in once more on the VilleDash domain (same account). To try a brand before the domain is live, open a Vercel preview with `?site=dash` or `?site=ville`.
 
+## Card payments (WiPay) — built, switched OFF
+
+Card payments use WiPay's hosted payment page (WiPay Payments API v1.0.7) and cover **VilleCabs rides** (the "Confirm your ride" sheet, ride-now only) and **VilleDash** (packages and store orders). They are **off** until you turn them on in Admin → VilleDash → **Card payments**. While off, customers only see cash and nothing changes.
+
+- **WiPay's fee is paid by the customer** (`customer_pay`): WiPay adds it on its own page, so VILLE receives the full fare or order total.
+- **Refunds are never automatic.** Card-paid rides and orders that are cancelled, rejected, expire or fail are flagged under **Refunds to review**. You decide: refund all or part (e.g. keep a cancellation fee) in the WiPay dashboard and record it, or mark *No refund* with a reason. Customers are told a refund is *under review*.
+- **Card rides** are saved as *awaiting_payment* and drivers can't see them until WiPay confirms payment; then they go to drivers as normal. Drivers see "PAID BY CARD · NO CASH". Admin → Revenue shows a "Paid by card" column, because VilleCabs holds that money and owes the driver their 85%.
+
+How it works:
+
+1. At checkout (store orders) or on the Review step (packages) the customer picks **Card now**. The order is saved as *Waiting for card payment*; stores and riders don't see it yet.
+2. The server asks WiPay for a payment page and sends the customer there. VilleDash never sees card numbers.
+3. WiPay sends the customer back through the `wipayReturn` function. A "success" only counts if WiPay's hash matches `md5(transaction_id + total + API key)`, so a faked link can't mark an order paid. Then the store gets the order (or dispatch starts) and the customer sees "Payment received".
+4. If the card fails, the customer can try again or switch to cash. Unpaid card orders are cancelled after 30 minutes and reserved stock goes back.
+5. The rider collects nothing on card jobs ("Paid by card · collect nothing"). VilleDash then owes the rider their pay: Finance → Cash held by riders shows "VilleDash owes" and a **Record payout** button.
+6. If a card-paid order is cancelled, rejected or fails, it appears under **Refunds to review**. WiPay has no refund API: refund in the WiPay dashboard, then record the reference.
+
+To test (sandbox — no real money): in Card payments, keep **Sandbox**, add your customer ID under **Test customers**, then book a ride or place an order and pay with a WiPay test card. Jamaica uses First Global Bank's page: Visa `4035874000424977` or Mastercard `5210000010001001`, any expiry and 3-digit code; if asked for a password, use the "Personal Message" shown.
+
+To go live: you need a verified WiPay Business account. Save the 10-digit account number and API key under **Live WiPay account** (the key is kept on the server only), switch Mode to **Live**, test with your own card, then **Turn card payments ON for everyone**. WiPay pays into your WiPay account; withdraw to the bank from WiPay (up to 7 working days, withdrawal fee applies). WiPay Jamaica fees: 4.2% + GCT (free plan) or 3.5% + GCT (paid plans); set to *Customer pays it* by default.
+
+Deploy needed: `firebase deploy --only firestore:rules,functions` (new functions `payCardStart`, `wipayReturn`, `payUseCash`, `payWatchDelivery`, `payWatchOrder`, `payWatchRide`, `notifyDriversPaidRide`, `payAdminSetWipay`, `payAdminResolveRefund`, `dashAdminRecordRiderPayout`). The rules change also stops customers and drivers editing a ride's payment details.
+
+## Extra fare requests (VilleCabs rides)
+
+Drivers can ask for more than the quoted fare during a ride, and admins can ask at any time (Admin → Rides → the ride → *Request extra fare*). They pick a reason — waiting time, extra stop, route change or detour, toll or parking, extra luggage, extra passenger, cleaning fee, or other (with a note) — and an amount (J$50–J$20,000). At most 3 can wait for an answer at once, 6 per ride.
+
+The customer gets a push and sees the request on the ride screen (or their home screen if the ride has ended). They **approve and pay cash** to the driver, **approve and pay by card** (only when card payments are on for them and the amount is at least J$160), or **decline**. Nothing is added without their tap. The driver gets a push with the answer and sees "Collect J$X extra in cash" or "Paid by card". Declined requests stay visible to admin.
+
+Approved extras are added to the ride (`extrasApprovedTotal`, split into cash and card) and count in Revenue with the usual 15% / 85% split. Only Cloud Functions can write these totals or the requests (`rideExtraRequest`, `rideExtraRespond`, plus push triggers).
+
 ## Launch sign-ups
 
 Before launch, signed-out visitors to the VilleDash domain see a "launching soon" page with a **Notify me** box (email or phone). Entries go to `dash_interest` and are listed in Admin → VilleDash → Launch, with a Copy all button. The `firestore.rules` on this branch allow anyone to add one entry with only those fields; only admins can read them.
@@ -128,8 +159,8 @@ existing document is changed.
 ## Not done yet
 
 - Substitutions (store offers a replacement, customer approves) — for now the store rejects with a reason or calls the customer
-- Refunds — cash only, so nothing is charged before delivery; card refunds come with online payments
-- Online payments (cash only at launch, as decided)
+- Card refunds are made by hand in the WiPay dashboard (WiPay has no refund API); the app lists what to refund
+- Card payments are built but switched off (see Card payments above)
 - Email notifications (push is wired; email needs EmailJS templates)
 - One store per login; multi-location chains need a merchant-users model
 - Distances are straight-line × 1.3, not road routes

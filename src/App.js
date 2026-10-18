@@ -22,10 +22,12 @@ import { VilleHome } from './dash/CustomerScreens';
 import { DashHome, DashPublic } from './dash/Home';
 import { MyOrders } from './dash/Orders';
 import { DashAbout, DashTerms } from './dash/Info';
+import { PaymentReturn, goToCard } from './dash/Payments';
+import { ExtraFareRequest, ExtraFareList, ExtraFareCustomer, usePendingExtraRides } from './RideExtras';
 import { StoresList, StorePage, Cart, Checkout, OrderTrack } from './dash/Marketplace';
 import SendPackage from './dash/SendPackage';
 import DeliveryTrack from './dash/DeliveryTrack';
-import { useDashEnabled } from './dash/dashApi';
+import { useDashEnabled, useCardPayments, CARD_MIN_CENTS, api as dashApiCalls } from './dash/dashApi';
 import { useSites, SiteLanding, FamilyBar, HouseAd } from './dash/sites';
 
 const firebaseConfig = {
@@ -3489,6 +3491,7 @@ function DashFAQ({ go }) {
 
 function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupData, setDropoffData, site, domains }) {
   const dashOn = useDashEnabled(user?.uid);
+  const extraRides = usePendingExtraRides(user?.uid);
   // Verification gate: a password (email/password) account that hasn't verified
   // its email must not reach the dashboard via any navigation path (logo tap,
   // back button, etc). Bounce them back to the verify screen. Google accounts
@@ -3742,6 +3745,13 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
 
       {/* VILLE family: cross-promotion for VilleDash / VilleEvents */}
       {dashOn && <HouseAd site={site || 'cabs'} domains={domains || {}} go={go} variant="banner"/>}
+
+      {/* Extra fare requests waiting for this customer's answer (e.g. sent by admin after a ride) */}
+      {extraRides.map(r => (
+        <div key={r.id} style={{ margin:'10px 12px 0' }}>
+          <ExtraFareCustomer bookingId={r.id} user={user} />
+        </div>
+      ))}
 
       {/* Side drawer menu */}
       {menuOpen && (
@@ -5054,6 +5064,9 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
   const [referralChecking, setReferralChecking] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);   // final review before the booking is created
   useBodyScrollLock(confirmOpen);
+  // Card payments (WiPay) — only offered when config/payments enables them.
+  const { cardOn, sandbox: cardSandbox } = useCardPayments(user?.uid);
+  const [payBy, setPayBy] = useState('cash');
   const [promoMsg,   setPromoMsg]   = useState('');
   const [promoData,  setPromoData]  = useState(null); // { id, discount, code }
   const [promoLoading, setPromoLoading] = useState(false);
@@ -5420,6 +5433,9 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
         return;
       }
       // ── DRIVERS AVAILABLE — CREATE NORMAL BOOKING ────────────────────
+      // Card: the ride waits as 'awaiting_payment' (drivers can't see it) until
+      // WiPay confirms payment; the server then opens it to drivers.
+      const byCard = payBy === 'card' && cardOn && finalPrice * 100 >= CARD_MIN_CENTS;
 
       const ref = await addDoc(collection(db,'bookings'), {
         customerId:   user.uid,
@@ -5439,7 +5455,8 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
         promoDiscount:promoData?.discount || null,
         promoType:    promoData?.discountType || 'percent',
         distanceKm:   dist,
-        status:       'searching',
+        status:       byCard ? 'awaiting_payment' : 'searching',
+        ...(byCard ? { paymentMethod: 'Card', payment: { method: 'card', status: 'pending', provider: 'wipay' } } : {}),
         createdAt:    serverTimestamp(),
       });
       // Mark promo as used
@@ -5456,6 +5473,10 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
       // Store fare in pickupData so BookingConfirm shows it immediately
       if (typeof setPickupData === 'function') {
         setPickupData(prev => ({ ...prev, fare: finalPrice, vehicleType: v.name, distanceKm: dist }));
+      }
+      if (byCard) {
+        // Off to WiPay's secure page. If that fails, the confirm screen offers card again or cash.
+        try { await goToCard('ride', ref.id); return; } catch (e) { setLoading(false); go('booking-confirm'); return; }
       }
       // Navigate immediately - don't wait for notifications
       setLoading(false);
@@ -5711,10 +5732,28 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
                     <span style={{ color:'#1a1a2e', fontWeight:600 }}>{new Date(scheduledAt).toLocaleString('en-JM',{ weekday:'short', day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })}</span>
                   </div>
                 )}
-                <div style={{ display:'flex', justifyContent:'space-between', marginBottom:7 }}>
-                  <span style={{ color:'#8a83a0' }}>Payment</span>
-                  <span style={{ color:'#1a1a2e', fontWeight:600 }}>Cash to your driver</span>
-                </div>
+                {cardOn && rideTime === 'now' && calcFinalPrice(v) * 100 >= CARD_MIN_CENTS ? (
+                  <div style={{ marginBottom:9 }}>
+                    <div style={{ color:'#8a83a0', marginBottom:6 }}>Payment</div>
+                    <div style={{ display:'flex', gap:8 }}>
+                      {[['cash','💵 Cash to driver'],['card','💳 Card now']].map(([k,l]) => (
+                        <button key={k} onClick={() => setPayBy(k)} aria-pressed={payBy===k}
+                          style={{ flex:1, padding:'10px 6px', borderRadius:10, fontSize:13, fontWeight:700, cursor:'pointer',
+                            border: payBy===k ? '2px solid #6b21a8' : '1px solid #e5e7eb', background: payBy===k ? '#f5f0ff' : '#fff', color: payBy===k ? '#6b21a8' : '#1a1a2e' }}>{l}</button>
+                      ))}
+                    </div>
+                    {payBy === 'card' && (
+                      <div style={{ fontSize:11.5, color:'#6b7280', marginTop:6, lineHeight:1.5 }}>
+                        You'll pay on WiPay's secure page (Visa or Mastercard). WiPay adds its card processing fee there. We look for a driver once payment goes through.{cardSandbox ? ' Test mode: use a WiPay test card.' : ''}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ display:'flex', justifyContent:'space-between', marginBottom:7 }}>
+                    <span style={{ color:'#8a83a0' }}>Payment</span>
+                    <span style={{ color:'#1a1a2e', fontWeight:600 }}>Cash to your driver</span>
+                  </div>
+                )}
                 {(promoData || referralDocId) && (
                   <div style={{ display:'flex', justifyContent:'space-between', marginBottom:7, color:GREEN }}>
                     <span>{promoData ? `Promo ${promoData.code}` : 'Referral code'}</span><span style={{ fontWeight:700 }}>{promoLabel()}</span>
@@ -5731,7 +5770,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
 
               <button onClick={() => { setConfirmOpen(false); handleBook(); }} disabled={loading}
                 style={{ width:'100%', padding:'15px', background: loading ? '#c4b5fd' : 'linear-gradient(135deg,#6A1BB9,#4c1d95)', color:'#fff', border:'none', borderRadius:13, fontSize:15, fontWeight:800, cursor: loading?'default':'pointer', marginBottom:9 }}>
-                {loading ? 'Please wait…' : (rideTime==='later' ? '🗓️ Confirm scheduled ride' : '✓ Confirm — find me a driver')}
+                {loading ? 'Please wait…' : (rideTime==='later' ? '🗓️ Confirm scheduled ride' : (payBy==='card' && cardOn && calcFinalPrice(v) * 100 >= CARD_MIN_CENTS) ? `💳 Pay J$${calcFinalPrice(v).toLocaleString()} by card` : '✓ Confirm — find me a driver')}
               </button>
               <button onClick={() => setConfirmOpen(false)} disabled={loading}
                 style={{ width:'100%', padding:'13px', background:'#fff', border:'1px solid #e5e7eb', borderRadius:13, fontSize:13.5, fontWeight:700, color:'#6b7280', cursor:'pointer' }}>
@@ -5864,11 +5903,26 @@ function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, 
     return () => unsub();
   }, [bookingId]);
 
+  // Card rides (WiPay): wait here until paid; the server opens them to drivers.
+  const isCardRide = booking?.payment?.method === 'card';
+  const cardPaid = isCardRide && booking?.payment?.status === 'paid';
+  const awaitingCard = booking?.status === 'awaiting_payment';
+  const payCard = async () => {
+    if (loading || !bookingId) return;
+    setLoading(true); setError('');
+    try { await goToCard('ride', bookingId); } catch (e) { setError(e?.message || 'Could not open the card payment page. Try again or pay cash.'); setLoading(false); }
+  };
+  const payCashInstead = async () => {
+    if (loading || !bookingId) return;
+    setLoading(true); setError('');
+    try { await dashApiCalls.payUseCash({ kind: 'ride', id: bookingId }); } catch (e) { setError(e?.message || 'Could not switch to cash. Please try again.'); }
+    setLoading(false);
+  };
   const handleConfirm = async () => {
     if (loading) return;
     setLoading(true); setError('');
     try {
-      if (bookingId) {
+      if (bookingId && !cardPaid) {
         // Update booking status to searching if needed
         await updateDoc(doc(db,'bookings',bookingId), { status:'searching', confirmedAt: serverTimestamp() });
       }
@@ -5978,13 +6032,26 @@ function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, 
         {/* Payment */}
         <div style={{ background:'#fff', borderRadius:16, padding:16, marginBottom:16, boxShadow:'0 2px 8px rgba(0,0,0,0.06)' }}>
           <div style={{ fontSize:11, fontWeight:700, color:'#6b21a8', textTransform:'uppercase', letterSpacing:0.8, marginBottom:10 }}>Payment</div>
-          <div style={{ display:'flex', alignItems:'center', gap:12 }}>
-            <div style={{ fontSize:28 }}>💵</div>
-            <div>
-              <div style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>Cash Payment</div>
-              <div style={{ fontSize:12, color:'#888', marginTop:2 }}>Pay J${fare.toLocaleString()} directly to your driver on arrival.</div>
+          {isCardRide ? (
+            <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+              <div style={{ fontSize:28 }}>💳</div>
+              <div>
+                <div style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>{cardPaid ? 'Paid by card' : 'Card payment not finished'}</div>
+                <div style={{ fontSize:12, color: cardPaid ? '#1a9e5a' : '#b45309', marginTop:2 }}>
+                  {cardPaid ? `J$${fare.toLocaleString()} paid. No cash needed — we're finding your driver.`
+                    : (booking?.payment?.lastError ? `Last attempt: ${booking.payment.lastError} ` : '') + 'Pay on WiPay to send your request to drivers, or pay cash instead.'}
+                </div>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+              <div style={{ fontSize:28 }}>💵</div>
+              <div>
+                <div style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>Cash Payment</div>
+                <div style={{ fontSize:12, color:'#888', marginTop:2 }}>Pay J${fare.toLocaleString()} directly to your driver on arrival.</div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Safety */}
@@ -5993,14 +6060,29 @@ function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, 
           <div style={{ fontSize:12, color:'#555', lineHeight:1.6 }}>Verify the driver name, licence plate, vehicle make and colour before entering the vehicle.</div>
         </div>
 
+        {awaitingCard ? (
+          <>
+            <button onClick={payCard} disabled={loading}
+              style={{ width:'100%', padding:'16px', background:loading?'#9ca3af':'#6b21a8', color:'#fff', border:'none', borderRadius:14, fontSize:16, fontWeight:700, cursor:loading?'default':'pointer', boxShadow:'0 4px 16px rgba(107,33,168,0.35)', marginBottom:10 }}>
+              {loading ? 'Opening WiPay…' : `💳 Pay J$${fare.toLocaleString()} by card`}
+            </button>
+            <button onClick={payCashInstead} disabled={loading}
+              style={{ width:'100%', padding:'13px', background:'#fff', color:'#6b21a8', border:'1px solid #e9d5ff', borderRadius:14, fontSize:14, fontWeight:700, cursor:'pointer', marginBottom:10 }}>
+              💵 Pay cash to the driver instead
+            </button>
+          </>
+        ) : (
         <button onClick={handleConfirm} disabled={loading}
           style={{ width:'100%', padding:'16px', background:loading?'#9ca3af':'#6b21a8', color:'#fff', border:'none', borderRadius:14, fontSize:16, fontWeight:700, cursor:loading?'default':'pointer', boxShadow:'0 4px 16px rgba(107,33,168,0.35)', marginBottom:10, display:'flex', alignItems:'center', justifyContent:'center', gap:10 }}>
           {loading ? (
             <><div style={{ width:18, height:18, border:'2px solid rgba(255,255,255,0.4)', borderTop:'2px solid #fff', borderRadius:'50%', animation:'spin 0.8s linear infinite' }}/>Finding your driver...</>
+          ) : cardPaid ? (
+            <>🚕 Continue — paid by card</>
           ) : (
             <>🚕 Confirm — Pay J${fare.toLocaleString()} Cash</>
           )}
         </button>
+        )}
         <button onClick={handleChangeRide} disabled={loading}
           style={{ width:'100%', padding:'13px', background:'#fff', color:'#888', border:'1px solid #e5e7eb', borderRadius:14, fontSize:14, cursor:'pointer' }}>
           ← Change Ride
@@ -6907,9 +6989,14 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
                 <div style={{ fontSize:11, color:'#8a83a0', textTransform:'uppercase', letterSpacing:1 }}>Total Paid</div>
                 {booking.promoCode && <div style={{ fontSize:11, color:GREEN, marginTop:2 }}>🎟️ {booking.promoCode} applied</div>}
               </div>
-              <div style={{ fontSize:24, fontWeight:700, color:GREEN }}>J${booking.fare?.toLocaleString()}</div>
+              <div style={{ textAlign:'right' }}>
+                <div style={{ fontSize:24, fontWeight:700, color:GREEN }}>J${((booking.fare||0) + (booking.extrasApprovedTotal||0)).toLocaleString()}</div>
+                {booking.extrasApprovedTotal > 0 && <div style={{ fontSize:11, color:'#8a83a0' }}>fare J${(booking.fare||0).toLocaleString()} + extras J${booking.extrasApprovedTotal.toLocaleString()}</div>}
+              </div>
             </div>
           </div>
+          {/* Requests that arrive after the ride (e.g. from admin) can still be answered here */}
+          <div style={{ width:'100%', maxWidth:400 }}><ExtraFareCustomer bookingId={booking?.id || bookingId} user={user} /></div>
 
           {/* Rating & Review */}
           {!rated ? (
@@ -7085,6 +7172,9 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
                 )}
               </div>
             </div>
+
+            {/* Extra fare requests from the driver (approve / decline / pay) */}
+            <ExtraFareCustomer bookingId={booking?.id || bookingId} user={user} />
 
             {/* Cancel — available the whole time the driver is on the way to
                 pickup. Once the driver taps "I've arrived" the status becomes
@@ -9368,16 +9458,19 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     });
   }
 
-  const fare = booking?.fare || 0;
+  // Approved extra fares count toward the trip total (same 15% / 85% split).
+  const fare = (booking?.fare || 0) + (booking?.extrasApprovedTotal || 0);
   const fee  = Math.round(fare * 0.15);
   const earn = Math.round(fare * 0.85);
+  const paidByCard = booking?.payment?.method === 'card' && booking?.payment?.status === 'paid';
+  const extrasTotal = booking?.extrasApprovedTotal || 0;   // approved extra fares (J$)
 
   // Completed screen - rendered as conditional JSX (not early return) to preserve hook count
   if (completed) return (
     <div style={{ ...s.content, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24, minHeight:'100vh' }}>
       <div style={{ width:80, height:80, borderRadius:'50%', background:'rgba(26,158,90,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:36, marginBottom:16 }}>✅</div>
       <div style={{ fontSize:22, fontWeight:800, color:'#1a1a2e', marginBottom:6 }}>Ride Complete!</div>
-      <div style={{ fontSize:14, color:'#888', marginBottom:24, textAlign:'center' }}>Great job! Your earnings have been recorded.</div>
+      <div style={{ fontSize:14, color:'#888', marginBottom:24, textAlign:'center' }}>Great job! Your earnings have been recorded.{paidByCard ? ' The rider paid by card, so VilleCabs pays you your earnings.' : ''}{extrasTotal > 0 ? ` Approved extras: J$${extrasTotal.toLocaleString()} (${(booking?.extrasCashTotal||0) ? `collect J$${(booking.extrasCashTotal).toLocaleString()} cash` : 'paid by card'}).` : ''}</div>
       <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:16, padding:'20px 24px', width:'100%', maxWidth:340, marginBottom:20 }}>
         <div style={{ display:'flex', justifyContent:'space-between', marginBottom:10 }}>
           <span style={{ fontSize:13, color:'#888' }}>Total fare</span>
@@ -9494,8 +9587,15 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
             <div style={{ display:'flex', gap:8, alignItems:'center', background:'rgba(15,20,40,0.65)', borderRadius:10, padding:12, marginBottom:14 }}>
               <div style={{ width:9, height:9, borderRadius:'50%', background:YELLOW }}/>
               <div style={{ fontSize:13, color:WHITE, flex:1 }}>{booking.dropoff?.address}</div>
-              <div style={{ fontSize:14, fontWeight:500, color:GREEN }}>J${booking.fare?.toLocaleString()}</div>
+              <div style={{ textAlign:'right' }}>
+                <div style={{ fontSize:14, fontWeight:500, color:GREEN }}>J${booking.fare?.toLocaleString()}</div>
+                <div style={{ fontSize:10.5, fontWeight:700, color: paidByCard ? '#86efac' : '#fcd34d' }}>{paidByCard ? 'PAID BY CARD · NO CASH' : 'COLLECT CASH'}</div>
+              </div>
             </div>
+
+            {/* Extra fare: ask the customer (they approve in their app), and see what to collect */}
+            <ExtraFareList bookingId={booking?.id || bookingId} theme="dark" />
+            {['active','arrived','enroute'].includes(booking?.status) && <ExtraFareRequest bookingId={booking?.id || bookingId} theme="dark" compact />}
 
             {/* Safety controls */}
             {sosSent ? (
@@ -12786,6 +12886,8 @@ function PartnerLocations({ go, user, setPickupData }) {
 // Reads a world-readable tracking/{id} doc that the rider's app keeps updated.
 // Shared with the VilleDash merchant portal (src/dash/MerchantPortal.js)
 export { AddressAutocompleteInput, VilleMap, geocodeLatLng };
+// Exposed for the screen-check harness (tools/screen-check), not used by the app.
+export { VehicleSelect as __VehicleSelect, BookingConfirm as __BookingConfirm };
 
 export function LiveTrackShare({ trackId }) {
   const [t, setT] = useState(null);
@@ -12962,6 +13064,19 @@ export default function App() {
     siteHomeShownRef.current = true;
     setScreen(site === 'dash' ? 'dash-home' : 'ville-home');
   }, [dashOn, user, screen, site]);
+
+  // Back from WiPay's card page: ?vdpay=<paymentId> → show the payment result.
+  const [payId] = useState(() => { try { return new URLSearchParams(window.location.search).get('vdpay'); } catch (e) { return null; } });
+  useEffect(() => {
+    // Works for VilleCabs rides (everyone) and VilleDash (when it's on).
+    if (!payId || user?.role !== 'customer') return;
+    siteHomeShownRef.current = true;
+    setScreen('pay-result');
+    try {
+      const u = new URL(window.location.href); u.searchParams.delete('vdpay');
+      window.history.replaceState(null, '', u.pathname + (u.search || '') + u.hash);
+    } catch (e) { /* ignore */ }
+  }, [payId, user]);
 
   // Scroll back to the top whenever we navigate to a new screen (SPA fix:
   // otherwise the browser keeps your old scroll position on the new page).
@@ -13173,6 +13288,7 @@ export default function App() {
     'dash-track':             dash(<DeliveryTrack {...dashProps}/>),
     'dash-history':           dash(<MyOrders {...dashProps}/>),
     'dash-cart':              dash(<Cart {...dashProps}/>),
+    'pay-result':             <PaymentReturn {...dashProps} paymentId={payId} openRide={(id, kind) => { setBookingId(id); setScreen(kind === 'extra' ? 'live-ride' : 'booking-confirm'); }} />,
     'dash-about':             <DashAbout {...dashProps} publicMode={!user || !dashOn}/>,
     'dash-terms':             <DashTerms {...dashProps} publicMode={!user || !dashOn}/>,
     'dash-stores':            dash(<StoresList {...dashProps}/>),

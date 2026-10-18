@@ -154,7 +154,7 @@ function findProhibited(text) {
 // ── Delivery status machine ──────────────────────────────────────────────────
 // requested → assigned → to_pickup → at_pickup → collected → to_dropoff →
 // at_dropoff → delivered.  Side exits: cancelled, failed.
-const STATUSES = ['requested', 'assigned', 'to_pickup', 'at_pickup', 'collected',
+const STATUSES = ['awaiting_payment', 'requested', 'assigned', 'to_pickup', 'at_pickup', 'collected',
   'to_dropoff', 'at_dropoff', 'delivered', 'cancelled', 'failed'];
 const FINAL = ['delivered', 'cancelled', 'failed'];
 const ACTIVE = STATUSES.filter((s) => !FINAL.includes(s));
@@ -170,7 +170,7 @@ const RIDER_STEPS = {
 };
 
 // A customer may cancel until the rider has the package.
-const CUSTOMER_CANCELLABLE = ['requested', 'assigned', 'to_pickup'];
+const CUSTOMER_CANCELLABLE = ['awaiting_payment', 'requested', 'assigned', 'to_pickup'];
 // An admin may (re)assign until the package is collected.
 const ADMIN_ASSIGNABLE = ['requested', 'assigned', 'to_pickup', 'at_pickup'];
 
@@ -316,7 +316,7 @@ function marketSplit({ subtotalCents, deliveryCents, serviceCents, riderPayCents
   };
 }
 
-const ORDER_STATUSES = ['awaiting_merchant', 'accepted', 'preparing', 'ready', 'collected', 'delivered', 'rejected', 'cancelled', 'failed'];
+const ORDER_STATUSES = ['awaiting_payment', 'awaiting_merchant', 'accepted', 'preparing', 'ready', 'collected', 'delivered', 'rejected', 'cancelled', 'failed'];
 const ORDER_FINAL = ['delivered', 'rejected', 'cancelled', 'failed'];
 const MERCHANT_STEPS = { awaiting_merchant: ['accepted', 'rejected'], accepted: ['preparing', 'ready'], preparing: ['ready'] };
 
@@ -368,7 +368,93 @@ function rankRiders(riders, pickup, { exclude = [], requireMotorcycle = true, no
   return out;
 }
 
+// ── Card payments (WiPay hosted page) ───────────────────────────────────────
+// Card payments are OFF unless config/payments says otherwise. Sandbox uses
+// WiPay's public test account; live needs the account number + API key that
+// an admin saves (kept in dash_secrets, never sent to browsers).
+const DEFAULT_PAYMENTS = {
+  cardEnabled: false,          // master switch: everyone
+  cardTesters: [],             // or: only these customer UIDs
+  environment: 'sandbox',      // 'sandbox' | 'live'
+  countryCode: 'JM',
+  currency: 'JMD',
+  feeStructure: 'customer_pay',    // customer pays WiPay's fee ('customer_pay' | 'merchant_absorb' | 'split')
+  unpaidExpiryMinutes: 30,
+};
+const WIPAY_SANDBOX = { accountNumber: '1234567890', apiKey: '123' };
+const WIPAY_HOSTS = { JM: 'jm', TT: 'tt', BB: 'bb' };
+const WIPAY_MIN_CENTS = 16000; // WiPay minimum is US$1.00 or equivalent
+
+function mergePayments(cfg) {
+  const c = { ...DEFAULT_PAYMENTS, ...(cfg || {}) };
+  if (!['sandbox', 'live'].includes(c.environment)) c.environment = 'sandbox';
+  if (!['customer_pay', 'merchant_absorb', 'split'].includes(c.feeStructure)) c.feeStructure = DEFAULT_PAYMENTS.feeStructure;
+  if (!WIPAY_HOSTS[c.countryCode]) c.countryCode = 'JM';
+  if (!['JMD', 'USD', 'TTD'].includes(c.currency)) c.currency = 'JMD';
+  c.cardTesters = Array.isArray(c.cardTesters) ? c.cardTesters : [];
+  return c;
+}
+function cardAllowedFor(cfg, uid) {
+  const c = mergePayments(cfg);
+  return c.cardEnabled === true || (!!uid && c.cardTesters.includes(uid));
+}
+function wipayUrl(cfg) {
+  return `https://${WIPAY_HOSTS[mergePayments(cfg).countryCode]}.wipayfinancial.com/plugins/payments/request`;
+}
+// WiPay order_id: 1–16 chars for FGB (Jamaica), alphanumeric/dash, starts and
+// ends alphanumeric. 'VD' + 14 random base-36 characters.
+function wipayOrderId(rand = () => crypto.randomInt(36) / 36) {
+  const a = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  let s = 'VD';
+  for (let i = 0; i < 14; i++) s += a[Math.floor(rand() * 36)];
+  return s;
+}
+const wipayTotal = (cents) => (Math.round(cents) / 100).toFixed(2);
+// hash = md5(transaction_id + original total + API key), no separators.
+function wipayHash(transactionId, totalStr, apiKey) {
+  return crypto.createHash('md5').update(`${transactionId}${totalStr}${apiKey}`).digest('hex');
+}
+function wipayRequestBody({ cfg, creds, orderId, totalCents, responseUrl, name, email, phone }) {
+  const c = mergePayments(cfg);
+  const body = {
+    account_number: c.environment === 'live' ? creds.accountNumber : WIPAY_SANDBOX.accountNumber,
+    avs: '0', country_code: c.countryCode, currency: c.currency, environment: c.environment,
+    fee_structure: c.feeStructure, method: 'credit_card', order_id: orderId, origin: 'VilleDash',
+    response_url: responseUrl, total: wipayTotal(totalCents), version: '1.0.0',
+  };
+  const n = cleanText(name, 60).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9 .'-]/g, '').trim();
+  if (n) body.name = n;
+  if (email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 50) body.email = email;
+  const ph = cleanPhone(phone);
+  if (ph) body.phone = ph.length === 7 ? `+1876${ph}` : ph.length === 10 ? `+1${ph}` : ph;
+  return body;
+}
+// Check a WiPay return. Never trust 'success' without a matching hash.
+function verifyWipayReturn(q, payment, apiKey) {
+  const status = String(q.status || '').toLowerCase();
+  if (q.order_id !== payment.wipayOrderId) return { ok: false, outcome: 'mismatch', reason: 'order_id does not match' };
+  if (status !== 'success') return { ok: true, outcome: status === 'failed' ? 'failed' : 'error' };
+  const tx = String(q.transaction_id || '');
+  if (!tx.includes(`-${payment.wipayOrderId}-`)) return { ok: false, outcome: 'mismatch', reason: 'transaction_id does not contain order_id' };
+  if (payment.environment === 'live' && tx.startsWith('SB-')) return { ok: false, outcome: 'mismatch', reason: 'sandbox transaction on live payment' };
+  const expected = wipayHash(tx, payment.totalStr, apiKey);
+  if (String(q.hash || '').toLowerCase() !== expected) return { ok: false, outcome: 'bad_hash', reason: 'hash mismatch' };
+  return { ok: true, outcome: 'paid' };
+}
+function allowedReturnOrigin(origin, domains = []) {
+  let u;
+  try { u = new URL(String(origin || '')); } catch (e) { return null; }
+  const host = u.hostname.toLowerCase();
+  const ok = u.protocol === 'https:' && (host.endsWith('.vercel.app')
+    || domains.map((d) => String(d || '').toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '').replace(/^www\./, ''))
+      .filter(Boolean).some((d) => host === d || host === `www.${d}`));
+  const local = u.protocol === 'http:' && (host === 'localhost' || host === '127.0.0.1');
+  return ok || local ? u.origin : null;
+}
+
 module.exports = {
+  DEFAULT_PAYMENTS, WIPAY_SANDBOX, WIPAY_MIN_CENTS, mergePayments, cardAllowedFor, wipayUrl, wipayOrderId, wipayTotal,
+  wipayHash, wipayRequestBody, verifyWipayReturn, allowedReturnOrigin,
   DEFAULT_PRICING, PACKAGE_CATEGORIES, PROHIBITED_WORDS,
   mergePricing, haversineKm, isCoord, quoteParcel, QuoteError, findProhibited,
   STATUSES, FINAL, ACTIVE, RIDER_STEPS, CUSTOMER_CANCELLABLE, ADMIN_ASSIGNABLE, canRiderMove,

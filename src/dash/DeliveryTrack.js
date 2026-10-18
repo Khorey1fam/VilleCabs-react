@@ -4,6 +4,7 @@ import { doc, onSnapshot, collection, query, orderBy } from 'firebase/firestore'
 import { api, dashDb, errText, formatJMD, STATUS_LABEL, STEPS, FINAL } from './dashApi';
 import { Shell, PageHead, Field, Icon, Chip, Skeleton, SkeletonRows, EmptyState, ErrorState, Timeline, useLive, docOf, fmtWhen, shortId } from './kit';
 import { deliveryTone } from './Orders';
+import { PaymentPending } from './Payments';
 
 const TRACKABLE = ['assigned', 'to_pickup', 'at_pickup', 'collected', 'to_dropoff', 'at_dropoff'];
 const STALE_MS = 2 * 60 * 1000;
@@ -45,7 +46,8 @@ export default function DeliveryTrack({ go, deliveryId, shared, domains }) {
   const stepIndex = STEPS.indexOf(d.status);
   const locAge = loc?.at ? now - (loc.at.toMillis ? loc.at.toMillis() : loc.at) : null;
   const locFresh = loc && locAge != null && locAge < STALE_MS;
-  const canCancel = d.type !== 'market' && ['requested', 'assigned', 'to_pickup'].includes(d.status);
+  const canCancel = d.type !== 'market' && ['awaiting_payment', 'requested', 'assigned', 'to_pickup'].includes(d.status);
+  const card = d.payment && d.payment.method === 'card';
   const ended = d.status === 'cancelled' || d.status === 'failed';
   const markers = [
     { position: { lat: d.pickup.lat, lng: d.pickup.lng }, title: 'Pickup' },
@@ -81,10 +83,11 @@ export default function DeliveryTrack({ go, deliveryId, shared, domains }) {
               {!locFresh && <p className="vd-field__hint">Live rider location isn’t available right now{loc ? '; the last update is over 2 minutes old' : ''}. Status updates still arrive here.</p>}
             </div>
           )}
+          {d.status === 'awaiting_payment' && <PaymentPending kind="delivery" id={d.id} target={d} />}
           {d.status === 'requested' && (
             <div className="vd-note"><b>Finding a rider.</b> We’ll notify you when a rider accepts. You can cancel free of charge until the package is collected.</div>
           )}
-          {!FINAL.includes(d.status) && pin && (
+          {!FINAL.includes(d.status) && d.status !== 'awaiting_payment' && pin && (
             <div className="vd-pin">
               <div style={{ fontWeight: 650, color: 'var(--vd-deep)' }}>Delivery PIN</div>
               <div className="vd-pin__code" aria-label={`PIN ${String(pin).split('').join(' ')}`}>{pin}</div>
@@ -114,8 +117,10 @@ export default function DeliveryTrack({ go, deliveryId, shared, domains }) {
             <div className="vd-row"><span>To</span><span>{d.dropoff.address}</span></div>
             <div className="vd-row"><span>Package</span><span>{d.package.description}</span></div>
             {(d.quote?.lines || []).map((l) => <div key={l.key} className="vd-row"><span>{l.label}</span><span>{formatJMD(l.cents)}</span></div>)}
-            <div className="vd-total"><span>Total, cash</span><b>{formatJMD(d.cashToCollectCents ?? d.quote.totalCents)}</b></div>
-            <p className="vd-field__hint">Paid by the {d.payment?.collectFrom === 'recipient' ? 'recipient on delivery' : 'sender at pickup'}.</p>
+            <div className="vd-total"><span>{card ? 'Total, by card' : 'Total, cash'}</span><b>{formatJMD(card ? d.quote.totalCents : (d.cashToCollectCents ?? d.quote.totalCents))}</b></div>
+            <p className="vd-field__hint">{card
+              ? ({ paid: 'Paid by card.', refund_due: 'VilleDash is reviewing a refund of your card payment.', refunded: `${formatJMD(d.payment.refundedCents || d.quote.totalCents)} was refunded to your card.` }[d.payment.status] || 'Waiting for your card payment.')
+              : `Paid in cash by the ${d.payment?.collectFrom === 'recipient' ? 'recipient on delivery' : 'sender at pickup'}.`}</p>
             {d.proofPhotos && (d.proofPhotos.pickup || d.proofPhotos.dropoff) && (
               <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
                 {['pickup', 'dropoff'].filter((k) => d.proofPhotos[k]).map((k) => (

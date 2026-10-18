@@ -2,7 +2,8 @@
 // The price comes from the server (dashQuoteDelivery) and is re-checked when the
 // booking is created; one idempotency key per attempt stops double bookings.
 import React, { useMemo, useRef, useState } from 'react';
-import { api, errText, formatJMD, newRequestKey, PACKAGE_CATEGORIES, PACKAGE_SIZES, PROHIBITED_SUMMARY } from './dashApi';
+import { api, errText, formatJMD, newRequestKey, PACKAGE_CATEGORIES, PACKAGE_SIZES, PROHIBITED_SUMMARY, useCardPayments, CARD_MIN_CENTS } from './dashApi';
+import { goToCard, CardNote } from './Payments';
 import { Shell, PageHead, Field, Steps, Chip } from './kit';
 import { DoneArt } from './art';
 
@@ -64,7 +65,8 @@ export default function SendPackage({ go, user, shared, openDelivery, domains })
   const [pickup, setPickup] = useState({ contactName: user?.name || '', contactPhone: user?.phone || '' });
   const [dropoff, setDropoff] = useState({});
   const [pkg, setPkg] = useState({ category: '', size: 'small', description: '', weightKg: '', fragile: false, handling: '' });
-  const [payer, setPayer] = useState('sender');
+  const [payer, setPayer] = useState('sender'); // 'sender' | 'recipient' | 'card'
+  const { cardOn, sandbox } = useCardPayments(user?.uid);
   const [rulesOk, setRulesOk] = useState(false);
   const [quote, setQuote] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -118,8 +120,13 @@ export default function SendPackage({ go, user, shared, openDelivery, domains })
     try {
       const res = await api.create({
         idempotencyKey: keyRef.current, expectedTotalCents: quote.totalCents, pickup, dropoff,
-        package: { ...pkg, weightKg: pkg.weightKg === '' ? null : Number(pkg.weightKg) }, payer, acceptedRules: rulesOk,
+        package: { ...pkg, weightKg: pkg.weightKg === '' ? null : Number(pkg.weightKg) },
+        payer: payer === 'card' ? 'sender' : payer, paymentMethod: payer === 'card' ? 'card' : 'cash', acceptedRules: rulesOk,
       });
+      if (res.needsPayment) {
+        // Off to WiPay's page. If that fails, the delivery page offers card again or cash.
+        try { await goToCard('delivery', res.deliveryId); return; } catch (e) { openDelivery(res.deliveryId); return; }
+      }
       setDoneId(res.deliveryId); setStep(3); top();
     } catch (e) {
       if (e.code === 'functions/aborted' && e.details?.totalCents) {
@@ -288,17 +295,19 @@ export default function SendPackage({ go, user, shared, openDelivery, domains })
                   </div>
                   <div className="vd-panel">
                     <div className="vd-panel__title">Payment</div>
-                    <p style={{ fontSize: 14.5, marginBottom: 10 }}>Pay the rider in cash. Who pays?</p>
-                    <div className="vd-choice vd-choice--2" role="radiogroup" aria-label="Who pays">
-                      {[['sender', 'Me, at pickup'], ['recipient', 'Recipient, on delivery']].map(([k, l]) => (
+                    <p style={{ fontSize: 14.5, marginBottom: 10 }}>{cardOn ? 'How would you like to pay?' : 'Pay the rider in cash. Who pays?'}</p>
+                    <div className="vd-choice vd-choice--2" role="radiogroup" aria-label="Payment">
+                      {[['sender', cardOn ? 'Cash, me at pickup' : 'Me, at pickup'], ['recipient', cardOn ? 'Cash, recipient on delivery' : 'Recipient, on delivery'],
+                        ...(cardOn && quote.totalCents >= CARD_MIN_CENTS ? [['card', 'Card now (Visa or Mastercard)']] : [])].map(([k, l]) => (
                         <button key={k} className="vd-opt" role="radio" aria-checked={payer === k} onClick={() => setPayer(k)}><span><b>{l}</b></span></button>
                       ))}
                     </div>
+                    {payer === 'card' && <CardNote sandbox={sandbox} />}
                   </div>
                   <div className="vd-panel">
                     <div className="vd-panel__title">Before you place it</div>
                     <ul style={{ margin: 0, paddingLeft: 20, fontSize: 14.5, display: 'grid', gap: 6 }}>
-                      <li>You’re not charged anything if no rider can take it.</li>
+                      <li>{payer === 'card' ? 'If no rider can take it, your card payment is refunded.' : 'You’re not charged anything if no rider can take it.'}</li>
                       <li>You can cancel free of charge until the rider collects the package.</li>
                       <li>We give you a 4-digit PIN. Share it with {dropoff.recipientName || 'the recipient'}; they give it to the rider only after receiving the package.</li>
                     </ul>
@@ -306,7 +315,7 @@ export default function SendPackage({ go, user, shared, openDelivery, domains })
                   {err && <div className="vd-errbox" role="alert">{err}</div>}
                   <div className="vd-choice vd-choice--2" style={{ marginTop: 16 }}>
                     <button className="vd-btn vd-btn--secondary" disabled={busy} onClick={() => { setStep(1); top(); }}>Back</button>
-                    <button className="vd-btn vd-btn--primary" disabled={busy} onClick={place}>{busy ? 'Placing request…' : `Place request, ${formatJMD(quote.totalCents)}`}</button>
+                    <button className="vd-btn vd-btn--primary" disabled={busy} onClick={place}>{busy ? (payer === 'card' ? 'Opening WiPay…' : 'Placing request…') : payer === 'card' ? `Pay ${formatJMD(quote.totalCents)} by card` : `Place request, ${formatJMD(quote.totalCents)}`}</button>
                   </div>
                 </>
               )}

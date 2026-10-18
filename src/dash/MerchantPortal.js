@@ -184,7 +184,7 @@ function OrderCard({ o, store }) {
         ))}
         {o.note && <div style={{ fontSize: 12.5, color: C.amber, marginTop: 4 }}>Order note: {o.note}</div>}
       </div>
-      <div style={{ fontSize: 13, color: C.quiet }}>Items {formatJMD(o.subtotalCents)} · you receive {formatJMD(o.merchantPayableCents)} after {o.commissionPct}% commission</div>
+      <div style={{ fontSize: 13, color: C.quiet }}>Items {formatJMD(o.subtotalCents)} · you receive {formatJMD(o.merchantPayableCents)} after {o.commissionPct}% commission · {o.payment && o.payment.method === 'card' ? 'paid by card' : 'customer pays the rider cash'}</div>
       {msg && <div style={st.err}>{msg}</div>}
       {o.status === 'awaiting_merchant' && !rejecting && (
         <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -220,7 +220,8 @@ function Orders({ uid, store }) {
   const groups = {
     new: orders.filter((o) => o.status === 'awaiting_merchant'),
     active: orders.filter((o) => ['accepted', 'preparing', 'ready', 'collected'].includes(o.status)),
-    done: orders.filter((o) => ['delivered', 'rejected', 'cancelled', 'failed'].includes(o.status)),
+    // Unpaid card orders that expired never reached the store, so they're not shown.
+    done: orders.filter((o) => ['delivered', 'rejected', 'cancelled', 'failed'].includes(o.status) && !(o.payment && o.payment.status === 'expired')),
   };
   return (
     <>
