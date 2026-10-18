@@ -5,12 +5,26 @@ import { api, dashDb, errText, formatJMD, STATUS_LABEL, STEPS, FINAL } from './d
 import { Shell, PageHead, Field, Icon, Chip, Skeleton, SkeletonRows, EmptyState, ErrorState, Timeline, useLive, docOf, fmtWhen, shortId } from './kit';
 import { deliveryTone } from './Orders';
 import { PaymentPending } from './Payments';
+import LiveTripMap from '../LiveTripMap';
+import { fmtDistance } from '../liveRoute';
 
 const TRACKABLE = ['assigned', 'to_pickup', 'at_pickup', 'collected', 'to_dropoff', 'at_dropoff'];
+
+// Which way the rider is heading, and what the panel under the live map says.
+export const riderLeg = (status) => (['collected', 'to_dropoff', 'at_dropoff'].includes(status) ? 'dropoff' : 'pickup');
+export function riderPanel(status, eta, live) {
+  const right = eta ? fmtDistance(eta.meters) : null;
+  if (status === 'at_pickup') return { title: 'Rider is at the pickup', sub: 'Picking it up now' };
+  if (status === 'at_dropoff') return { title: 'Rider has arrived', sub: 'Have the delivery PIN ready' };
+  if (riderLeg(status) === 'dropoff') {
+    return { title: eta ? `Arriving in ${eta.minutes} min` : 'On the way to the drop-off', sub: live ? 'Tracking your rider live' : 'Live location will show when available', right };
+  }
+  return { title: eta ? `Rider at pickup in ${eta.minutes} min` : 'Rider heading to pickup', sub: live ? 'Tracking your rider live' : 'Live location will show when available', right };
+}
 const STALE_MS = 2 * 60 * 1000;
 
 export default function DeliveryTrack({ go, deliveryId, shared, domains }) {
-  const { VilleMap, vcConfirm } = shared;
+  const { vcConfirm } = shared;
   const live = useLive(() => (deliveryId ? doc(dashDb(), 'dash_deliveries', deliveryId) : null), [deliveryId], docOf);
   const d = live.data;
   const [pin, setPin] = useState(null);
@@ -49,11 +63,6 @@ export default function DeliveryTrack({ go, deliveryId, shared, domains }) {
   const canCancel = d.type !== 'market' && ['awaiting_payment', 'requested', 'assigned', 'to_pickup'].includes(d.status);
   const card = d.payment && d.payment.method === 'card';
   const ended = d.status === 'cancelled' || d.status === 'failed';
-  const markers = [
-    { position: { lat: d.pickup.lat, lng: d.pickup.lng }, title: 'Pickup' },
-    { position: { lat: d.dropoff.lat, lng: d.dropoff.lng }, title: 'Drop-off' },
-    ...(locFresh ? [{ position: { lat: loc.lat, lng: loc.lng }, title: 'Rider' }] : []),
-  ];
   const lastAt = events.length ? events[events.length - 1].at : null;
   const timeline = STEPS.map((s, i) => ({
     key: s, title: STATUS_LABEL[s],
@@ -78,7 +87,11 @@ export default function DeliveryTrack({ go, deliveryId, shared, domains }) {
           {tracking && (
             <div>
               <div className="vd-map" style={{ marginTop: 0 }}>
-                <VilleMap height={260} center={locFresh ? { lat: loc.lat, lng: loc.lng } : { lat: d.pickup.lat, lng: d.pickup.lng }} zoom={14} markers={markers} />
+                <LiveTripMap height={340} vehicleKind="moto" vehicleTitle="Rider"
+                  vehicle={locFresh ? { lat: loc.lat, lng: loc.lng } : null}
+                  pickup={d.pickup} dropoff={d.dropoff} leg={riderLeg(d.status)}
+                  pickupLabel={d.type === 'market' ? (d.merchantName || 'Store') : 'Pickup'} dropoffLabel="Drop-off"
+                  panel={(eta) => riderPanel(d.status, eta, locFresh)} />
               </div>
               {!locFresh && <p className="vd-field__hint">Live rider location isn’t available right now{loc ? '; the last update is over 2 minutes old' : ''}. Status updates still arrive here.</p>}
             </div>

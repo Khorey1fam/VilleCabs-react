@@ -166,3 +166,13 @@ existing document is changed.
 - Distances are straight-line × 1.3, not road routes
 - Firestore rules are reviewed against every screen's reads and writes but untested against the emulator (its download is blocked here) — test on staging before production
 - Open jobs show pickup and drop-off addresses to every online rider until one accepts
+
+## Live trip map
+
+`src/LiveTripMap.js` (geometry in `src/liveRoute.js`) is the map on the customer's live ride, the driver's active ride and VilleDash tracking.
+
+- Light VILLE style, always north-up. The car (motorcycle on VilleDash) stays upright and never rotates.
+- The car glides along the road and is held on the route; only the road still ahead is drawn.
+- The route is re-planned only when the driver is more than 60 m off it for 2+ GPS fixes over 4+ seconds, when the leg changes (pickup → drop-off), or every 3 minutes for traffic. Between those, the ETA is counted down locally.
+- Optional 3D tilt: set `REACT_APP_GOOGLE_MAP_ID` (a vector Map ID from Google Cloud) in Vercel. Without it, the map uses the built-in light style with no tilt. With it, the style comes from the Map ID's cloud style, so pick a light style there.
+- Tests: `node tools/screen-check/liveroute.js` (geometry) and `node tools/screen-check/livemap.js` (behaviour on a fake map, needs `serve.js`).

@@ -27,6 +27,8 @@ import { ExtraFareRequest, ExtraFareList, ExtraFareCustomer, usePendingExtraRide
 import { StoresList, StorePage, Cart, Checkout, OrderTrack } from './dash/Marketplace';
 import SendPackage from './dash/SendPackage';
 import DeliveryTrack from './dash/DeliveryTrack';
+import LiveTripMap from './LiveTripMap';
+import { fmtDistance as fmtKm } from './liveRoute';
 import { useDashEnabled, useCardPayments, CARD_MIN_CENTS, api as dashApiCalls } from './dash/dashApi';
 import { useSites, SiteLanding, FamilyBar, HouseAd } from './dash/sites';
 
@@ -6316,7 +6318,6 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   const [lightbox,     setLightbox]     = useState(null); // {url, label} for enlarged photo
   useBodyScrollLock(!!lightbox);   // stop the page scrolling behind the overlay
   const [driverInfo,   setDriverInfo]   = useState(null);
-  const [directions,   setDirections]   = useState(null);
   const [sosSent,    setSosSent]    = useState(false);
   const [sosBlocked, setSosBlocked] = useState('');   // rate-limit message, if any
   const [sosLevel,   setSosLevel]   = useState(3);    // which tier was sent
@@ -6722,68 +6723,11 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   const dropoffCoords = booking?.dropoff?.lat   ? { lat:booking.dropoff.lat,        lng:booking.dropoff.lng        } : null;
   const driverCoords  = booking?.driverLocation ? { lat:booking.driverLocation.lat, lng:booking.driverLocation.lng } : null;
 
-  // When a driver first accepts (status → active) zoom in close on the driver so
-  // the rider can see the actual road and turns. Fires once per acceptance.
-  const [focusZoom, setFocusZoom] = useState(null);
-  const zoomedOnAcceptRef = useRef(false);
-  useEffect(() => {
-    const active = booking?.driverId && ['active','arrived','enroute'].includes(booking?.status);
-    if (active && driverCoords?.lat && !zoomedOnAcceptRef.current) {
-      zoomedOnAcceptRef.current = true;
-      setFocusZoom({ center: driverCoords, zoom: 17, token: Date.now() });
-    }
-    if (!active) zoomedOnAcceptRef.current = false;
-  }, [booking?.status, booking?.driverId, driverCoords?.lat]);
-
-  // Track heading so the driver's car icon visually points the way they're travelling (Feature: Live map polish)
-  const [driverBearing, setDriverBearing] = useState(0);
-  const prevDriverCoordsRef = useRef(null);
-  useEffect(() => {
-    if (driverCoords) {
-      if (prevDriverCoordsRef.current) {
-        const moved = Math.abs(driverCoords.lat - prevDriverCoordsRef.current.lat) > 0.00003 || Math.abs(driverCoords.lng - prevDriverCoordsRef.current.lng) > 0.00003;
-        if (moved) setDriverBearing(calcBearing(prevDriverCoordsRef.current, driverCoords));
-      }
-      prevDriverCoordsRef.current = driverCoords;
-    }
-  }, [driverCoords?.lat, driverCoords?.lng]);
-
-  // Compute directions:
-  //  • before pickup: driver → pickup
-  //  • after 'start journey' (enroute): driver → dropoff, recomputed as the
-  //    driver moves, so the customer sees the car advancing along live roads
-  //    instead of a frozen pickup→dropoff line.
-  const custRouteRef = useRef({ at: 0, leg: null });
-  useEffect(() => {
-    if (!window.google?.maps?.DirectionsService) return;
-    const enroute     = booking?.enrouteToDropoff;
-    const origin      = driverCoords || pickupCoords;            // always anchor on the driver
-    const destination = enroute ? dropoffCoords : pickupCoords;
-    if (!origin?.lat || !destination?.lat) { return; }           // keep last route rather than blanking
-
-    // Only refetch when it actually matters: the leg changed, the driver left
-    // the drawn route (took a different road), or the route is stale. Refetching
-    // on every GPS ping burns Directions quota and gets throttled — which is why
-    // the route stopped updating at all.
-    const leg = enroute ? 'dropoff' : 'pickup';
-    const now = Date.now();
-    const path = routePathFrom(directions);
-    const offRoute = path ? !snapToRoute({ lat: origin.lat, lng: origin.lng }, path) : true;
-    const legChanged = custRouteRef.current.leg !== leg;
-    const stale = now - custRouteRef.current.at > 25000;
-    if (!legChanged && !offRoute && !stale) return;
-    custRouteRef.current = { at: now, leg };
-
-    const svc = new window.google.maps.DirectionsService();
-    svc.route({
-      origin:      { lat: origin.lat, lng: origin.lng },
-      destination: { lat: destination.lat, lng: destination.lng },
-      travelMode:  window.google.maps.TravelMode.DRIVING,
-    }, (result, status) => {
-      if (status === 'OK') setDirections(result);
-      // On failure keep the previous route rather than clearing (avoids the freeze/blank)
-    });
-  }, [driverCoords?.lat, driverCoords?.lng, dropoffCoords?.lat, pickupCoords?.lat, booking?.enrouteToDropoff]);
+  // The live map (LiveTripMap) plans and re-plans the route itself: driver →
+  // pickup, then driver → drop-off once the journey starts. It only asks Google
+  // again when the driver really leaves the route, so the car stays steady.
+  const rideLive = !!booking?.driverId && ['active','arrived','enroute'].includes(booking?.status);
+  const rideArrived = booking?.status === 'arrived' && !booking?.enrouteToDropoff;
 
   // ── Cancelled screen ──
   // ── No driver found within 10 minutes ──
@@ -7062,40 +7006,20 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
         </div>
       )}
       <div style={{ position:'relative' }}>
-        {(() => {
-          const cEta = etaFromDirections(directions);
-          if (!cEta?.text) return null;
-          const label = booking?.enrouteToDropoff ? `${cEta.text} to drop-off` : `${cEta.text} away`;
-          return (
-            <div style={{ position:'absolute', top:12, left:'50%', transform:'translateX(-50%)', zIndex:5,
-              background:'rgba(26,26,46,0.92)', color:'#fff', padding:'8px 16px', borderRadius:22,
-              fontSize:13, fontWeight:700, boxShadow:'0 4px 14px rgba(0,0,0,0.3)', display:'flex', alignItems:'center', gap:7, whiteSpace:'nowrap' }}>
-              <span style={{ fontSize:15 }}>⏱️</span><span>{label}</span>
-              {cEta.distance && <span style={{ opacity:0.6, fontWeight:500 }}>· {cEta.distance}</span>}
-            </div>
-          );
-        })()}
-        <VilleMap height={typeof window!=='undefined'?Math.max(560,window.innerHeight*0.80):640} center={driverCoords||pickupCoords} zoom={15} expandable={true} directions={directions} followCenter={driverCoords} focusZoom={focusZoom} fitRoute={false}>
-          <Marker position={pickupCoords} title="Pickup"
-            icon={{ url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><circle cx="14" cy="14" r="11" fill="#1a9e5a" stroke="white" stroke-width="2.5"/></svg>'), scaledSize:{width:28,height:28} }}/>
-          {dropoffCoords && (
-            <Marker position={dropoffCoords} title="Drop-off"
-              icon={{ url:'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><circle cx="14" cy="14" r="11" fill="#e8b400" stroke="white" stroke-width="2.5"/></svg>'), scaledSize:{width:28,height:28} }}/>
-          )}
-          {driverCoords && (
-            <SmoothMarker position={driverCoords} title="Your driver" routePath={routePathFrom(directions)}
-              icon={{ url:carIconSVG(driverBearing, '#e8b400'), scaledSize:{width:44,height:44}, anchor:{x:22,y:22} }}/>
-          )}
-        </VilleMap>
-        <div style={{ position:'absolute', bottom:0, left:0, right:0, background:'rgba(107,33,168,0.85)', backdropFilter:'blur(8px)', padding:'7px 14px', textAlign:'center', fontSize:12, color:'#fff', fontWeight:600 }}>
-          {(booking?.status==='active'||booking?.status==='arrived'||booking?.status==='enroute')
-            ? booking?.enrouteToDropoff
-              ? '🚗 En route to drop-off — tracking live'
-              : driverCoords
-                ? '📍 Tracking driver live on map'
-                : '🟢 Driver accepted — heading to you'
-            : '🔍 Finding your driver...'}
-        </div>
+        <LiveTripMap height={typeof window!=='undefined'?Math.max(520,window.innerHeight*0.72):600}
+          vehicle={rideLive ? driverCoords : null} vehicleTitle="Your driver"
+          pickup={booking?.pickup?.lat ? pickupCoords : null} dropoff={dropoffCoords}
+          leg={booking?.enrouteToDropoff ? 'dropoff' : 'pickup'}
+          panel={(eta) => {
+            if (!rideLive) return { title: 'Finding your driver…', sub: 'We’ll show your driver here once they accept.' };
+            if (booking?.enrouteToDropoff) {
+              const at = eta ? new Date(Date.now() + eta.seconds * 1000).toLocaleTimeString('en-JM', { hour:'numeric', minute:'2-digit' }) : null;
+              return { title: eta ? `Arriving in ${eta.minutes} min` : 'On the way to your drop-off', sub: at ? `Drop-off around ${at}` : 'Tracking your trip live', right: eta ? fmtKm(eta.meters) : null };
+            }
+            if (rideArrived) return { title: 'Your driver has arrived', sub: `Meet ${booking?.driverName || 'your driver'} at the pickup spot` };
+            if (!driverCoords) return { title: 'Driver accepted', sub: `${booking?.driverName || 'Your driver'} is heading to you` };
+            return { title: eta ? `Pickup in ${eta.minutes} min` : 'Driver on the way', sub: `${booking?.driverName || 'Your driver'} is heading to you`, right: eta ? fmtKm(eta.meters) : null };
+          }}/>
       </div>
 
       <div style={{ padding:14 }}>
@@ -9014,7 +8938,6 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
   const [helpOpen,      setHelpOpen]      = useState(false); // calm help sheet (L1/L2)
   const [sosHolding,    setSosHolding]    = useState(false);
   const [sosCount,      setSosCount]      = useState(5);
-  const [directions, setDirections] = useState(null);
   const [completed,  setCompleted]  = useState(false);
   const [completing, setCompleting] = useState(false);
   const watchRef = useRef(null);
@@ -9107,49 +9030,9 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     return () => unsub();
   }, [bookingId, user]);
 
-  // Route + ETA, recalculated as the driver actually drives.
-  //
-  // Two things this has to get right:
-  //  1. ALWAYS route from the driver's CURRENT position (before AND after
-  //     pickup). It previously drew pickup→dropoff after arrival, so it never
-  //     reflected the road the driver actually took.
-  //  2. Re-route when they deviate. We don't refetch on every GPS ping (that
-  //     would be a Directions call per second and get throttled); we refetch
-  //     when they leave the drawn route, when the leg changes, or every 25s as
-  //     a safety net so the ETA stays fresh.
-  const lastRouteRef = useRef({ at: 0, leg: null });
-  useEffect(() => {
-    if (!booking?.pickup || !window.google) return;
-    const drv = booking.driverLocation;
-    if (!drv?.lat) return;
-
-    const leg = arrived ? 'dropoff' : 'pickup';
-    const dest = arrived
-      ? (booking.dropoff ? { lat: booking.dropoff.lat, lng: booking.dropoff.lng } : null)
-      : { lat: booking.pickup.lat, lng: booking.pickup.lng };
-    if (!dest) return;
-
-    const now = Date.now();
-    const legChanged = lastRouteRef.current.leg !== leg;
-    // Are they still on the route we drew? snapToRoute returns null once they're
-    // further than the tolerance — that's a genuine turn onto another road.
-    const path = routePathFrom(directions);
-    const offRoute = path ? !snapToRoute({ lat: drv.lat, lng: drv.lng }, path) : true;
-    const stale = now - lastRouteRef.current.at > 25000;
-
-    if (!legChanged && !offRoute && !stale) return;   // still on track — keep current route
-
-    lastRouteRef.current = { at: now, leg };
-    let cancelled = false;
-    (async () => {
-      const result = await getDirections({ lat: drv.lat, lng: drv.lng }, dest);
-      if (!cancelled && result) {
-        setDirections(result);
-        // ETA updates automatically — etaFromDirections() derives it from this.
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [booking?.driverLocation?.lat, booking?.driverLocation?.lng, arrived, booking?.pickup?.lat, booking?.dropoff?.lat]);
+  // Route + ETA live in LiveTripMap: it routes from the driver's current spot to
+  // the pickup (then the drop-off after arrival) and only re-plans when the
+  // driver really leaves the route.
 
   // Keep the live booking id in a ref so the geolocation callback below always
   // writes to the CURRENT ride without needing to re-subscribe the watch.
@@ -9275,7 +9158,6 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
   const notifyArrived = async () => {
     if (!booking?.id) return;
     setArrived(true);
-    setDirections(null); // Clear old route, new one will load via useEffect
     try {
       // Update booking with arrived status
       await updateDoc(doc(db,'bookings',booking.id), {
@@ -9383,42 +9265,9 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     ? { lat: booking.dropoff.lat, lng: booking.dropoff.lng }
     : null;
 
-  // Track heading so the car icon visually points the way the driver is travelling (Feature: Live map polish)
-  const [driverBearing, setDriverBearing] = useState(0);
-  const prevDriverCoordsRef = useRef(null);
-  useEffect(() => {
-    if (driverCoords) {
-      if (prevDriverCoordsRef.current) {
-        const moved = Math.abs(driverCoords.lat - prevDriverCoordsRef.current.lat) > 0.00003 || Math.abs(driverCoords.lng - prevDriverCoordsRef.current.lng) > 0.00003;
-        if (moved) setDriverBearing(calcBearing(prevDriverCoordsRef.current, driverCoords));
-      }
-      prevDriverCoordsRef.current = driverCoords;
-    }
-  }, [driverCoords?.lat, driverCoords?.lng]);
-  // ETA to show above the car — traffic-aware when Google provides it.
-  // Before arrival: ETA to pickup. After arrival: ETA to drop-off.
-  const eta = etaFromDirections(directions);
-  const etaLabel = eta?.text ? (arrived ? `${eta.text} to drop-off` : `${eta.text} to pickup`) : null;
-
-  // Zoom in close on the driver once the ride is active, so they see their road
-  // and turns. Fires once; after that the map just follows without stealing zoom.
-  const [driverFocus, setDriverFocus] = useState(null);
-  const driverZoomedRef = useRef(false);
-  useEffect(() => {
-    if (booking && driverCoords?.lat && !driverZoomedRef.current) {
-      driverZoomedRef.current = true;
-      setDriverFocus({ center: driverCoords, zoom: 17, token: Date.now() });
-    }
-  }, [booking?.id, driverCoords?.lat]);
-
-  // Pins to show on the driver map:
-  //  • before pickup: show the Pickup pin (A)
-  //  • after 'arrived': show the Drop-off pin (B)
-  // Previously this blanked ALL markers after arrival, so the map went empty
-  // for the rest of the ride.
-  const markers = arrived
-    ? (dropoffCoords ? [{ position: dropoffCoords, label:'B', title:'Drop-off' }] : [])
-    : (pickupCoords  ? [{ position: pickupCoords,  label:'A', title:'Pickup'   }] : []);
+  // Extra pins for the driver's live map (the pickup / drop-off pins are drawn by
+  // LiveTripMap itself).
+  const markers = [];
 
   // Charter banner — keeps the driver aware this is a day-hire with stops,
   // not an ordinary point-to-point ride.
@@ -9500,25 +9349,18 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
          ) : '📍 Getting your location...'}
       </div>
       <div style={{ position:'relative' }}>
-        {etaLabel && (
-          <div style={{ position:'absolute', top:12, left:'50%', transform:'translateX(-50%)', zIndex:5,
-            background:'rgba(26,26,46,0.92)', color:'#fff', padding:'8px 16px', borderRadius:22,
-            fontSize:13, fontWeight:700, boxShadow:'0 4px 14px rgba(0,0,0,0.3)', display:'flex', alignItems:'center', gap:7, whiteSpace:'nowrap' }}>
-            <span style={{ fontSize:15 }}>⏱️</span>
-            <span>{etaLabel}</span>
-            {eta?.distance && <span style={{ opacity:0.6, fontWeight:500 }}>· {eta.distance}</span>}
-          </div>
-        )}
-        <VilleMap height={typeof window!=='undefined'?Math.max(560,window.innerHeight*0.80):640} center={driverCoords||pickupCoords} zoom={14} markers={markers} directions={directions} expandable={true} followCenter={driverCoords} focusZoom={driverFocus} fitRoute={false}>
-          {driverCoords && !directions && (
-            <SmoothMarker position={driverCoords} title="Your location" routePath={routePathFrom(directions)}
-              icon={{ url:carIconSVG(driverBearing, '#e8b400'), scaledSize:{width:36,height:36}, anchor:{x:18,y:18} }}/>
-          )}
-          {driverCoords && directions && (
-            <SmoothMarker position={driverCoords} title="You" routePath={routePathFrom(directions)}
-              icon={{ url:carIconSVG(driverBearing, '#e8b400'), scaledSize:{width:40,height:40}, anchor:{x:20,y:20} }}/>
-          )}
-        </VilleMap>
+        <LiveTripMap height={typeof window!=='undefined'?Math.max(520,window.innerHeight*0.72):600}
+          vehicle={driverCoords} vehicleTitle="You"
+          pickup={booking?.pickup?.lat ? pickupCoords : null} dropoff={dropoffCoords}
+          leg={arrived ? 'dropoff' : 'pickup'} pickupLabel="Pickup" dropoffLabel="Drop-off"
+          extraMarkers={markers.map((m, i) => ({ ...m, key: m.key || `x${i}` }))}
+          panel={(eta) => {
+            if (!booking) return null;
+            if (!driverCoords) return { title: 'Getting your location…', sub: 'Your route appears once GPS is ready' };
+            if (enroute) return { title: eta ? `Drop-off in ${eta.minutes} min` : 'Heading to drop-off', sub: (booking.dropoff?.address || '').split(',')[0], right: eta ? fmtKm(eta.meters) : null };
+            if (arrived) return { title: 'At pickup', sub: eta ? `Drop-off is ${eta.minutes} min away once you start` : 'Start the journey when your rider is in', right: eta ? fmtKm(eta.meters) : null };
+            return { title: eta ? `Pickup in ${eta.minutes} min` : 'Heading to pickup', sub: (booking.pickup?.address || '').split(',')[0], right: eta ? fmtKm(eta.meters) : null };
+          }}/>
       </div>
       <div style={{ padding:14 }}>
         {charterBanner}
