@@ -33,6 +33,16 @@ const wait = (p, ms) => p.waitForTimeout(ms);
     await fix(p, lat0 + (i % 2 ? 0.00012 : -0.00018), -77.5120 + i * 0.0007);
     await wait(p, 1100);
   }
+  // Smoothness: sample the car every 100 ms over the next 3 fixes.
+  const samples = [];
+  for (let i = 7; i <= 9; i += 1) {
+    await fix(p, lat0, -77.5120 + i * 0.0007);
+    for (let k = 0; k < 10; k += 1) { samples.push((await car(p)).lng); await wait(p, 100); }
+  }
+  const steps = samples.slice(1).map((v, i) => Math.abs(v - samples[i]) * 105000);
+  const maxStep = Math.max(...steps), stops = steps.slice(5).filter((x) => x < 0.3).length;
+  check('car glides smoothly (no jumps between fixes)', maxStep < 15, `max ${maxStep.toFixed(1)} m per 100 ms`);
+  check('car keeps rolling between fixes (no stop-start)', stops <= 2, `${stops} still frames`);
   const c1 = await car(p);
   check('no re-route while on the road', await calls(p) === 1, String(await calls(p)));
   check('car snapped onto the road, not the noisy GPS point', Math.abs(c1.lat - lat0) < 1e-6, String(c1.lat));
@@ -41,7 +51,7 @@ const wait = (p, ms) => p.waitForTimeout(ms);
   check('car icon redrawn to face the road', c1.src !== icon0 || Math.abs(h1 - 90) < 4);
   // Drive round the corner onto the southbound stretch.
   const corner = -77.5036;
-  const legs = [[lat0, -77.5066], [lat0, -77.5054], [lat0, -77.5042], [lat0 - 0.0004, corner], [lat0 - 0.0012, corner]];
+  const legs = [[lat0, -77.5054], [lat0, -77.5042], [lat0 - 0.0004, corner], [lat0 - 0.0012, corner]];
   for (const [la, ln] of legs) { await fix(p, la, ln); await wait(p, 1300); }
   const h2 = await p.evaluate(() => window.__carHeading);
   check('car turns with the road at the corner (now facing south)', Math.abs(h2 - 180) < 6, String(h2));

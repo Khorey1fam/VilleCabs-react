@@ -180,6 +180,8 @@ export default function LiveTripMap({
   const sRef = useRef(null);         // car's distance along the track (m)
   const posRef = useRef(null);       // car's drawn position
   const lastFixRef = useRef(null);
+  const gapsRef = useRef([]);        // recent time between GPS fixes (ms)
+  const animSRef = useRef(null);     // where the car is drawn along the route right now
   const legInfoRef = useRef({ seconds: 0, meters: 0 });
   const routeRef = useRef({ key: null, at: 0, busy: false });
   const devRef = useRef(makeDeviation());
@@ -280,6 +282,7 @@ export default function LiveTripMap({
     devRef.current.reset();
     const at = posRef.current ? locate(track, posRef.current) : null;
     sRef.current = at && at.off <= OFF_ROUTE_M ? at.s : 0;
+    animSRef.current = sRef.current;
     if (at && at.off <= OFF_ROUTE_M) posRef.current = pointAt(track, sRef.current);
     faceTo(roadHeading(track, sRef.current));
     setRouteVer((v) => v + 1);
@@ -293,6 +296,7 @@ export default function LiveTripMap({
     routeRef.current.key = routeKey;
     trackRef.current = null;
     sRef.current = null;
+    animSRef.current = null;
     setRouteVer((v) => v + 1);
     fetchRoute(origin, true).then(() => { if (!userMoved) frame(); });
   }, [isLoaded, routeKey]); // eslint-disable-line
@@ -303,6 +307,7 @@ export default function LiveTripMap({
     const now = Date.now();
     const last = lastFixRef.current;
     if (last && isTeleport(last, veh, now - last.t)) return undefined;   // GPS glitch: hold
+    if (last) gapsRef.current = [...gapsRef.current, now - last.t].slice(-4);
     lastFixRef.current = { ...veh, t: now };
 
     const track = trackRef.current;
@@ -322,28 +327,36 @@ export default function LiveTripMap({
       to = pointAt(track, toS);
       publishEta(liveEta(track, toS, legInfoRef.current.seconds, legInfoRef.current.meters));
     }
-    const fromS = sRef.current;
+    // Start from where the car is drawn now (it may still be gliding toward the
+    // previous fix), so a new fix never makes it hop forward.
+    const fromS = animSRef.current != null ? animSRef.current : sRef.current;
     sRef.current = onRoute ? toS : sRef.current;
 
     if (!start || !carRef.current) { posRef.current = to; if (carRef.current) { carRef.current.setPosition(to); if (onRoute) faceTo(roadHeading(track, toS)); } maybeReframe(); return undefined; }
     const dist = haversine(start, to);
     if (dist < 0.5) return undefined;
-    const duration = Math.min(2000, Math.max(300, dist * 12));
+    // Glide at a steady pace over about the time until the next fix is due, so
+    // the car keeps rolling between updates instead of dashing and stopping.
+    const gaps = gapsRef.current.slice().sort((x, y) => x - y);
+    const gap = gaps.length ? gaps[Math.floor(gaps.length / 2)] : 1000;
+    const duration = Math.min(12000, Math.max(600, gap * 1.05));
     const t0 = performance.now();
     const alongRoad = onRoute && fromS != null && toS != null;
     const moveHeading = dist > 4 ? bearing(start, to) : null;
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     const step = (t) => {
       const p = Math.min(1, (t - t0) / duration);
-      const e = p < 0.5 ? 2 * p * p : 1 - ((-2 * p + 2) ** 2) / 2;   // ease in-out
+      const e = p;                                                   // constant speed
       let pos;
       if (alongRoad) {
         const s = fromS + (toS - fromS) * e;
+        animSRef.current = s;
         pos = pointAt(track, s);
         if (lineRef.current) lineRef.current.setPath(remainingPath(track, s));
         faceTo(roadHeading(track, s));
       } else {
         pos = { lat: start.lat + (to.lat - start.lat) * e, lng: start.lng + (to.lng - start.lng) * e };
+        animSRef.current = null;
         if (p === 0 || e < 0.05) faceTo(moveHeading);
       }
       posRef.current = { lat: pos.lat, lng: pos.lng };
