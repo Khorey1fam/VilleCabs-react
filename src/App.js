@@ -60,6 +60,14 @@ const functions_     = getFunctions(app);
 const createPaymentIntentFn   = httpsCallable(functions_, 'createPaymentIntent');
 const updateDriverLocationFn  = httpsCallable(functions_, 'updateDriverLocation');
 const checkReferralCodeFn     = httpsCallable(functions_, 'checkReferralCode');
+const creatorCodeCheckFn      = httpsCallable(functions_, 'creatorCodeCheck');
+// Creator-program rides: VilleCabs covers the rider's discount, so the driver
+// is paid on the full fare. Every driver earnings figure goes through this.
+export const driverFare = (r) => {
+  if (!r) return 0;
+  const full = Number(r.originalFare);
+  return r.discountCoveredBy === 'villecabs' && Number.isFinite(full) && full > (r.fare || 0) ? full : (r.fare || 0);
+};
 const REFERRAL_DISCOUNT_PCT   = 20;
 const YELLOW = '#e8b400';
 const DARK   = '#1a1a2e';
@@ -1685,7 +1693,7 @@ function Splash({ go, site, domains, dashOn }) {
     const unsub = onSnapshot(collection(db,'promo_codes'), snap => {
       const now = new Date();
       const list = snap.docs.map(d => ({ id:d.id, ...d.data() }))
-        .filter(p => p.active && (!p.expiry || new Date(p.expiry) >= now))
+        .filter(p => p.active && p.showOnSite !== false && (!p.expiry || new Date(p.expiry) >= now))
         .sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
       setLivePromos(list);
     }, () => {});
@@ -5235,7 +5243,17 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
     setPromoLoading(true); setPromoMsg(''); setPromoData(null);
     try {
       const snap = await getDocs(query(collection(db,'promo_codes'), where('code','==',promoCode.toUpperCase().trim())));
-      if (snap.empty) { setPromoMsg('❌ Invalid promo code.'); setPromoLoading(false); return; }
+      if (snap.empty) {
+        // Not a public code: it may be a creator's private code (checked on the server).
+        try {
+          const r = (await creatorCodeCheckFn({ code: promoCode })).data || {};
+          if (r.ok) {
+            setPromoData({ code: r.code, discount: r.discount, discountType: r.discountType, creator: true });
+            setPromoMsg(`✅ "${r.code}" applied — ${r.label}!`);
+          } else setPromoMsg(`❌ ${r.message || 'Invalid promo code.'}`);
+        } catch (e) { setPromoMsg('❌ Invalid promo code.'); }
+        setPromoLoading(false); return;
+      }
       const pd = { id: snap.docs[0].id, ...snap.docs[0].data() };
       if (!pd.active) { setPromoMsg('❌ This promo code is no longer active.'); setPromoLoading(false); return; }
       if (pd.expiry && new Date(pd.expiry) < new Date()) { setPromoMsg('❌ This promo code has expired.'); setPromoLoading(false); return; }
@@ -5272,6 +5290,14 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
     // with a promo code — the customer gets whichever discount is bigger.
     const referralPrice = referralDocId ? Math.round(base * (1 - REFERRAL_DISCOUNT_PCT / 100)) : base;
     if (!promoData) return referralPrice;
+    const creatorBase = calcPrice(v);
+    // A creator code is never combined with the referral discount: the rider
+    // gets the creator's discount, and that is what the creator is paid for.
+    if (promoData.creator) {
+      return promoData.discountType === 'fixed'
+        ? Math.max(0, creatorBase - Math.round(promoData.discount))
+        : Math.round(creatorBase * (1 - promoData.discount / 100));
+    }
     // Codes are either a percentage off or a flat J$ amount off. Older codes
     // have no discountType and are treated as percent for backwards compatibility.
     const promoPrice = promoData.discountType === 'fixed'
@@ -5282,6 +5308,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
   // Human-readable label for the applied discount.
   const promoLabel = () => {
     if (!promoData) return referralDocId ? `referral ${REFERRAL_DISCOUNT_PCT}% off` : '';
+    if (promoData.creator) return promoData.discountType === 'fixed' ? `J$${(promoData.discount||0).toLocaleString()} off` : `${promoData.discount}% off`;
     const promoText = promoData.discountType === 'fixed'
       ? `J$${(promoData.discount||0).toLocaleString()} off`
       : `${promoData.discount}% off`;
@@ -5420,6 +5447,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
           originalFare:    price,
           surgeMultiplier: SURGE_MULT > 1 ? SURGE_MULT : null,
           promoCode:       promoData?.code || null,
+          ...(promoData?.creator ? { creatorCode: promoData.code } : {}),
           referredBy:      referralDocId || null,
           referralDiscountPct: referralDocId ? REFERRAL_DISCOUNT_PCT : null,
           promoDiscount:   promoData?.discount || null,
@@ -5463,6 +5491,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
         originalFare: price,
         surgeMultiplier: SURGE_MULT > 1 ? SURGE_MULT : null,
         promoCode:    promoData?.code || null,
+        ...(promoData?.creator ? { creatorCode: promoData.code } : {}),
         referredBy:   referralDocId || null,
         referralDiscountPct: referralDocId ? REFERRAL_DISCOUNT_PCT : null,
         promoDiscount:promoData?.discount || null,
@@ -7980,7 +8009,7 @@ function DriverDash({ go, user, setUser, setBookingId, site, domains }) {
         const weekStart  = new Date(todayStart.getTime() - 6*86400000);
         const todayRides = history.filter(r => when(r) >= todayStart.getTime());
         const weekRides  = history.filter(r => when(r) >= weekStart.getTime());
-        const earned = list => list.reduce((s,r) => s + Math.round((r.fare||0)*0.85), 0);
+        const earned = list => list.reduce((s,r) => s + Math.round(driverFare(r)*0.85), 0);
         setEarnings({
           today:      earned(todayRides),
           week:       earned(weekRides),
@@ -8546,7 +8575,7 @@ function DriverDash({ go, user, setUser, setBookingId, site, domains }) {
                     </div>
                     <div className="dr-req__fare">
                       <b>{money(r.fare)}</b>
-                      <span>You earn {money((r.fare||0)*0.85)}</span>
+                      <span>You earn {money(driverFare(r)*0.85)}</span>
                     </div>
                   </div>
                   <div className="dr-route">
@@ -8810,7 +8839,7 @@ function DriverDash({ go, user, setUser, setBookingId, site, domains }) {
             )}
             {earnings.history.map((r,i) => {
               const d   = new Date((r.createdAt?.seconds||0)*1000);
-              const net = Math.round((r.fare||0)*0.85);
+              const net = Math.round(driverFare(r)*0.85);
               return (
                 <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
                   <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
@@ -8820,7 +8849,7 @@ function DriverDash({ go, user, setUser, setBookingId, site, domains }) {
                     </div>
                     <div style={{ textAlign:'right' }}>
                       <div style={{ fontSize:16, fontWeight:800, color:'#6b21a8' }}>J${net.toLocaleString()}</div>
-                      <div style={{ fontSize:10, color:'#aaa' }}>Fare J${(r.fare||0).toLocaleString()}</div>
+                      <div style={{ fontSize:10, color:'#aaa' }}>Fare J${(r.fare||0).toLocaleString()}{driverFare(r) > (r.fare||0) ? ` + J$${(driverFare(r)-(r.fare||0)).toLocaleString()} promo` : ''}</div>
                     </div>
                   </div>
                   <div style={{ fontSize:11, color:'#555', marginBottom:2 }}>📍 {shortAddress(r.pickup?.address||'')}</div>
@@ -8886,11 +8915,11 @@ function DriverDash({ go, user, setUser, setBookingId, site, domains }) {
               <div key={i} style={{ background:'#fff', borderRadius:14, padding:14, marginBottom:10, boxShadow:'0 1px 6px rgba(0,0,0,0.06)' }}>
                 <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
                   <div style={{ fontSize:13, fontWeight:600, color:'#1a1a2e' }}>👤 {r.customerName||'Passenger'}</div>
-                  <div style={{ fontSize:15, fontWeight:800, color:'#6b21a8' }}>J${Math.round((r.fare||0)*0.85).toLocaleString()}</div>
+                  <div style={{ fontSize:15, fontWeight:800, color:'#6b21a8' }}>J${Math.round(driverFare(r)*0.85).toLocaleString()}</div>
                 </div>
                 <div style={{ fontSize:11, color:'#888' }}>{new Date((r.createdAt?.seconds||0)*1000).toLocaleDateString()}</div>
                 <div style={{ display:'flex', gap:6, marginTop:6 }}>
-                  <span style={{ fontSize:10, background:'#fff0f0', color:'#dc2626', padding:'2px 8px', borderRadius:8 }}>Fee: J${Math.round((r.fare||0)*0.15).toLocaleString()}</span>
+                  <span style={{ fontSize:10, background:'#fff0f0', color:'#dc2626', padding:'2px 8px', borderRadius:8 }}>Fee: J${Math.round(driverFare(r)*0.15).toLocaleString()}</span>
                   <span style={{ fontSize:10, background:'#f9f5ff', color:'#6b21a8', padding:'2px 8px', borderRadius:8 }}>Total: J${(r.fare||0).toLocaleString()}</span>
                 </div>
               </div>
@@ -10238,7 +10267,12 @@ function PromotionsPage({ go, user }) {
               try {
                 const snap = await getDocs(query(collection(db,'promo_codes'), where('code','==',c)));
                 const pd = snap.empty ? null : snap.docs[0].data();
-                if (!pd || !pd.active) setPromoMsg('❌ That code isn\u2019t valid.');
+                if (!pd) {
+                  const r = (await creatorCodeCheckFn({ code: c }).catch(() => ({ data: {} }))).data || {};
+                  setPromoMsg(r.ok ? `✅ "${r.code}" is valid — enter it when you book to get ${r.label}.` : `❌ ${r.message || 'That code isn\u2019t valid.'}`);
+                  return;
+                }
+                if (!pd.active) setPromoMsg('❌ That code isn\u2019t valid.');
                 else if (pd.expiry && new Date(pd.expiry) < new Date()) setPromoMsg('❌ That code has expired.');
                 else if ((pd.usedBy||[]).includes(user?.uid)) setPromoMsg('❌ You have already used that code.');
                 else setPromoMsg(`✅ "${pd.code}" is valid — enter it when you book to get ${pd.discountType === 'fixed' ? `J$${(pd.discount||0).toLocaleString()}` : `${pd.discount}%`} off.`);
@@ -11538,12 +11572,12 @@ function DriverEarnings({ go, user }) {
     const secs = r.completedAt?.seconds || r.createdAt?.seconds || 0;
     return period === 'week' ? (now - secs) < 604800 : (now - secs) < 2592000;
   });
-  const totalFare = filtered.reduce((s,r) => s + (r.fare||0), 0);
+  const totalFare = filtered.reduce((s,r) => s + driverFare(r), 0);
   const totalEarn = Math.round(totalFare * 0.85);
   const totalFee  = Math.round(totalFare * 0.15);
   const avgFare   = filtered.length ? Math.round(totalFare / filtered.length) : 0;
   // Unpaid balance = ALL-TIME earnings minus everything logged as paid out (Feature: Driver Payouts)
-  const allTimeEarn   = Math.round(rides.reduce((s,r) => s + (r.fare||0), 0) * 0.85);
+  const allTimeEarn   = Math.round(rides.reduce((s,r) => s + driverFare(r), 0) * 0.85);
   const totalPaidOut  = payouts.reduce((s,p) => s + (p.amount||0), 0);
   const unpaidBalance = allTimeEarn - totalPaidOut;
 
@@ -11649,7 +11683,7 @@ function DriverEarnings({ go, user }) {
             const rideDate = ride.completedAt?.seconds
               ? new Date(ride.completedAt.seconds*1000).toLocaleDateString('en-JM',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})
               : '—';
-            const earn = Math.round((ride.fare||0) * 0.85);
+            const earn = Math.round(driverFare(ride) * 0.85);
             return (
               <div key={ride.id||i} style={{ background:'#ffffff', borderRadius:14, padding:'14px 16px', marginBottom:10, boxShadow:'0 1px 4px rgba(0,0,0,0.06)' }}>
                 <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
@@ -11665,8 +11699,8 @@ function DriverEarnings({ go, user }) {
                   <div style={{ fontSize:12, color:'#1a1a2e', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{shortAddress(ride.dropoff?.address)||'—'}</div>
                 </div>
                 <div style={{ display:'flex', gap:12, marginTop:8, paddingTop:8, borderTop:'1px solid #f0f0f0', flexWrap:'wrap' }}>
-                  <div style={{ fontSize:11, color:'#888' }}>Fare: <span style={{ fontWeight:600, color:'#1a1a2e' }}>J${(ride.fare||0).toLocaleString()}</span></div>
-                  <div style={{ fontSize:11, color:'#888' }}>Fee: <span style={{ color:'#e24b4a' }}>-J${Math.round((ride.fare||0)*0.15).toLocaleString()}</span></div>
+                  <div style={{ fontSize:11, color:'#888' }}>Fare: <span style={{ fontWeight:600, color:'#1a1a2e' }}>J${(ride.fare||0).toLocaleString()}</span>{driverFare(ride) > (ride.fare||0) && <span style={{ color:'#6b21a8' }}> + J${(driverFare(ride)-(ride.fare||0)).toLocaleString()} promo covered by VilleCabs</span>}</div>
+                  <div style={{ fontSize:11, color:'#888' }}>Fee: <span style={{ color:'#e24b4a' }}>-J${Math.round(driverFare(ride)*0.15).toLocaleString()}</span></div>
                   {ride.distanceKm && <div style={{ fontSize:11, color:'#888' }}>{Number(ride.distanceKm).toFixed(1)} km</div>}
                 </div>
               </div>

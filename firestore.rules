@@ -278,10 +278,19 @@ service cloud.firestore {
     // landing page to signed-out visitors too). On redemption a signed-in
     // customer may ONLY append to usedBy / bump usageCount — they cannot change
     // the discount or reset limits. Only admins create/delete.
+    // ── Creator program ──────────────────────────────────────────────────────
+    // Creator codes are private (never in the public promo_codes list). Only
+    // admins can read them; every write goes through Cloud Functions.
+    match /creators/{id}            { allow read: if isAdmin(); allow write: if false; }
+    match /creator_codes/{code}     { allow read: if isAdmin(); allow write: if false; }
+    match /creator_redemptions/{id} { allow read: if isAdmin(); allow write: if false; }
+    match /creator_uses/{id}        { allow read: if isAdmin(); allow write: if false; }
+    match /creator_payouts/{id}     { allow read: if isAdmin(); allow write: if false; }
+
     match /promo_codes/{id} {
       allow read:   if true;
-      allow update: if signedIn()
-                    && onlyChanges(['usedBy', 'usageCount']);
+      allow update: if isAdmin()
+                    || (signedIn() && onlyChanges(['usedBy', 'usageCount']));
       allow create, delete: if isAdmin();
     }
 

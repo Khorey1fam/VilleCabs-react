@@ -282,3 +282,8 @@ Object.assign(exports, require('./dash'));
 const villeEvents = require('./events');
 ['eventSaveSync', 'eventChangeSync', 'eventRemindersSweep', 'eventTrack', 'eventRideBooked',
   'eventRideCompleted', 'eventsImportLegacy', 'eventPage'].forEach((k) => { exports[k] = villeEvents[k]; });
+
+// ── Creator program (private creator promo codes, paid per completed ride) ──
+const creators = require('./creators');
+['creatorCodeCheck', 'creatorBookingCreated', 'creatorBookingUpdated', 'creatorSave',
+  'creatorRotateLink', 'creatorRecordPayout', 'creatorStats'].forEach((k) => { exports[k] = creators[k]; });

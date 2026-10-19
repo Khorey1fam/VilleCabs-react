@@ -2,11 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ExtraFareRequest, ExtraFareList } from './RideExtras';
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendPasswordResetEmail } from 'firebase/auth';
-import { getFirestore, collection, query, where, onSnapshot, updateDoc, doc, orderBy, addDoc, deleteDoc, setDoc, serverTimestamp, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { getFirestore, collection, query, where, onSnapshot, updateDoc, doc, getDoc, orderBy, addDoc, deleteDoc, setDoc, serverTimestamp, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from '@react-google-maps/api';
 import AdminDashTab from './dash/AdminDash';
 import AdminEventsTab from './events/AdminEvents';
+import AdminCreatorsTab from './creators/AdminCreators';
 
 const GOOGLE_MAPS_KEY = process.env.REACT_APP_GOOGLE_MAPS_KEY || '';
 const MAP_LIBRARIES = ['places'];
@@ -173,7 +174,8 @@ function DriverEarnings({ driverId }) {
     const d = new Date(secs*1000);
     const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     if (!byDay[key]) byDay[key] = { key, date:d, gross:0, count:0 };
-    byDay[key].gross += (r.fare || 0);
+    // Creator-code rides: VilleCabs covers the discount, so pay on the full fare.
+    byDay[key].gross += (r.discountCoveredBy === 'villecabs' && (r.originalFare||0) > (r.fare||0)) ? r.originalFare : (r.fare || 0);
     byDay[key].count += 1;
   });
   const days = Object.values(byDay).sort((a,b) => b.date - a.date);
@@ -985,6 +987,8 @@ function PromoCodesTab() {
     if (promos.find(p => p.code.toUpperCase() === form.code.toUpperCase())) { setError('That code already exists.'); return; }
     setSaving(true);
     try {
+      const taken = await getDoc(doc(db,'creator_codes', form.code.toUpperCase().trim()));
+      if (taken.exists()) { setError('A creator already uses that code.'); setSaving(false); return; }
       await addDoc(collection(db,'promo_codes'), {
         code:         form.code.toUpperCase().trim(),
         discount:     +form.discount,
@@ -996,17 +1000,22 @@ function PromoCodesTab() {
         // When true the app refuses the code for anyone who already has a
         // completed ride — so a code advertised as "first ride" actually is one.
         firstRideOnly: !!form.firstRideOnly,
+        // Hidden codes still work at checkout but aren't listed on the website.
+        showOnSite:  form.showOnSite !== false,
         active:      true,
         usedBy:      [],
         usageCount:  0,
         createdAt:   serverTimestamp(),
       });
       setSuccess(`Promo code "${form.code.toUpperCase()}" created!`);
-      setForm({ code:'', discount:'', discountType:'percent', expiry:'', description:'', firstRideOnly:false });
+      setForm({ code:'', discount:'', discountType:'percent', expiry:'', description:'', firstRideOnly:false, showOnSite:true });
     } catch(err) { setError(err.message); }
     setSaving(false);
   };
 
+  const toggleSite = async (id, current) => {
+    await updateDoc(doc(db,'promo_codes',id), { showOnSite: current === false });
+  };
   const toggleActive = async (id, current) => {
     await updateDoc(doc(db,'promo_codes',id), { active: !current });
   };
@@ -1066,6 +1075,21 @@ function PromoCodesTab() {
                 </span>
               </span>
             </label>
+            <label onClick={() => set('showOnSite', form.showOnSite === false)}
+              style={{ display:'flex', alignItems:'flex-start', gap:10, cursor:'pointer',
+                background: form.showOnSite !== false ? '#f5f0ff' : '#f9fafb',
+                border:`1px solid ${form.showOnSite !== false ? '#d8b4fe' : '#e5e7eb'}`,
+                borderRadius:10, padding:'11px 13px', marginBottom:12 }}>
+              <input type="checkbox" readOnly checked={form.showOnSite !== false}
+                style={{ width:17, height:17, accentColor:'#6b21a8', marginTop:1, cursor:'pointer' }}/>
+              <span>
+                <span style={{ fontSize:13, fontWeight:700, color:'#1a1a2e' }}>Show on website</span>
+                <span style={{ display:'block', fontSize:11, color:'#6b7280', marginTop:2, lineHeight:1.5 }}>
+                  Untick to keep the code off the website's offers list. It still works when a customer types it.
+                  For creators, use the Creators tab instead.
+                </span>
+              </span>
+            </label>
           </div>
         </div>
         <button onClick={handleCreate} disabled={saving}
@@ -1101,6 +1125,7 @@ function PromoCodesTab() {
                     </span>
                   )}
                   <span style={{ background:`${statusColor}22`, color:statusColor, borderRadius:20, padding:'2px 10px', fontSize:11, fontWeight:500, textTransform:'uppercase' }}>{status}</span>
+                  {p.showOnSite === false && <span style={{ ...s.badge, background:'#f3f4f6', color:'#4b5563', border:'1px solid #e5e7eb', fontSize:10 }}>Hidden from website</span>}
                 </div>
                 <div style={{ fontSize:13, color:'#6b7280' }}>{p.description}</div>
               </div>
@@ -1116,6 +1141,10 @@ function PromoCodesTab() {
                 Expires: <span style={{ color: expired ? '#dc2626' : '#4b5563' }}>{p.expiry || '--'}</span>
               </div>
               <div style={{ display:'flex', gap:8 }}>
+                <button onClick={() => toggleSite(p.id, p.showOnSite)}
+                  style={{ padding:'5px 12px', borderRadius:8, fontSize:12, cursor:'pointer', border:'1px solid #e5e7eb', background:'#f3f4f6', color:'#1a1a2e' }}>
+                  {p.showOnSite === false ? 'Show on website' : 'Hide from website'}
+                </button>
                 <button onClick={() => toggleActive(p.id, p.active)}
                   style={{ padding:'5px 12px', borderRadius:8, fontSize:12, cursor:'pointer', border:'1px solid #e5e7eb', background:'#f3f4f6', color:'#1a1a2e' }}>
                   {p.active ? 'Disable' : 'Enable'}
@@ -3807,6 +3836,7 @@ export default function AdminPanel() {
     { id:'unfulfilled',label:'No Driver',  icon:'📍' },
     { id:'broadcast', label:'Broadcast',   icon:'📢' },
     { id:'promos',    label:'Promos',      icon:'🎟️' },
+    { id:'creators',  label:'Creators',    icon:'📣' },
   ];
 
   return (
@@ -3837,7 +3867,7 @@ export default function AdminPanel() {
       {/* ── CONTENT ── */}
       <div style={s.main}>
         <div style={{ fontSize:18, fontWeight:800, marginBottom:16, color:'#1a1a2e' }}>
-          {tab==='overview'?'📊 Dashboard Overview':tab==='villedash'?'📦 VilleDash':tab==='villeevents'?'🎟️ VilleEvents':tab==='analytics'?'📉 Analytics':tab==='drivers'?'🚗 Driver Management':tab==='rides'?'🚕 Ride Management':tab==='livemap'?'🗺️ Live Operations Map':tab==='scheduled'?'🗓️ Scheduled Rides':tab==='customers'?'👥 Customers':tab==='revenue'?'💰 Revenue':tab==='demand'?'📅 Demand Schedule':tab==='performance'?'📈 Driver Performance':tab==='partners'?'🤝 Partner Requests':tab==='charter'?'🚘 Charter Bookings':tab==='contacts'?'📬 Messages':tab==='alerts'?'🆘 Safety Alerts':tab==='unfulfilled'?'📍 No Driver Available':tab==='broadcast'?'📢 Broadcast to Drivers':'🎟️ Promo Codes'}
+          {tab==='overview'?'📊 Dashboard Overview':tab==='villedash'?'📦 VilleDash':tab==='villeevents'?'🎟️ VilleEvents':tab==='creators'?'📣 Creator Program':tab==='analytics'?'📉 Analytics':tab==='drivers'?'🚗 Driver Management':tab==='rides'?'🚕 Ride Management':tab==='livemap'?'🗺️ Live Operations Map':tab==='scheduled'?'🗓️ Scheduled Rides':tab==='customers'?'👥 Customers':tab==='revenue'?'💰 Revenue':tab==='demand'?'📅 Demand Schedule':tab==='performance'?'📈 Driver Performance':tab==='partners'?'🤝 Partner Requests':tab==='charter'?'🚘 Charter Bookings':tab==='contacts'?'📬 Messages':tab==='alerts'?'🆘 Safety Alerts':tab==='unfulfilled'?'📍 No Driver Available':tab==='broadcast'?'📢 Broadcast to Drivers':'🎟️ Promo Codes'}
         </div>
         {tab === 'overview'  && <OverviewTab setTab={setTab}/>}
         {tab === 'villedash' && <AdminDashTab/>}
@@ -3858,6 +3888,7 @@ export default function AdminPanel() {
         {tab === 'unfulfilled' && <UnfulfilledTab/>}
         {tab === 'broadcast' && <BroadcastTab/>}
         {tab === 'promos'    && <PromoCodesTab/>}
+        {tab === 'creators'  && <AdminCreatorsTab/>}
       </div>
     </div>
   );
