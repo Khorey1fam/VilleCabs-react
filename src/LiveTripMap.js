@@ -50,15 +50,15 @@ export const LIGHT_MAP_STYLE = [
 
 const svgUrl = (s) => `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(s)}`;
 
-// Upright car seen from the side: white body, VILLE-purple outline. It never rotates.
-export const CAR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="56" height="44" viewBox="0 0 56 44">
-<ellipse cx="28" cy="38.5" rx="21" ry="3.6" fill="${INK}" opacity=".18"/>
-<path d="M6.5 30.5v-5.2c0-2 1.4-3.7 3.4-4.1l6.6-1.3 6.1-6.2c1-1 2.4-1.6 3.8-1.6h9.6c1.6 0 3.1.7 4.1 1.9l5 6 3.1.6c2 .4 3.4 2.1 3.4 4.2v5.7c0 1.1-.9 2-2 2h-41c-1.2 0-2.1-.9-2.1-2z" fill="#fff" stroke="${PURPLE}" stroke-width="2.2" stroke-linejoin="round"/>
-<path d="M19.6 19.9l4.5-4.6c.6-.6 1.4-1 2.3-1h3.9v5.6z" fill="#ede4fb" stroke="${PURPLE}" stroke-width="1.3" stroke-linejoin="round"/>
-<path d="M32.4 14.3h3.6c.9 0 1.8.4 2.4 1.1l3.8 4.5h-9.8z" fill="#ede4fb" stroke="${PURPLE}" stroke-width="1.3" stroke-linejoin="round"/>
-<rect x="46.2" y="23" width="3.2" height="2.2" rx="1.1" fill="#f5c542"/>
-<circle cx="16.5" cy="32" r="4.8" fill="#2a1a4a" stroke="#fff" stroke-width="1.6"/><circle cx="16.5" cy="32" r="1.7" fill="#c4b5fd"/>
-<circle cx="40.5" cy="32" r="4.8" fill="#2a1a4a" stroke="#fff" stroke-width="1.6"/><circle cx="40.5" cy="32" r="1.7" fill="#c4b5fd"/>
+// Car seen from directly above, nose pointing up. It never rotates.
+export const CAR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="46" viewBox="0 0 26 46">
+<rect x="3" y="4" width="20" height="40" rx="7" fill="${INK}" opacity=".16"/>
+<rect x="2" y="2" width="20" height="40" rx="7" fill="#fff" stroke="${PURPLE}" stroke-width="1.6"/>
+<path d="M5.2 12.5c2-2 11.6-2 13.6 0l-1.3 5.2c-3.3-1-7.7-1-11 0z" fill="#2a1a4a"/>
+<rect x="6.3" y="18.6" width="11.4" height="12" rx="2.6" fill="#f3eefb" stroke="#e3d8f5" stroke-width=".8"/>
+<path d="M6.2 31.6c3.3.9 8.3.9 11.6 0l1 4.4c-4.2 1.2-9.4 1.2-13.6 0z" fill="#2a1a4a"/>
+<rect x="4.4" y="3.6" width="3.6" height="1.8" rx=".9" fill="#f5c542"/><rect x="16" y="3.6" width="3.6" height="1.8" rx=".9" fill="#f5c542"/>
+<rect x="4.6" y="39.2" width="3.4" height="1.4" rx=".7" fill="#e24b4a"/><rect x="16" y="39.2" width="3.4" height="1.4" rx=".7" fill="#e24b4a"/>
 </svg>`;
 
 // Upright delivery motorcycle with a top box (VilleDash).
@@ -352,7 +352,7 @@ export default function LiveTripMap({
     return remainingPath(track, sRef.current || 0);
   }, [track, routeVer]); // eslint-disable-line
 
-  const carIcon = useMemo(() => (isLoaded ? icon(vehicleKind === 'moto' ? MOTO_SVG : CAR_SVG, 52, 41, 26, 36) : null), [isLoaded, vehicleKind]);
+  const carIcon = useMemo(() => (isLoaded ? (vehicleKind === 'moto' ? icon(MOTO_SVG, 44, 35, 22, 30) : icon(CAR_SVG, 20, 35, 10, 17)) : null), [isLoaded, vehicleKind]);
   const puIcon = useMemo(() => (isLoaded ? icon(PICKUP_SVG, 30, 30, 15, 15) : null), [isLoaded]);
   const drIcon = useMemo(() => (isLoaded ? icon(DROPOFF_SVG, 26, 26, 13, 13) : null), [isLoaded]);
 
