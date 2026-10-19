@@ -1,0 +1,17 @@
+{
+  "name": "VilleCabs Driver",
+  "short_name": "VC Driver",
+  "description": "The VilleCabs driver app: get ride requests, navigate and track your earnings.",
+  "id": "/?app=driver",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#160a29",
+  "theme_color": "#160a29",
+  "orientation": "portrait",
+  "scope": "/",
+  "lang": "en",
+  "icons": [
+    { "src": "/driver-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/driver-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

@@ -176,3 +176,15 @@ existing document is changed.
 - The route is re-planned only when the driver is more than 60 m off it for 2+ GPS fixes over 4+ seconds, when the leg changes (pickup → drop-off), or every 3 minutes for traffic. Between those, the ETA is counted down locally.
 - Optional 3D tilt: set `REACT_APP_GOOGLE_MAP_ID` (a vector Map ID from Google Cloud) in Vercel. Without it, the map uses the built-in light style with no tilt. With it, the style comes from the Map ID's cloud style, so pick a light style there.
 - Tests: `node tools/screen-check/liveroute.js` (geometry) and `node tools/screen-check/livemap.js` (behaviour on a fake map, needs `serve.js`).
+
+## Driver app (driver.villecabs.com)
+
+The same app, opened on the driver address, becomes **VilleCabs Driver**: its own name, icon and home-screen install, a driver landing page (Sign in / Apply to drive), and customers who sign in there are sent back to VilleCabs. Try it on a preview with `?site=driver`.
+
+Going live:
+1. Vercel → Project → Settings → Domains → add `driver.villecabs.com`. At your DNS provider add the CNAME record Vercel shows (`driver` → `cname.vercel-dns.com`).
+2. Firebase console → Authentication → Settings → Authorized domains → add `driver.villecabs.com` (otherwise sign-in fails there).
+3. Google Cloud → Credentials → the Maps key → Website restrictions → add `https://driver.villecabs.com/*`.
+4. Admin → VilleDash → Sites & ads → Domains: check the driver domain, tick "Driver app is live", Save. Drivers on villecabs.com then see a "Get the VilleCabs Driver app" link.
+
+Drivers allow notifications and location again on the new address (browsers ask per address). Driver sign-in on villecabs.com keeps working.
