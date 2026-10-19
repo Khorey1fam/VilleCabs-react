@@ -27,7 +27,7 @@ import { ExtraFareRequest, ExtraFareList, ExtraFareCustomer, usePendingExtraRide
 import { StoresList, StorePage, Cart, Checkout, OrderTrack } from './dash/Marketplace';
 import SendPackage from './dash/SendPackage';
 import DeliveryTrack from './dash/DeliveryTrack';
-import LiveTripMap from './LiveTripMap';
+import LiveTripMap, { LIGHT_MAP_STYLE } from './LiveTripMap';
 import { fmtDistance as fmtKm } from './liveRoute';
 import { useDashEnabled, useCardPayments, CARD_MIN_CENTS, api as dashApiCalls } from './dash/dashApi';
 import { useSites, SiteLanding, FamilyBar, HouseAd } from './dash/sites';
@@ -385,24 +385,6 @@ const EMAILJS_USER    = process.env.REACT_APP_EMAILJS_USER    || 'NYE1IvkRipsFf-
 
 
 // Dark map style matching VilleCabs theme
-const MAP_STYLE = [
-  { elementType:'geometry', stylers:[{ color:'#1a2744' }] },
-  { elementType:'labels.text.fill', stylers:[{ color:'#8ec3b9' }] },
-  { elementType:'labels.text.stroke', stylers:[{ color:'#1a3646' }] },
-  { featureType:'road', elementType:'geometry', stylers:[{ color:'#304a7d' }] },
-  { featureType:'road', elementType:'geometry.stroke', stylers:[{ color:'#255763' }] },
-  { featureType:'road.highway', elementType:'geometry', stylers:[{ color:'#e8b400' }] },
-  { featureType:'road.highway', elementType:'geometry.stroke', stylers:[{ color:'#1f2835' }] },
-  { featureType:'road.highway', elementType:'labels.text.fill', stylers:[{ color:'#f3d19c' }] },
-  { featureType:'water', elementType:'geometry', stylers:[{ color:'#0e1626' }] },
-  { featureType:'water', elementType:'labels.text.fill', stylers:[{ color:'#515c6d' }] },
-  { featureType:'poi', elementType:'geometry', stylers:[{ color:'#1a3a2a' }] },
-  { featureType:'poi.park', elementType:'geometry', stylers:[{ color:'#1a4a2e' }] },
-  { featureType:'transit', elementType:'geometry', stylers:[{ color:'#2f3948' }] },
-  { featureType:'administrative', elementType:'geometry', stylers:[{ color:'#2a3a5a' }] },
-  { featureType:'administrative.country', elementType:'labels.text.fill', stylers:[{ color:'#9d9d9d' }] },
-  { featureType:'administrative.locality', elementType:'labels.text.fill', stylers:[{ color:'#e8b400' }] },
-];
 
 // ── Rotated car marker + bearing helper (Feature: Live-tracking map polish) ────
 // Computes the compass bearing (0=N, 90=E, ...) from one lat/lng point to another,
@@ -740,7 +722,7 @@ function VilleMap({ height = 620, center = MANCHESTER_CENTER, zoom = 14, onClick
   const mobileHeight = Math.min(height, window.innerHeight * 0.82);
 
   if (!isLoaded) return (
-    <div style={{ height:mobileHeight, background:'#1a2744', display:'flex', alignItems:'center', justifyContent:'center', color:YELLOW, fontSize:13 }}>
+    <div style={{ height:mobileHeight, background:'#eef0f5', display:'flex', alignItems:'center', justifyContent:'center', color:'#8a8d9c', fontSize:13 }}>
       Loading map...
     </div>
   );
@@ -757,7 +739,7 @@ function VilleMap({ height = 620, center = MANCHESTER_CENTER, zoom = 14, onClick
       mapContainerStyle={{ width:'100%', height: expanded ? '100%' : mobileHeight }}
       onLoad={onMapLoad}
       onClick={handleMapClick}
-      options={{ styles:MAP_STYLE, disableDefaultUI:true, zoomControl:true, gestureHandling:'greedy' }}
+      options={{ styles:LIGHT_MAP_STYLE, disableDefaultUI:true, zoomControl:true, gestureHandling:'greedy' }}
     >
       {markers.map((m, i) => (
         m.smooth
@@ -798,7 +780,7 @@ function VilleMap({ height = 620, center = MANCHESTER_CENTER, zoom = 14, onClick
       {/* Expand button */}
       {expandable && (
         <button onClick={() => setExpanded(true)}
-          style={{ position:'absolute', top:10, right:10, background:'rgba(10,15,35,0.85)', border:'0.5px solid rgba(255,255,255,0.2)', borderRadius:8, color:WHITE, fontSize:11, padding:'6px 10px', cursor:'pointer', backdropFilter:'blur(8px)', display:'flex', alignItems:'center', gap:4 }}>
+          style={{ position:'absolute', top:10, right:10, background:'#ffffff', border:'1px solid #e3e0ea', borderRadius:20, color:'#6b21a8', fontSize:12, fontWeight:700, padding:'7px 12px', cursor:'pointer', boxShadow:'0 3px 10px rgba(31,18,53,.16)', display:'flex', alignItems:'center', gap:4 }}>
           ⛶ Expand
         </button>
       )}
