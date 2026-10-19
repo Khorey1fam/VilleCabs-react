@@ -8,6 +8,8 @@ import { useMyDeliveries } from '../dash/CustomerScreens';
 import { useMyOrders } from '../dash/Marketplace';
 import { Icon, logoVille, SERVICES, ServiceMedia, StatusChip, useServiceStatus, openService } from './VilleUI';
 import VillePublic from './VillePublic';
+import { useEvents, useMySaves, useInbox, markRead } from '../events/eventsData';
+import { phase, countdown, whenLine } from '../events/eventTime';
 
 const ACTIVE_RIDE = ['awaiting_payment', 'searching', 'active', 'arrived', 'enroute', 'scheduled'];
 const RIDE_LABEL = {
@@ -16,7 +18,7 @@ const RIDE_LABEL = {
   completed: 'Completed', cancelled: 'Cancelled', expired: 'No driver found',
 };
 const ACTIVE_DELIVERY = ['awaiting_payment', 'requested', 'assigned', 'to_pickup', 'at_pickup', 'collected', 'to_dropoff', 'at_dropoff'];
-const ms = (t) => (t && t.toMillis ? t.toMillis() : t && t.seconds ? t.seconds * 1000 : 0);
+const ms = (t) => (Number.isFinite(t) ? t : t && t.toMillis ? t.toMillis() : t && t.seconds ? t.seconds * 1000 : 0);
 const when = (t) => {
   const m = ms(t);
   if (!m) return 'Just now';
@@ -63,14 +65,35 @@ function Skeleton() {
   return <div style={{ padding: '14px 18px', display: 'grid', gap: 12 }}>{[0, 1].map((i) => <div key={i} className="vl-skel" style={{ height: 44 }} />)}</div>;
 }
 
-export default function VilleDashboard({ go, user, setUser, setBookingId, openDelivery, openOrder, domains, onSignOut }) {
+export default function VilleDashboard({ go, user, setUser, setBookingId, openDelivery, openOrder, domains, onSignOut, setDropoffData }) {
   const uid = user && user.uid;
   const status = useServiceStatus(uid);
   const dashOpen = status.dash !== 'soon';
   const { rides, error: ridesError } = useCustomerRides(uid);
   const deliveries = useMyDeliveries(dashOpen ? uid : null, { max: 10 });
   const orders = useMyOrders(dashOpen ? uid : null, 10);
-  const notes = useCustomerNotifications(uid);
+  const rideNotes = useCustomerNotifications(uid);
+  const inbox = useInbox(uid);
+  const { events } = useEvents();
+  const { saves } = useMySaves(uid);
+  const notes = useMemo(() => {
+    if (rideNotes === null || inbox === null) return null;
+    return [
+      ...rideNotes.map((n) => ({ id: `r${n.id}`, text: n.message || 'Update from VilleCabs', t: ms(n.createdAt), read: true })),
+      ...inbox.map((n) => ({ id: n.id, text: n.title, sub: n.body, t: ms(n.createdAt), read: !!n.read, eventId: n.eventId, raw: n })),
+    ].sort((a, b) => b.t - a.t).slice(0, 5);
+  }, [rideNotes, inbox]);
+  const upcomingEvents = useMemo(() => {
+    if (!events || !saves) return null;
+    const byId = new Map(events.map((e) => [e.id, e]));
+    return saves.map((sv) => ({ sv, ev: byId.get(sv.eventId) })).filter((x) => x.ev && ['upcoming', 'live', 'tba'].includes(phase(x.ev)))
+      .sort((a, b) => (a.ev.startMs || 9e15) - (b.ev.startMs || 9e15)).slice(0, 3);
+  }, [events, saves]);
+  const openEventPage = (id, tab) => { try { if (id) sessionStorage.setItem('ve_open', id); if (tab) sessionStorage.setItem('ve_tab', tab); } catch (e) { /* ignore */ } go('ville-events'); };
+  const rideToEvent = (ev) => {
+    if (typeof setDropoffData === 'function') setDropoffData({ address: [ev.venueName, ev.address].filter(Boolean).join(', ') || ev.title, coords: ev.lat != null && ev.lng != null ? { lat: ev.lat, lng: ev.lng } : null, eventId: ev.id, eventTitle: ev.title });
+    go('pin-pickup');
+  };
   const me = useCustomerDoc(uid);
   const [menu, setMenu] = useState(false);
   const menuRef = useRef(null);
@@ -197,6 +220,35 @@ export default function VilleDashboard({ go, user, setUser, setBookingId, openDe
               </div>
             </section>
 
+            {/* Your upcoming events */}
+            <section className="vl-card" aria-labelledby="vl-events-h">
+              <div className="vl-card__head"><h2 id="vl-events-h">Your upcoming events</h2><button type="button" className="vl-link" onClick={() => openEventPage(null, 'mine')}>My Events</button></div>
+              {upcomingEvents === null ? <Skeleton /> : upcomingEvents.length === 0 ? (
+                <div className="vl-empty" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                  <span>Discover what&rsquo;s happening around Mandeville.</span>
+                  <button type="button" className="vl-btn vl-btn--secondary vl-btn--sm" onClick={() => openEventPage(null, 'discover')}>Discover Events</button>
+                </div>
+              ) : (
+                <div className="vl-rows">
+                  {upcomingEvents.map(({ sv, ev }) => {
+                    const on = sv.remindersOn !== false && (sv.reminders || []).length > 0;
+                    return (
+                      <div key={ev.id} className="vl-row" style={{ cursor: 'default' }}>
+                        <button type="button" onClick={() => openEventPage(ev.id)} style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0, background: 'none', border: 0, padding: 0, textAlign: 'left', font: 'inherit', color: 'inherit', cursor: 'pointer' }}>
+                          <span className="vl-row__icon" style={{ overflow: 'hidden' }}>{ev.posters[0] ? <img src={ev.posters[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <Icon name="ticket" size={20} />}</span>
+                          <span className="vl-row__main">
+                            <span className="vl-row__title">{ev.title}</span>
+                            <span className="vl-row__sub">{whenLine(ev)} · {countdown(ev)} · {on ? 'Reminders on' : 'No reminders'}</span>
+                          </span>
+                        </button>
+                        <button type="button" className="vl-btn vl-btn--ghost vl-btn--sm" onClick={() => rideToEvent(ev)} aria-label={`Book a ride to ${ev.title}`}><Icon name="car" size={18} />Ride</button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+
             {/* Recent activity */}
             <section className="vl-card" aria-labelledby="vl-recent-h">
               <div className="vl-card__head"><h2 id="vl-recent-h">Recent activity</h2><button type="button" className="vl-link" onClick={rideHistory}>Ride history</button></div>
@@ -245,14 +297,16 @@ export default function VilleDashboard({ go, user, setUser, setBookingId, openDe
             <section className="vl-card" id="vl-notes" aria-labelledby="vl-notes-h">
               <div className="vl-card__head"><h2 id="vl-notes-h">Notifications</h2></div>
               {notes === null ? <Skeleton /> : notes.length === 0 ? (
-                <div className="vl-empty">You&rsquo;re all caught up. Ride updates from your driver will appear here.</div>
+                <div className="vl-empty">You&rsquo;re all caught up. Ride updates and event reminders will appear here.</div>
               ) : (
                 <div className="vl-rows">
                   {notes.map((n) => (
-                    <div key={n.id} className="vl-row" style={{ cursor: 'default' }}>
-                      <span className="vl-row__icon"><Icon name="bell" size={20} /></span>
-                      <span className="vl-row__main"><span className="vl-row__title" style={{ whiteSpace: 'normal' }}>{n.message || 'Update from VilleCabs'}</span><span className="vl-row__sub">{when(n.createdAt)}</span></span>
-                    </div>
+                    <button type="button" key={n.id} className="vl-row" style={{ cursor: n.eventId ? 'pointer' : 'default' }}
+                      onClick={() => { if (n.raw && !n.read) markRead(n.id); if (n.eventId) openEventPage(n.eventId); }}>
+                      <span className="vl-row__icon"><Icon name={n.eventId ? 'ticket' : 'bell'} size={20} /></span>
+                      <span className="vl-row__main"><span className="vl-row__title" style={{ whiteSpace: 'normal' }}>{n.text}</span><span className="vl-row__sub">{n.sub ? `${n.sub} · ` : ''}{when(n.t)}</span></span>
+                      {!n.read && <span style={{ width: 9, height: 9, borderRadius: '50%', background: 'var(--vl-purple)', flexShrink: 0 }} aria-label="Unread" />}
+                    </button>
                   ))}
                 </div>
               )}

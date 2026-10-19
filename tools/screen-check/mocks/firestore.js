@@ -77,7 +77,7 @@ export async function updateDoc(ref, patch) {
   store.set(ref.path, d); window.__writes.push(['update', ref.path, patch]); emit();
 }
 export async function deleteDoc(ref) { store.delete(ref.path); window.__writes.push(['delete', ref.path]); emit(); }
-export function writeBatch() { const ops = []; return { set: (r, d) => ops.push(() => setDoc(r, d)), commit: async () => { for (const o of ops) await o(); } }; }
+export function writeBatch() { const ops = []; return { set: (r, d) => ops.push(() => setDoc(r, d)), update: (r, d) => ops.push(() => updateDoc(r, d)), delete: (r) => ops.push(() => deleteDoc(r)), commit: async () => { for (const o of ops) await o(); } }; }
 export const arrayUnion = (...a) => a;
 export const arrayRemove = () => [];
 export const increment = (n) => n;

@@ -1,5 +1,6 @@
 {
   "rewrites": [
+    { "source": "/e/:id", "destination": "https://us-central1-villecabs.cloudfunctions.net/eventPage?id=:id" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

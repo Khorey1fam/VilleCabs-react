@@ -7,6 +7,9 @@ import { ExtraFareRequest, ExtraFareList, ExtraFareCustomer } from '@src/RideExt
 import { DriverLanding, DriverSiteCustomer, DriverAppBanner } from '@src/DriverSite';
 import VillePublic from '@src/ville/VillePublic';
 import VilleDashboard from '@src/ville/VilleDashboard';
+import VilleEvents from '@src/events/VilleEvents';
+import AdminEvents from '@src/events/AdminEvents';
+import { jamaicaMs, jamaicaParts } from '@src/events/eventTime';
 
 // Minimal Google Maps stand-in (the real script isn't loaded here).
 window.google = { maps: {
@@ -53,7 +56,39 @@ if (s && s.startsWith('ville')) {
   put('bookings/RH2', { customerId: 'cust1', status: 'completed', fare: 850, createdAt: Timestamp.fromMillis(t - 3 * 86400e3), completedAt: Timestamp.fromMillis(t - 3 * 86400e3), pickup: { address: 'Caledonia Road' }, dropoff: { address: 'Manchester Shopping Centre' } });
   put('notifications/N1', { customerId: 'cust1', message: 'Dwayne has arrived at your pickup location!', createdAt: Timestamp.fromMillis(t - 86100e3), read: false });
 }
+
+// ── VilleEvents sample data (relative to now, Jamaica time) ──
+const flyer = (bg, txt) => `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800"><rect width="600" height="800" fill="${bg}"/><text x="300" y="400" font-size="48" text-anchor="middle" fill="#fff" font-family="sans-serif">${txt}</text></svg>`)}`;
+if (s && (s.startsWith('events') || s === 'ville-home-events' || s === 'admin-events')) {
+  const t = Date.now(); const day = 86400e3;
+  const at = (dOff, h, mi = 0) => { const p = jamaicaParts(t + dOff * day); return jamaicaMs(p.y, p.mo, p.d, h, mi); };
+  const TS = (ms) => Timestamp.fromMillis(ms);
+  put('ville_events/E1', { title: 'Mandeville Food Fest', description: 'Jerk, seafood and local vendors in the park.', category: 'food', startAt: TS(at(3, 18)), endAt: TS(at(3, 23)), timeKnown: true, venueName: 'Cecil Charlton Park', address: 'Park Crescent, Mandeville', lat: 18.0416, lng: -77.5054, admission: 'free', posters: [flyer('#6d28d9', 'FOOD FEST'), flyer('#9333ea', 'MENU')], featured: true, status: 'published', organizer: { name: 'Manchester Parish Council', contact: '876-555-0100', showContact: true } });
+  put('ville_events/E2', { title: 'Reggae Night Live', description: 'Live band all night.', category: 'music', startAt: TS(at(10, 20)), timeKnown: true, venueName: 'Bloomfield Great House', address: 'Bloomfield, Mandeville', lat: 18.035, lng: -77.51, admission: 'paid', admissionNote: 'Pre-sold $2,000', ticketUrl: 'https://tickets.example.org/reggae', posters: [flyer('#0f766e', 'REGGAE NIGHT')], status: 'published' });
+  put('ville_events/E3', { title: 'Community Clean-Up', category: 'community', startAt: TS(at(5, 12)), timeKnown: false, venueName: 'Ward Avenue', status: 'cancelled', posters: [] });
+  put('ville_events/E4', { title: 'Fun Run 5K', category: 'sports', startAt: TS(at(-6, 7)), timeKnown: true, venueName: 'Manchester High', status: 'published', posters: [flyer('#b45309', '5K')] });
+  put('ville_events/E5', { title: 'Hidden Draft', category: 'other', startAt: TS(at(4, 19)), timeKnown: true, status: 'draft', posters: [] });
+  const p0 = jamaicaParts(at(1, 12));
+  put('partnerRequests/L1', { bizType: 'Events', status: 'approved', slot: 'events', bizName: 'Old School Party', eventDate: `${p0.y}-${String(p0.mo).padStart(2, '0')}-${String(p0.d).padStart(2, '0')}`, eventTime: '9pm till', address: 'Caledonia Road', uploads: [flyer('#be123c', 'OLD SCHOOL')] });
+  if (s !== 'events-guest') {
+    put('event_saves/cust1_E1', { uid: 'cust1', eventId: 'E1', reminders: ['1d', '3h'], customMinutes: null, remindersOn: true, eventTitle: 'Mandeville Food Fest', eventStartMs: at(3, 18), createdAt: TS(t - day) });
+    put('event_saves/cust1_E3', { uid: 'cust1', eventId: 'E3', reminders: [], remindersOn: false, eventTitle: 'Community Clean-Up', eventStartMs: at(5, 12), createdAt: TS(t - day) });
+    put('customer_notifications/n1', { uid: 'cust1', type: 'event_reminder', eventId: 'E1', title: 'Mandeville Food Fest is coming up', body: 'Starts in 3 days.', read: false, createdAt: TS(t - 3600e3) });
+    put('customer_notifications/n2', { uid: 'cust1', type: 'event_cancelled', eventId: 'E3', title: 'Community Clean-Up was cancelled', body: 'Your reminders have been turned off.', read: true, createdAt: TS(t - 2 * day) });
+  }
+  if (s === 'admin-events') put('ville_event_stats/E1', { views: 42, saves: 7, reminderOptIns: 5, remindersSent: 3, remindersFailed: 0, shares: 4, calendarAdds: 2, rideClicks: 6, ridesBooked: 2, ridesCompleted: 1 });
+  if (s === 'events-detail') sessionStorage.setItem('ve_open', 'E1');
+  if (s === 'events-legacy') sessionStorage.setItem('ve_open', 'pr_L1');
+  window.__enablePush = params.get('push') || 'granted';
+}
+const setDrop = (d) => { window.__drop = d; console.log('DROP ' + JSON.stringify(d)); };
 const SCREENS = {
+  events: <VilleEvents go={nav} user={user} setDropoffData={setDrop} site="ville" enablePush={async () => window.__enablePush} onHome={() => nav('home')} />,
+  'events-guest': <VilleEvents go={nav} user={null} setDropoffData={setDrop} site="ville" enablePush={async () => 'unsupported'} onHome={() => nav('home')} />,
+  'events-detail': <VilleEvents go={nav} user={user} setDropoffData={setDrop} site="ville" enablePush={async () => window.__enablePush} onHome={() => nav('home')} />,
+  'events-legacy': <VilleEvents go={nav} user={user} setDropoffData={setDrop} site="ville" enablePush={async () => window.__enablePush} onHome={() => nav('home')} />,
+  'ville-home-events': <VilleDashboard go={nav} user={user} setBookingId={() => {}} openDelivery={nav} openOrder={nav} domains={{}} onSignOut={() => nav('signed-out')} setDropoffData={setDrop} />,
+  'admin-events': <div style={{ background: '#f5f6fa', minHeight: '100vh', padding: 14 }}><AdminEvents /></div>,
   'ville-public': <VillePublic go={nav} user={null} domains={{ driver: 'driver.villecabs.com' }} />,
   'ville-home': <VilleDashboard go={nav} user={user} setBookingId={(id) => { window.__booking = id; }} openDelivery={nav} openOrder={nav} domains={{}} onSignOut={() => nav('signed-out')} />,
   'ville-home-active': <VilleDashboard go={nav} user={user} setBookingId={(id) => { window.__booking = id; }} openDelivery={nav} openOrder={nav} domains={{}} onSignOut={() => nav('signed-out')} />,
