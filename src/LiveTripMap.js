@@ -29,14 +29,11 @@ const INK = '#1f1235';
 // Light VILLE map style (used when no Map ID is set; a Map ID carries its own style).
 export const LIGHT_MAP_STYLE = [
   { elementType: 'geometry', stylers: [{ color: '#f4f4f7' }] },
-  { elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
   { elementType: 'labels.text.fill', stylers: [{ color: '#6b6f80' }] },
   { elementType: 'labels.text.stroke', stylers: [{ color: '#ffffff' }, { weight: 3 }] },
   { featureType: 'administrative.land_parcel', stylers: [{ visibility: 'off' }] },
   { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#4b4560' }] },
-  { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
   { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#e1efe0' }] },
-  { featureType: 'poi.park', elementType: 'labels.text', stylers: [{ visibility: 'on' }] },
   { featureType: 'poi.park', elementType: 'labels.text.fill', stylers: [{ color: '#7c9a7a' }] },
   { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
   { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#e3e4ec' }] },
@@ -45,7 +42,8 @@ export const LIGHT_MAP_STYLE = [
   { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#ece6f7' }] },
   { featureType: 'road.highway', elementType: 'geometry.stroke', stylers: [{ color: '#ddd3ef' }] },
   { featureType: 'road.local', elementType: 'labels.text.fill', stylers: [{ color: '#a3a5b2' }] },
-  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#7a6f92' }] },
+  { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#e6e4ee' }] },
   { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#cfe1f3' }] },
   { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#7d99b5' }] },
 ];
