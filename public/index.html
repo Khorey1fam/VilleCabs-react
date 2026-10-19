@@ -25,6 +25,26 @@
     <!-- Manifest -->
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <link rel="icon" href="%PUBLIC_URL%/logo.png" />
+    <!-- Driver app (driver.villecabs.com, or ?site=driver on previews): its own name, icon and install manifest -->
+    <script>
+      (function () {
+        try {
+          var h = location.hostname.toLowerCase();
+          var preview = /(\.vercel\.app|localhost|127\.0\.0\.1)$/.test(h);
+          var q = new URLSearchParams(location.search).get('site');
+          if (preview && q) sessionStorage.setItem('vd_site', q);
+          var isDriver = h.indexOf('driver.') === 0 || (preview && sessionStorage.getItem('vd_site') === 'driver');
+          if (!isDriver) return;
+          document.title = 'VilleCabs Driver';
+          var set = function (sel, attr, val) { var el = document.querySelector(sel); if (el) el.setAttribute(attr, val); };
+          set('link[rel="manifest"]', 'href', '/manifest-driver.json');
+          set('meta[name="apple-mobile-web-app-title"]', 'content', 'VC Driver');
+          set('meta[name="application-name"]', 'content', 'VilleCabs Driver');
+          set('meta[name="theme-color"]', 'content', '#160a29');
+          document.querySelectorAll('link[rel="apple-touch-icon"]').forEach(function (el) { el.setAttribute('href', '/driver-icon-512.png'); });
+        } catch (e) { /* keep the VilleCabs defaults */ }
+      })();
+    </script>
     <link rel="shortcut icon" href="%PUBLIC_URL%/logo.png" />
 
     <!-- Open Graph -->

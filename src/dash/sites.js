@@ -3,10 +3,11 @@
 //   villecabs.com  → VilleCabs (taxi) — unchanged
 //   villeapp.org   → the VILLE hub (Cabs · Dash · Events)
 //   villedash.com  → VilleDash (send packages, order from stores)
+//   driver.villecabs.com → VilleCabs Driver (the driver app on its own)
 //
 // Domains come from config/sites in Firestore (Admin → VilleDash → Sites & ads),
 // falling back to REACT_APP_SITE_* build variables. On preview URLs
-// (vercel.app, localhost) add ?site=dash or ?site=ville to try a brand.
+// (vercel.app, localhost) add ?site=dash, ?site=ville or ?site=driver to try a brand.
 import logoVille from './img/logo-ville-row.webp';
 import React, { useEffect, useState } from 'react';
 import { doc, onSnapshot, collection, query, where } from 'firebase/firestore';
@@ -20,21 +21,25 @@ export const SITE_INFO = {
   dash:   { name: 'VilleDash',   tagline: 'Send it. Track it. Delivered.', emoji: '📦', screen: 'dash-home' },
   ville:  { name: 'VILLE',       tagline: 'Your City. One App.',      emoji: '🏙️', screen: 'ville-home' },
   events: { name: 'VilleEvents', tagline: 'Discover local events',    emoji: '🎉', screen: 'ville-events' },
+  driver: { name: 'VilleCabs Driver', tagline: 'Drive with VilleCabs', emoji: '🚗', screen: 'driver-dash' },
 };
 
 const ENV_DOMAINS = {
   cabs: process.env.REACT_APP_SITE_CABS || 'villecabs.com',
   ville: process.env.REACT_APP_SITE_VILLE || 'villeapp.org',
   dash: process.env.REACT_APP_SITE_DASH || 'villedash.com',
+  driver: process.env.REACT_APP_SITE_DRIVER || 'driver.villecabs.com',
+  driverLive: false,
 };
 const bare = (h) => String(h || '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '');
 
 /** Which brand this page is: matches the hostname against the configured domains. */
 export function detectSite(hostname, domains) {
   const host = bare(hostname);
-  for (const key of ['dash', 'ville', 'cabs']) {
+  for (const key of ['driver', 'dash', 'ville', 'cabs']) {
     if (domains[key] && bare(domains[key]) === host) return key;
   }
+  if (host.startsWith('driver.')) return 'driver';
   // Preview/test hosts: allow ?site= to choose, remembered for the tab.
   if (/(\.vercel\.app|localhost|127\.0\.0\.1)$/.test(host) || host.startsWith('localhost')) {
     try {
@@ -54,7 +59,7 @@ export function useSites() {
       return onSnapshot(doc(dashDb(), 'config', 'sites'), (s) => {
         if (s.exists()) {
           const d = s.data();
-          setDomains({ cabs: d.cabs || ENV_DOMAINS.cabs, ville: d.ville || ENV_DOMAINS.ville, dash: d.dash || ENV_DOMAINS.dash });
+          setDomains({ cabs: d.cabs || ENV_DOMAINS.cabs, ville: d.ville || ENV_DOMAINS.ville, dash: d.dash || ENV_DOMAINS.dash, driver: d.driver || ENV_DOMAINS.driver, driverLive: d.driverLive === true });
         }
       }, () => {});
     } catch (e) { return undefined; }

@@ -9,27 +9,32 @@ import { C, st, Pill, Spinner } from './ui';
 const card = { ...st.card, padding: 14 };
 const small = { padding: '6px 10px', fontSize: 12, borderRadius: 8, cursor: 'pointer', fontWeight: 600 };
 const SITES = ['cabs', 'ville', 'dash'];
+const DOMAIN_SITES = [...SITES, 'driver'];
 const clean = (d) => String(d || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/.*$/, '');
 
 function Domains() {
   const [f, setF] = useState(null);
   const [msg, setMsg] = useState('');
-  useEffect(() => onSnapshot(doc(dashDb(), 'config', 'sites'), (s) => setF({ cabs: 'villecabs.com', ville: 'villeapp.org', dash: 'villedash.com', ...(s.exists() ? s.data() : {}) }), () => setF({ cabs: 'villecabs.com', ville: 'villeapp.org', dash: 'villedash.com' })), []);
+  useEffect(() => onSnapshot(doc(dashDb(), 'config', 'sites'), (s) => setF({ cabs: 'villecabs.com', ville: 'villeapp.org', dash: 'villedash.com', driver: 'driver.villecabs.com', ...(s.exists() ? s.data() : {}) }), () => setF({ cabs: 'villecabs.com', ville: 'villeapp.org', dash: 'villedash.com', driver: 'driver.villecabs.com' })), []);
   if (!f) return <Spinner />;
   const save = async () => {
     setMsg('');
-    const out = Object.fromEntries(SITES.map((k) => [k, clean(f[k])]));
+    const out = { ...Object.fromEntries(DOMAIN_SITES.map((k) => [k, clean(f[k])])), driverLive: f.driverLive === true };
     if (out.ville && out.ville === out.dash) { setMsg('VILLE and VilleDash need different domains.'); return; }
     try { await setDoc(doc(dashDb(), 'config', 'sites'), { ...out, updatedAt: serverTimestamp() }, { merge: true }); setMsg('Saved. Each domain shows its own home page as soon as it points at Vercel.'); } catch (e) { setMsg('Could not save.'); }
   };
   return (
     <div style={card}>
       <div style={st.h2}>Domains</div>
-      <div style={{ fontSize: 12.5, color: C.quiet, marginBottom: 6 }}>All three run the same app. Add each domain to the Vercel project and to Firebase Auth → Authorized domains first (steps in VILLEDASH.md).</div>
-      {SITES.map((k) => (
+      <div style={{ fontSize: 12.5, color: C.quiet, marginBottom: 6 }}>All of them run the same app. Add each domain to the Vercel project and to Firebase Auth → Authorized domains first (steps in VILLEDASH.md).</div>
+      {DOMAIN_SITES.map((k) => (
         <div key={k}><label style={st.label}>{SITE_INFO[k].name} domain</label>
           <input style={st.input} placeholder={k === 'cabs' ? 'villecabs.com' : 'e.g. your-domain.com'} value={f[k] || ''} onChange={(e) => setF({ ...f, [k]: e.target.value })} /></div>
       ))}
+      <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13.5, marginTop: 10 }}>
+        <input type="checkbox" checked={f.driverLive === true} onChange={(e) => setF({ ...f, driverLive: e.target.checked })} />
+        Driver app is live: show drivers on VilleCabs a link to it
+      </label>
       <button onClick={save} style={{ ...st.btn, width: 'auto', padding: '10px 18px', marginTop: 10 }}>Save domains</button>
       {msg && <div style={st.note}>{msg}</div>}
     </div>

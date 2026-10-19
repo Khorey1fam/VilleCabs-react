@@ -28,6 +28,7 @@ import { StoresList, StorePage, Cart, Checkout, OrderTrack } from './dash/Market
 import SendPackage from './dash/SendPackage';
 import DeliveryTrack from './dash/DeliveryTrack';
 import LiveTripMap, { LIGHT_MAP_STYLE } from './LiveTripMap';
+import { DriverLanding, DriverSiteCustomer, DriverAppBanner } from './DriverSite';
 import { fmtDistance as fmtKm } from './liveRoute';
 import { useDashEnabled, useCardPayments, CARD_MIN_CENTS, api as dashApiCalls } from './dash/dashApi';
 import { useSites, SiteLanding, FamilyBar, HouseAd } from './dash/sites';
@@ -7814,7 +7815,7 @@ function DriverBusyTimes() {
   );
 }
 
-function DriverDash({ go, user, setUser, setBookingId }) {
+function DriverDash({ go, user, setUser, setBookingId, site, domains }) {
   // No <VilleMap> on this screen, so nothing else loads the Google Maps API —
   // without this, geocoding a charter's addresses silently does nothing and
   // starting a charter day fails with "could not locate the addresses".
@@ -8374,6 +8375,7 @@ function DriverDash({ go, user, setUser, setBookingId }) {
           )}
         </div>
       </div>
+      {site !== 'driver' && <DriverAppBanner domains={domains}/>}
 
       {/* ── SLIDE-IN MENU ── */}
       {menuOpen && (
@@ -12884,10 +12886,16 @@ export default function App() {
     let goEvents = false;
     try { goEvents = new URLSearchParams(window.location.search).get('go') === 'events'; } catch (e) {}
     if (goEvents) { siteHomeShownRef.current = true; setScreen('ville-events'); return; }
-    if (!dashOn || site === 'cabs') return;
+    if (!dashOn || site === 'cabs' || site === 'driver') return;
     siteHomeShownRef.current = true;
     setScreen(site === 'dash' ? 'dash-home' : 'ville-home');
   }, [dashOn, user, screen, site]);
+
+  // The driver app (driver.villecabs.com) is for drivers only: a customer who
+  // signs in there is pointed back to VilleCabs.
+  useEffect(() => {
+    if (site === 'driver' && user?.role === 'customer' && screen !== 'driver-site-customer') setScreen('driver-site-customer');
+  }, [site, user, screen]);
 
   // Back from WiPay's card page: ?vdpay=<paymentId> → show the payment result.
   const [payId] = useState(() => { try { return new URLSearchParams(window.location.search).get('vdpay'); } catch (e) { return null; } });
@@ -13054,7 +13062,8 @@ export default function App() {
   const dash = (el) => (dashOn ? el : <CustomerDash {...props}/>);
 
   const screens = {
-    splash:           site === 'cabs' ? <Splash {...props}/> : site === 'dash' ? <DashPublic go={setScreen} domains={domains} launched={dashOn}/> : <SiteLanding site={site} domains={domains} go={setScreen} dashOn={dashOn}/>,
+    'driver-site-customer': <DriverSiteCustomer domains={domains} onSignOut={async () => { try { await signOut(auth); } catch(e) {} setUser(null); setScreen('splash'); }}/>,
+    splash:           site === 'driver' ? <DriverLanding go={setScreen} domains={domains}/> : site === 'cabs' ? <Splash {...props}/> : site === 'dash' ? <DashPublic go={setScreen} domains={domains} launched={dashOn}/> : <SiteLanding site={site} domains={domains} go={setScreen} dashOn={dashOn}/>,
     role:             <RoleSelect {...props}/>,
     'customer-signup':<CustomerSignup {...props}/>,
     'customer-login': <CustomerLogin {...props}/>,

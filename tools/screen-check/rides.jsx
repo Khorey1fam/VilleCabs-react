@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { Timestamp } from 'firebase/firestore';
 import { __VehicleSelect as VehicleSelect, __BookingConfirm as BookingConfirm } from '@src/App';
 import { ExtraFareRequest, ExtraFareList, ExtraFareCustomer } from '@src/RideExtras';
+import { DriverLanding, DriverSiteCustomer, DriverAppBanner } from '@src/DriverSite';
 
 // Minimal Google Maps stand-in (the real script isn't loaded here).
 window.google = { maps: {
@@ -32,6 +33,9 @@ const nav = (x) => { window.__nav = x; console.log('NAV', x); };
 const pickup = { address: 'Manchester Shopping Centre, Mandeville', coords: { lat: 18.0416, lng: -77.5036 }, passengers: 1 };
 const dropoff = { address: '12 Caledonia Road, Mandeville', coords: { lat: 18.03, lng: -77.51 } };
 const SCREENS = {
+  'driver-landing': <DriverLanding go={nav} domains={{ cabs: 'villecabs.com' }} />,
+  'driver-customer': <DriverSiteCustomer domains={{ cabs: 'villecabs.com' }} onSignOut={() => nav('signed-out')} />,
+  'driver-banner': <div style={{ background: '#fff', minHeight: '100vh' }}><DriverAppBanner domains={{ driver: 'driver.villecabs.com', driverLive: true }} /><DriverAppBanner domains={{ driver: 'driver.villecabs.com', driverLive: false }} /></div>,
   choose: <VehicleSelect go={nav} user={user} pickupData={pickup} setPickupData={() => {}} dropoffData={dropoff} setBookingId={(id) => { window.__booking = id; }} />,
   'confirm-unpaid': <BookingConfirm go={nav} user={user} bookingId="RCARD" setBookingId={() => {}} pickupData={pickup} dropoffData={dropoff} />,
   'extras-driver': <div style={{ background: '#0b1020', minHeight: '100vh', padding: 14 }}><ExtraFareList bookingId="RX" theme="dark" /><ExtraFareRequest bookingId="RX" theme="dark" compact /></div>,
