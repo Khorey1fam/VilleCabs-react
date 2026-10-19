@@ -14,7 +14,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useJsApiLoader, GoogleMap, MarkerF, PolylineF, OverlayViewF } from '@react-google-maps/api';
 import {
   buildTrack, locate, pointAt, remainingPath, steadyProgress, makeDeviation,
-  liveEta, fmtDistance, isTeleport, haversine, OFF_ROUTE_M,
+  liveEta, fmtDistance, isTeleport, haversine, OFF_ROUTE_M, roadHeading, bearing, turn,
 } from './liveRoute';
 
 const LIBRARIES = ['places'];                    // must match App.js's loader options
@@ -50,30 +50,27 @@ export const LIGHT_MAP_STYLE = [
 
 const svgUrl = (s) => `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(s)}`;
 
-// Car seen from directly above, nose pointing up. It never rotates.
-export const CAR_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="46" viewBox="0 0 26 46">
-<rect x="3" y="4" width="20" height="40" rx="7" fill="${INK}" opacity=".16"/>
+// Vehicles are drawn seen from directly above, nose up, then turned to face
+// the direction of the road (heading in degrees, 0 = north).
+const CAR_BODY = `<rect x="3" y="4" width="20" height="40" rx="7" fill="${INK}" opacity=".16"/>
 <rect x="2" y="2" width="20" height="40" rx="7" fill="#fff" stroke="${PURPLE}" stroke-width="1.6"/>
 <path d="M5.2 12.5c2-2 11.6-2 13.6 0l-1.3 5.2c-3.3-1-7.7-1-11 0z" fill="#2a1a4a"/>
 <rect x="6.3" y="18.6" width="11.4" height="12" rx="2.6" fill="#f3eefb" stroke="#e3d8f5" stroke-width=".8"/>
 <path d="M6.2 31.6c3.3.9 8.3.9 11.6 0l1 4.4c-4.2 1.2-9.4 1.2-13.6 0z" fill="#2a1a4a"/>
 <rect x="4.4" y="3.6" width="3.6" height="1.8" rx=".9" fill="#f5c542"/><rect x="16" y="3.6" width="3.6" height="1.8" rx=".9" fill="#f5c542"/>
-<rect x="4.6" y="39.2" width="3.4" height="1.4" rx=".7" fill="#e24b4a"/><rect x="16" y="39.2" width="3.4" height="1.4" rx=".7" fill="#e24b4a"/>
-</svg>`;
-
-// Upright delivery motorcycle with a top box (VilleDash).
-export const MOTO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="56" height="44" viewBox="0 0 56 44">
-<ellipse cx="28" cy="38.5" rx="21" ry="3.6" fill="${INK}" opacity=".18"/>
-<rect x="5.5" y="12.5" width="13" height="11" rx="2.2" fill="#fff" stroke="${PURPLE}" stroke-width="2"/>
-<path d="M9 16.5h6" stroke="${PURPLE}" stroke-width="1.6" stroke-linecap="round"/>
-<path d="M13 26.5h17.5l5-4.5 5.5 0 3.5 9" fill="none" stroke="${PURPLE}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M14.5 26.5c.5-2.4 2.3-3.6 4.6-3.6h10.6l-1.8 6.6H17.2c-1.6 0-2.9-1.4-2.7-3z" fill="#fff" stroke="${PURPLE}" stroke-width="2" stroke-linejoin="round"/>
-<path d="M38.5 22l2.6-8.4h3.4" fill="none" stroke="${INK}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-<path d="M27.5 21.5l1.6-7.6c.3-1.4 1.5-2.4 2.9-2.4h0c1.6 0 2.8 1.4 2.6 3l-.6 4.6 5.2 1" fill="none" stroke="${PURPLE}" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
-<circle cx="32.8" cy="7.4" r="4.4" fill="${PURPLE}"/><path d="M33.5 6.2h3.6" stroke="#ede4fb" stroke-width="1.8" stroke-linecap="round"/>
-<circle cx="14" cy="32" r="5.2" fill="#2a1a4a" stroke="#fff" stroke-width="1.6"/><circle cx="14" cy="32" r="1.8" fill="#c4b5fd"/>
-<circle cx="44.5" cy="32" r="5.2" fill="#2a1a4a" stroke="#fff" stroke-width="1.6"/><circle cx="44.5" cy="32" r="1.8" fill="#c4b5fd"/>
-</svg>`;
+<rect x="4.6" y="39.2" width="3.4" height="1.4" rx=".7" fill="#e24b4a"/><rect x="16" y="39.2" width="3.4" height="1.4" rx=".7" fill="#e24b4a"/>`;
+const MOTO_BODY = `<ellipse cx="13" cy="24" rx="7" ry="19" fill="${INK}" opacity=".14"/>
+<rect x="10" y="3" width="4" height="9" rx="2" fill="#2a1a4a"/>
+<path d="M3.5 12.5h17" stroke="#2a1a4a" stroke-width="2.2" stroke-linecap="round"/>
+<path d="M12 9c3 0 4.6 2 4.6 5v14H7.4V14c0-3 1.6-5 4.6-5z" fill="#fff" stroke="${PURPLE}" stroke-width="1.5"/>
+<ellipse cx="12" cy="21" rx="6.2" ry="4" fill="${PURPLE}"/>
+<circle cx="12" cy="18.2" r="3.6" fill="#2a1a4a" stroke="#fff" stroke-width="1"/>
+<rect x="5" y="27" width="14" height="13" rx="2.2" fill="#fff" stroke="${PURPLE}" stroke-width="1.6"/>
+<path d="M8.5 33.5h7" stroke="${PURPLE}" stroke-width="1.4" stroke-linecap="round"/>
+<rect x="10.4" y="40" width="3.2" height="4" rx="1.4" fill="#2a1a4a"/>`;
+export const vehicleSvg = (kind, heading = 0) => `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48"><g transform="rotate(${Math.round(heading)} 24 24) translate(${kind === 'moto' ? 12 : 11} 1)">${kind === 'moto' ? MOTO_BODY : CAR_BODY}</g></svg>`;
+export const CAR_SVG = vehicleSvg('car', 0);
+export const MOTO_SVG = vehicleSvg('moto', 0);
 
 const PICKUP_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 30 30"><circle cx="15" cy="15" r="11.5" fill="${PURPLE}" stroke="#fff" stroke-width="3.5"/><circle cx="15" cy="15" r="3.6" fill="#fff"/></svg>`;
 const DROPOFF_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28"><rect x="3" y="3" width="22" height="22" rx="4" fill="${INK}" stroke="#fff" stroke-width="3"/><rect x="10.5" y="10.5" width="7" height="7" rx="1" fill="#fff"/></svg>`;
@@ -186,6 +183,16 @@ export default function LiveTripMap({
   const legInfoRef = useRef({ seconds: 0, meters: 0 });
   const routeRef = useRef({ key: null, at: 0, busy: false });
   const devRef = useRef(makeDeviation());
+  const headRef = useRef(null);      // heading currently drawn
+  const kindRef = useRef(vehicleKind); kindRef.current = vehicleKind;
+  // Turn the vehicle to face the road. Redraw only for a visible change.
+  const faceTo = (h) => {
+    if (h == null || !carRef.current || !window.google?.maps) return;
+    if (headRef.current != null && Math.abs(turn(headRef.current, h)) < 3) return;
+    headRef.current = (h + 360) % 360;
+    window.__carHeading = headRef.current;
+    try { carRef.current.setIcon(icon(vehicleSvg(kindRef.current, headRef.current), 38, 38, 19, 19)); } catch (e) { /* unmounted */ }
+  };
   const [routeVer, setRouteVer] = useState(0);
   const [eta, setEta] = useState(null);
   const [userMoved, setUserMoved] = useState(false);
@@ -274,6 +281,7 @@ export default function LiveTripMap({
     const at = posRef.current ? locate(track, posRef.current) : null;
     sRef.current = at && at.off <= OFF_ROUTE_M ? at.s : 0;
     if (at && at.off <= OFF_ROUTE_M) posRef.current = pointAt(track, sRef.current);
+    faceTo(roadHeading(track, sRef.current));
     setRouteVer((v) => v + 1);
     publishEta(liveEta(track, sRef.current, legInfoRef.current.seconds, legInfoRef.current.meters));
   };
@@ -317,12 +325,13 @@ export default function LiveTripMap({
     const fromS = sRef.current;
     sRef.current = onRoute ? toS : sRef.current;
 
-    if (!start || !carRef.current) { posRef.current = to; if (carRef.current) carRef.current.setPosition(to); maybeReframe(); return undefined; }
+    if (!start || !carRef.current) { posRef.current = to; if (carRef.current) { carRef.current.setPosition(to); if (onRoute) faceTo(roadHeading(track, toS)); } maybeReframe(); return undefined; }
     const dist = haversine(start, to);
     if (dist < 0.5) return undefined;
     const duration = Math.min(2000, Math.max(300, dist * 12));
     const t0 = performance.now();
     const alongRoad = onRoute && fromS != null && toS != null;
+    const moveHeading = dist > 4 ? bearing(start, to) : null;
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     const step = (t) => {
       const p = Math.min(1, (t - t0) / duration);
@@ -332,8 +341,10 @@ export default function LiveTripMap({
         const s = fromS + (toS - fromS) * e;
         pos = pointAt(track, s);
         if (lineRef.current) lineRef.current.setPath(remainingPath(track, s));
+        faceTo(roadHeading(track, s));
       } else {
         pos = { lat: start.lat + (to.lat - start.lat) * e, lng: start.lng + (to.lng - start.lng) * e };
+        if (p === 0 || e < 0.05) faceTo(moveHeading);
       }
       posRef.current = { lat: pos.lat, lng: pos.lng };
       try { carRef.current && carRef.current.setPosition(posRef.current); } catch (err) { /* unmounted */ }
@@ -352,7 +363,7 @@ export default function LiveTripMap({
     return remainingPath(track, sRef.current || 0);
   }, [track, routeVer]); // eslint-disable-line
 
-  const carIcon = useMemo(() => (isLoaded ? (vehicleKind === 'moto' ? icon(MOTO_SVG, 44, 35, 22, 30) : icon(CAR_SVG, 20, 35, 10, 17)) : null), [isLoaded, vehicleKind]);
+  const carIcon = useMemo(() => (isLoaded ? icon(vehicleSvg(vehicleKind, headRef.current || 0), 38, 38, 19, 19) : null), [isLoaded, vehicleKind]);
   const puIcon = useMemo(() => (isLoaded ? icon(PICKUP_SVG, 30, 30, 15, 15) : null), [isLoaded]);
   const drIcon = useMemo(() => (isLoaded ? icon(DROPOFF_SVG, 26, 26, 13, 13) : null), [isLoaded]);
 
@@ -388,7 +399,7 @@ export default function LiveTripMap({
       {extraMarkers.map((m, i) => <MarkerF key={m.key || i} position={m.position} icon={m.icon} title={m.title} zIndex={4} />)}
       {veh && (
         <MarkerF position={posRef.current || veh} icon={carIcon} title={vehicleTitle} zIndex={6}
-          onLoad={(m) => { carRef.current = m; }} onUnmount={() => { carRef.current = null; }} />
+          onLoad={(m) => { carRef.current = m; headRef.current = null; if (trackRef.current && sRef.current != null) faceTo(roadHeading(trackRef.current, sRef.current)); }} onUnmount={() => { carRef.current = null; }} />
       )}
     </GoogleMap>
   );

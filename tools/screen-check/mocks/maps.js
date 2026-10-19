@@ -78,14 +78,17 @@ const sizeOf = (s, d) => (s && s.w ? { w: s.w, h: s.h } : d);
 export function MarkerF({ position, icon, title, onLoad, onUnmount, zIndex }) {
   const { map } = useContext(Cam);
   const [pos, setPos] = useState(position);
+  const [ic, setIc] = useState(icon);
+  useEffect(() => { setIc(icon); }, [icon]);
   useEffect(() => { setPos(position); }, [position && position.lat, position && position.lng]); // eslint-disable-line
   useEffect(() => {
-    const obj = { setPosition: (p) => setPos(toLL(p)), getPosition: () => pos };
+    const obj = { setPosition: (p) => setPos(toLL(p)), getPosition: () => pos, setIcon: (i) => setIc(i) };
     if (onLoad) onLoad(obj);
     return () => { if (onUnmount) onUnmount(obj); };
   }, []); // eslint-disable-line
   if (!pos) return null;
   const p = map.px(pos);
+  icon = ic;
   if (!icon || !icon.url) {
     return <div data-marker={title} style={{ position: 'absolute', left: p.x - 8, top: p.y - 8, width: 16, height: 16, borderRadius: 8, background: '#2563eb', border: '3px solid #fff', zIndex }} />;
   }

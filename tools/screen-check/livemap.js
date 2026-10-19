@@ -36,19 +36,28 @@ const wait = (p, ms) => p.waitForTimeout(ms);
   const c1 = await car(p);
   check('no re-route while on the road', await calls(p) === 1, String(await calls(p)));
   check('car snapped onto the road, not the noisy GPS point', Math.abs(c1.lat - lat0) < 1e-6, String(c1.lat));
-  check('car icon never changes (no rotation)', c1.src === icon0);
+  const h1 = await p.evaluate(() => window.__carHeading);
+  check('car faces along the road (east), not the GPS wobble', Math.abs(h1 - 90) < 4, String(h1));
+  check('car icon redrawn to face the road', c1.src !== icon0 || Math.abs(h1 - 90) < 4);
+  // Drive round the corner onto the southbound stretch.
+  const corner = -77.5036;
+  const legs = [[lat0, -77.5066], [lat0, -77.5054], [lat0, -77.5042], [lat0 - 0.0004, corner], [lat0 - 0.0012, corner]];
+  for (const [la, ln] of legs) { await fix(p, la, ln); await wait(p, 1300); }
+  const h2 = await p.evaluate(() => window.__carHeading);
+  check('car turns with the road at the corner (now facing south)', Math.abs(h2 - 180) < 6, String(h2));
+  check('still no re-route after the corner', await calls(p) === 1, String(await calls(p)));
   const eta1 = (await panel(p)).match(/Pickup in (\d+)/)[1];
   check('ETA counts down without asking Google', +eta1 < +eta0, `${eta0} → ${eta1}`);
   const pts = await p.evaluate(() => [...document.querySelectorAll('[data-polyline="5"]')].map((e) => +e.dataset.points)[0]);
   check('only the road ahead is drawn', pts < 41, String(pts));
 
   // A single stray fix far off the road: hold, don't re-route.
-  await fix(p, lat0 + 0.0015, -77.5120 + 6.5 * 0.0007); await wait(p, 1100);
-  await fix(p, lat0, -77.5120 + 7 * 0.0007); await wait(p, 1100);
+  await fix(p, lat0 - 0.0013, corner + 0.0013); await wait(p, 1100);
+  await fix(p, lat0 - 0.0016, corner); await wait(p, 1100);
   check('one stray GPS fix does not re-route', await calls(p) === 1, String(await calls(p)));
 
   // Really turning off: several fixes on another road over > 4 s.
-  for (let i = 1; i <= 5; i += 1) { await fix(p, lat0 + i * 0.0009, -77.5120 + 7 * 0.0007); await wait(p, 1100); }
+  for (let i = 1; i <= 5; i += 1) { await fix(p, lat0 - 0.0016, corner + i * 0.0009); await wait(p, 1100); }
   check('a real wrong turn re-routes once', await calls(p) === 2, String(await calls(p)));
   await wait(p, 300);
   await p.screenshot({ path: 'shots/live-ride-reroute.png' });
@@ -71,7 +80,7 @@ const wait = (p, ms) => p.waitForTimeout(ms);
   // ── VilleDash: motorcycle ──
   p = await open('dash');
   const moto = await car(p, 'Rider');
-  check('VilleDash shows the motorcycle', !!moto && decodeURIComponent(moto.src).includes('M38.5 22'));
+  check('VilleDash shows the motorcycle', !!moto && decodeURIComponent(moto.src).includes('translate(12 1)'));
   check('VilleDash panel: Rider at pickup in X min', /Rider at pickup in \d+ min/.test(await panel(p)), await panel(p));
   check('store name as the pickup label', await p.locator('[data-ltm-label="Juici Patties"]').count() === 1);
   await p.screenshot({ path: 'shots/live-dash.png' });

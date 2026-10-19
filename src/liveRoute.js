@@ -132,3 +132,23 @@ export function isTeleport(prev, next, dtMs) {
   const d = haversine(prev, next);
   return d > 150 && d / Math.max(0.5, dtMs / 1000) > 60;
 }
+
+// Compass bearing a → b in degrees (0 = north, 90 = east).
+export function bearing(a, b) {
+  const y = Math.sin(rad(b.lng - a.lng)) * Math.cos(rad(b.lat));
+  const x = Math.cos(rad(a.lat)) * Math.sin(rad(b.lat)) - Math.sin(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.cos(rad(b.lng - a.lng));
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}
+
+// Direction of the road at s, read over a short stretch so the car points
+// along the road rather than at every tiny kink in the line.
+export function roadHeading(track, s) {
+  if (!track) return null;
+  const a = pointAt(track, Math.max(0, s - 6));
+  const b = pointAt(track, Math.min(track.total, s + 12));
+  if (haversine(a, b) < 1) return null;
+  return bearing(a, b);
+}
+
+// Smallest signed turn from one heading to another (-180..180).
+export const turn = (from, to) => ((to - from + 540) % 360) - 180;
