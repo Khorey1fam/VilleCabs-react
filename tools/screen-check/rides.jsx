@@ -9,6 +9,8 @@ import VillePublic from '@src/ville/VillePublic';
 import VilleDashboard from '@src/ville/VilleDashboard';
 import VilleEvents from '@src/events/VilleEvents';
 import AdminEvents from '@src/events/AdminEvents';
+import AdminCreators from '@src/creators/AdminCreators';
+import CreatorStats from '@src/creators/CreatorStats';
 import { jamaicaMs, jamaicaParts } from '@src/events/eventTime';
 
 // Minimal Google Maps stand-in (the real script isn't loaded here).
@@ -32,7 +34,19 @@ put('bookings/RX/extras/e2', { customerId: 'cust1', driverName: 'Dee', amountCen
 window.__callables = {
   rideExtraRequest: async () => ({ ok: true, extraId: 'e9' }),
   rideExtraRespond: async (d) => (d.payWith === 'card' && d.decision === 'approve' ? { ok: true, status: 'awaiting_payment', payId: `RX/${d.extraId}` } : { ok: true, status: d.decision === 'approve' ? 'approved_cash' : 'declined' }),
-  payCardStart: async () => ({ url: 'https://jm.wipayfinancial.com/hosted/test-page', paymentId: 'VDTESTAAAAAAAAAA' }) };
+  payCardStart: async () => ({ url: 'https://jm.wipayfinancial.com/hosted/test-page', paymentId: 'VDTESTAAAAAAAAAA' }),
+  creatorCodeCheck: async (d) => (String(d.code).toUpperCase().trim() === 'SHANICE10' ? { ok: true, code: 'SHANICE10', discountType: 'percent', discount: 10, label: '10% off' } : String(d.code).toUpperCase() === 'USEDUP' ? { ok: false, message: 'You have already used this promo code.' } : { ok: false, message: 'Invalid promo code.' }),
+  creatorStats: async (d) => { if (d.token !== 'goodtoken1234567890ab') { const e = new Error('x'); e.code = 'functions/not-found'; throw e; } return { name: 'Shanice Brown', handle: 'shanicevlogs', code: 'SHANICE10', active: true, discountLabel: '10% off', payoutJmd: 200, booked: 7, completed: 5, released: 1, inProgress: 1, earnedJmd: 1000, paidJmd: 600, balanceJmd: 400, months: [{ month: '2026-10', rides: 3, earnedJmd: 600 }, { month: '2026-09', rides: 2, earnedJmd: 400 }], recent: [{ at: Date.now() - 86400e3, payoutJmd: 200, paid: false }, { at: Date.now() - 5 * 86400e3, payoutJmd: 200, paid: true }], payouts: [{ at: Date.now() - 4 * 86400e3, amountJmd: 600, rides: 3 }] }; },
+  creatorSave: async (d) => ({ ok: true, id: d.id || 'CRnew', code: d.code || 'X' }),
+  creatorRecordPayout: async () => ({ ok: true, amountJmd: 400, rides: 2 }),
+  creatorRotateLink: async () => ({ ok: true }) };
+if (s === 'admin-creators') {
+  const T = (ms) => Timestamp.fromMillis(ms);
+  put('creators/CR1', { name: 'Shanice Brown', handle: 'shanicevlogs', platform: 'Instagram', code: 'SHANICE10', discountType: 'percent', discount: 10, payoutJmd: 200, active: true, statsToken: 'goodtoken1234567890ab', booked: 7, completed: 5, released: 1, earnedJmd: 1000, paidJmd: 600, discountJmd: 650 });
+  put('creators/CR2', { name: 'Dre Mobay', handle: 'dremobay', platform: 'TikTok', code: 'DRE300', discountType: 'fixed', discount: 300, payoutJmd: 250, active: false, statsToken: 'tok2abcdefghijklmnop', booked: 1, completed: 0, released: 0, earnedJmd: 0, paidJmd: 0, discountJmd: 0 });
+  put('creator_uses/B1', { creatorId: 'CR1', code: 'SHANICE10', bookingId: 'B1', fare: 1080, fareBeforeDiscount: 1200, discountJmd: 120, payoutJmd: 200, paid: false, completedAt: T(Date.now() - 86400e3) });
+  put('creator_uses/B2', { creatorId: 'CR1', code: 'SHANICE10', bookingId: 'B2', fare: 900, fareBeforeDiscount: 1000, discountJmd: 100, payoutJmd: 200, paid: true, completedAt: T(Date.now() - 5 * 86400e3) });
+}
 const user = { uid: 'cust1', name: 'Keneile Davis', role: 'customer', email: 'k@x.jm' };
 const nav = (x) => { window.__nav = x; console.log('NAV', x); };
 const pickup = { address: 'Manchester Shopping Centre, Mandeville', coords: { lat: 18.0416, lng: -77.5036 }, passengers: 1 };
@@ -83,6 +97,9 @@ if (s && (s.startsWith('events') || s === 'ville-home-events' || s === 'admin-ev
 }
 const setDrop = (d) => { window.__drop = d; console.log('DROP ' + JSON.stringify(d)); };
 const SCREENS = {
+  'creator-stats': <CreatorStats token="goodtoken1234567890ab" />,
+  'creator-stats-bad': <CreatorStats token="nope" />,
+  'admin-creators': <div style={{ background: '#f5f6fa', minHeight: '100vh', padding: 14 }}><AdminCreators /></div>,
   events: <VilleEvents go={nav} user={user} setDropoffData={setDrop} site="ville" enablePush={async () => window.__enablePush} onHome={() => nav('home')} />,
   'events-guest': <VilleEvents go={nav} user={null} setDropoffData={setDrop} site="ville" enablePush={async () => 'unsupported'} onHome={() => nav('home')} />,
   'events-detail': <VilleEvents go={nav} user={user} setDropoffData={setDrop} site="ville" enablePush={async () => window.__enablePush} onHome={() => nav('home')} />,
