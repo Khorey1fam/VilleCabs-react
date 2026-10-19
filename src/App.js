@@ -29,6 +29,7 @@ import SendPackage from './dash/SendPackage';
 import DeliveryTrack from './dash/DeliveryTrack';
 import LiveTripMap, { LIGHT_MAP_STYLE } from './LiveTripMap';
 import { DriverLanding, DriverSiteCustomer, DriverAppBanner } from './DriverSite';
+import { Icon as DrIcon, Brand as DrBrand } from './driver/DriverUI';
 import { fmtDistance as fmtKm } from './liveRoute';
 import { useDashEnabled, useCardPayments, CARD_MIN_CENTS, api as dashApiCalls } from './dash/dashApi';
 import { useSites, SiteLanding, FamilyBar, HouseAd } from './dash/sites';
@@ -2376,8 +2377,9 @@ function CustomerLogin({ go, setUser, user }) {
 }
 
 // ── DRIVER LOGIN ──────────────────────────────────────────────────────────────
-function DriverLogin({ go, user, setUser }) {
+function DriverLogin({ go, user, setUser, site }) {
   const [email,    setEmail]    = useState('');
+  const [showPw,   setShowPw]   = useState(false);
   const [password, setPassword] = useState('');
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState('');
@@ -2448,29 +2450,44 @@ function DriverLogin({ go, user, setUser }) {
     }
   };
 
+  const submit = (e) => { e.preventDefault(); if (!loading) handleLogin(); };
   return (
-    <div style={s.content}>
-      <TopBar title="Driver Login" go={go} user={user} hideMenu/>
-      <div style={{ padding:'32px 20px', maxWidth:420, margin:'0 auto' }}>
-        <h2 style={{ fontSize:22, fontWeight:800, color:'#1a1a2e', marginBottom:4 }}>Welcome back</h2>
-        <p style={{ color:'#6b7280', fontSize:13, marginBottom:20 }}>Sign in to your driver account</p>
-        {error && <div style={s.errBox}>⚠️ {error}</div>}
-        <label style={s.lbl}>Email</label>
-        <input style={s.inp} type="email" placeholder="you@email.com" value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key==='Enter' && handleLogin()}/>
-        <label style={s.lbl}>Password</label>
-        <input style={s.inp} type="password" placeholder="Your password" value={password} onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key==='Enter' && handleLogin()}/>
-        <div style={{ textAlign:'right', marginTop:-4, marginBottom:14 }}>
-          <span onClick={() => go('forgot-password')}
-            style={{ fontSize:12.5, color:'#6b21a8', fontWeight:600, cursor:'pointer' }}>
-            Forgot password?
-          </span>
-        </div>
-        <button style={{ ...s.btnY, opacity:loading?0.7:1 }} onClick={handleLogin} disabled={loading}>
-          {loading ? 'Logging in...' : 'Login'}
-        </button>
-        <button style={s.link} onClick={() => go('driver-signup')}>New driver? Apply here →</button>
-        <button style={{ ...s.link, marginTop:4 }} onClick={() => go('login-choice')}>← Back</button>
+    <div className="dr dr-auth">
+      <div className="dr-auth__bar">
+        <button type="button" className="dr-iconbtn" aria-label="Back" onClick={() => go(site === 'driver' ? 'splash' : 'login-choice')}><DrIcon name="back"/></button>
       </div>
+      <main className="dr-auth__card">
+        <DrBrand/>
+        <h1>Welcome back</h1>
+        <p className="dr-auth__sub">Sign in to go online and start receiving ride requests.</p>
+        {error && <div className="dr-error" role="alert"><DrIcon name="alert" size={20}/><span>{error}</span></div>}
+        <form onSubmit={submit} noValidate>
+          <label className="dr-field">
+            <span className="dr-field__label">Email</span>
+            <span className="dr-field__box">
+              <DrIcon name="mail" size={20}/>
+              <input className="dr-input" type="email" inputMode="email" autoComplete="email" placeholder="you@email.com" value={email} onChange={e => setEmail(e.target.value)}/>
+            </span>
+          </label>
+          <label className="dr-field">
+            <span className="dr-field__label">Password</span>
+            <span className="dr-field__box">
+              <DrIcon name="lock" size={20}/>
+              <input className="dr-input dr-input--pw" type={showPw ? 'text' : 'password'} autoComplete="current-password" placeholder="Your password" value={password} onChange={e => setPassword(e.target.value)}/>
+              <button type="button" className="dr-field__toggle" onClick={() => setShowPw(v => !v)} aria-label={showPw ? 'Hide password' : 'Show password'}>{showPw ? 'Hide' : 'Show'}</button>
+            </span>
+          </label>
+          <div style={{ textAlign:'right', margin:'-4px 0 18px' }}>
+            <button type="button" className="dr-link" onClick={() => go('forgot-password')}>Forgot password?</button>
+          </div>
+          <button type="submit" className="dr-btn dr-btn--primary dr-btn--block" disabled={loading}>
+            {loading ? <><span className="dr-spin" aria-hidden="true"/> Signing in…</> : 'Sign in'}
+          </button>
+        </form>
+        <div className="dr-divider">New to VilleCabs?</div>
+        <button type="button" className="dr-btn dr-btn--secondary dr-btn--block" onClick={() => go('driver-signup')}>Apply to drive</button>
+      </main>
+      <p style={{ maxWidth:440, textAlign:'center', fontSize:13, color:'#6b6580', margin:'16px auto 0', lineHeight:1.5 }}>Drivers keep 85% of every completed fare.</p>
     </div>
   );
 }
@@ -7834,6 +7851,8 @@ function DriverDash({ go, user, setUser, setBookingId, site, domains }) {
   const unreadNotices = driverNotices.filter(n => !(n.readBy || []).includes(user?.uid)).length;
   const [earnings,     setEarnings]     = useState({ today:0, week:0, total:0, todayRides:0, weekRides:0, totalRides:0, history:[] });
   const [pendingRides, setPendingRides] = useState([]);
+  const [profile,      setProfile]      = useState(null);   // live driver record, for the account card
+  const [scheduledCount, setScheduledCount] = useState(0);
   const [myCharters,   setMyCharters]   = useState([]);   // charter jobs assigned to this driver
   const [openCharters, setOpenCharters] = useState([]);  // confirmed charters any driver can claim
   const [claimingId,   setClaimingId]   = useState(null);
@@ -7929,6 +7948,7 @@ function DriverDash({ go, user, setUser, setBookingId, site, domains }) {
         }
         setIsOnline(d.isOnline || false);
         driverProfileRef.current = d; // cache for instant ride acceptance (no extra read)
+        setProfile(d);
       } else {
         // Driver doc deleted out from under them — end the session too.
         signOut(auth).catch(()=>{});
@@ -8350,31 +8370,44 @@ function DriverDash({ go, user, setUser, setBookingId, site, domains }) {
     go('splash');
   };
 
-  return (
-    <div style={{ display:'flex', flexDirection:'column', height:'100vh', background:'linear-gradient(160deg, #ffffff 0%, #f6f2fb 45%, #efe8f7 100%)', overflow:'hidden' }}>
+  // ── Dashboard summaries (display only) ──
+  const firstName = String(user?.name || profile?.name || 'Driver').split(' ')[0];
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const todayLabel = new Date().toLocaleDateString('en-JM', { weekday:'long', day:'numeric', month:'long' });
+  const docSummary = useMemo(() => {
+    const d = profile || {};
+    const flat = d.docs || {}, rich = d.documents || {};
+    const flatMap = { licence: flat.license, licenceBack: flat.licenseBack, insurance: flat.insurance, fitness: flat.fitness, registration: flat.registration, vehiclePhoto: flat.vehiclePhoto || d.vehiclePhotoUrl };
+    const keys = Object.keys(flatMap);
+    let onFile = 0, rejected = 0;
+    keys.forEach(k => {
+      const r = rich[k];
+      if (!((r && r.url) || flatMap[k])) return;
+      onFile++;
+      if (r && r.status === 'rejected') rejected++;
+    });
+    return { total: keys.length, onFile, rejected, missing: keys.length - onFile };
+  }, [profile]);
+  const accountTone = { approved:['green','Approved'], pending:['amber','Under review'], suspended:['red','Suspended'], rejected:['red','Not approved'] }[profile?.status] || ['grey', profile?.status || 'Checking…'];
+  const latestNotices = driverNotices.slice(0, 3);
+  const money = (n) => `J$${Math.round(n || 0).toLocaleString()}`;
+  const vehicleLine = [profile?.vehicleColor, profile?.vehicleMake, profile?.vehicleModel].filter(Boolean).join(' ');
 
-      {/* ── TOP HEADER ── */}
-      <div style={{ background:'#ffffff', padding:'8px 14px', display:'flex', alignItems:'center', gap:10, borderBottom:'1px solid #eee', boxShadow:'0 1px 4px rgba(0,0,0,0.06)', flexShrink:0 }}>
-        <button onClick={() => setMenuOpen(true)} style={{ background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', gap:4, padding:4, position:'relative' }}>
-          <div style={{ width:20, height:2, background:'#1a1a2e', borderRadius:1 }}/>
-          <div style={{ width:14, height:2, background:'#1a1a2e', borderRadius:1 }}/>
-          <div style={{ width:20, height:2, background:'#1a1a2e', borderRadius:1 }}/>
-          {unreadNotices > 0 && (
-            <span style={{ position:'absolute', top:-1, right:-3, width:9, height:9, borderRadius:'50%',
-              background:'#6b21a8', border:'1.5px solid #fff' }}/>
-          )}
-        </button>
-        <img src="/logo.png" alt="VilleCabs" onClick={() => go('driver-dash')} style={{cursor:'pointer',  height:26, objectFit:'contain', flexShrink:0 }}/>
-        <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:8 }}>
-          <div style={{ display:'flex', alignItems:'center', gap:5, padding:'4px 10px', borderRadius:20, background:isOnline?'#f0fff4':'#f5f5f5', border:`1px solid ${isOnline?'#86efac':'#e5e7eb'}` }}>
-            <div style={{ width:7, height:7, borderRadius:'50%', background:isOnline?'#1a9e5a':'#9ca3af' }}/>
-            <span style={{ fontSize:11, fontWeight:700, color:isOnline?'#1a9e5a':'#6b7280' }}>{isOnline?'Online':'Offline'}</span>
+  return (
+    <div className="dr dr-app">
+      <header className="dr-head">
+        <div className="dr-head__in">
+          <button type="button" className="dr-iconbtn" aria-label="Open menu" onClick={() => setMenuOpen(true)}><DrIcon name="menu"/></button>
+          <DrBrand onClick={() => setDriverTab('home')}/>
+          <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:4 }}>
+            <span className={`dr-chip ${isOnline ? 'dr-chip--green' : 'dr-chip--grey'}`}><span className="dr-dot"/>{isOnline ? 'Online' : 'Offline'}</span>
+            <button type="button" className="dr-iconbtn" aria-label={`Notifications${unreadNotices ? `, ${unreadNotices} unread` : ''}`} onClick={() => go('driver-notifications')}>
+              <DrIcon name="bell"/>{unreadNotices > 0 && <span className="dr-badge">{unreadNotices}</span>}
+            </button>
           </div>
-          {pendingRides.length > 0 && (
-            <div style={{ background:'#6b21a8', color:'#fff', borderRadius:10, fontSize:10, fontWeight:700, padding:'2px 7px' }}>{pendingRides.length}</div>
-          )}
         </div>
-      </div>
+      </header>
       {site !== 'driver' && <DriverAppBanner domains={domains}/>}
 
       {/* ── SLIDE-IN MENU ── */}
@@ -8426,180 +8459,136 @@ function DriverDash({ go, user, setUser, setBookingId, site, domains }) {
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════════
-          HOME TAB
-          ══════════════════════════════════════════════════════ */}
-      {/* ── ACTIVE RIDE BANNER (all tabs) ── */}
-      {activeRideId && (
-        <div onClick={() => go('driver-active')}
-          style={{ margin:'10px 14px 0', background:'linear-gradient(135deg,#6b21a8,#4c1d95)', borderRadius:14, padding:'14px 16px', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'space-between', boxShadow:'0 4px 14px rgba(107,33,168,0.4)' }}>
-          <div>
-            <div style={{ fontSize:14, fontWeight:700, color:'#fff', marginBottom:3 }}>🚗 Active Ride In Progress</div>
-            <div style={{ fontSize:12, color:'rgba(255,255,255,0.85)' }}>Tap to return to your current ride →</div>
-          </div>
-          <div style={{ fontSize:24, color:'#D4AF37' }}>→</div>
-        </div>
-      )}
-
       {driverTab === 'home' && (
-        <div style={{ flex:1, overflowY:'auto', paddingBottom:80 }}>
-
-          {/* Notification nudge — shown until the driver enables notifications */}
-          {(notifPerm === 'default' || notifPerm === 'denied') && (
-            <div style={{ margin:'12px 14px 0', background:'#fff7ed', border:'1px solid #fdba74', borderRadius:14, padding:'12px 14px', display:'flex', alignItems:'center', gap:12 }}>
-              <span style={{ fontSize:24, flexShrink:0 }}>🔔</span>
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontSize:13, fontWeight:800, color:'#9a3412' }}>Turn on ride alerts</div>
-                <div style={{ fontSize:11.5, color:'#b45309', lineHeight:1.5 }}>
-                  {notifPerm === 'denied'
-                    ? 'Notifications are blocked. Re-enable them so you never miss a ride request.'
-                    : 'Get notified the moment a new ride comes in — even when the app is in another tab.'}
-                </div>
-              </div>
-              <button onClick={enableNotifications} style={{ flexShrink:0, padding:'9px 14px', background:'#ea580c', color:'#fff', border:'none', borderRadius:20, fontSize:12, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>
-                {notifPerm === 'denied' ? 'How to fix' : 'Enable'}
-              </button>
-            </div>
-          )}
-
-          {/* Stats cards */}
-          <div style={{ padding:'14px 14px 0' }}>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
-              <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:14, padding:'14px' }}>
-                <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', letterSpacing:0.6, marginBottom:4 }}>Today's Earnings</div>
-                <div style={{ fontSize:22, fontWeight:800, color:'#6b21a8' }}>J${earnings.today.toLocaleString()}</div>
-                <div style={{ fontSize:11, color:'#888', marginTop:2 }}>{earnings.todayRides} ride{earnings.todayRides!==1?'s':''}</div>
-              </div>
-              <div style={{ background:'#f0fff4', border:'1px solid #86efac', borderRadius:14, padding:'14px' }}>
-                <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', letterSpacing:0.6, marginBottom:4 }}>This Week</div>
-                <div style={{ fontSize:22, fontWeight:800, color:'#1a9e5a' }}>J${earnings.week.toLocaleString()}</div>
-                <div style={{ fontSize:11, color:'#888', marginTop:2 }}>{earnings.weekRides} ride{earnings.weekRides!==1?'s':''}</div>
-              </div>
-            </div>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, marginBottom:14 }}>
-              {[['All Time', `J$${earnings.total.toLocaleString()}`], ['Total Rides', earnings.totalRides], ['Rating', earnings.totalRides>0?'⭐ 5.0':'—']].map(([l,v],i) => (
-                <div key={i} style={{ background:'#fff', border:'1px solid #e5e7eb', borderRadius:12, padding:'11px 10px', textAlign:'center' }}>
-                  <div style={{ fontSize:10, color:'#888', textTransform:'uppercase', letterSpacing:0.4, marginBottom:4 }}>{l}</div>
-                  <div style={{ fontSize:15, fontWeight:700, color:'#1a1a2e' }}>{v}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Online/Offline prominent widget */}
-          <div style={{ margin:'0 14px 12px', borderRadius:14, padding:'14px 16px',
-            background: isOnline ? 'linear-gradient(135deg,#1a9e5a,#166534)' : '#1a1a2e',
-            border: `1px solid ${isOnline ? '#1a9e5a' : 'rgba(255,255,255,0.1)'}`,
-            display:'flex', alignItems:'center', justifyContent:'space-between',
-            boxShadow: isOnline ? '0 4px 14px rgba(26,158,90,0.35)' : 'none' }}>
-            <div>
-              <div style={{ fontSize:13, fontWeight:700, color:'#fff', marginBottom:3 }}>
-                {isOnline ? '🟢 You are Online' : '⚫ You are Offline'}
-              </div>
-              <div style={{ fontSize:11, color:'rgba(255,255,255,0.7)' }}>
-                {isOnline ? 'Accepting ride requests' : 'Go online to receive rides'}
-              </div>
-            </div>
-            <div onClick={() => isOnline ? goOffline() : goOnline()}
-              style={{ width:52, height:28, borderRadius:14, background: isOnline ? '#fff' : 'rgba(255,255,255,0.15)',
-                position:'relative', cursor:'pointer', transition:'background 0.3s', flexShrink:0 }}>
-              <div style={{ position:'absolute', top:4, left: isOnline ? 26 : 4, width:20, height:20,
-                borderRadius:'50%', background: isOnline ? '#1a9e5a' : '#6b7280', transition:'left 0.3s' }}/>
-            </div>
-          </div>
-
-          {/* Scheduled rides for drivers (Feature: Scheduled Rides) */}
-          <DriverScheduledRides user={user} go={go} setBookingId={setBookingId}/>
-
-          {/* Busy times — driven by real completed rides, published by admin.
-              (This replaced a hardcoded "Peak Hours Active" banner that claimed
-              Mon-Fri 5-7pm was busy regardless of whether it actually was.) */}
-          <DriverBusyTimes/>
-
-          {/* Go Online / Offline */}
-          <div style={{ padding:'0 14px 14px' }}>
-            {isOnline ? (
+        <div className="dr-scroll">
+          <div className="dr-wrap">
+            <div className="dr-hello">
               <div>
-                <div style={{ background:'#f0fff4', border:'1px solid #86efac', borderRadius:14, padding:'14px', marginBottom:10, textAlign:'center' }}>
-                  <div style={{ fontSize:14, fontWeight:700, color:'#1a9e5a', marginBottom:4 }}>🟢 Waiting for ride requests</div>
-                  <div style={{ fontSize:12, color:'#166534' }}>New bookings appear here instantly</div>
-                </div>
-                <button onClick={goOffline} style={{ width:'100%', padding:'13px', background:'#fff', border:'1.5px solid #fca5a5', borderRadius:12, color:'#dc2626', fontSize:14, fontWeight:700, cursor:'pointer' }}>
-                  Go Offline
-                </button>
+                <h1>{greeting}, {firstName}</h1>
+                <p>{todayLabel}</p>
               </div>
-            ) : (
-              <button onClick={goOnline} style={{ width:'100%', padding:'16px', background:'#6b21a8', border:'none', borderRadius:14, color:'#fff', fontSize:15, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 14px rgba(107,33,168,0.35)' }}>
-                Go Online
+            </div>
+
+            {activeRideId && (
+              <button type="button" className="dr-banner dr-banner--ride" onClick={() => go('driver-active')}>
+                <DrIcon name="rides" size={26}/>
+                <span style={{ flex:1 }}>
+                  <span className="dr-banner__title" style={{ display:'block' }}>Ride in progress</span>
+                  <span className="dr-banner__sub" style={{ display:'block' }}>Tap to return to your current ride</span>
+                </span>
+                <DrIcon name="chevron"/>
               </button>
             )}
-          </div>
 
-          {/* ── INCOMING RIDE REQUESTS (shown when online) ── */}
-          {/* AVAILABLE charters — confirmed by admin, not yet claimed */}
-          {openCharters.length > 0 && (
-            <div style={{ marginBottom:18 }}>
-              <div style={{ fontSize:13, fontWeight:800, color:'#6b21a8', marginBottom:10, display:'flex', alignItems:'center', gap:7 }}>
-                🚘 {openCharters.length} Charter Job{openCharters.length>1?'s':''} Available
+            {/* Online / offline */}
+            <section className={`dr-card dr-status-card`} aria-label="Availability">
+              <div className={`dr-status ${isOnline ? 'dr-status--on' : ''}`}>
+                <div className="dr-status__ring"><DrIcon name="power" size={24}/></div>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <p className="dr-status__title">{isOnline ? 'You’re online' : 'You’re offline'}</p>
+                  <p className="dr-status__sub">{isOnline ? 'Waiting for ride requests. Keep this screen open.' : 'Go online to start receiving ride requests.'}</p>
+                </div>
               </div>
-              {openCharters.map(c => {
-                const days = c.days || [];
-                const first = days[0] || {};
-                return (
-                  <div key={c.id} style={{ background:'#fff', border:'2px dashed #c4b5fd', borderRadius:16, padding:16, marginBottom:12, boxShadow:'0 4px 16px rgba(107,33,168,0.08)' }}>
-                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8, flexWrap:'wrap' }}>
-                      <div style={{ display:'inline-flex', alignItems:'center', gap:5, background:'#f5f0ff', border:'1.5px solid #6b21a8', color:'#6b21a8',
-                        fontSize:10.5, fontWeight:800, textTransform:'uppercase', letterSpacing:0.7, padding:'3px 9px', borderRadius:11, marginBottom:8 }}>
-                        🚘 Charter · {days.length} day{days.length!==1?'s':''}
-                      </div>
-                      <div style={{ fontSize:19, fontWeight:800, color:'#6b21a8' }}>J${(c.adjustedTotal || c.total || 0).toLocaleString()}</div>
-                    </div>
+              <div className="dr-status__actions">
+                {isOnline
+                  ? <button type="button" className="dr-btn dr-btn--danger-outline dr-btn--block" onClick={goOffline}>Go offline</button>
+                  : <button type="button" className="dr-btn dr-btn--primary dr-btn--block" onClick={goOnline}><DrIcon name="power" size={20}/>Go online</button>}
+              </div>
+            </section>
 
-                    <div style={{ fontSize:15.5, fontWeight:700, color:'#1a1a2e' }}>{c.name || 'Charter customer'}</div>
-                    <div style={{ fontSize:12, color:'#6b7280', marginTop:3 }}>
-                      {first.date || '—'}{first.startTime ? ` · starts ${first.startTime}` : ''}{first.hours ? ` · ${first.hours}h reserved` : ''}
-                    </div>
-                    {first.purpose && <div style={{ fontSize:12, color:'#6b7280', marginTop:2 }}>Purpose: {first.purpose}</div>}
+            {(notifPerm === 'default' || notifPerm === 'denied') && (
+              <div className="dr-banner dr-banner--warn">
+                <DrIcon name="bell" size={24}/>
+                <span style={{ flex:1, minWidth:0 }}>
+                  <span className="dr-banner__title" style={{ display:'block' }}>Turn on ride alerts</span>
+                  <span className="dr-banner__sub" style={{ display:'block' }}>{notifPerm === 'denied' ? 'Notifications are blocked. Re-enable them so you never miss a request.' : 'Get alerted the moment a new ride comes in.'}</span>
+                </span>
+                <button type="button" className="dr-btn dr-btn--sm dr-btn--primary" onClick={enableNotifications}>{notifPerm === 'denied' ? 'How to fix' : 'Enable'}</button>
+              </div>
+            )}
 
-                    {/* Full itinerary so the driver knows what they're taking on */}
-                    <div style={{ marginTop:10, background:'#faf7fd', border:'1px solid #ece3f5', borderRadius:10, padding:'11px 13px' }}>
-                      {days.map((d, di) => (
-                        <div key={di} style={{ marginBottom: di < days.length-1 ? 10 : 0 }}>
-                          {days.length > 1 && <div style={{ fontSize:11, fontWeight:800, color:'#6b21a8', marginBottom:3 }}>Day {di+1} · {d.date}{d.startTime?` · ${d.startTime}`:''}{d.hours?` · ${d.hours}h`:''}</div>}
-                          <div style={{ fontSize:12.5, color:'#374151', lineHeight:1.65 }}>
-                            <div>🟢 {d.start || '—'}</div>
-                            {(d.stops||[]).map((sp,x)=><div key={x}>📍 {sp}</div>)}
-                            <div>🏁 {d.destination || '—'}</div>
-                            {d.returnTo && <div>↩️ {d.returnTo}</div>}
-                            {d.airport && <div style={{ color:'#b45309' }}>✈️ {d.airport}</div>}
-                          </div>
-                          {d.driverNotes && <div style={{ fontSize:11.5, color:'#6b7280', fontStyle:'italic', marginTop:3 }}>📝 {d.driverNotes}</div>}
-                          <div style={{ fontSize:11, color:'#9199ad', marginTop:4 }}>{Math.round(d.km||0)} km · {d.mins||0} min driving</div>
-                        </div>
-                      ))}
+            {/* Ride requests */}
+            <div className="dr-sec">
+              <h2>Ride requests</h2>
+              {isOnline && pendingRides.length > 0 && <span className="dr-chip">{pendingRides.length} waiting</span>}
+            </div>
+            {!isOnline ? (
+              <div className="dr-card dr-empty"><DrIcon name="rides" size={34}/><b>You’re offline</b>Go online and new ride requests will appear here.</div>
+            ) : pendingRides.length === 0 ? (
+              <div className="dr-card dr-empty"><DrIcon name="clock" size={34}/><b>No requests right now</b>New requests appear here instantly, with a sound and vibration.</div>
+            ) : pendingRides.map((r, i) => {
+              const k = rideKind(r);
+              const createdMs = r.createdAt?.seconds ? r.createdAt.seconds*1000 : (r.createdAt?.toMillis ? r.createdAt.toMillis() : null);
+              let age = 'Just now', ageTone = 'green';
+              if (createdMs) {
+                const secs = Math.max(0, Math.floor((nowTick - createdMs)/1000));
+                age = secs < 60 ? `${secs}s ago` : `${Math.floor(secs/60)}m ${secs%60}s ago`;
+                ageTone = secs >= 180 ? 'red' : secs >= 120 ? 'amber' : 'green';
+              }
+              return (
+                <article key={r.id || i} className="dr-card dr-req">
+                  <div className="dr-req__top">
+                    <div style={{ minWidth:0 }}>
+                      <span className="dr-chip" style={{ background:k.bg, color:k.color }}>{k.label}</span>
+                      <div className="dr-req__name">{r.customerName || 'Passenger'}</div>
+                      <div className="dr-req__meta">{r.passengers || 1} passenger{(r.passengers||1) > 1 ? 's' : ''} · <span style={{ color: ageTone==='red' ? 'var(--dr-red)' : ageTone==='amber' ? 'var(--dr-amber)' : 'var(--dr-green)', fontWeight:650 }}>Requested {age}</span></div>
                     </div>
-
-                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'#6b7280', marginTop:9 }}>
-                      <span>{Math.round(c.totalKm||0)} km total</span>
-                      <span>{c.totalReservedHours || 0}h reserved</span>
-                    </div>
-                    {c.notes && <div style={{ fontSize:12, color:'#6b7280', fontStyle:'italic', marginTop:6 }}>Customer note: {c.notes}</div>}
-
-                    <button onClick={() => claimCharter(c.id)} disabled={claimingId === c.id}
-                      style={{ width:'100%', marginTop:12, padding:'14px', background: claimingId===c.id ? '#c4b5fd' : 'linear-gradient(135deg,#6b21a8,#4c1d95)',
-                        color:'#fff', border:'none', borderRadius:12, fontSize:14.5, fontWeight:800, cursor: claimingId===c.id ? 'default' : 'pointer' }}>
-                      {claimingId===c.id ? 'Accepting…' : '🚘 Accept this charter'}
-                    </button>
-                    <div style={{ fontSize:10.5, color:'#8a83a0', marginTop:7, textAlign:'center', lineHeight:1.5 }}>
-                      Price shown is an estimate — agree the final amount with the customer.<br/>
-                      Check you're free for the full booking before accepting.
+                    <div className="dr-req__fare">
+                      <b>{money(r.fare)}</b>
+                      <span>You earn {money((r.fare||0)*0.85)}</span>
                     </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
+                  <div className="dr-route">
+                    <div className="dr-route__stop"><div className="dr-route__k">Pickup</div><div className="dr-route__v">{r.pickup?.address || '—'}</div></div>
+                    <div className="dr-route__stop dr-route__stop--end"><div className="dr-route__k">Drop-off</div><div className="dr-route__v">{r.dropoff?.address || '—'}</div></div>
+                  </div>
+                  <div className="dr-tags">
+                    <span className="dr-tag">{r.vehicleType || 'VilleRide'}</span>
+                    <span className="dr-tag">{r.distanceKm || '?'} km</span>
+                    <span className="dr-tag">~{Math.ceil((r.distanceKm||5)/0.5)} min</span>
+                    <span className="dr-tag">{r.payment?.method === 'card' && r.payment?.status === 'paid' ? 'Paid by card' : 'Cash'}</span>
+                  </div>
+                  <div className="dr-req__actions">
+                    <button type="button" className="dr-btn dr-btn--green" onClick={() => acceptRide(r.id)} disabled={acceptingId===r.id}>
+                      {acceptingId===r.id ? <><span className="dr-spin" aria-hidden="true"/> Accepting…</> : <><DrIcon name="check" size={20}/>Accept ride</>}
+                    </button>
+                    <button type="button" className="dr-btn dr-btn--quiet" onClick={() => declineRide(r.id)} disabled={acceptingId===r.id}>Decline</button>
+                  </div>
+                </article>
+              );
+            })}
 
+            {/* Today */}
+            <div className="dr-sec"><h2>Today</h2><button type="button" className="dr-link" onClick={() => setDriverTab('earnings')}>Earnings</button></div>
+            <div className="dr-stats">
+              <button type="button" className="dr-stat dr-stat--hero" onClick={() => setDriverTab('earnings')}>
+                <div className="dr-stat__label">Today’s earnings</div>
+                <div className="dr-stat__value">{money(earnings.today)}</div>
+                <div className="dr-stat__note">after 15% fee</div>
+              </button>
+              <button type="button" className="dr-stat" onClick={() => setDriverTab('rides')}>
+                <div className="dr-stat__label">Completed</div>
+                <div className="dr-stat__value">{earnings.todayRides}</div>
+                <div className="dr-stat__note">ride{earnings.todayRides !== 1 ? 's' : ''} today</div>
+              </button>
+              <button type="button" className="dr-stat" onClick={() => setDriverTab('earnings')}>
+                <div className="dr-stat__label">This week</div>
+                <div className="dr-stat__value">{money(earnings.week)}</div>
+                <div className="dr-stat__note">{earnings.weekRides} ride{earnings.weekRides !== 1 ? 's' : ''}</div>
+              </button>
+            </div>
+            <div className="dr-minirow">
+              <span>All time <b>{money(earnings.total)}</b></span>
+              <span><b>{earnings.totalRides}</b> rides</span>
+              <span>Rating <b>{profile?.ratingCount ? Number(profile.rating || 5).toFixed(1) : '—'}</b></span>
+            </div>
+
+            {/* Upcoming confirmed jobs */}
+            <div className="dr-sec"><h2>Upcoming jobs</h2></div>
+            {myCharters.length === 0 && scheduledCount === 0 && (
+              <div className="dr-card dr-empty" style={{ padding:'18px 14px' }}><DrIcon name="calendar" size={30}/><b>Nothing scheduled</b>Scheduled rides and charters you’ve accepted show here.</div>
+            )}
+            <DriverScheduledRides user={user} go={go} setBookingId={setBookingId} onCount={setScheduledCount}/>
           {/* Charter jobs assigned to this driver */}
           {myCharters.length > 0 && (
             <div style={{ marginBottom:18 }}>
@@ -8665,115 +8654,131 @@ function DriverDash({ go, user, setUser, setBookingId, site, domains }) {
             </div>
           )}
 
-          {isOnline && pendingRides.length > 0 && (
-            <div style={{ padding:'0 14px 14px' }}>
-              <div style={{ fontSize:11, fontWeight:700, color:'#6b21a8', textTransform:'uppercase', letterSpacing:0.8, marginBottom:10 }}>
-                🔔 {pendingRides.length} Ride Request{pendingRides.length>1?'s':''}
+          {/* AVAILABLE charters — confirmed by admin, not yet claimed */}
+          {openCharters.length > 0 && (
+            <div style={{ marginBottom:18 }}>
+              <div style={{ fontSize:13, fontWeight:800, color:'#6b21a8', marginBottom:10, display:'flex', alignItems:'center', gap:7 }}>
+                🚘 {openCharters.length} Charter Job{openCharters.length>1?'s':''} Available
               </div>
-              {pendingRides.map((r, i) => (
-                <div key={r.id||i} style={{ background:'#fff', border:'2px solid #e9d5ff', borderRadius:16, padding:16, marginBottom:12, boxShadow:'0 4px 16px rgba(107,33,168,0.1)' }}>
-                  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
-                    <div>
-                      {(() => { const k = rideKind(r); return (
-                        <div style={{ display:'inline-flex', alignItems:'center', gap:5, background:k.bg, border:`1.5px solid ${k.color}`, color:k.color,
-                          fontSize:10.5, fontWeight:800, textTransform:'uppercase', letterSpacing:0.7, padding:'3px 9px', borderRadius:11, marginBottom:6 }}>
-                          {k.emoji} {k.label}
-                        </div>
-                      ); })()}
-                      <div style={{ fontSize:16, fontWeight:700, color:'#1a1a2e' }}>{r.customerName||'Passenger'}</div>
-                      <div style={{ fontSize:11, color:'#888', marginTop:2 }}>✓ Verified · 👥 {r.passengers||1} passenger{(r.passengers||1)>1?'s':''}</div>
-                      {(() => {
-                        const createdMs = r.createdAt?.seconds ? r.createdAt.seconds*1000 : (r.createdAt?.toMillis ? r.createdAt.toMillis() : null);
-                        if (!createdMs) return <div style={{ fontSize:11, color:'#b45309', marginTop:4, fontWeight:600 }}>🕐 Just now</div>;
-                        const secs = Math.max(0, Math.floor((nowTick - createdMs)/1000));
-                        const mins = Math.floor(secs/60);
-                        const ageText = secs < 60 ? `${secs}s ago` : `${mins}m ${secs%60}s ago`;
-                        const t = new Date(createdMs).toLocaleTimeString('en-JM',{hour:'numeric',minute:'2-digit'});
-                        // Amber past 2 min, red past 3 (the auto-expiry point)
-                        const col = secs >= 180 ? '#dc2626' : secs >= 120 ? '#b45309' : '#1a9e5a';
-                        return (
-                          <div style={{ fontSize:11, color:col, marginTop:4, fontWeight:700, display:'flex', alignItems:'center', gap:5 }}>
-                            🕐 Requested {ageText} <span style={{ color:'#aaa', fontWeight:500 }}>· {t}</span>
+              {openCharters.map(c => {
+                const days = c.days || [];
+                const first = days[0] || {};
+                return (
+                  <div key={c.id} style={{ background:'#fff', border:'2px dashed #c4b5fd', borderRadius:16, padding:16, marginBottom:12, boxShadow:'0 4px 16px rgba(107,33,168,0.08)' }}>
+                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:8, flexWrap:'wrap' }}>
+                      <div style={{ display:'inline-flex', alignItems:'center', gap:5, background:'#f5f0ff', border:'1.5px solid #6b21a8', color:'#6b21a8',
+                        fontSize:10.5, fontWeight:800, textTransform:'uppercase', letterSpacing:0.7, padding:'3px 9px', borderRadius:11, marginBottom:8 }}>
+                        🚘 Charter · {days.length} day{days.length!==1?'s':''}
+                      </div>
+                      <div style={{ fontSize:19, fontWeight:800, color:'#6b21a8' }}>J${(c.adjustedTotal || c.total || 0).toLocaleString()}</div>
+                    </div>
+
+                    <div style={{ fontSize:15.5, fontWeight:700, color:'#1a1a2e' }}>{c.name || 'Charter customer'}</div>
+                    <div style={{ fontSize:12, color:'#6b7280', marginTop:3 }}>
+                      {first.date || '—'}{first.startTime ? ` · starts ${first.startTime}` : ''}{first.hours ? ` · ${first.hours}h reserved` : ''}
+                    </div>
+                    {first.purpose && <div style={{ fontSize:12, color:'#6b7280', marginTop:2 }}>Purpose: {first.purpose}</div>}
+
+                    {/* Full itinerary so the driver knows what they're taking on */}
+                    <div style={{ marginTop:10, background:'#faf7fd', border:'1px solid #ece3f5', borderRadius:10, padding:'11px 13px' }}>
+                      {days.map((d, di) => (
+                        <div key={di} style={{ marginBottom: di < days.length-1 ? 10 : 0 }}>
+                          {days.length > 1 && <div style={{ fontSize:11, fontWeight:800, color:'#6b21a8', marginBottom:3 }}>Day {di+1} · {d.date}{d.startTime?` · ${d.startTime}`:''}{d.hours?` · ${d.hours}h`:''}</div>}
+                          <div style={{ fontSize:12.5, color:'#374151', lineHeight:1.65 }}>
+                            <div>🟢 {d.start || '—'}</div>
+                            {(d.stops||[]).map((sp,x)=><div key={x}>📍 {sp}</div>)}
+                            <div>🏁 {d.destination || '—'}</div>
+                            {d.returnTo && <div>↩️ {d.returnTo}</div>}
+                            {d.airport && <div style={{ color:'#b45309' }}>✈️ {d.airport}</div>}
                           </div>
-                        );
-                      })()}
+                          {d.driverNotes && <div style={{ fontSize:11.5, color:'#6b7280', fontStyle:'italic', marginTop:3 }}>📝 {d.driverNotes}</div>}
+                          <div style={{ fontSize:11, color:'#9199ad', marginTop:4 }}>{Math.round(d.km||0)} km · {d.mins||0} min driving</div>
+                        </div>
+                      ))}
                     </div>
-                    <div style={{ textAlign:'right' }}>
-                      <div style={{ fontSize:20, fontWeight:800, color:'#6b21a8' }}>J${(r.fare||0).toLocaleString()}</div>
-                      <div style={{ fontSize:12, color:'#1a9e5a', fontWeight:600 }}>You earn: J${Math.round((r.fare||0)*0.85).toLocaleString()}</div>
+
+                    <div style={{ display:'flex', justifyContent:'space-between', fontSize:12, color:'#6b7280', marginTop:9 }}>
+                      <span>{Math.round(c.totalKm||0)} km total</span>
+                      <span>{c.totalReservedHours || 0}h reserved</span>
                     </div>
-                  </div>
-                  <div style={{ background:'#f9f5ff', borderRadius:10, padding:'10px 12px', marginBottom:10 }}>
-                    <div style={{ display:'flex', gap:8, marginBottom:6, alignItems:'flex-start' }}>
-                      <div style={{ width:8, height:8, borderRadius:'50%', background:'#1a9e5a', flexShrink:0, marginTop:3 }}/>
-                      <div><div style={{ fontSize:10, color:'#888', marginBottom:1 }}>PICKUP</div><div style={{ fontSize:12, fontWeight:600, color:'#1a1a2e' }}>{r.pickup?.address||'—'}</div></div>
-                    </div>
-                    <div style={{ width:1, height:10, background:'#e9d5ff', marginLeft:3.5, marginBottom:6 }}/>
-                    <div style={{ display:'flex', gap:8, alignItems:'flex-start' }}>
-                      <div style={{ width:8, height:8, borderRadius:'50%', background:'#6b21a8', flexShrink:0, marginTop:3 }}/>
-                      <div><div style={{ fontSize:10, color:'#888', marginBottom:1 }}>DROP-OFF</div><div style={{ fontSize:12, fontWeight:600, color:'#1a1a2e' }}>{r.dropoff?.address||'—'}</div></div>
-                    </div>
-                  </div>
-                  <div style={{ display:'flex', gap:6, marginBottom:12, flexWrap:'wrap' }}>
-                    {[['🚗',r.vehicleType||'VilleRide'],['📏',`${r.distanceKm||'?'} km`],['⏱️',`~${Math.ceil((r.distanceKm||5)/0.5)} min`],['💵','Cash']].map(([ico,val],j) => (
-                      <div key={j} style={{ background:'#f3f4f6', borderRadius:8, padding:'4px 10px', fontSize:11, color:'#555' }}>{ico} {val}</div>
-                    ))}
-                  </div>
-                  <div style={{ display:'flex', gap:10 }}>
-                    <button onClick={() => acceptRide(r.id)} disabled={acceptingId===r.id} style={{ flex:2, padding:'13px', background: acceptingId===r.id ? '#6b7280' : '#1a9e5a', color:'#fff', border:'none', borderRadius:12, fontSize:15, fontWeight:700, cursor: acceptingId===r.id ? 'default' : 'pointer', boxShadow:'0 4px 12px rgba(26,158,90,0.35)' }}>
-                      {acceptingId===r.id ? '⏳ Accepting...' : '✓ Accept Ride'}
+                    {c.notes && <div style={{ fontSize:12, color:'#6b7280', fontStyle:'italic', marginTop:6 }}>Customer note: {c.notes}</div>}
+
+                    <button onClick={() => claimCharter(c.id)} disabled={claimingId === c.id}
+                      style={{ width:'100%', marginTop:12, padding:'14px', background: claimingId===c.id ? '#c4b5fd' : 'linear-gradient(135deg,#6b21a8,#4c1d95)',
+                        color:'#fff', border:'none', borderRadius:12, fontSize:14.5, fontWeight:800, cursor: claimingId===c.id ? 'default' : 'pointer' }}>
+                      {claimingId===c.id ? 'Accepting…' : '🚘 Accept this charter'}
                     </button>
-                    <button onClick={() => declineRide(r.id)} disabled={acceptingId===r.id} style={{ flex:1, padding:'13px', background:'#f5f5f5', color:'#888', border:'1px solid #e5e7eb', borderRadius:12, fontSize:14, cursor:'pointer' }}>
-                      Decline
-                    </button>
+                    <div style={{ fontSize:10.5, color:'#8a83a0', marginTop:7, textAlign:'center', lineHeight:1.5 }}>
+                      Price shown is an estimate — agree the final amount with the customer.<br/>
+                      Check you're free for the full booking before accepting.
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
-          {/* Tips */}
-          <div style={{ padding:'0 14px 14px' }}>
-            <div style={{ fontSize:11, fontWeight:700, color:'#888', textTransform:'uppercase', letterSpacing:0.6, marginBottom:8 }}>Driver Tips</div>
-            <div style={{ display:'flex', gap:10, overflowX:'auto', paddingBottom:4, scrollbarWidth:'none' }}>
-              {[['🔋','Keep phone charged'],['👤','Confirm passenger name'],['📱','Use app buttons for ride status'],['🛡️','Contact support if unsafe'],['📍','Stay near Mandeville town']].map(([icon,tip],i) => (
-                <div key={i} style={{ flexShrink:0, width:160, background:'#fff', border:'1px solid #e5e7eb', borderRadius:12, padding:'12px' }}>
-                  <div style={{ fontSize:18, marginBottom:6 }}>{icon}</div>
-                  <div style={{ fontSize:11, color:'#374151', lineHeight:1.5 }}>{tip}</div>
+
+            {/* Notifications */}
+            <div className="dr-sec"><h2>Notifications</h2><button type="button" className="dr-link" onClick={() => go('driver-notifications')}>See all</button></div>
+            <div className="dr-card dr-card--flush">
+              {latestNotices.length === 0 ? (
+                <div className="dr-empty" style={{ padding:'18px 14px' }}>No messages from VilleCabs yet.</div>
+              ) : (
+                <div className="dr-list">
+                  {latestNotices.map(n => {
+                    const unread = !(n.readBy || []).includes(user?.uid);
+                    return (
+                      <button type="button" key={n.id} className="dr-row" onClick={() => go('driver-notifications')}>
+                        <span className="dr-row__icon"><DrIcon name="bell" size={20}/></span>
+                        <span className="dr-row__main">
+                          <span className="dr-row__title" style={{ display:'block' }}>{n.title || 'VilleCabs'}</span>
+                          <span className="dr-row__sub">{noticeAgo(n.createdAt)}{n.message ? ` · ${n.message}` : ''}</span>
+                        </span>
+                        {unread && <span className="dr-row__unread" aria-label="Unread"/>}
+                      </button>
+                    );
+                  })}
                 </div>
-              ))}
+              )}
             </div>
-          </div>
 
-          {/* Quick links */}
-          <div style={{ padding:'0 14px 14px' }}>
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-              {[['💰','Earnings',() => go('driver-earnings')],['📋','Documents',() => go('driver-documents')],['🔔','Notifications',() => go('driver-notifications')],['👤','Profile',() => go('driver-profile')]].map(([icon,label,action],i) => (
-                <button key={i} onClick={action} style={{ background:'#fff', border:'1px solid #e5e7eb', borderRadius:12, padding:'13px 12px', display:'flex', alignItems:'center', gap:10, cursor:'pointer' }}>
-                  <span style={{ fontSize:20 }}>{icon}</span>
-                  <span style={{ fontSize:13, fontWeight:600, color:'#1a1a2e' }}>{label}</span>
+            {/* Account & documents */}
+            <div className="dr-sec"><h2>Account</h2></div>
+            <div className="dr-card dr-card--flush">
+              <div className="dr-list">
+                <button type="button" className="dr-row" onClick={() => go('driver-profile')}>
+                  <span className="dr-row__icon"><DrIcon name="shield" size={20}/></span>
+                  <span className="dr-row__main">
+                    <span className="dr-row__title" style={{ display:'block' }}>Account status</span>
+                    <span className="dr-row__sub">{vehicleLine || 'Your vehicle'}{profile?.licensePlate ? ` · ${profile.licensePlate}` : ''}</span>
+                  </span>
+                  <span className={`dr-chip dr-chip--${accountTone[0]}`}>{accountTone[1]}</span>
                 </button>
-              ))}
+                <button type="button" className="dr-row" onClick={() => go('driver-documents')}>
+                  <span className="dr-row__icon"><DrIcon name="file" size={20}/></span>
+                  <span className="dr-row__main">
+                    <span className="dr-row__title" style={{ display:'block' }}>Documents</span>
+                    <span className="dr-row__sub">{docSummary.onFile} of {docSummary.total} on file{docSummary.rejected ? ` · ${docSummary.rejected} need${docSummary.rejected === 1 ? 's' : ''} re-uploading` : docSummary.missing ? ` · ${docSummary.missing} missing` : ''}</span>
+                  </span>
+                  {docSummary.rejected || docSummary.missing
+                    ? <span className={`dr-chip ${docSummary.rejected ? 'dr-chip--red' : 'dr-chip--amber'}`}>Action needed</span>
+                    : <span className="dr-chip dr-chip--green">Complete</span>}
+                </button>
+                <button type="button" className="dr-row" onClick={() => setDriverTab('earnings')}>
+                  <span className="dr-row__icon"><DrIcon name="wallet" size={20}/></span>
+                  <span className="dr-row__main">
+                    <span className="dr-row__title" style={{ display:'block' }}>Your commission</span>
+                    <span className="dr-row__sub">You keep 85% of every completed fare. VilleCabs’ fee is 15%.</span>
+                  </span>
+                  <DrIcon name="chevron" size={20}/>
+                </button>
+              </div>
             </div>
-          </div>
 
-          {/* ── DRIVER TIPS — feature cards with hover ── */}
-          <div style={{ padding:'6px 14px 20px' }}>
-            <div style={{ fontSize:12, fontWeight:700, color:'#8a83a0', marginBottom:12, textTransform:'uppercase', letterSpacing:0.8 }}>Tips to earn more</div>
-            <div style={{ display:'flex', gap:12, flexWrap:'wrap', justifyContent:'center' }}>
-              {[
-                ['⚡','Drive Peak Hours','Weekday 5–7pm and weekends see the most ride requests.'],
-                ['⭐','Keep Your Rating High','Be punctual and friendly — top-rated drivers get more trips.'],
-                ['📍','Stay Near Town','Position yourself around Mandeville centre for faster matches.'],
-                ['🟢','Stay Online','You only get requests while online with the app open.'],
-              ].map(([icon,title,desc],i) => (
-                <FeatureCard key={i} icon={icon} title={title} desc={desc} tint="#f3edfb" accent="#6b21a8"/>
-              ))}
-            </div>
+            <DriverBusyTimes/>
+            <DriverReviews user={user}/>
           </div>
-
-          {/* ── RECENT REVIEWS ── */}
-          <DriverReviews user={user}/>
         </div>
       )}
 
@@ -8883,27 +8888,27 @@ function DriverDash({ go, user, setUser, setBookingId, site, domains }) {
         </div>
       )}
 
-      {/* ── BOTTOM NAV ── */}
-      <div style={{ background:'#ffffff', borderTop:'1px solid #eee', display:'flex', flexShrink:0, paddingBottom:'env(safe-area-inset-bottom)', boxShadow:'0 -2px 8px rgba(0,0,0,0.06)' }}>
-        {[
-          { icon:'🏠', label:'Home',     tab:'home'     },
-          { icon:'🚗', label:'Rides',    tab:'rides'    },
-          { icon:'💰', label:'Earnings', tab:'earnings' },
-          { icon:'🔔', label:'Alerts',   tab:'alerts'   },
-          { icon:'👤', label:'Profile',  tab:'profile'  },
-        ].map(({ icon, label, tab }) => (
-          <button key={tab} onClick={() => {
-            if (tab==='profile')  go('driver-profile');
-            else if (tab==='alerts') go('driver-notifications');
-            else setDriverTab(tab);
-          }}
-            style={{ flex:1, padding:'10px 0', background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
-            <div style={{ fontSize:18, opacity:driverTab===tab?1:0.4 }}>{icon}</div>
-            <div style={{ fontSize:10, color:driverTab===tab?'#6b21a8':'#9ca3af', fontWeight:driverTab===tab?700:400 }}>{label}</div>
-            {driverTab===tab && <div style={{ width:4, height:4, borderRadius:'50%', background:'#6b21a8' }}/>}
-          </button>
-        ))}
-      </div>
+      <nav className="dr-nav" aria-label="Driver">
+        <div className="dr-nav__in">
+          {[
+            { icon:'home',   label:'Home',     tab:'home' },
+            { icon:'rides',  label:'Rides',    tab:'rides' },
+            { icon:'wallet', label:'Earnings', tab:'earnings' },
+            { icon:'bell',   label:'Alerts',   tab:'alerts' },
+            { icon:'user',   label:'Profile',  tab:'profile' },
+          ].map(({ icon, label, tab }) => (
+            <button type="button" key={tab} aria-current={driverTab === tab ? 'page' : undefined} onClick={() => {
+              if (tab==='profile')  go('driver-profile');
+              else if (tab==='alerts') go('driver-notifications');
+              else setDriverTab(tab);
+            }}>
+              <DrIcon name={icon} size={23}/>
+              {label}
+              {tab === 'alerts' && unreadNotices > 0 && <span className="dr-badge">{unreadNotices}</span>}
+            </button>
+          ))}
+        </div>
+      </nav>
     </div>
   );
 }
@@ -12528,7 +12533,7 @@ function ScheduledRidesCard({ user, go }) {
 }
 
 // ══ Feature: Scheduled Rides — driver view: claim & start scheduled rides ══
-function DriverScheduledRides({ user, go, setBookingId }) {
+function DriverScheduledRides({ user, go, setBookingId, onCount }) {
   const [scheduled, setScheduled] = useState([]);
   const [busy,      setBusy]      = useState('');
   const seenRef = useRef(null);   // null until the first snapshot is seeded
@@ -12564,6 +12569,7 @@ function DriverScheduledRides({ user, go, setBookingId }) {
     }, ()=>{});
     return () => unsub();
   }, [user]);
+  useEffect(() => { if (onCount) onCount(scheduled.length); }, [scheduled.length]); // eslint-disable-line
   if (!scheduled.length) return null;
   const acceptRide = async (r) => {
     setBusy(r.id);
@@ -12713,7 +12719,7 @@ function PartnerLocations({ go, user, setPickupData }) {
 // Shared with the VilleDash merchant portal (src/dash/MerchantPortal.js)
 export { AddressAutocompleteInput, VilleMap, geocodeLatLng };
 // Exposed for the screen-check harness (tools/screen-check), not used by the app.
-export { VehicleSelect as __VehicleSelect, BookingConfirm as __BookingConfirm };
+export { VehicleSelect as __VehicleSelect, BookingConfirm as __BookingConfirm, DriverLogin as __DriverLogin, DriverDash as __DriverDash };
 
 export function LiveTrackShare({ trackId }) {
   const [t, setT] = useState(null);
