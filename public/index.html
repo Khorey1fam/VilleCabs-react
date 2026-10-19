@@ -35,10 +35,19 @@
           if (preview && q) sessionStorage.setItem('vd_site', q);
           var isDriver = h.indexOf('driver.') === 0 || (preview && sessionStorage.getItem('vd_site') === 'driver');
           var isVille = h === 'villeapp.org' || h === 'www.villeapp.org' || (preview && sessionStorage.getItem('vd_site') === 'ville');
-          if (isVille) { document.title = 'VILLE · Your City. One App.'; return; }
+          var set = function (sel, attr, val) { var el = document.querySelector(sel); if (el) el.setAttribute(attr, val); };
+          if (isVille) {
+            document.title = 'VILLE · Your City. One App.';
+            set('link[rel="manifest"]', 'href', '/manifest-ville.json');
+            set('meta[name="apple-mobile-web-app-title"]', 'content', 'VILLE');
+            set('meta[name="application-name"]', 'content', 'VILLE');
+            set('link[rel="icon"]', 'href', '/ville-favicon-64.png');
+            set('link[rel="shortcut icon"]', 'href', '/ville-favicon-64.png');
+            document.querySelectorAll('link[rel="apple-touch-icon"]').forEach(function (el) { el.setAttribute('href', '/ville-apple-touch-icon.png'); });
+            return;
+          }
           if (!isDriver) return;
           document.title = 'VilleCabs Driver';
-          var set = function (sel, attr, val) { var el = document.querySelector(sel); if (el) el.setAttribute(attr, val); };
           set('link[rel="manifest"]', 'href', '/manifest-driver.json');
           set('meta[name="apple-mobile-web-app-title"]', 'content', 'VC Driver');
           set('meta[name="application-name"]', 'content', 'VilleCabs Driver');

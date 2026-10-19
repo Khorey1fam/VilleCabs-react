@@ -6,7 +6,7 @@ import '@fontsource-variable/instrument-sans';
 import './ville.css';
 import { dashDb } from '../dash/dashApi';
 import { vehicleSvg } from '../LiveTripMap';
-import logoVille from '../dash/img/logo-ville-row.webp';
+import logoVille from './img/ville-logo-row.png';
 import dashImg from '../dash/img/hero-800.webp';
 import eventsImg from './img/events-park.webp';
 
