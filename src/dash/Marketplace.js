@@ -11,6 +11,8 @@ import { Shell, PageHead, Field, Icon, Chip, Skeleton, SkeletonRows, EmptyState,
 import { StoreCoverArt, StoreArt } from './art';
 import { CATEGORY_GROUPS, SearchBox, MerchantCard, useApprovedMerchants, catLabel, takeHandOff, storeState, todayHours } from './Home';
 import { orderTone, OrderItem } from './Orders';
+import LiveTripMap from '../LiveTripMap';
+import { riderLeg, riderPanel } from './DeliveryTrack';
 
 const MANDEVILLE = { lat: 18.0416, lng: -77.5036 };
 const toMerchant = () => { window.location.href = '/merchant'; };
@@ -517,7 +519,7 @@ function orderTimeline(o, del) {
 }
 
 export function OrderTrack({ go, orderId, shared, openDelivery, domains }) {
-  const { VilleMap, vcConfirm } = shared;
+  const { vcConfirm } = shared;
   const ord = useLive(() => (orderId ? doc(dashDb(), 'dash_orders', orderId) : null), [orderId], docOf);
   const [pin, setPin] = useState(null);
   const [del, setDel] = useState(null);
@@ -562,9 +564,11 @@ export function OrderTrack({ go, orderId, shared, openDelivery, domains }) {
           {tracking && (
             <div>
               <div className="vd-map" style={{ marginTop: 0 }}>
-                <VilleMap height={240} center={fresh ? { lat: loc.lat, lng: loc.lng } : { lat: o.dropoff.lat, lng: o.dropoff.lng }} zoom={14}
-                  markers={[{ position: { lat: del.pickup.lat, lng: del.pickup.lng }, title: o.merchantName }, { position: { lat: o.dropoff.lat, lng: o.dropoff.lng }, title: 'You' },
-                    ...(fresh ? [{ position: { lat: loc.lat, lng: loc.lng }, title: 'Rider' }] : [])]} />
+                <LiveTripMap height={340} vehicleKind="moto" vehicleTitle="Rider"
+                  vehicle={fresh ? { lat: loc.lat, lng: loc.lng } : null}
+                  pickup={del.pickup} dropoff={o.dropoff} leg={riderLeg(del.status)}
+                  pickupLabel={o.merchantName || 'Store'} dropoffLabel="You"
+                  panel={(eta) => riderPanel(del.status, eta, fresh)} />
               </div>
               {!fresh && <p className="vd-field__hint">Live rider location isn’t available right now. Status updates still arrive here.</p>}
             </div>
