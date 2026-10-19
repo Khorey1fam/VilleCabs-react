@@ -6,6 +6,7 @@ import { getFirestore, collection, query, where, onSnapshot, updateDoc, doc, ord
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from '@react-google-maps/api';
 import AdminDashTab from './dash/AdminDash';
+import AdminEventsTab from './events/AdminEvents';
 
 const GOOGLE_MAPS_KEY = process.env.REACT_APP_GOOGLE_MAPS_KEY || '';
 const MAP_LIBRARIES = ['places'];
@@ -3789,6 +3790,7 @@ export default function AdminPanel() {
   const tabs = [
     { id:'overview',  label:'Overview',    icon:'📊' },
     { id:'villedash', label:'VilleDash',   icon:'📦' },
+    { id:'villeevents', label:'VilleEvents', icon:'🎟️' },
     { id:'analytics', label:'Analytics',   icon:'📉' },
     { id:'drivers',   label:'Drivers',     icon:'🚗' },
     { id:'rides',     label:'Rides',       icon:'🚕' },
@@ -3835,10 +3837,11 @@ export default function AdminPanel() {
       {/* ── CONTENT ── */}
       <div style={s.main}>
         <div style={{ fontSize:18, fontWeight:800, marginBottom:16, color:'#1a1a2e' }}>
-          {tab==='overview'?'📊 Dashboard Overview':tab==='villedash'?'📦 VilleDash':tab==='analytics'?'📉 Analytics':tab==='drivers'?'🚗 Driver Management':tab==='rides'?'🚕 Ride Management':tab==='livemap'?'🗺️ Live Operations Map':tab==='scheduled'?'🗓️ Scheduled Rides':tab==='customers'?'👥 Customers':tab==='revenue'?'💰 Revenue':tab==='demand'?'📅 Demand Schedule':tab==='performance'?'📈 Driver Performance':tab==='partners'?'🤝 Partner Requests':tab==='charter'?'🚘 Charter Bookings':tab==='contacts'?'📬 Messages':tab==='alerts'?'🆘 Safety Alerts':tab==='unfulfilled'?'📍 No Driver Available':tab==='broadcast'?'📢 Broadcast to Drivers':'🎟️ Promo Codes'}
+          {tab==='overview'?'📊 Dashboard Overview':tab==='villedash'?'📦 VilleDash':tab==='villeevents'?'🎟️ VilleEvents':tab==='analytics'?'📉 Analytics':tab==='drivers'?'🚗 Driver Management':tab==='rides'?'🚕 Ride Management':tab==='livemap'?'🗺️ Live Operations Map':tab==='scheduled'?'🗓️ Scheduled Rides':tab==='customers'?'👥 Customers':tab==='revenue'?'💰 Revenue':tab==='demand'?'📅 Demand Schedule':tab==='performance'?'📈 Driver Performance':tab==='partners'?'🤝 Partner Requests':tab==='charter'?'🚘 Charter Bookings':tab==='contacts'?'📬 Messages':tab==='alerts'?'🆘 Safety Alerts':tab==='unfulfilled'?'📍 No Driver Available':tab==='broadcast'?'📢 Broadcast to Drivers':'🎟️ Promo Codes'}
         </div>
         {tab === 'overview'  && <OverviewTab setTab={setTab}/>}
         {tab === 'villedash' && <AdminDashTab/>}
+        {tab === 'villeevents' && <AdminEventsTab/>}
         {tab === 'analytics' && <AnalyticsTab/>}
         {tab === 'drivers'   && <DriversTab/>}
         {tab === 'rides'     && <RidesTab/>}

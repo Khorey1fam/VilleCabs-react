@@ -37,7 +37,7 @@ messaging.onBackgroundMessage((payload) => {
 
   self.registration.showNotification(title, {
     body,
-    icon: '/logo.png',
+    icon: (payload.data && payload.data.icon) || '/logo.png',
     badge: '/logo.png',
     tag: (payload.data && payload.data.tag) || 'villecabs-ride',
     data: { url: (payload.data && payload.data.url) || '/' },
@@ -52,6 +52,10 @@ self.addEventListener('notificationclick', (event) => {
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       for (const client of list) {
+        // Event reminders link to /events/<id>: open that page in the tab.
+        if (target !== '/' && 'navigate' in client) {
+          return client.navigate(target).then((c) => (c || client).focus()).catch(() => client.focus());
+        }
         if ('focus' in client) return client.focus();
       }
       if (clients.openWindow) return clients.openWindow(target);

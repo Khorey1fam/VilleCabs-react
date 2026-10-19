@@ -18,7 +18,9 @@ import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'fire
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 // VilleDash (VILLE ecosystem) — new screens live in src/dash, gated by config/features
-import { VilleHome } from './dash/CustomerScreens';
+import VillePublic from './ville/VillePublic';
+import VilleDashboard from './ville/VilleDashboard';
+import VilleEvents from './events/VilleEvents';
 import { DashHome, DashPublic } from './dash/Home';
 import { MyOrders } from './dash/Orders';
 import { DashAbout, DashTerms } from './dash/Info';
@@ -3511,7 +3513,10 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
     return () => unsub();
   }, []);
 
-  const [tab,        setTab]        = useState('book');
+  // Other screens (e.g. the VILLE home's "Ride history") can open a tab here.
+  const [tab,        setTab]        = useState(() => {
+    try { const t = sessionStorage.getItem('vc_dash_tab'); sessionStorage.removeItem('vc_dash_tab'); return t === 'history' ? 'history' : 'book'; } catch(e) { return 'book'; }
+  });
   const [menuOpen,   setMenuOpen]   = useState(false);
   const [history,    setHistory]    = useState([]);
   const [receiptRide, setReceiptRide] = useState(null);  // ride whose receipt is open
@@ -3736,7 +3741,7 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
           <img src="/logo.png" alt="VilleCabs" onClick={() => setTab('book')} style={{ height:26, width:'auto', objectFit:'contain', cursor:'pointer' }}/>
         </div>
         <div style={{ display:'flex', gap:5, marginLeft:'auto', alignItems:'center' }}>
-          {dashOn && <button onClick={() => go('ville-home')} style={{ padding:'3px 8px', background:'#6b21a8', border:'1px solid #6b21a8', borderRadius:12, color:'#ffffff', fontSize:10, fontWeight:700, cursor:'pointer' }}>VILLE</button>}
+          {(dashOn || site === 'ville') && <button onClick={() => go('ville-home')} style={{ padding:'3px 8px', background:'#6b21a8', border:'1px solid #6b21a8', borderRadius:12, color:'#ffffff', fontSize:10, fontWeight:700, cursor:'pointer' }}>VILLE</button>}
           {dashOn && <button onClick={() => go('dash-home')} style={{ padding:'3px 8px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, color:'#6b21a8', fontSize:10, fontWeight:600, cursor:'pointer' }}>VilleDash</button>}
           <button onClick={() => go('ville-events')} style={{ padding:'3px 8px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, color:'#6b21a8', fontSize:10, fontWeight:600, cursor:'pointer' }}>VilleEvents</button>
           <button onClick={() => go('featured')} style={{ padding:'3px 8px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, color:'#6b21a8', fontSize:10, fontWeight:600, cursor:'pointer' }}>Featured</button>
@@ -4928,7 +4933,11 @@ function PinDropoff({ go, pickupData, dropoffData, setDropoffData, user }) {
       return;
     }
     const finalAddress = note.trim() ? address + ' — ' + note.trim() : address;
-    setDropoffData({ coords: pinPos, address: finalAddress });
+    // Booked from a VilleEvents page: keep the event link while the drop-off
+    // is still at (or very near) the venue, so the ride counts for that event.
+    const keepEvent = dropoffData?.eventId && (!dropoffData.coords
+      || haversineM(dropoffData.coords.lat, dropoffData.coords.lng, pinPos.lat, pinPos.lng) < 600);
+    setDropoffData({ coords: pinPos, address: finalAddress, ...(keepEvent ? { eventId: dropoffData.eventId, eventTitle: dropoffData.eventTitle || '' } : {}) });
     go('vehicle-select');
   };
 
@@ -5405,6 +5414,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
           passengers:      pickupData?.passengers || 1,
           pickup:          { address: pickupData?.address||'Manchester, Jamaica', lat: pickupData?.coords?.lat||MANCHESTER_CENTER.lat, lng: pickupData?.coords?.lng||MANCHESTER_CENTER.lng },
           dropoff:         { address: dropoffData?.address||'Destination', lat: dropoffData?.coords?.lat||18.02, lng: dropoffData?.coords?.lng||-77.48 },
+          ...(dropoffData?.eventId ? { eventId: String(dropoffData.eventId).slice(0, 80), eventTitle: String(dropoffData.eventTitle || '').slice(0, 200) } : {}),
           vehicleType:     v.name,
           fare:            finalPrice,
           originalFare:    price,
@@ -5447,6 +5457,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
         passengers:   pickupData?.passengers || 1,
         pickup:       { address: pickupData?.address||'Manchester, Jamaica', lat: pickupData?.coords?.lat||MANCHESTER_CENTER.lat, lng: pickupData?.coords?.lng||MANCHESTER_CENTER.lng },
         dropoff:      { address: dropoffData?.address||'Destination', lat: dropoffData?.coords?.lat||18.02, lng: dropoffData?.coords?.lng||-77.48 },
+        ...(dropoffData?.eventId ? { eventId: String(dropoffData.eventId).slice(0, 80), eventTitle: String(dropoffData.eventTitle || '').slice(0, 200) } : {}),
         vehicleType:  v.name,
         fare:         finalPrice,
         originalFare: price,
@@ -11175,119 +11186,6 @@ function CharterPromo({ go, variant = 'landing' }) {
   );
 }
 
-function VilleEventsPage({ go, user, setPickupData, setDropoffData }) {
-  const [events,  setEvents]  = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const q = query(collection(db,'partnerRequests'), where('status','==','approved'));
-    const unsub = onSnapshot(q, snap => {
-      const live = snap.docs.map(d => ({ id:d.id, ...d.data() }))
-        .filter(p => (p.bizType === 'Events') && p.slot);
-      setEvents(live);
-      setLoading(false);
-    }, () => setLoading(false));
-    return () => unsub();
-  }, []);
-
-  // Group into month buckets, dropping anything already past.
-  const { buckets, undated } = useMemo(() => {
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const map = new Map();   // 'YYYY-M' → { date, list }
-    const noDate = [];
-    events.forEach(p => {
-      const d = parseEventDate(p.eventDate);
-      if (!d) { noDate.push(p); return; }
-      if (d < today) return;                       // event has passed
-      const key = `${d.getFullYear()}-${d.getMonth()}`;
-      if (!map.has(key)) map.set(key, { date:new Date(d.getFullYear(), d.getMonth(), 1), list:[] });
-      map.get(key).list.push(p);
-    });
-    // sort events inside each month by day, and months chronologically
-    const arr = [...map.values()]
-      .map(b => ({ ...b, list: b.list.sort((a,z) => (parseEventDate(a.eventDate) - parseEventDate(z.eventDate))) }))
-      .sort((a,z) => a.date - z.date);
-    return { buckets:arr, undated:noDate };
-  }, [events]);
-
-  const now = new Date();
-  const thisKey = `${now.getFullYear()}-${now.getMonth()}`;
-  const nextD   = new Date(now.getFullYear(), now.getMonth()+1, 1);
-  const nextKey = `${nextD.getFullYear()}-${nextD.getMonth()}`;
-
-  const labelFor = (b) => {
-    const k = `${b.date.getFullYear()}-${b.date.getMonth()}`;
-    if (k === thisKey) return { title:"This Month's Events", sub: b.date.toLocaleDateString('en-US',{ month:'long', year:'numeric' }) };
-    if (k === nextKey) return { title:'Next Month', sub: b.date.toLocaleDateString('en-US',{ month:'long', year:'numeric' }) };
-    return { title: b.date.toLocaleDateString('en-US',{ month:'long', year:'numeric' }), sub:null };
-  };
-
-  const hasAny = buckets.length > 0 || undated.length > 0;
-
-  return (
-    <div style={{ ...s.content, background:'linear-gradient(160deg,#ffffff,#f6f2fb 45%,#efe8f7)' }}>
-      <TopBar title="VilleEvents" go={go} user={user}/>
-      <div style={{ padding:20, maxWidth:1000, margin:'0 auto' }}>
-        <h2 style={{ fontSize:26, fontWeight:800, color:'#2a1a4a', margin:'0 0 6px' }}>🎉 VilleEvents</h2>
-        <p style={{ fontSize:14, color:'#5b5470', marginBottom:20, lineHeight:1.5 }}>
-          Parties and events happening in Mandeville &amp; Manchester. Tap any flyer to see the full details — then book or schedule your ride straight there.
-        </p>
-
-        {/* Schedule a ride — right on the events page */}
-        <div style={{ background:'linear-gradient(135deg,#2a1a4a,#4c1d95)', borderRadius:16, padding:'16px 18px', marginBottom:26, display:'flex', alignItems:'center', gap:14, flexWrap:'wrap' }}>
-          <div style={{ fontSize:30 }}>🗓️</div>
-          <div style={{ flex:1, minWidth:180 }}>
-            <div style={{ fontSize:15, fontWeight:800, color:'#fff', marginBottom:2 }}>Going out? Book your ride ahead.</div>
-            <div style={{ fontSize:12.5, color:'#c4b5fd', lineHeight:1.45 }}>Schedule a pickup for later so you're not stuck finding a ride when the party done.</div>
-          </div>
-          <button onClick={() => go('pin-pickup')}
-            style={{ padding:'11px 20px', background:'#fff', color:'#2a1a4a', border:'none', borderRadius:22, fontSize:13.5, fontWeight:800, cursor:'pointer', whiteSpace:'nowrap' }}>
-            Schedule a Ride →
-          </button>
-        </div>
-
-        {loading ? (
-          <div style={{ textAlign:'center', padding:'50px 0', color:'#8a83a0', fontSize:14 }}>Loading events…</div>
-        ) : !hasAny ? (
-          <div style={{ textAlign:'center', padding:'44px 20px', background:'#fff', border:'1px dashed #e9d5ff', borderRadius:18 }}>
-            <div style={{ fontSize:48, marginBottom:10 }}>🎉</div>
-            <div style={{ fontSize:16, fontWeight:800, color:'#2a1a4a', marginBottom:6 }}>No events listed yet</div>
-            <div style={{ fontSize:13, color:'#8a83a0', marginBottom:16, lineHeight:1.5 }}>
-              Promoting a party or event in Mandeville? Get your flyer in front of every VilleCabs rider.
-            </div>
-            <button onClick={() => go('partner-with-us')}
-              style={{ padding:'11px 22px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:22, fontSize:13.5, fontWeight:700, cursor:'pointer' }}>
-              Promote Your Event →
-            </button>
-          </div>
-        ) : (
-          <>
-            {buckets.map(b => {
-              const { title, sub } = labelFor(b);
-              return <EventMonthRow key={`${b.date.getFullYear()}-${b.date.getMonth()}`} title={title} subtitle={sub}
-                events={b.list} go={go} setPickupData={setPickupData} setDropoffData={setDropoffData}/>;
-            })}
-            {undated.length > 0 && (
-              <EventMonthRow title="More Events" subtitle="Date to be announced"
-                events={undated} go={go} setPickupData={setPickupData} setDropoffData={setDropoffData}/>
-            )}
-            <div style={{ textAlign:'center', marginTop:10, padding:'20px', background:'#fff', border:'1px dashed #e9d5ff', borderRadius:16 }}>
-              <div style={{ fontSize:13.5, fontWeight:700, color:'#2a1a4a', marginBottom:4 }}>Promoting an event?</div>
-              <div style={{ fontSize:12.5, color:'#8a83a0', marginBottom:12 }}>Put your flyer in front of every VilleCabs rider in Manchester.</div>
-              <button onClick={() => go('partner-with-us')}
-                style={{ padding:'10px 20px', background:'#6b21a8', color:'#fff', border:'none', borderRadius:20, fontSize:13, fontWeight:700, cursor:'pointer' }}>
-                Promote Your Event →
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-      <Footer go={go}/>
-    </div>
-  );
-}
-
 function FeaturedPage({ go, user, setPickupData, setDropoffData }) {
   const [partners, setPartners] = useState([]);
   const [loading,  setLoading]  = useState(true);
@@ -12892,7 +12790,7 @@ export default function App() {
     let goEvents = false;
     try { goEvents = new URLSearchParams(window.location.search).get('go') === 'events'; } catch (e) {}
     if (goEvents) { siteHomeShownRef.current = true; setScreen('ville-events'); return; }
-    if (!dashOn || site === 'cabs' || site === 'driver') return;
+    if (site === 'cabs' || site === 'driver' || (site === 'dash' && !dashOn)) return;
     siteHomeShownRef.current = true;
     setScreen(site === 'dash' ? 'dash-home' : 'ville-home');
   }, [dashOn, user, screen, site]);
@@ -12902,6 +12800,18 @@ export default function App() {
   useEffect(() => {
     if (site === 'driver' && user?.role === 'customer' && screen !== 'driver-site-customer') setScreen('driver-site-customer');
   }, [site, user, screen]);
+
+  // Shared event links (/events/<id>, reached directly or via the /e/<id>
+  // preview page) open that event in VilleEvents once the session is restored.
+  const [deepEvent] = useState(() => { try { const m = window.location.pathname.match(/^\/events\/([A-Za-z0-9_-]{1,80})\/?$/); return m ? m[1] : null; } catch (e) { return null; } });
+  const deepEventDoneRef = useRef(false);
+  useEffect(() => {
+    if (!deepEvent || loading || deepEventDoneRef.current) return;
+    deepEventDoneRef.current = true;
+    siteHomeShownRef.current = true;
+    try { sessionStorage.setItem('ve_open', deepEvent); window.history.replaceState(null, '', '/'); } catch (e) {}
+    setScreen('ville-events');
+  }, [deepEvent, loading, screen]);
 
   // Back from WiPay's card page: ?vdpay=<paymentId> → show the payment result.
   const [payId] = useState(() => { try { return new URLSearchParams(window.location.search).get('vdpay'); } catch (e) { return null; } });
@@ -13067,9 +12977,10 @@ export default function App() {
   // VilleDash screens exist only while the feature flag is on.
   const dash = (el) => (dashOn ? el : <CustomerDash {...props}/>);
 
+  const signOutToHome = async () => { try { await signOut(auth); } catch(e) {} setUser(null); setScreen('splash'); };
   const screens = {
-    'driver-site-customer': <DriverSiteCustomer domains={domains} onSignOut={async () => { try { await signOut(auth); } catch(e) {} setUser(null); setScreen('splash'); }}/>,
-    splash:           site === 'driver' ? <DriverLanding go={setScreen} domains={domains}/> : site === 'cabs' ? <Splash {...props}/> : site === 'dash' ? <DashPublic go={setScreen} domains={domains} launched={dashOn}/> : <SiteLanding site={site} domains={domains} go={setScreen} dashOn={dashOn}/>,
+    'driver-site-customer': <DriverSiteCustomer domains={domains} onSignOut={signOutToHome}/>,
+    splash:           site === 'driver' ? <DriverLanding go={setScreen} domains={domains}/> : site === 'ville' ? <VillePublic go={setScreen} user={user} domains={domains}/> : site === 'cabs' ? <Splash {...props}/> : site === 'dash' ? <DashPublic go={setScreen} domains={domains} launched={dashOn}/> : <SiteLanding site={site} domains={domains} go={setScreen} dashOn={dashOn}/>,
     role:             <RoleSelect {...props}/>,
     'customer-signup':<CustomerSignup {...props}/>,
     'customer-login': <CustomerLogin {...props}/>,
@@ -13103,7 +13014,15 @@ export default function App() {
     'customer-settings':<CustomerSettings {...props}/>,
     'business':         <BusinessPage {...props}/>,
     'featured':         <FeaturedPage {...props}/>,
-    'ville-events':     <VilleEventsPage {...props}/>,
+    'ville-events':     <VilleEvents go={setScreen} user={user} setDropoffData={setDropoffData} site={site}
+                          enablePush={async () => {
+                            if (typeof Notification === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) return 'unsupported';
+                            let perm = Notification.permission;
+                            if (perm === 'default') { try { perm = await Notification.requestPermission(); } catch (e) { return 'unsupported'; } }
+                            if (perm === 'granted' && user?.uid) await registerCustomerPushToken(user.uid);
+                            return perm;
+                          }}
+                          onHome={() => setScreen(site === 'ville' ? (user ? 'ville-home' : 'splash') : (user ? (user.role === 'driver' ? 'driver-dash' : 'customer-dash') : 'splash'))}/>,
     'charter':          <CharterPage {...props}/>,
     'payments':         <PaymentsPage {...props}/>,
     'promotions':       <PromotionsPage {...props}/>,
@@ -13121,7 +13040,8 @@ export default function App() {
     'login-choice':           <CustomerLogin {...props}/>,
     'complete-profile':       <CompleteProfile {...props}/>,
     'partner-locations':      <PartnerLocations {...props}/>,
-    'ville-home':             dash(<VilleHome {...dashProps}/>),
+    'ville-home':             <VilleDashboard {...dashProps} onSignOut={signOutToHome}/>,
+    'dash-public':            <DashPublic go={setScreen} domains={domains} launched={dashOn}/>,
     'dash-home':              dash(<DashHome {...dashProps}/>),
     'dash-send':              dash(<SendPackage {...dashProps}/>),
     'dash-track':             dash(<DeliveryTrack {...dashProps}/>),

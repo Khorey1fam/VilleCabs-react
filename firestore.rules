@@ -606,6 +606,63 @@ service cloud.firestore {
       allow read, delete: if isAdmin();
     }
 
+    // ── VilleEvents ──────────────────────────────────────────────────────────
+    // Events: everyone sees published and cancelled events; only admins write.
+    match /ville_events/{eventId} {
+      allow read:  if isAdmin() || resource.data.status in ['published', 'cancelled'];
+      allow write: if isAdmin();
+      match /audit/{entryId} {
+        allow read:  if isAdmin();
+        allow write: if false;                    // written by Cloud Functions
+      }
+    }
+    // Saved events: one per customer per event (the id is uid_eventId, so a
+    // second save of the same event is the same document). Owner only.
+    function eventSaveOk(d) {
+      return d.keys().hasOnly(['uid', 'eventId', 'reminders', 'customMinutes', 'remindersOn', 'eventTitle', 'eventStartMs', 'createdAt', 'updatedAt'])
+        && d.eventId is string && d.eventId.size() > 0 && d.eventId.size() <= 80
+        && d.reminders is list && d.reminders.size() <= 5
+        && d.remindersOn is bool
+        && (!('customMinutes' in d) || d.customMinutes == null || (d.customMinutes is int && d.customMinutes >= 15 && d.customMinutes <= 20160))
+        && (!('eventTitle' in d) || (d.eventTitle is string && d.eventTitle.size() <= 200));
+    }
+    match /event_saves/{saveId} {
+      allow read, delete: if signedIn() && resource.data.uid == request.auth.uid;
+      allow create: if signedIn()
+                    && request.resource.data.uid == request.auth.uid
+                    && saveId == request.auth.uid + '_' + request.resource.data.eventId
+                    && eventSaveOk(request.resource.data);
+      allow update: if signedIn()
+                    && resource.data.uid == request.auth.uid
+                    && request.resource.data.uid == resource.data.uid
+                    && request.resource.data.eventId == resource.data.eventId
+                    && eventSaveOk(request.resource.data);
+    }
+    // Reminder jobs: the customer can see their own; only Cloud Functions write.
+    match /event_reminders/{jobId} {
+      allow read:  if signedIn() && resource.data.uid == request.auth.uid;
+      allow write: if false;
+    }
+    // In-app inbox: owner reads, marks read or deletes; Cloud Functions create.
+    match /customer_notifications/{noteId} {
+      allow read, delete: if signedIn() && resource.data.uid == request.auth.uid;
+      allow update: if signedIn() && resource.data.uid == request.auth.uid
+                    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']);
+      allow create: if false;
+    }
+    // Recently viewed events (per customer, ids only).
+    match /event_recent/{uid} {
+      allow read:  if signedIn() && request.auth.uid == uid;
+      allow write: if signedIn() && request.auth.uid == uid
+                   && request.resource.data.keys().hasOnly(['ids', 'updatedAt'])
+                   && request.resource.data.ids is list && request.resource.data.ids.size() <= 20;
+    }
+    // Aggregate engagement counters: admin only.
+    match /ville_event_stats/{eventId} {
+      allow read:  if isAdmin();
+      allow write: if false;
+    }
+
     // ── Default deny for anything not explicitly listed ──────────────────────
     match /{document=**} {
       allow read, write: if false;

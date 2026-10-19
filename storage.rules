@@ -78,6 +78,14 @@ service firebase.storage {
     }
 
     // ── VILLE cross-site ad images — admin only ───────────────────────────────
+    // ── VilleEvents posters (admin uploads the organiser's original flyer) ──
+    match /ville_events/{eventId}/{file} {
+      allow read:  if true;
+      allow write: if isAdmin()
+                   && request.resource.size < 8 * 1024 * 1024
+                   && request.resource.contentType.matches('image/(png|jpeg|webp)');
+    }
+
     match /site_ads/{file} {
       allow read:  if true;
       allow write: if isAdmin()

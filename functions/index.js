@@ -277,3 +277,8 @@ exports.notifyCustomerCompleted = onDocumentUpdated(
    PIN verification, notifications, referral check).
    ═══════════════════════════════════════════════════════════════════════════ */
 Object.assign(exports, require('./dash'));
+
+// VilleEvents: saved-event reminders, inbox, stats and share previews.
+const villeEvents = require('./events');
+['eventSaveSync', 'eventChangeSync', 'eventRemindersSweep', 'eventTrack', 'eventRideBooked',
+  'eventRideCompleted', 'eventsImportLegacy', 'eventPage'].forEach((k) => { exports[k] = villeEvents[k]; });

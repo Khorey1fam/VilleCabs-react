@@ -19,7 +19,9 @@ function Domains() {
   if (!f) return <Spinner />;
   const save = async () => {
     setMsg('');
-    const out = { ...Object.fromEntries(DOMAIN_SITES.map((k) => [k, clean(f[k])])), driverLive: f.driverLive === true };
+    const store = (u, host) => { const v = String(u || '').trim(); return v.startsWith('https://') && v.includes(host) ? v : ''; };
+    if ((f.appAndroidUrl && !store(f.appAndroidUrl, 'play.google.com')) || (f.appIosUrl && !store(f.appIosUrl, 'apps.apple.com'))) { setMsg('Store links must be the real listing addresses (https://play.google.com/… and https://apps.apple.com/…).'); return; }
+    const out = { ...Object.fromEntries(DOMAIN_SITES.map((k) => [k, clean(f[k])])), driverLive: f.driverLive === true, appAndroidUrl: store(f.appAndroidUrl, 'play.google.com'), appIosUrl: store(f.appIosUrl, 'apps.apple.com') };
     if (out.ville && out.ville === out.dash) { setMsg('VILLE and VilleDash need different domains.'); return; }
     try { await setDoc(doc(dashDb(), 'config', 'sites'), { ...out, updatedAt: serverTimestamp() }, { merge: true }); setMsg('Saved. Each domain shows its own home page as soon as it points at Vercel.'); } catch (e) { setMsg('Could not save.'); }
   };
@@ -31,6 +33,11 @@ function Domains() {
         <div key={k}><label style={st.label}>{SITE_INFO[k].name} domain</label>
           <input style={st.input} placeholder={k === 'cabs' ? 'villecabs.com' : 'e.g. your-domain.com'} value={f[k] || ''} onChange={(e) => setF({ ...f, [k]: e.target.value })} /></div>
       ))}
+      <label style={st.label}>VILLE app on Google Play (leave blank until it is published)</label>
+      <input style={st.input} placeholder="https://play.google.com/store/apps/details?id=…" value={f.appAndroidUrl || ''} onChange={(e) => setF({ ...f, appAndroidUrl: e.target.value })} />
+      <label style={st.label}>VILLE app on the App Store (leave blank until it is published)</label>
+      <input style={st.input} placeholder="https://apps.apple.com/…" value={f.appIosUrl || ''} onChange={(e) => setF({ ...f, appIosUrl: e.target.value })} />
+      <div style={{ fontSize: 12, color: C.quiet, marginTop: 4 }}>Until a link is saved, the VILLE homepage shows that store as “Coming soon” with a notify-me form.</div>
       <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 13.5, marginTop: 10 }}>
         <input type="checkbox" checked={f.driverLive === true} onChange={(e) => setF({ ...f, driverLive: e.target.checked })} />
         Driver app is live: show drivers on VilleCabs a link to it
