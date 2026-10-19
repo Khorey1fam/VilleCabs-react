@@ -34,6 +34,8 @@
           var q = new URLSearchParams(location.search).get('site');
           if (preview && q) sessionStorage.setItem('vd_site', q);
           var isDriver = h.indexOf('driver.') === 0 || (preview && sessionStorage.getItem('vd_site') === 'driver');
+          var isVille = h === 'villeapp.org' || h === 'www.villeapp.org' || (preview && sessionStorage.getItem('vd_site') === 'ville');
+          if (isVille) { document.title = 'VILLE · Your City. One App.'; return; }
           if (!isDriver) return;
           document.title = 'VilleCabs Driver';
           var set = function (sel, attr, val) { var el = document.querySelector(sel); if (el) el.setAttribute(attr, val); };

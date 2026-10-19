@@ -5,6 +5,8 @@ import { Timestamp } from 'firebase/firestore';
 import { __VehicleSelect as VehicleSelect, __BookingConfirm as BookingConfirm, __DriverLogin as DriverLogin, __DriverDash as DriverDash } from '@src/App';
 import { ExtraFareRequest, ExtraFareList, ExtraFareCustomer } from '@src/RideExtras';
 import { DriverLanding, DriverSiteCustomer, DriverAppBanner } from '@src/DriverSite';
+import VillePublic from '@src/ville/VillePublic';
+import VilleDashboard from '@src/ville/VilleDashboard';
 
 // Minimal Google Maps stand-in (the real script isn't loaded here).
 window.google = { maps: {
@@ -42,7 +44,20 @@ if (s && s.startsWith('driver-dash')) {
   put('driver_notices/n1', { audience: 'all', title: 'Busy weekend ahead', message: 'Expect more requests around town Friday evening.', createdAt: Timestamp.fromMillis(t - 5400e3), readBy: [] });
   put('driver_notices/n2', { audience: 'all', title: 'Welcome to the driver app', message: 'Add it to your home screen for the best experience.', createdAt: Timestamp.fromMillis(t - 86400e3), readBy: ['drv1'] });
 }
+if (s && s.startsWith('ville')) {
+  const t = Date.now();
+  if (s.includes('dashlive')) put('config/features', { dash: true }); else put('config/features', { dash: false, dashTesters: [] });
+  put('customers/cust1', { name: 'Keneile Davis', phone: '8765550101', email: 'k@x.jm', status: 'active' });
+  if (s.includes('active')) put('bookings/RA', { customerId: 'cust1', status: 'active', driverName: 'Dwayne', fare: 1300, createdAt: Timestamp.fromMillis(t - 300e3), pickup: { address: 'Manchester Shopping Centre' }, dropoff: { address: 'Northern Caribbean University, Mandeville' } });
+  put('bookings/RH1', { customerId: 'cust1', status: 'completed', fare: 1200, createdAt: Timestamp.fromMillis(t - 86400e3), completedAt: Timestamp.fromMillis(t - 86000e3), pickup: { address: 'Ward Avenue' }, dropoff: { address: 'Mandeville Regional Hospital, Hargreaves Ave' } });
+  put('bookings/RH2', { customerId: 'cust1', status: 'completed', fare: 850, createdAt: Timestamp.fromMillis(t - 3 * 86400e3), completedAt: Timestamp.fromMillis(t - 3 * 86400e3), pickup: { address: 'Caledonia Road' }, dropoff: { address: 'Manchester Shopping Centre' } });
+  put('notifications/N1', { customerId: 'cust1', message: 'Dwayne has arrived at your pickup location!', createdAt: Timestamp.fromMillis(t - 86100e3), read: false });
+}
 const SCREENS = {
+  'ville-public': <VillePublic go={nav} user={null} domains={{ driver: 'driver.villecabs.com' }} />,
+  'ville-home': <VilleDashboard go={nav} user={user} setBookingId={(id) => { window.__booking = id; }} openDelivery={nav} openOrder={nav} domains={{}} onSignOut={() => nav('signed-out')} />,
+  'ville-home-active': <VilleDashboard go={nav} user={user} setBookingId={(id) => { window.__booking = id; }} openDelivery={nav} openOrder={nav} domains={{}} onSignOut={() => nav('signed-out')} />,
+  'ville-public-dashlive': <VillePublic go={nav} user={null} domains={{}} />,
   'driver-login': <DriverLogin go={nav} user={null} setUser={() => {}} site="driver" />,
   'driver-dash-off': <DriverDash go={nav} user={{ uid: 'drv1', name: 'Dwayne Brown', role: 'driver' }} setUser={() => {}} setBookingId={() => {}} site="driver" domains={{}} />,
   'driver-dash': <DriverDash go={nav} user={{ uid: 'drv1', name: 'Dwayne Brown', role: 'driver' }} setUser={() => {}} setBookingId={() => {}} site="driver" domains={{}} />,

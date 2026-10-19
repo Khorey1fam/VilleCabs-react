@@ -18,7 +18,8 @@ import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'fire
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 // VilleDash (VILLE ecosystem) — new screens live in src/dash, gated by config/features
-import { VilleHome } from './dash/CustomerScreens';
+import VillePublic from './ville/VillePublic';
+import VilleDashboard from './ville/VilleDashboard';
 import { DashHome, DashPublic } from './dash/Home';
 import { MyOrders } from './dash/Orders';
 import { DashAbout, DashTerms } from './dash/Info';
@@ -3511,7 +3512,10 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
     return () => unsub();
   }, []);
 
-  const [tab,        setTab]        = useState('book');
+  // Other screens (e.g. the VILLE home's "Ride history") can open a tab here.
+  const [tab,        setTab]        = useState(() => {
+    try { const t = sessionStorage.getItem('vc_dash_tab'); sessionStorage.removeItem('vc_dash_tab'); return t === 'history' ? 'history' : 'book'; } catch(e) { return 'book'; }
+  });
   const [menuOpen,   setMenuOpen]   = useState(false);
   const [history,    setHistory]    = useState([]);
   const [receiptRide, setReceiptRide] = useState(null);  // ride whose receipt is open
@@ -3736,7 +3740,7 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
           <img src="/logo.png" alt="VilleCabs" onClick={() => setTab('book')} style={{ height:26, width:'auto', objectFit:'contain', cursor:'pointer' }}/>
         </div>
         <div style={{ display:'flex', gap:5, marginLeft:'auto', alignItems:'center' }}>
-          {dashOn && <button onClick={() => go('ville-home')} style={{ padding:'3px 8px', background:'#6b21a8', border:'1px solid #6b21a8', borderRadius:12, color:'#ffffff', fontSize:10, fontWeight:700, cursor:'pointer' }}>VILLE</button>}
+          {(dashOn || site === 'ville') && <button onClick={() => go('ville-home')} style={{ padding:'3px 8px', background:'#6b21a8', border:'1px solid #6b21a8', borderRadius:12, color:'#ffffff', fontSize:10, fontWeight:700, cursor:'pointer' }}>VILLE</button>}
           {dashOn && <button onClick={() => go('dash-home')} style={{ padding:'3px 8px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, color:'#6b21a8', fontSize:10, fontWeight:600, cursor:'pointer' }}>VilleDash</button>}
           <button onClick={() => go('ville-events')} style={{ padding:'3px 8px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, color:'#6b21a8', fontSize:10, fontWeight:600, cursor:'pointer' }}>VilleEvents</button>
           <button onClick={() => go('featured')} style={{ padding:'3px 8px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, color:'#6b21a8', fontSize:10, fontWeight:600, cursor:'pointer' }}>Featured</button>
@@ -12892,7 +12896,7 @@ export default function App() {
     let goEvents = false;
     try { goEvents = new URLSearchParams(window.location.search).get('go') === 'events'; } catch (e) {}
     if (goEvents) { siteHomeShownRef.current = true; setScreen('ville-events'); return; }
-    if (!dashOn || site === 'cabs' || site === 'driver') return;
+    if (site === 'cabs' || site === 'driver' || (site === 'dash' && !dashOn)) return;
     siteHomeShownRef.current = true;
     setScreen(site === 'dash' ? 'dash-home' : 'ville-home');
   }, [dashOn, user, screen, site]);
@@ -13067,9 +13071,10 @@ export default function App() {
   // VilleDash screens exist only while the feature flag is on.
   const dash = (el) => (dashOn ? el : <CustomerDash {...props}/>);
 
+  const signOutToHome = async () => { try { await signOut(auth); } catch(e) {} setUser(null); setScreen('splash'); };
   const screens = {
-    'driver-site-customer': <DriverSiteCustomer domains={domains} onSignOut={async () => { try { await signOut(auth); } catch(e) {} setUser(null); setScreen('splash'); }}/>,
-    splash:           site === 'driver' ? <DriverLanding go={setScreen} domains={domains}/> : site === 'cabs' ? <Splash {...props}/> : site === 'dash' ? <DashPublic go={setScreen} domains={domains} launched={dashOn}/> : <SiteLanding site={site} domains={domains} go={setScreen} dashOn={dashOn}/>,
+    'driver-site-customer': <DriverSiteCustomer domains={domains} onSignOut={signOutToHome}/>,
+    splash:           site === 'driver' ? <DriverLanding go={setScreen} domains={domains}/> : site === 'ville' ? <VillePublic go={setScreen} user={user} domains={domains}/> : site === 'cabs' ? <Splash {...props}/> : site === 'dash' ? <DashPublic go={setScreen} domains={domains} launched={dashOn}/> : <SiteLanding site={site} domains={domains} go={setScreen} dashOn={dashOn}/>,
     role:             <RoleSelect {...props}/>,
     'customer-signup':<CustomerSignup {...props}/>,
     'customer-login': <CustomerLogin {...props}/>,
@@ -13121,7 +13126,8 @@ export default function App() {
     'login-choice':           <CustomerLogin {...props}/>,
     'complete-profile':       <CompleteProfile {...props}/>,
     'partner-locations':      <PartnerLocations {...props}/>,
-    'ville-home':             dash(<VilleHome {...dashProps}/>),
+    'ville-home':             <VilleDashboard {...dashProps} onSignOut={signOutToHome}/>,
+    'dash-public':            <DashPublic go={setScreen} domains={domains} launched={dashOn}/>,
     'dash-home':              dash(<DashHome {...dashProps}/>),
     'dash-send':              dash(<SendPackage {...dashProps}/>),
     'dash-track':             dash(<DeliveryTrack {...dashProps}/>),
