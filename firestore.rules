@@ -127,6 +127,23 @@ service cloud.firestore {
         'extrasOpenCount', 'extrasCount', 'extraPending']);
     }
 
+    // Fields only Cloud Functions write (cancellation fees, creator codes,
+    // re-dispatch). Neither the customer nor the driver may change them.
+    function serverRideFieldsUntouched() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        'cancelHandled', 'cancelFee', 'cancelFault', 'cancelFeeCollect', 'creator', 'discountCoveredBy',
+        'redispatchCount', 'lastDriverCancel', 'searchStartedAt', 'needsReview']);
+    }
+    // The customer can't move the clock the cancellation fee is based on, and
+    // can only cancel, or expire a ride that is still searching.
+    function customerRideUpdateOk() {
+      return serverRideFieldsUntouched()
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['acceptedAt', 'arrivedAt', 'startedAt', 'driverId'])
+        && (request.resource.data.status == resource.data.status
+            || request.resource.data.status == 'cancelled'
+            || (resource.data.status == 'searching' && request.resource.data.status in ['expired', 'searching']));
+    }
+
     match /bookings/{bookingId} {
       // Read: admin, the ride's customer, the assigned driver, or an approved
       // driver looking at OPEN rides (searching / scheduled). This stops any
@@ -157,13 +174,17 @@ service cloud.firestore {
                         && get(/databases/$(database)/documents/charterRequests/$(request.resource.data.charterId)).data.assignedDriverId == request.auth.uid);
       allow update: if isAdmin()
                     || (signedIn() && resource.data.customerId == request.auth.uid && ridePaymentUntouched()
+                        && customerRideUpdateOk()
                         && (resource.data.status != 'awaiting_payment'
                             || request.resource.data.status in ['awaiting_payment', 'cancelled']))
                     // the driver already assigned to this ride may keep updating it
                     // (arrive / complete / location). No isDriver() get() here —
                     // this is the hot path (location writes every few seconds) and
                     // they were already verified as approved when they claimed it.
-                    || (signedIn() && resource.data.driverId == request.auth.uid && ridePaymentUntouched())
+                    // Drivers cancel through the rideDriverCancel function, never directly.
+                    || (signedIn() && resource.data.driverId == request.auth.uid && ridePaymentUntouched()
+                        && serverRideFieldsUntouched()
+                        && (request.resource.data.status != 'cancelled' || resource.data.status == 'cancelled'))
                     // any APPROVED driver may DECLINE an open ride — this only
                     // appends their uid to declinedBy, nothing else may change
                     || (isDriver() && onlyChanges(['declinedBy']))
@@ -273,11 +294,6 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // ── Promo codes ──────────────────────────────────────────────────────────
-    // Publicly READABLE — promo codes are meant to be advertised (shown on the
-    // landing page to signed-out visitors too). On redemption a signed-in
-    // customer may ONLY append to usedBy / bump usageCount — they cannot change
-    // the discount or reset limits. Only admins create/delete.
     // ── Creator program ──────────────────────────────────────────────────────
     // Creator codes are private (never in the public promo_codes list). Only
     // admins can read them; every write goes through Cloud Functions.
@@ -287,6 +303,22 @@ service cloud.firestore {
     match /creator_uses/{id}        { allow read: if isAdmin(); allow write: if false; }
     match /creator_payouts/{id}     { allow read: if isAdmin(); allow write: if false; }
 
+    // ── Ride cancellation fees ───────────────────────────────────────────────
+    // Written only by Cloud Functions. The customer sees their own fees and
+    // balance; the driver sees the fees they're owed; admins see everything.
+    match /cancel_fees/{id} {
+      allow read: if isAdmin()
+                  || (signedIn() && (resource.data.customerId == request.auth.uid || resource.data.driverId == request.auth.uid));
+      allow write: if false;
+    }
+    match /customer_balances/{uid} { allow read: if isOwner(uid) || isAdmin(); allow write: if false; }
+    match /driver_cancellations/{id} { allow read: if isAdmin() || (signedIn() && resource.data.driverId == request.auth.uid); allow write: if false; }
+
+    // ── Promo codes ──────────────────────────────────────────────────────────
+    // Publicly READABLE — promo codes are meant to be advertised (shown on the
+    // landing page to signed-out visitors too). On redemption a signed-in
+    // customer may ONLY append to usedBy / bump usageCount — they cannot change
+    // the discount or reset limits. Only admins create/delete.
     match /promo_codes/{id} {
       allow read:   if true;
       allow update: if isAdmin()

@@ -8,6 +8,7 @@ import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from '@react-google-map
 import AdminDashTab from './dash/AdminDash';
 import AdminEventsTab from './events/AdminEvents';
 import AdminCreatorsTab from './creators/AdminCreators';
+import AdminCancellationsTab from './cancel/AdminCancellations';
 
 const GOOGLE_MAPS_KEY = process.env.REACT_APP_GOOGLE_MAPS_KEY || '';
 const MAP_LIBRARIES = ['places'];
@@ -162,6 +163,12 @@ function DriverEarnings({ driverId }) {
       e => { console.error('Driver earnings load failed:', e); setLoading(false); });
     return () => unsub();
   }, [driverId]);
+  const [cancelFees, setCancelFees] = useState([]);
+  useEffect(() => {
+    if (!driverId) return undefined;
+    return onSnapshot(query(collection(db,'cancel_fees'), where('driverId','==',driverId)),
+      snap => setCancelFees(snap.docs.map(d=>({id:d.id,...d.data()}))), () => {});
+  }, [driverId]);
 
   if (loading) return <div style={{ fontSize:12, color:'#9199ad', padding:'10px 0' }}>Loading earnings…</div>;
   if (rides.length === 0) return <div style={{ fontSize:12, color:'#9199ad', padding:'10px 0' }}>No completed rides yet.</div>;
@@ -212,6 +219,8 @@ function DriverEarnings({ driverId }) {
       </div>
       <div style={{ fontSize:11, color:'#8a83a0', marginBottom:10 }}>
         Payout = 85% of gross fares (after the 15% platform fee).
+        {cancelFees.some(f => f.status === 'collected') && <> Plus <b>J${cancelFees.filter(f => f.status === 'collected').reduce((t,f)=>t+(f.driverShareJmd||0),0).toLocaleString()}</b> from collected rider cancellation fees (85% share).</>}
+        {cancelFees.some(f => ['owed','collecting'].includes(f.status)) && <> J${cancelFees.filter(f => ['owed','collecting'].includes(f.status)).reduce((t,f)=>t+(f.driverShareJmd||0),0).toLocaleString()} in cancellation fees not collected yet.</>}
       </div>
 
       <div style={{ fontSize:11, color:'#8a83a0', fontWeight:700, textTransform:'uppercase', letterSpacing:0.4, marginBottom:2 }}>Daily breakdown</div>
@@ -3837,6 +3846,7 @@ export default function AdminPanel() {
     { id:'broadcast', label:'Broadcast',   icon:'📢' },
     { id:'promos',    label:'Promos',      icon:'🎟️' },
     { id:'creators',  label:'Creators',    icon:'📣' },
+    { id:'cancellations', label:'Cancellations', icon:'✖️' },
   ];
 
   return (
@@ -3867,7 +3877,7 @@ export default function AdminPanel() {
       {/* ── CONTENT ── */}
       <div style={s.main}>
         <div style={{ fontSize:18, fontWeight:800, marginBottom:16, color:'#1a1a2e' }}>
-          {tab==='overview'?'📊 Dashboard Overview':tab==='villedash'?'📦 VilleDash':tab==='villeevents'?'🎟️ VilleEvents':tab==='creators'?'📣 Creator Program':tab==='analytics'?'📉 Analytics':tab==='drivers'?'🚗 Driver Management':tab==='rides'?'🚕 Ride Management':tab==='livemap'?'🗺️ Live Operations Map':tab==='scheduled'?'🗓️ Scheduled Rides':tab==='customers'?'👥 Customers':tab==='revenue'?'💰 Revenue':tab==='demand'?'📅 Demand Schedule':tab==='performance'?'📈 Driver Performance':tab==='partners'?'🤝 Partner Requests':tab==='charter'?'🚘 Charter Bookings':tab==='contacts'?'📬 Messages':tab==='alerts'?'🆘 Safety Alerts':tab==='unfulfilled'?'📍 No Driver Available':tab==='broadcast'?'📢 Broadcast to Drivers':'🎟️ Promo Codes'}
+          {tab==='overview'?'📊 Dashboard Overview':tab==='villedash'?'📦 VilleDash':tab==='villeevents'?'🎟️ VilleEvents':tab==='creators'?'📣 Creator Program':tab==='cancellations'?'✖️ Cancellations':tab==='analytics'?'📉 Analytics':tab==='drivers'?'🚗 Driver Management':tab==='rides'?'🚕 Ride Management':tab==='livemap'?'🗺️ Live Operations Map':tab==='scheduled'?'🗓️ Scheduled Rides':tab==='customers'?'👥 Customers':tab==='revenue'?'💰 Revenue':tab==='demand'?'📅 Demand Schedule':tab==='performance'?'📈 Driver Performance':tab==='partners'?'🤝 Partner Requests':tab==='charter'?'🚘 Charter Bookings':tab==='contacts'?'📬 Messages':tab==='alerts'?'🆘 Safety Alerts':tab==='unfulfilled'?'📍 No Driver Available':tab==='broadcast'?'📢 Broadcast to Drivers':'🎟️ Promo Codes'}
         </div>
         {tab === 'overview'  && <OverviewTab setTab={setTab}/>}
         {tab === 'villedash' && <AdminDashTab/>}
@@ -3889,6 +3899,7 @@ export default function AdminPanel() {
         {tab === 'broadcast' && <BroadcastTab/>}
         {tab === 'promos'    && <PromoCodesTab/>}
         {tab === 'creators'  && <AdminCreatorsTab/>}
+        {tab === 'cancellations' && <AdminCancellationsTab/>}
       </div>
     </div>
   );

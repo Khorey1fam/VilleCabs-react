@@ -26,6 +26,8 @@ import { MyOrders } from './dash/Orders';
 import { DashAbout, DashTerms } from './dash/Info';
 import { PaymentReturn, goToCard } from './dash/Payments';
 import { ExtraFareRequest, ExtraFareList, ExtraFareCustomer, usePendingExtraRides } from './RideExtras';
+import { CustomerCancelSheet, DriverCancelSheet, useCancelConfig, useCancelBalance } from './cancel/CancelSheets';
+import { freeWindowLeft, jmd as cancelJmd } from './cancel/cancelRules';
 import { StoresList, StorePage, Cart, Checkout, OrderTrack } from './dash/Marketplace';
 import SendPackage from './dash/SendPackage';
 import DeliveryTrack from './dash/DeliveryTrack';
@@ -3445,7 +3447,7 @@ function DashFAQ({ go }) {
   const [open, setOpen] = useState(0);
   const faqs = [
     ['How do I schedule a ride?','Open the app → choose pickup & drop-off → pick date/time → select your vehicle → confirm. You\u2019ll see the fare before booking.'],
-    ['What\u2019s the cancellation policy?','You can cancel free of charge any time before a driver accepts your ride. Once a driver is on the way, a small cancellation fee may apply.'],
+    ['What\u2019s the cancellation policy?','Cancelling is free while we look for a driver and for the first 2 minutes after a driver accepts. After that, a cancellation fee (currently J$300) applies and is added to your next ride. There\u2019s no fee if your driver cancels, or if they still haven\u2019t arrived 15 minutes after accepting.'],
     ['How do I pay for my ride?','Payment is cash directly to your driver on arrival. Just confirm the fare shown in the app before you book.'],
     ['Are the drivers verified?','Yes. Every VilleCabs driver is background-checked and approved before they can accept rides.'],
     ['Which areas do you cover?','VilleCabs operates across Mandeville and the wider Manchester parish, with out-of-town trips available on request.'],
@@ -5078,6 +5080,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
   const [directions, setDirections] = useState(null);
   const [completed,  setCompleted]  = useState(false);
   const [promoCode,  setPromoCode]  = useState('');
+  const owedCancelFee = useCancelBalance(user?.uid);
   const [referralMsg,   setReferralMsg]   = useState(null); // { text, ok }
   const [referralDocId, setReferralDocId] = useState(null); // referrer's customer id, once validated
   const [referralChecking, setReferralChecking] = useState(false);
@@ -5808,6 +5811,14 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
                 <span style={{ fontSize:23, fontWeight:800, color:'#6b21a8' }}>J${calcFinalPrice(v).toLocaleString()}</span>
               </div>
 
+              {owedCancelFee > 0 && (
+                <div role="status" style={{ background:'#fff7ed', border:'1px solid #fdba74', color:'#9a3412', borderRadius:12, padding:'10px 12px', fontSize:12.5, lineHeight:1.5, marginBottom:12 }}>
+                  {payBy === 'card' && cardOn
+                    ? `You owe a ${cancelJmd(owedCancelFee)} cancellation fee from an earlier trip. It will be added to your next cash ride.`
+                    : <>Plus a <b>{cancelJmd(owedCancelFee)}</b> cancellation fee from an earlier trip, paid to your driver in cash. Total to pay: <b>{cancelJmd(calcFinalPrice(v) + owedCancelFee)}</b>.</>}
+                </div>
+              )}
+
               {error && <div style={{ ...s.errBox, marginBottom:12 }}>⚠️ {error}</div>}
 
               <button onClick={() => { setConfirmOpen(false); handleBook(); }} disabled={loading}
@@ -5900,7 +5911,7 @@ function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, 
   useEffect(() => {
     if (!bookingId || booking?.status !== 'searching') { searchStartRef.current = null; return; }
     if (searchStartRef.current === null) {
-      searchStartRef.current = booking?.createdAt?.seconds ? booking.createdAt.seconds * 1000 : Date.now();
+      searchStartRef.current = (booking?.searchStartedAt?.seconds || booking?.createdAt?.seconds) ? (booking?.searchStartedAt?.seconds || booking.createdAt.seconds) * 1000 : Date.now();
     }
     const deadline = searchStartRef.current + 10*60*1000;
     const fire = async () => {
@@ -5965,8 +5976,9 @@ function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, 
     setLoading(true); setError('');
     try {
       if (bookingId && !cardPaid) {
-        // Update booking status to searching if needed
-        await updateDoc(doc(db,'bookings',bookingId), { status:'searching', confirmedAt: serverTimestamp() });
+        // Mark the request confirmed. If a driver already accepted (status moved
+        // on), the rules refuse this write — that's fine, carry on to the ride.
+        try { await updateDoc(doc(db,'bookings',bookingId), { status:'searching', confirmedAt: serverTimestamp() }); } catch (e) { /* already accepted */ }
       }
       navigatedRef.current = true;
       go('live-ride');
@@ -5984,6 +5996,13 @@ function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, 
         // Only cancel if it hasn't reached a terminal state
         const snap = await getDoc(doc(db,'bookings',bookingId));
         const cur = snap.exists() ? snap.data() : null;
+        // A driver is already on the way: cancel from the ride screen, where any
+        // cancellation fee is shown first.
+        if (cur && ['active','arrived','enroute'].includes(cur.status)) {
+          vcToast('A driver has already accepted your ride. To cancel, use Cancel ride on the trip screen.', 'warn');
+          go('live-ride');
+          return;
+        }
         if (cur && !['completed','cancelled'].includes(cur.status)) {
           await updateDoc(doc(db,'bookings',bookingId), {
             status: 'cancelled',
@@ -6364,8 +6383,10 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   const [helpOpen,   setHelpOpen]   = useState(false); // calm "Get help" sheet (L1/L2)
   const [sosHolding, setSosHolding] = useState(false);
   const [sosCount,   setSosCount]   = useState(5);
-  const [cancelling, setCancelling] = useState(false);
+  const [cancelling] = useState(false);
   const [cancelDone, setCancelDone] = useState(false);
+  const [cancelSheet, setCancelSheet] = useState(false);
+  const cancelCfg = useCancelConfig();
   const [noDriverFound, setNoDriverFound] = useState(false); // set if 10 min pass with no driver
   const [searchSecs, setSearchSecs] = useState(0);           // how long we've been searching
 
@@ -6373,12 +6394,13 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
   // timer survives a refresh or the screen being backgrounded.
   useEffect(() => {
     if (booking?.status !== 'searching') { setSearchSecs(0); return; }
-    const startedAt = booking?.createdAt?.seconds ? booking.createdAt.seconds * 1000 : Date.now();
+    const anchor = booking?.searchStartedAt?.seconds || booking?.createdAt?.seconds;
+    const startedAt = anchor ? anchor * 1000 : Date.now();
     const tick = () => setSearchSecs(Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
     tick();
     const t = setInterval(tick, 1000);
     return () => clearInterval(t);
-  }, [booking?.status, booking?.createdAt?.seconds]);
+  }, [booking?.status, booking?.createdAt?.seconds, booking?.searchStartedAt?.seconds]);
   const [shareCopied,  setShareCopied]  = useState(false);
   const sosRef = useRef(null);
 
@@ -6430,30 +6452,13 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
     syncTrackingDoc();
   }, [bookingId, booking?.status, booking?.driverLocation?.lat, booking?.driverLocation?.lng, booking?.driverName]);
 
-  const cancelRide = async () => {
-    if (!bookingId) return;
-    const reasons = ['Wrong pickup location', 'Changed my mind', 'Driver taking too long', 'Found another ride', 'Other'];
-    const reason  = window.prompt('Please tell us why you want to cancel:\n\n' + reasons.map((r,i) => `${i+1}. ${r}`).join('\n') + '\n\nEnter number (1-5) or leave blank to cancel without reason:');
-    if (reason === null) return; // user clicked Cancel on prompt
-    const reasonText = reasons[parseInt(reason)-1] || reason || 'No reason given';
-    if (!(await vcConfirm(`Cancel this ride?\nReason: ${reasonText}`, { confirmText:'Cancel Ride', danger:true }))) return;
-    setCancelling(true);
-    try {
-      await updateDoc(doc(db,'bookings',bookingId), {
-        status:        'cancelled',
-        cancelledBy:   'customer',
-        cancelReason:  reasonText,
-        cancelledAt: serverTimestamp(),
-      });
-      if (booking?.driverId) { try { await updateDoc(doc(db,'drivers',booking.driverId), { currentRideId:null }); } catch(e) {} }
-      setCancelling(false);
-      setCancelDone(true);
-    } catch(err) {
-      console.error('Cancel error:', err);
-      setCancelling(false);
-      vcToast('Could not cancel the ride. Please check your connection and try again.', 'error');
-    }
-  };
+  // Cancelling opens a sheet with reasons and shows any fee before confirming;
+  // the server decides the final fee from the ride's own timestamps.
+  const cancelRide = () => { if (bookingId) setCancelSheet(true); };
+  const cancelSheetEl = cancelSheet && booking ? (
+    <CustomerCancelSheet booking={booking} bookingId={bookingId} onClose={() => setCancelSheet(false)}
+      onDone={() => { setCancelSheet(false); setCancelDone(true); }} />
+  ) : null;
 
   // ── 3-MINUTE NO-DRIVER TIMEOUT ──────────────────────────────────────────────
   // If nobody accepts within 10 minutes, expire the ride, free it from the driver
@@ -6468,9 +6473,8 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
     }
     // Establish the start time once.
     if (searchStartRef.current === null) {
-      searchStartRef.current = booking?.createdAt?.seconds
-        ? booking.createdAt.seconds * 1000
-        : Date.now();
+      const anchor = booking?.searchStartedAt?.seconds || booking?.createdAt?.seconds;
+      searchStartRef.current = anchor ? anchor * 1000 : Date.now();
     }
     const deadline = searchStartRef.current + 10 * 60 * 1000;
 
@@ -6503,35 +6507,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
     };
   }, [booking?.status, bookingId]);
 
-  // Free cancel within the 15s grace window after a driver accepts.
-  const cancelWithinGrace = async () => {
-    if (!bookingId || cancelling) return;
-    const isCard = (booking?.paymentMethod || 'cash').toLowerCase() === 'card';
-    const ok = await vcConfirm(
-      isCard
-        ? 'Cancel this ride? A small cancellation fee will apply because you paid by card.'
-        : 'Cancel this ride? No fee will be charged.',
-      { confirmText: isCard ? 'Cancel (fee applies)' : 'Cancel ride', danger:true }
-    );
-    if (!ok) return;
-    setCancelling(true);
-    try {
-      await updateDoc(doc(db,'bookings',bookingId), {
-        status:          'cancelled',
-        cancelledBy:     'customer',
-        cancelReason:    'Cancelled by customer before driver arrived',
-        cancellationFee: isCard,
-        cancelledAt:     serverTimestamp(),
-      });
-      if (booking?.driverId) { try { await updateDoc(doc(db,'drivers',booking.driverId), { currentRideId:null }); } catch(e) {} }
-      setCancelling(false);
-      setCancelDone(true);
-    } catch(err) {
-      console.error('Grace cancel error:', err);
-      setCancelling(false);
-      vcToast('Could not cancel the ride. Please try again.', 'error');
-    }
-  };
+  const cancelWithinGrace = cancelRide;
 
   // Block browser back button when searching
   useEffect(() => {
@@ -6819,7 +6795,12 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
             <div style={{ position:'relative', width:84, height:84, borderRadius:'50%', background:'linear-gradient(135deg,#6b21a8,#4c1d95)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:38, boxShadow:'0 10px 28px rgba(76,29,149,0.34)', animation:'vcBob 2.6s ease-in-out infinite' }}>🚕</div>
           </div>
 
-          <h2 style={{ fontSize:23, fontWeight:800, color:'#2a1a4a', margin:'0 0 8px' }}>Finding your driver</h2>
+          {booking?.lastDriverCancel && (
+            <div role="status" style={{ background:'#fff7ed', border:'1px solid #fdba74', color:'#9a3412', borderRadius:14, padding:'11px 14px', fontSize:13.5, lineHeight:1.5, margin:'0 0 18px', maxWidth:360 }}>
+              Your driver had to cancel. We’re finding you another driver. You won’t be charged for this.
+            </div>
+          )}
+          <h2 style={{ fontSize:23, fontWeight:800, color:'#2a1a4a', margin:'0 0 8px' }}>{booking?.lastDriverCancel ? 'Finding you another driver' : 'Finding your driver'}</h2>
           <p style={{ fontSize:14, color:'#5b5470', lineHeight:1.6, margin:'0 0 4px', maxWidth:320 }}>
             We're notifying drivers near you in Manchester.
           </p>
@@ -6861,6 +6842,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
             style={{ width:'100%', maxWidth:400, padding:'14px', background:'#fff', color:'#dc2626', border:'1.5px solid #fca5a5', borderRadius:14, fontSize:14.5, fontWeight:700, cursor:cancelling?'default':'pointer', opacity:cancelling?0.6:1 }}>
             {cancelling ? 'Cancelling…' : 'Cancel ride'}
           </button>
+          {cancelSheetEl}
         </div>
       </div>
     );
@@ -6871,8 +6853,23 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
       <div style={{ ...s.content, display:'flex', alignItems:'center', justifyContent:'center', minHeight:'100vh' }}>
         <div style={{ textAlign:'center', padding:24 }}>
           <div style={{ fontSize:56, marginBottom:16 }}>❌</div>
-          <h2 style={{ fontSize:20, fontWeight:500, color:'#fff', marginBottom:8 }}>Ride Cancelled</h2>
-          <p style={{ color:'#6b6b80', fontSize:13, marginBottom:28 }}>Your booking has been cancelled successfully.</p>
+          <h2 style={{ fontSize:20, fontWeight:700, color:'#1a1a2e', marginBottom:8 }}>Ride Cancelled</h2>
+          <p style={{ color:'#5b5470', fontSize:14, marginBottom: 12, lineHeight:1.5 }}>
+            {booking?.cancelledBy === 'driver'
+              ? (booking?.cancelReasonKey === 'rider_no_show' ? 'Your driver waited at the pickup but couldn’t find you.' : `Your driver cancelled: ${booking?.cancelReason || 'no reason given'}.`)
+              : 'Your booking has been cancelled.'}
+          </p>
+          {booking?.cancelFee?.amountJmd > 0 && booking?.cancelFee?.status === 'owed' && (
+            <p style={{ background:'#fff7ed', border:'1px solid #fdba74', color:'#9a3412', borderRadius:12, padding:'10px 14px', fontSize:13.5, margin:'0 auto 24px', maxWidth:340, lineHeight:1.5 }}>
+              A {cancelJmd(booking.cancelFee.amountJmd)} cancellation fee {booking?.payment?.status === 'paid' ? 'will be kept from your card refund' : 'will be added to your next ride'}.
+            </p>
+          )}
+          {booking?.cancelFee?.status === 'review' && (
+            <p style={{ background:'#f5f0ff', border:'1px solid #e4d4fb', color:'#4c1d95', borderRadius:12, padding:'10px 14px', fontSize:13.5, margin:'0 auto 24px', maxWidth:340, lineHeight:1.5 }}>
+              We’re reviewing this cancellation. If a fee applies, we’ll let you know.
+            </p>
+          )}
+          <div style={{ height: 12 }} />
           <button style={s.btnY} onClick={() => go('customer-dash')}>Back to Dashboard</button>
         </div>
       </div>
@@ -6976,6 +6973,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
               <div style={{ textAlign:'right' }}>
                 <div style={{ fontSize:24, fontWeight:700, color:GREEN }}>J${((booking.fare||0) + (booking.extrasApprovedTotal||0)).toLocaleString()}</div>
                 {booking.extrasApprovedTotal > 0 && <div style={{ fontSize:11, color:'#8a83a0' }}>fare J${(booking.fare||0).toLocaleString()} + extras J${booking.extrasApprovedTotal.toLocaleString()}</div>}
+                {booking.cancelFeeCollect?.amountJmd > 0 && <div style={{ fontSize:11, color:'#9a3412' }}>+ {cancelJmd(booking.cancelFeeCollect.amountJmd)} cancellation fee from an earlier trip, paid to your driver</div>}
               </div>
             </div>
           </div>
@@ -7144,13 +7142,14 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
                 pickup. Once the driver taps "I've arrived" the status becomes
                 'arrived' and this disappears: no cancelling on a driver who has
                 already made the trip. */}
-            {booking?.status === 'active' && (
+            {(booking?.status === 'active' || booking?.status === 'arrived') && (
               <div style={{ background:'#fff7ed', border:'1px solid #fdba74', borderRadius:12, padding:'12px 14px', marginBottom:12 }}>
                 <div style={{ fontSize:12.5, color:'#9a3412', lineHeight:1.5, marginBottom:10 }}>
-                  Changed your mind? You can cancel while your driver is on the way.
-                  {(booking?.paymentMethod||'cash').toLowerCase()==='card'
-                    ? ' A small fee applies for card payments.'
-                    : ' No fee for cash rides.'}
+                  {!cancelCfg.enabled || !cancelCfg.feeJmd
+                    ? 'Need to cancel? You can cancel here.'
+                    : freeWindowLeft(booking, cancelCfg, Date.now()) > 0
+                      ? `Need to cancel? It’s free for ${cancelCfg.freeMinutes} minutes after your driver accepts. After that, a ${cancelJmd(cancelCfg.feeJmd)} cancellation fee applies.`
+                      : `Need to cancel? A ${cancelJmd(cancelCfg.feeJmd)} cancellation fee applies now that your driver is on the way.`}
                 </div>
                 <button onClick={cancelWithinGrace} disabled={cancelling}
                   style={{ width:'100%', padding:'11px', background:'#ea580c', color:'#fff', border:'none', borderRadius:10, fontSize:13.5, fontWeight:700, cursor:cancelling?'default':'pointer' }}>
@@ -7158,6 +7157,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
                 </button>
               </div>
             )}
+            {cancelSheetEl}
 
             {/* Fare + status */}
             <div style={{ display:'flex', gap:10, marginBottom:12 }}>
@@ -7184,6 +7184,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
               style={{ marginTop:14, padding:'9px 24px', background:'rgba(226,75,74,0.15)', border:'1px solid rgba(226,75,74,0.4)', borderRadius:10, color:'#f09595', fontSize:13, cursor:'pointer', opacity:cancelling?0.6:1 }}>
               {cancelling ? 'Cancelling...' : '✕ Cancel Ride'}
             </button>
+            {cancelSheetEl}
           </div>
         )}
 
@@ -8056,7 +8057,8 @@ function DriverDash({ go, user, setUser, setBookingId, site, domains }) {
         // Safety net: never show a request older than 10 minutes, even if the
         // customer's app died before it could self-expire. Keeps the queue clean.
         .filter(r => {
-          const created = r.createdAt?.seconds ? r.createdAt.seconds * 1000 : null;
+          const anchor = r.searchStartedAt?.seconds || r.createdAt?.seconds;
+          const created = anchor ? anchor * 1000 : null;
           return !created || (Date.now() - created) < 10 * 60 * 1000;
         })
         .sort((a,b) => (b.createdAt?.seconds||0) - (a.createdAt?.seconds||0));
@@ -8558,7 +8560,7 @@ function DriverDash({ go, user, setUser, setBookingId, site, domains }) {
               <div className="dr-card dr-empty"><DrIcon name="clock" size={34}/><b>No requests right now</b>New requests appear here instantly, with a sound and vibration.</div>
             ) : pendingRides.map((r, i) => {
               const k = rideKind(r);
-              const createdMs = r.createdAt?.seconds ? r.createdAt.seconds*1000 : (r.createdAt?.toMillis ? r.createdAt.toMillis() : null);
+              const createdMs = r.searchStartedAt?.seconds ? r.searchStartedAt.seconds*1000 : r.createdAt?.seconds ? r.createdAt.seconds*1000 : (r.createdAt?.toMillis ? r.createdAt.toMillis() : null);
               let age = 'Just now', ageTone = 'green';
               if (createdMs) {
                 const secs = Math.max(0, Math.floor((nowTick - createdMs)/1000));
@@ -8960,6 +8962,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
   const [loadError,     setLoadError]     = useState(false); // the query itself failed
   const [locationStatus,setLocationStatus]= useState('idle');
   const [arrived,       setArrived]       = useState(false);
+  const [driverCancelOpen, setDriverCancelOpen] = useState(false);
   const [enroute,       setEnroute]       = useState(false);
   const [sosSent,       setSosSent]       = useState(false);
   const [sosBlocked,    setSosBlocked]    = useState('');   // rate-limit message
@@ -9348,7 +9351,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     <div style={{ ...s.content, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24, minHeight:'100vh' }}>
       <div style={{ width:80, height:80, borderRadius:'50%', background:'rgba(26,158,90,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:36, marginBottom:16 }}>✅</div>
       <div style={{ fontSize:22, fontWeight:800, color:'#1a1a2e', marginBottom:6 }}>Ride Complete!</div>
-      <div style={{ fontSize:14, color:'#888', marginBottom:24, textAlign:'center' }}>Great job! Your earnings have been recorded.{paidByCard ? ' The rider paid by card, so VilleCabs pays you your earnings.' : ''}{extrasTotal > 0 ? ` Approved extras: J$${extrasTotal.toLocaleString()} (${(booking?.extrasCashTotal||0) ? `collect J$${(booking.extrasCashTotal).toLocaleString()} cash` : 'paid by card'}).` : ''}</div>
+      <div style={{ fontSize:14, color:'#888', marginBottom:24, textAlign:'center' }}>Great job! Your earnings have been recorded.{paidByCard ? ' The rider paid by card, so VilleCabs pays you your earnings.' : ''}{extrasTotal > 0 ? ` Approved extras: J$${extrasTotal.toLocaleString()} (${(booking?.extrasCashTotal||0) ? `collect J$${(booking.extrasCashTotal).toLocaleString()} cash` : 'paid by card'}).` : ''}{booking?.cancelFeeCollect?.amountJmd > 0 ? ` Also collect ${cancelJmd(booking.cancelFeeCollect.amountJmd)} cash for the rider’s earlier cancellation fee (it’s passed on to that driver).` : ''}</div>
       <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:16, padding:'20px 24px', width:'100%', maxWidth:340, marginBottom:20 }}>
         <div style={{ display:'flex', justifyContent:'space-between', marginBottom:10 }}>
           <span style={{ fontSize:13, color:'#888' }}>Total fare</span>
@@ -9463,10 +9466,35 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
                 <div style={{ fontSize:10.5, fontWeight:700, color: paidByCard ? '#86efac' : '#fcd34d' }}>{paidByCard ? 'PAID BY CARD · NO CASH' : 'COLLECT CASH'}</div>
               </div>
             </div>
+            {booking?.cancelFeeCollect?.amountJmd > 0 && (
+              <div style={{ background:'rgba(252,211,77,0.12)', border:'1px solid rgba(252,211,77,0.45)', borderRadius:10, padding:'10px 12px', marginBottom:14, fontSize:12.5, color:'#fde68a', lineHeight:1.5 }}>
+                Also collect <b>{cancelJmd(booking.cancelFeeCollect.amountJmd)}</b> cash: a cancellation fee the rider owes from an earlier trip.
+                Collect <b>{cancelJmd((booking.fare||0) + (booking.extrasCashTotal||0) + booking.cancelFeeCollect.amountJmd)}</b> in total. The fee goes to the driver they cancelled on, not your earnings.
+              </div>
+            )}
 
             {/* Extra fare: ask the customer (they approve in their app), and see what to collect */}
             <ExtraFareList bookingId={booking?.id || bookingId} theme="dark" />
             {['active','arrived','enroute'].includes(booking?.status) && <ExtraFareRequest bookingId={booking?.id || bookingId} theme="dark" compact />}
+
+            {/* Cancel trip — before the rider is on board */}
+            {['active','arrived'].includes(booking?.status) && !enroute && (
+              <button type="button" onClick={() => setDriverCancelOpen(true)}
+                style={{ width:'100%', minHeight:44, padding:'11px 16px', background:'transparent', border:'1px solid rgba(255,255,255,0.22)', borderRadius:12, fontSize:13, fontWeight:700, color:'rgba(255,255,255,0.8)', cursor:'pointer', marginBottom:12 }}>
+                ✕ Cancel trip
+              </button>
+            )}
+            {driverCancelOpen && (
+              <DriverCancelSheet booking={booking} bookingId={booking?.id || bookingId}
+                onClose={() => setDriverCancelOpen(false)}
+                onDone={(r) => {
+                  setDriverCancelOpen(false);
+                  if (watchRef.current !== null) { try { navigator.geolocation.clearWatch(watchRef.current); } catch(e){} }
+                  vcToast(r?.outcome === 'redispatch' ? 'Trip cancelled. We’re finding the rider another driver.' : r?.feeJmd ? `Trip cancelled. The rider will pay a ${cancelJmd(r.feeJmd)} cancellation fee.` : 'Trip cancelled.', 'info');
+                  setBookingId(null);
+                  go('driver-dash');
+                }} />
+            )}
 
             {/* Safety controls */}
             {sosSent ? (
@@ -11566,18 +11594,29 @@ function DriverEarnings({ go, user }) {
     .catch(() => setLoading(false));
   }, [user]);
 
+  // Cancellation fees riders owe this driver (85% share once collected).
+  const [cancelFees, setCancelFees] = useState([]);
+  useEffect(() => {
+    if (!user?.uid) return;
+    getDocs(query(collection(db,'cancel_fees'), where('driverId','==',user.uid)))
+      .then(snap => setCancelFees(snap.docs.map(d => ({ id:d.id, ...d.data() }))))
+      .catch(()=>{});
+  }, [user]);
+
   const now = Date.now() / 1000;
-  const filtered = rides.filter(r => {
-    if (period === 'all') return true;
-    const secs = r.completedAt?.seconds || r.createdAt?.seconds || 0;
-    return period === 'week' ? (now - secs) < 604800 : (now - secs) < 2592000;
-  });
+  const inPeriod = (secs) => period === 'all' || (period === 'week' ? (now - secs) < 604800 : (now - secs) < 2592000);
+  const filtered = rides.filter(r => inPeriod(r.completedAt?.seconds || r.createdAt?.seconds || 0));
+  const feesCollected = cancelFees.filter(f => f.status === 'collected');
+  const feesPending   = cancelFees.filter(f => ['owed','collecting'].includes(f.status));
+  const feeEarnPeriod = feesCollected.filter(f => inPeriod(f.collectedAt?.seconds || f.createdAt?.seconds || 0)).reduce((s,f) => s + (f.driverShareJmd||0), 0);
+  const feeEarnAll    = feesCollected.reduce((s,f) => s + (f.driverShareJmd||0), 0);
+  const feePendingAmt = feesPending.reduce((s,f) => s + (f.driverShareJmd||0), 0);
   const totalFare = filtered.reduce((s,r) => s + driverFare(r), 0);
-  const totalEarn = Math.round(totalFare * 0.85);
+  const totalEarn = Math.round(totalFare * 0.85) + feeEarnPeriod;
   const totalFee  = Math.round(totalFare * 0.15);
   const avgFare   = filtered.length ? Math.round(totalFare / filtered.length) : 0;
   // Unpaid balance = ALL-TIME earnings minus everything logged as paid out (Feature: Driver Payouts)
-  const allTimeEarn   = Math.round(rides.reduce((s,r) => s + driverFare(r), 0) * 0.85);
+  const allTimeEarn   = Math.round(rides.reduce((s,r) => s + driverFare(r), 0) * 0.85) + feeEarnAll;
   const totalPaidOut  = payouts.reduce((s,p) => s + (p.amount||0), 0);
   const unpaidBalance = allTimeEarn - totalPaidOut;
 
@@ -11667,6 +11706,17 @@ function DriverEarnings({ go, user }) {
             ))}
             {payouts.length===0 && !showPayoutForm && <div style={{ fontSize:12, color:'#888' }}>No payouts logged yet. Tap "+ Log Payout" when you receive money from VilleCabs.</div>}
           </div>
+
+          {(feesCollected.length > 0 || feesPending.length > 0) && (
+            <div style={{ background:'#ffffff', borderRadius:14, padding:'14px 16px', marginBottom:14, boxShadow:'0 1px 4px rgba(0,0,0,0.06)' }}>
+              <div style={{ fontSize:13, fontWeight:700, color:'#1a1a2e', marginBottom:4 }}>Cancellation fees</div>
+              <div style={{ fontSize:12.5, color:'#4b5563', lineHeight:1.6 }}>
+                {feeEarnPeriod > 0 && <>You earned <b>J${feeEarnPeriod.toLocaleString()}</b> from riders who cancelled or didn’t show (included above). </>}
+                {feePendingAmt > 0 && <>J${feePendingAmt.toLocaleString()} more is waiting to be collected from {feesPending.length} rider{feesPending.length === 1 ? '' : 's'} on their next ride.</>}
+                {feeEarnPeriod === 0 && feePendingAmt === 0 && <>No cancellation fees in this period.</>}
+              </div>
+            </div>
+          )}
 
           <div style={{ fontSize:11, fontWeight:700, color:'#6b7280', textTransform:'uppercase', letterSpacing:0.8, marginBottom:10 }}>
             Ride History ({filtered.length})
@@ -11813,7 +11863,7 @@ function PrivacyPolicy({ go, user }) {
 function RefundPolicy({ go, user }) {
   const sections = [
     { n:'1', title:'Ride Cancellations',
-      items:['Customers may cancel a ride before a driver accepts the request without being charged.','If a ride is cancelled after a driver has accepted and started heading to the pickup location, a cancellation fee may apply.'] },
+      items:['Customers may cancel a ride without charge before a driver accepts it, and within 2 minutes after a driver accepts.','After that, a cancellation fee (currently J$300) applies. For cash rides it is added to the customer\u2019s next ride; for card rides it is kept from the refund.','If the driver waits at the pickup for 5 minutes and the customer doesn\u2019t show up, the same fee applies.','There is no fee if the driver cancels, or if the driver has not arrived 15 minutes after accepting. A customer who believes a fee was charged unfairly can contact VilleCabs to have it reviewed.'] },
     { n:'2', title:'No Driver Available',
       body:'If no driver is available and the ride is not confirmed, the customer will not be charged.' },
     { n:'3', title:'Failed or Incomplete Rides',
@@ -11980,7 +12030,7 @@ function FAQPage({ go, user }) {
   const faqs = [
     ['How do I book a ride?', 'Open VilleCabs, set your pickup and drop-off, choose your vehicle, and confirm. You\u2019ll see the exact fare before you book — no surprises.'],
     ['How do I pay for my ride?', 'Payment is cash directly to your driver on arrival. Just confirm the fare shown in the app before booking.'],
-    ['What\u2019s the cancellation policy?', 'You can cancel free of charge any time before a driver accepts your ride. Once a driver is on the way, a small cancellation fee may apply. See our Refund Policy for full details.'],
+    ['What\u2019s the cancellation policy?', 'Cancelling is free while we look for a driver and for the first 2 minutes after a driver accepts. After that, a cancellation fee (currently J$300) applies and is added to your next ride. There\u2019s no fee if your driver cancels, or if they still haven\u2019t arrived 15 minutes after accepting. See our Refund Policy for full details.'],
     ['Are the drivers verified?', 'Yes. Every VilleCabs driver is background-checked and approved by our admin team before they can accept any rides.'],
     ['Which areas do you cover?', 'VilleCabs operates across Mandeville and the wider Manchester parish, with long-distance and out-of-town trips available on request.'],
     ['How is my fare calculated?', 'Fares are based on distance. Local trips use our standard rates; longer parish-to-parish trips use long-distance pricing with any out-of-town surcharge shown clearly in your fare breakdown.'],
@@ -12651,7 +12701,7 @@ function PartnerLocations({ go, user, setPickupData }) {
 // Shared with the VilleDash merchant portal (src/dash/MerchantPortal.js)
 export { AddressAutocompleteInput, VilleMap, geocodeLatLng };
 // Exposed for the screen-check harness (tools/screen-check), not used by the app.
-export { VehicleSelect as __VehicleSelect, BookingConfirm as __BookingConfirm, DriverLogin as __DriverLogin, DriverDash as __DriverDash };
+export { VehicleSelect as __VehicleSelect, BookingConfirm as __BookingConfirm, DriverLogin as __DriverLogin, DriverDash as __DriverDash, DriverActive as __DriverActive, LiveRide as __LiveRide };
 
 export function LiveTrackShare({ trackId }) {
   const [t, setT] = useState(null);
