@@ -2,7 +2,8 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { Timestamp } from 'firebase/firestore';
-import { __VehicleSelect as VehicleSelect, __BookingConfirm as BookingConfirm, __DriverLogin as DriverLogin, __DriverDash as DriverDash } from '@src/App';
+import { __VehicleSelect as VehicleSelect, __BookingConfirm as BookingConfirm, __DriverLogin as DriverLogin, __DriverDash as DriverDash, __DriverActive as DriverActive, __LiveRide as LiveRide } from '@src/App';
+import AdminCancellations from '@src/cancel/AdminCancellations';
 import { ExtraFareRequest, ExtraFareList, ExtraFareCustomer } from '@src/RideExtras';
 import { DriverLanding, DriverSiteCustomer, DriverAppBanner } from '@src/DriverSite';
 import VillePublic from '@src/ville/VillePublic';
@@ -39,7 +40,33 @@ window.__callables = {
   creatorStats: async (d) => { if (d.token !== 'goodtoken1234567890ab') { const e = new Error('x'); e.code = 'functions/not-found'; throw e; } return { name: 'Shanice Brown', handle: 'shanicevlogs', code: 'SHANICE10', active: true, discountLabel: '10% off', payoutJmd: 200, booked: 7, completed: 5, released: 1, inProgress: 1, earnedJmd: 1000, paidJmd: 600, balanceJmd: 400, months: [{ month: '2026-10', rides: 3, earnedJmd: 600 }, { month: '2026-09', rides: 2, earnedJmd: 400 }], recent: [{ at: Date.now() - 86400e3, payoutJmd: 200, paid: false }, { at: Date.now() - 5 * 86400e3, payoutJmd: 200, paid: true }], payouts: [{ at: Date.now() - 4 * 86400e3, amountJmd: 600, rides: 3 }] }; },
   creatorSave: async (d) => ({ ok: true, id: d.id || 'CRnew', code: d.code || 'X' }),
   creatorRecordPayout: async () => ({ ok: true, amountJmd: 400, rides: 2 }),
-  creatorRotateLink: async () => ({ ok: true }) };
+  creatorRotateLink: async () => ({ ok: true }),
+  rideDriverCancel: async (d) => (d.reasonKey === 'rider_no_show' ? { ok: true, outcome: 'cancel', feeJmd: 300 } : ['rider_asked', 'safety'].includes(d.reasonKey) ? { ok: true, outcome: 'cancel', feeJmd: 0 } : { ok: true, outcome: 'redispatch', feeJmd: 0 }),
+  cancelFeeAdmin: async () => ({ ok: true }) };
+// ── Cancellation screens ──
+if (s && s.startsWith('cx-')) {
+  const t = Date.now(); const T = (ms) => Timestamp.fromMillis(ms); const MIN = 60e3;
+  const base = { customerId: 'cust1', customerName: 'Keneile Davis', customerPhone: '8765550101', driverId: 'drv1', driverName: 'Dwayne', vehicleMake: 'Toyota', vehicleModel: 'Axio', licensePlate: 'PH 1234', fare: 1200, vehicleType: 'VilleRide', paymentMethod: 'cash', pickup: { address: 'Manchester Shopping Centre', lat: 18.04, lng: -77.50 }, dropoff: { address: 'Caledonia Road', lat: 18.03, lng: -77.51 }, createdAt: T(t - 10 * MIN) };
+  if (s === 'cx-rider-free') put('bookings/BK', { ...base, status: 'active', acceptedAt: T(t - 30e3) });
+  if (s === 'cx-rider-fee') put('bookings/BK', { ...base, status: 'active', acceptedAt: T(t - 5 * MIN) });
+  if (s === 'cx-rider-late') put('bookings/BK', { ...base, status: 'active', acceptedAt: T(t - 20 * MIN) });
+  if (s === 'cx-rider-search') put('bookings/BK', { ...base, driverId: null, status: 'searching' });
+  if (s === 'cx-rider-redispatch') put('bookings/BK', { ...base, driverId: null, status: 'searching', searchStartedAt: T(t - 20e3), lastDriverCancel: { reasonKey: 'vehicle' } });
+  if (s === 'cx-rider-cancelled') put('bookings/BK', { ...base, status: 'cancelled', cancelledBy: 'driver', cancelReasonKey: 'rider_no_show', cancelReason: 'Rider didn’t show up', cancelFee: { amountJmd: 300, status: 'owed' } });
+  if (s === 'cx-driver-active') put('bookings/BK', { ...base, status: 'active', acceptedAt: T(t - 3 * MIN) });
+  if (s === 'cx-driver-waiting') put('bookings/BK', { ...base, status: 'arrived', driverArrived: true, acceptedAt: T(t - 10 * MIN), arrivedAt: T(t - 2 * MIN) });
+  if (s === 'cx-driver-noshow') put('bookings/BK', { ...base, status: 'arrived', driverArrived: true, acceptedAt: T(t - 15 * MIN), arrivedAt: T(t - 6 * MIN) });
+  if (s === 'cx-driver-collect') put('bookings/BK', { ...base, status: 'active', acceptedAt: T(t - 3 * MIN), cancelFeeCollect: { amountJmd: 300, feeIds: ['OLD'] } });
+  if (s === 'cx-admin') {
+    put('cancel_fees/F1', { bookingId: 'B1', customerId: 'c1', customerName: 'Kim Brown', driverId: 'drv1', driverName: 'Dwayne', amountJmd: 300, driverShareJmd: 255, status: 'review', collectVia: 'next_ride', reasonLabel: 'Driver asked me to cancel', cancelledBy: 'customer', createdAt: T(t - 3600e3) });
+    put('cancel_fees/F2', { bookingId: 'B2', customerId: 'c2', customerName: 'Andre Smith', driverId: 'drv2', driverName: 'Marlon', amountJmd: 300, driverShareJmd: 255, status: 'owed', collectVia: 'next_ride', reasonLabel: 'Rider didn’t show up', cancelledBy: 'driver', createdAt: T(t - 7200e3) });
+    put('cancel_fees/F3', { bookingId: 'B3', customerId: 'c3', customerName: 'Tia', driverId: 'drv1', driverName: 'Dwayne', amountJmd: 300, driverShareJmd: 255, status: 'collected', collectVia: 'next_ride', reasonLabel: 'I changed my mind', cancelledBy: 'customer', createdAt: T(t - 86400e3) });
+    put('driver_cancellations/D1', { driverId: 'drv3', driverName: 'Ricky', reasonKey: 'too_far', outcome: 'redispatch', at: T(t - 3600e3), bookingId: 'B9' });
+    put('driver_cancellations/D2', { driverId: 'drv3', driverName: 'Ricky', reasonKey: 'personal', outcome: 'redispatch', at: T(t - 7200e3), bookingId: 'B8' });
+    put('driver_cancellations/D3', { driverId: 'drv1', driverName: 'Dwayne', reasonKey: 'safety', outcome: 'cancel', note: 'Rider was aggressive', at: T(t - 9000e3), bookingId: 'B7' });
+  }
+}
+if (params.get('owed')) put('customer_balances/cust1', { cancelFeeOwedJmd: 300 });
 if (s === 'admin-creators') {
   const T = (ms) => Timestamp.fromMillis(ms);
   put('creators/CR1', { name: 'Shanice Brown', handle: 'shanicevlogs', platform: 'Instagram', code: 'SHANICE10', discountType: 'percent', discount: 10, payoutJmd: 200, active: true, statsToken: 'goodtoken1234567890ab', booked: 7, completed: 5, released: 1, earnedJmd: 1000, paidJmd: 600, discountJmd: 650 });
@@ -97,6 +124,17 @@ if (s && (s.startsWith('events') || s === 'ville-home-events' || s === 'admin-ev
 }
 const setDrop = (d) => { window.__drop = d; console.log('DROP ' + JSON.stringify(d)); };
 const SCREENS = {
+  'cx-rider-free': <LiveRide go={nav} bookingId="BK" setBookingId={() => {}} user={user} setUser={() => {}} />,
+  'cx-rider-fee': <LiveRide go={nav} bookingId="BK" setBookingId={() => {}} user={user} setUser={() => {}} />,
+  'cx-rider-late': <LiveRide go={nav} bookingId="BK" setBookingId={() => {}} user={user} setUser={() => {}} />,
+  'cx-rider-search': <LiveRide go={nav} bookingId="BK" setBookingId={() => {}} user={user} setUser={() => {}} />,
+  'cx-rider-redispatch': <LiveRide go={nav} bookingId="BK" setBookingId={() => {}} user={user} setUser={() => {}} />,
+  'cx-rider-cancelled': <LiveRide go={nav} bookingId="BK" setBookingId={() => {}} user={user} setUser={() => {}} />,
+  'cx-driver-active': <DriverActive go={nav} user={{ uid: 'drv1', name: 'Dwayne', role: 'driver' }} bookingId="BK" setBookingId={() => {}} />,
+  'cx-driver-waiting': <DriverActive go={nav} user={{ uid: 'drv1', name: 'Dwayne', role: 'driver' }} bookingId="BK" setBookingId={() => {}} />,
+  'cx-driver-noshow': <DriverActive go={nav} user={{ uid: 'drv1', name: 'Dwayne', role: 'driver' }} bookingId="BK" setBookingId={() => {}} />,
+  'cx-driver-collect': <DriverActive go={nav} user={{ uid: 'drv1', name: 'Dwayne', role: 'driver' }} bookingId="BK" setBookingId={() => {}} />,
+  'cx-admin': <div style={{ background: '#f5f6fa', minHeight: '100vh', padding: 14 }}><AdminCancellations /></div>,
   'creator-stats': <CreatorStats token="goodtoken1234567890ab" />,
   'creator-stats-bad': <CreatorStats token="nope" />,
   'admin-creators': <div style={{ background: '#f5f6fa', minHeight: '100vh', padding: 14 }}><AdminCreators /></div>,

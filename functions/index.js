@@ -169,7 +169,9 @@ exports.notifyDriversPaidRide = onDocumentUpdated(
   async (event) => {
     const before = event.data.before.data() || {};
     const after  = event.data.after.data()  || {};
-    if (before.status !== 'awaiting_payment' || after.status !== 'searching') return;
+    // Also re-broadcast a ride a driver had to cancel (sent back to searching).
+    const redispatched = ['active', 'arrived'].includes(before.status) && after.status === 'searching';
+    if ((before.status !== 'awaiting_payment' && !redispatched) || after.status !== 'searching') return;
     await broadcastNewRide(after, event.params.bookingId);
   }
 );
@@ -287,3 +289,7 @@ const villeEvents = require('./events');
 const creators = require('./creators');
 ['creatorCodeCheck', 'creatorBookingCreated', 'creatorBookingUpdated', 'creatorSave',
   'creatorRotateLink', 'creatorRecordPayout', 'creatorStats'].forEach((k) => { exports[k] = creators[k]; });
+
+// ── Ride cancellations (driver cancel button, customer cancellation fee) ────
+const cancels = require('./cancel');
+['cancelBookingCreated', 'cancelBookingUpdated', 'rideDriverCancel', 'cancelFeeAdmin'].forEach((k) => { exports[k] = cancels[k]; });
