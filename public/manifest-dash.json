@@ -1,0 +1,18 @@
+{
+  "name": "VilleDash",
+  "short_name": "VilleDash",
+  "description": "Your City. Delivered. Send packages and order from local stores in Mandeville, Jamaica.",
+  "id": "/?app=villedash",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#6b21a8",
+  "orientation": "portrait",
+  "scope": "/",
+  "lang": "en",
+  "icons": [
+    { "src": "/dash-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/dash-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/dash-icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

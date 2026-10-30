@@ -25,7 +25,8 @@
     <!-- Manifest -->
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <link rel="icon" href="%PUBLIC_URL%/logo.png" />
-    <!-- Driver app (driver.villecabs.com, or ?site=driver on previews): its own name, icon and install manifest -->
+    <link rel="shortcut icon" href="%PUBLIC_URL%/logo.png" />
+    <!-- VILLE, VilleDash and the driver app (their own domains, or ?site=… on previews): own name, icon and install manifest -->
     <script>
       (function () {
         try {
@@ -36,6 +37,18 @@
           var isDriver = h.indexOf('driver.') === 0 || (preview && sessionStorage.getItem('vd_site') === 'driver');
           var isVille = h === 'villeapp.org' || h === 'www.villeapp.org' || (preview && sessionStorage.getItem('vd_site') === 'ville');
           var set = function (sel, attr, val) { var el = document.querySelector(sel); if (el) el.setAttribute(attr, val); };
+          var isDash = h === 'villedash.com' || h === 'www.villedash.com' || (preview && sessionStorage.getItem('vd_site') === 'dash');
+          if (isDash) {
+            document.title = 'VilleDash · Your City. Delivered.';
+            set('link[rel="manifest"]', 'href', '/manifest-dash.json');
+            set('meta[name="apple-mobile-web-app-title"]', 'content', 'VilleDash');
+            set('meta[name="application-name"]', 'content', 'VilleDash');
+            set('meta[name="description"]', 'content', 'Your City. Delivered. Send packages and order from local stores in Mandeville, Jamaica.');
+            set('link[rel="icon"]', 'href', '/dash-favicon-64.png');
+            set('link[rel="shortcut icon"]', 'href', '/dash-favicon-64.png');
+            document.querySelectorAll('link[rel="apple-touch-icon"]').forEach(function (el) { el.setAttribute('href', '/dash-apple-touch-icon.png'); });
+            return;
+          }
           if (isVille) {
             document.title = 'VILLE · Your City. One App.';
             set('link[rel="manifest"]', 'href', '/manifest-ville.json');
@@ -56,7 +69,6 @@
         } catch (e) { /* keep the VilleCabs defaults */ }
       })();
     </script>
-    <link rel="shortcut icon" href="%PUBLIC_URL%/logo.png" />
 
     <!-- Open Graph -->
     <meta property="og:title" content="VilleCabs" />
