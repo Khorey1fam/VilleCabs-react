@@ -17,7 +17,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build && cp public/admin.html build/admin.html"
+    "build": "react-scripts build && cp public/admin.html build/admin.html && node scripts/site-pages.js"
   },
   "browserslist": {
     "production": [
