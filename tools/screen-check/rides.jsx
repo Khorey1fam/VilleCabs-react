@@ -2,7 +2,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { Timestamp } from 'firebase/firestore';
-import { __VehicleSelect as VehicleSelect, __BookingConfirm as BookingConfirm, __DriverLogin as DriverLogin, __DriverDash as DriverDash, __DriverActive as DriverActive, __LiveRide as LiveRide } from '@src/App';
+import { __VehicleSelect as VehicleSelect, __BookingConfirm as BookingConfirm, __DriverLogin as DriverLogin, __DriverDash as DriverDash, __DriverActive as DriverActive, __LiveRide as LiveRide, __CustomerSignup as CustomerSignup, __CustomerLogin as CustomerLogin } from '@src/App';
 import AdminCancellations from '@src/cancel/AdminCancellations';
 import { ExtraFareRequest, ExtraFareList, ExtraFareCustomer } from '@src/RideExtras';
 import { DriverLanding, DriverSiteCustomer, DriverAppBanner } from '@src/DriverSite';
@@ -124,6 +124,11 @@ if (s && (s.startsWith('events') || s === 'ville-home-events' || s === 'admin-ev
 }
 const setDrop = (d) => { window.__drop = d; console.log('DROP ' + JSON.stringify(d)); };
 const SCREENS = {
+  'auth-signup-dash': <CustomerSignup go={nav} user={null} setUser={() => {}} site="dash" />,
+  'auth-login-dash': <CustomerLogin go={nav} user={null} setUser={() => {}} site="dash" />,
+  'auth-signup-ville': <CustomerSignup go={nav} user={null} setUser={() => {}} site="ville" />,
+  'auth-signup-cabs': <CustomerSignup go={nav} user={null} setUser={() => {}} site="cabs" />,
+  'auth-login-cabs': <CustomerLogin go={nav} user={null} setUser={() => {}} site="cabs" />,
   'cx-rider-free': <LiveRide go={nav} bookingId="BK" setBookingId={() => {}} user={user} setUser={() => {}} />,
   'cx-rider-fee': <LiveRide go={nav} bookingId="BK" setBookingId={() => {}} user={user} setUser={() => {}} />,
   'cx-rider-late': <LiveRide go={nav} bookingId="BK" setBookingId={() => {}} user={user} setUser={() => {}} />,

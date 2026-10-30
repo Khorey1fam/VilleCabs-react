@@ -37,6 +37,17 @@ import { Icon as DrIcon, Brand as DrBrand } from './driver/DriverUI';
 import { fmtDistance as fmtKm } from './liveRoute';
 import { useDashEnabled, useCardPayments, CARD_MIN_CENTS, api as dashApiCalls } from './dash/dashApi';
 import { useSites, SiteLanding, FamilyBar, HouseAd } from './dash/sites';
+import dashLogoRow from './dash/img/logo-villedash-row.webp';
+import villeLogoRow from './ville/img/ville-logo-row.png';
+
+// Sign-in / sign-up wording and logo for each VILLE-family site. One account
+// works everywhere; only the branding changes.
+const AUTH_BRAND = {
+  cabs:  { name: 'VilleCabs', logo: '/logo.png', signupTitle: 'Welcome to VilleCabs', signupSub: 'Create your rider account', loginSub: 'Log in to book a VilleCabs ride', note: '' },
+  dash:  { name: 'VilleDash', logo: dashLogoRow, signupTitle: 'Welcome to VilleDash', signupSub: 'Create your account to send packages and order from local stores.', loginSub: 'Log in to send a package or order from local stores', note: 'One account for VilleDash, VilleCabs and VilleEvents.' },
+  ville: { name: 'VILLE', logo: villeLogoRow, signupTitle: 'Welcome to VILLE', signupSub: 'Create your account for rides, deliveries and events.', loginSub: 'Log in to VILLE', note: 'One account for VilleCabs, VilleDash and VilleEvents.' },
+};
+const authBrand = (site) => AUTH_BRAND[site] || AUTH_BRAND.cabs;
 
 const firebaseConfig = {
   apiKey:            process.env.REACT_APP_FIREBASE_API_KEY,
@@ -1214,7 +1225,7 @@ function sosRecord(rideKey) {
 }
 
 
-function TopBar({ title, onBack, go, user, showMenu, hideMenu }) {
+function TopBar({ title, onBack, go, user, showMenu, hideMenu, brand }) {
   const [menuOpen, setMenuOpen] = useState(false);
   return (
     <>
@@ -1232,12 +1243,12 @@ function TopBar({ title, onBack, go, user, showMenu, hideMenu }) {
         {onBack && <button style={{ ...s.backBtn, marginLeft:6 }} onClick={onBack}>←</button>}
 
         {/* Logo — taps home */}
-        <img src="/logo.png" alt="VilleCabs"
+        <img src={brand ? brand.logo : '/logo.png'} alt={brand ? brand.name : 'VilleCabs'}
           onClick={() => go ? go(user ? (user.role === 'driver' ? 'driver-dash' : 'customer-dash') : 'splash') : null}
-          style={{ height:30, width:'auto', objectFit:'contain', cursor:'pointer', flexShrink:0, maxWidth:150, marginLeft:10 }}/>
+          style={{ height: brand && brand.name !== 'VilleCabs' ? 26 : 30, width:'auto', objectFit:'contain', cursor:'pointer', flexShrink:0, maxWidth:150, marginLeft:10 }}/>
 
-        {/* RIGHT — VilleEvents · Featured */}
-        <div style={{ display:'flex', gap:5, marginLeft:'auto', alignItems:'center' }}>
+        {/* RIGHT — VilleEvents · Featured (VilleCabs only) */}
+        {(!brand || brand.name === 'VilleCabs') && <div style={{ display:'flex', gap:5, marginLeft:'auto', alignItems:'center' }}>
           <button onClick={() => setDarkPref(!getDarkPref())} title="Toggle dark mode"
             style={{ padding:'4px 8px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, fontSize:11, cursor:'pointer' }}>
             🌙
@@ -1250,7 +1261,7 @@ function TopBar({ title, onBack, go, user, showMenu, hideMenu }) {
             style={{ padding:'4px 10px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:12, color:'#6b21a8', fontSize:10, fontWeight:600, cursor:'pointer' }}>
             Featured
           </button>
-        </div>
+        </div>}
       </div>
       <AppMenu open={menuOpen} onClose={() => setMenuOpen(false)} go={go} user={user}/>
     </>
@@ -2035,7 +2046,8 @@ function CompleteProfile({ go, user, setUser }) {
   );
 }
 
-function CustomerSignup({ go, setUser, user }) {
+function CustomerSignup({ go, setUser, user, site }) {
+  const brand = authBrand(site);
   const [form, setForm]       = useState({ name:'', phone:'', email:'', password:'' });
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
@@ -2080,10 +2092,11 @@ function CustomerSignup({ go, setUser, user }) {
 
   return (
     <div style={s.content}>
-      <TopBar title="Create Account" go={go} user={user}/>
+      <TopBar title="Create Account" go={go} user={user} brand={brand} hideMenu={site === 'dash' || site === 'ville'}/>
       <div style={{ padding:'24px 20px', maxWidth:420, margin:'0 auto' }}>
-        <h2 style={{ fontSize:20, fontWeight:500, marginBottom:4 }}>Welcome to VilleCabs</h2>
-        <p style={{ color:'#5b5470', fontSize:13, marginBottom:20 }}>Create your rider account</p>
+        <h2 style={{ fontSize:20, fontWeight: site === 'dash' || site === 'ville' ? 800 : 500, marginBottom:4 }}>{brand.signupTitle}</h2>
+        <p style={{ color:'#5b5470', fontSize:13, marginBottom: brand.note ? 6 : 20 }}>{brand.signupSub}</p>
+        {brand.note && <p style={{ color:'#6b21a8', fontSize:12.5, fontWeight:600, marginBottom:20 }}>{brand.note}</p>}
         {error && <div style={s.errBox}>⚠️ {error}</div>}
         <GoogleBtn onClick={handleGoogle} loading={loading}/>
         <Divider/>
@@ -2098,7 +2111,7 @@ function CustomerSignup({ go, setUser, user }) {
 }
 
 // ── OTP ───────────────────────────────────────────────────────────────────────
-function OTPScreen({ go, user }) {
+function OTPScreen({ go, user, site }) {
   const [resent,    setResent]    = useState(false);
   const [cooldown,  setCooldown]  = useState(0);
   const [error,     setError]     = useState('');
@@ -2123,7 +2136,7 @@ function OTPScreen({ go, user }) {
 
   return (
     <div style={s.content}>
-      <TopBar title="Verify Email" go={go} user={user}/>
+      <TopBar title="Verify Email" go={go} user={user} brand={authBrand(site)} hideMenu={site === 'dash' || site === 'ville'}/>
       <div style={{ ...s.center, paddingTop:40 }}>
         <div style={{ fontSize:56, marginBottom:16 }}>📧</div>
         <h2 style={{ fontSize:20, fontWeight:500, marginBottom:6 }}>Check your inbox</h2>
@@ -2165,7 +2178,8 @@ function OTPScreen({ go, user }) {
 // Firebase sends a secure, single-use, time-limited reset link and hosts the
 // reset page itself — the app never sees the old or the new password.
 // For privacy we never reveal whether an email is registered.
-function ForgotPassword({ go, user }) {
+function ForgotPassword({ go, user, site }) {
+  const brand = authBrand(site);
   const [email,   setEmail]   = useState('');
   const [loading, setLoading] = useState(false);
   const [sent,    setSent]    = useState(false);
@@ -2206,7 +2220,7 @@ function ForgotPassword({ go, user }) {
 
   return (
     <div style={s.content}>
-      <TopBar title="Reset Password" go={go} user={user}/>
+      <TopBar title="Reset Password" go={go} user={user} brand={brand} hideMenu={site === 'dash' || site === 'ville'}/>
       <div style={{ padding:'32px 20px', maxWidth:420, margin:'0 auto' }}>
 
         {sent ? (
@@ -2226,7 +2240,7 @@ function ForgotPassword({ go, user }) {
             <div style={{ marginTop:26, padding:'14px 16px', background:'#faf7fd', border:'1px solid #ece3f5', borderRadius:12, textAlign:'left' }}>
               <div style={{ fontSize:12, fontWeight:700, color:'#2a1a4a', marginBottom:5 }}>Didn't get the email?</div>
               <div style={{ fontSize:12, color:'#8a83a0', lineHeight:1.7 }}>
-                Wait a minute and check your spam folder. <strong style={{ color:'#6b21a8' }}>If you signed up with Google, you don't have a VilleCabs password</strong> — go back and tap “Continue with Google” instead. Still stuck? Contact us at{' '}
+                Wait a minute and check your spam folder. <strong style={{ color:'#6b21a8' }}>If you signed up with Google, you don't have a {brand.name} password</strong> — go back and tap “Continue with Google” instead. Still stuck? Contact us at{' '}
                 <a href="mailto:admin@villecabs.com" style={{ color:'#6b21a8', textDecoration:'none', fontWeight:600 }}>admin@villecabs.com</a>.
               </div>
             </div>
@@ -2236,7 +2250,7 @@ function ForgotPassword({ go, user }) {
             <div style={{ width:64, height:64, borderRadius:18, background:'#f5f0ff', border:'1px solid #e9d5ff', display:'flex', alignItems:'center', justifyContent:'center', fontSize:28, marginBottom:18 }}>🔑</div>
             <h2 style={{ fontSize:22, fontWeight:800, color:'#1a1a2e', margin:'0 0 6px' }}>Forgot your password?</h2>
             <p style={{ color:'#5b5470', fontSize:13.5, lineHeight:1.6, marginBottom:22 }}>
-              Enter the email linked to your VilleCabs account and we'll send you a secure link to set a new password.
+              Enter the email linked to your {brand.name} account and we'll send you a secure link to set a new password.
             </p>
 
             {error && <div style={s.errBox}>⚠️ {error}</div>}
@@ -2257,7 +2271,7 @@ function ForgotPassword({ go, user }) {
             <div style={{ marginTop:24, display:'flex', gap:9, alignItems:'flex-start', padding:'12px 14px', background:'#faf7fd', border:'1px solid #ece3f5', borderRadius:12 }}>
               <span style={{ fontSize:15, lineHeight:1.3 }}>🔒</span>
               <div style={{ fontSize:11.5, color:'#8a83a0', lineHeight:1.65 }}>
-                For your security, the reset link can be used once and expires after one hour. VilleCabs never sees or stores your password.
+                For your security, the reset link can be used once and expires after one hour. {brand.name} never sees or stores your password.
               </div>
             </div>
           </>
@@ -2268,7 +2282,8 @@ function ForgotPassword({ go, user }) {
   );
 }
 
-function CustomerLogin({ go, setUser, user }) {
+function CustomerLogin({ go, setUser, user, site }) {
+  const brand = authBrand(site);
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading]   = useState(false);
@@ -2363,10 +2378,11 @@ function CustomerLogin({ go, setUser, user }) {
 
   return (
     <div style={s.content}>
-      <TopBar title="Log In" go={go} user={user} hideMenu/>
+      <TopBar title="Log In" go={go} user={user} hideMenu brand={brand}/>
       <div style={{ padding:'32px 20px', maxWidth:420, margin:'0 auto' }}>
         <h2 style={{ fontSize:22, fontWeight:800, color:"#1a1a2e", marginBottom:4 }}>Welcome back</h2>
-        <p style={{ color:'#5b5470', fontSize:13, marginBottom:20 }}>Log in to book a VilleCabs ride</p>
+        <p style={{ color:'#5b5470', fontSize:13, marginBottom: brand.note ? 6 : 20 }}>{brand.loginSub}</p>
+        {brand.note && <p style={{ color:'#6b21a8', fontSize:12.5, fontWeight:600, marginBottom:20 }}>{brand.note}</p>}
         {error && <div style={s.errBox}>⚠️ {error}</div>}
         <GoogleBtn onClick={handleGoogle} loading={loading}/>
         <Divider/>
@@ -2383,7 +2399,7 @@ function CustomerLogin({ go, setUser, user }) {
         <button style={{ ...s.btnY, opacity:loading?0.7:1 }} onClick={handleLogin} disabled={loading}>{loading?'Logging in...':'Log In'}</button>
         <button style={s.link} onClick={() => go('customer-signup')}>Create an account</button>
       </div>
-    <Footer go={go}/>
+    {(!site || site === 'cabs') && <Footer go={go}/>}
     </div>
   );
 }
@@ -12701,7 +12717,7 @@ function PartnerLocations({ go, user, setPickupData }) {
 // Shared with the VilleDash merchant portal (src/dash/MerchantPortal.js)
 export { AddressAutocompleteInput, VilleMap, geocodeLatLng };
 // Exposed for the screen-check harness (tools/screen-check), not used by the app.
-export { VehicleSelect as __VehicleSelect, BookingConfirm as __BookingConfirm, DriverLogin as __DriverLogin, DriverDash as __DriverDash, DriverActive as __DriverActive, LiveRide as __LiveRide };
+export { VehicleSelect as __VehicleSelect, BookingConfirm as __BookingConfirm, DriverLogin as __DriverLogin, DriverDash as __DriverDash, DriverActive as __DriverActive, LiveRide as __LiveRide, CustomerSignup as __CustomerSignup, CustomerLogin as __CustomerLogin };
 
 export function LiveTrackShare({ trackId }) {
   const [t, setT] = useState(null);
@@ -12874,8 +12890,9 @@ export default function App() {
     let goEvents = false;
     try { goEvents = new URLSearchParams(window.location.search).get('go') === 'events'; } catch (e) {}
     if (goEvents) { siteHomeShownRef.current = true; setScreen('ville-events'); return; }
-    if (site === 'cabs' || site === 'driver' || (site === 'dash' && !dashOn)) return;
+    if (site === 'cabs' || site === 'driver') return;
     siteHomeShownRef.current = true;
+    if (site === 'dash' && !dashOn) { setScreen('splash'); return; }
     setScreen(site === 'dash' ? 'dash-home' : 'ville-home');
   }, [dashOn, user, screen, site]);
 
