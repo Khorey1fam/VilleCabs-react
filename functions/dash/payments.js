@@ -34,7 +34,9 @@ const { restoreStock, readStockProducts } = require('./stock');
 // What can be paid by card: VilleDash parcels and store orders, VilleCabs rides.
 // 'extra' = an extra-fare request on a ride: bookings/{rideId}/extras/{extraId},
 // addressed as "rideId/extraId".
-const TARGETS = { delivery: 'dash_deliveries', order: 'dash_orders', ride: 'bookings', extra: 'bookings' };
+// 'topup' = buying VilleCoins (wallet_topups/{id}); credited by functions/wallet.
+const TARGETS = { delivery: 'dash_deliveries', order: 'dash_orders', ride: 'bookings', extra: 'bookings', topup: 'wallet_topups' };
+const wallet = require('../wallet');
 const kindOf = (k) => (TARGETS[k] ? k : null);
 const EXTRA_ID = /^[A-Za-z0-9_-]{1,64}\/[A-Za-z0-9_-]{1,64}$/;
 function pathOf(kind, id) {
@@ -69,7 +71,7 @@ function projectId() {
 function responseUrl(cfg) {
   return cfg.responseUrl || `https://us-central1-${projectId()}.cloudfunctions.net/wipayReturn`;
 }
-const amountOf = (kind, t) => (kind === 'order' || kind === 'extra' ? (kind === 'order' ? t.totalCents : t.amountCents)
+const amountOf = (kind, t) => (kind === 'order' || kind === 'extra' || kind === 'topup' ? (kind === 'order' ? t.totalCents : t.amountCents)
   : kind === 'ride' ? Math.round(Number(t.fare || 0) * 100) : (t.quote && t.quote.totalCents));
 
 // Is the card option available to this customer? (Used by create callables.)
@@ -92,7 +94,7 @@ exports.payCardStart = onCall(async (req) => {
   if (!snap.exists) throw new HttpsError('not-found', 'Order not found.');
   const t = snap.data();
   if (t.customerId !== auth.uid) throw new HttpsError('permission-denied', 'Not your order.');
-  if (kind !== 'ride' && kind !== 'extra' && !(await dashEnabledFor(auth))) throw new HttpsError('failed-precondition', 'VilleDash is not open yet.');
+  if (kind !== 'ride' && kind !== 'extra' && kind !== 'topup' && !(await dashEnabledFor(auth))) throw new HttpsError('failed-precondition', 'VilleDash is not open yet.');
   if (t.status !== 'awaiting_payment' || !t.payment || t.payment.method !== 'card') {
     throw new HttpsError('failed-precondition', 'This order isn’t waiting for a card payment.');
   }
@@ -110,7 +112,7 @@ exports.payCardStart = onCall(async (req) => {
   const totalStr = L.wipayTotal(amountCents);
   const payRef = db().doc(`dash_payments/${pid}`);
   await payRef.create({
-    uid: auth.uid, targetKind: kind, targetId: id, service: kind === 'ride' || kind === 'extra' ? 'cabs' : 'dash', amountCents, totalStr, currency: cfg.currency,
+    uid: auth.uid, targetKind: kind, targetId: id, service: kind === 'ride' || kind === 'extra' || kind === 'topup' ? 'cabs' : 'dash', amountCents, totalStr, currency: cfg.currency,
     environment: cfg.environment, feeStructure: cfg.feeStructure, wipayOrderId: pid, provider: 'wipay',
     status: 'creating', returnOrigin, createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(),
   });
@@ -144,8 +146,14 @@ exports.payCardStart = onCall(async (req) => {
 });
 
 // Move a paid (or switched-to-cash) order on to the store / dispatch.
-function releaseTarget(tx, kind, ref, id, t, patch, note) {
-  if (kind === 'extra') {
+function releaseTarget(tx, kind, ref, id, t, patch, note, walletSnap) {
+  if (kind === 'topup') {
+    // VilleCoins bought: mark the top-up paid and credit the wallet.
+    const { cashToCollectCents, ...rest } = patch; void cashToCollectCents;
+    if (patch['payment.status'] !== 'paid') { tx.update(ref, { ...rest, status: 'cancelled', cancelledAt: FieldValue.serverTimestamp() }); return; }
+    tx.update(ref, { ...rest, status: 'paid', paidAt: FieldValue.serverTimestamp() });
+    wallet.creditTopupInTx(tx, walletSnap, id, t);
+  } else if (kind === 'extra') {
     // Extra fare settled: by card ('paid') or the customer switched to cash.
     const card = patch['payment.status'] === 'paid';
     const { cashToCollectCents, ...rest } = patch; void cashToCollectCents;
@@ -190,6 +198,8 @@ async function settlePayment(pid, query) {
     const tRef = db().doc(pathOf(p.targetKind, p.targetId));
     const ts = await tx.get(tRef);
     const t = ts.exists ? ts.data() : null;
+    // A top-up credits the wallet in this same transaction: read it before any write.
+    const walletSnap = p.targetKind === 'topup' && t ? await tx.get(db().doc(`wallets/${t.customerId}`)) : null;
     if (!check.ok) {
       tx.update(payRef, { ...result, status: 'rejected', rejectReason: check.reason, updatedAt: FieldValue.serverTimestamp() });
       audit(tx, { actor: 'wipay', role: 'system', action: 'pay.rejected', target: pid, details: { reason: check.reason } });
@@ -208,7 +218,7 @@ async function settlePayment(pid, query) {
         'payment.status': 'paid', 'payment.paymentId': pid, 'payment.paidCents': p.amountCents,
         'payment.card': result.card, 'payment.lastError': null,
         ...(p.targetKind === 'ride' ? {} : { cashToCollectCents: 0 }),
-      }, 'Card payment received');
+      }, 'Card payment received', walletSnap);
       return { outcome: 'paid', payment: p };
     }
     // Paid, but the order was cancelled/expired or switched to cash meanwhile.
@@ -240,7 +250,7 @@ exports.payUseCash = onCall(async (req) => {
   const auth = requireAuth(req);
   const d = req.data || {};
   const kind = kindOf(d.kind);
-  if (!kind) throw new HttpsError('invalid-argument', 'Unknown order.');
+  if (!kind || kind === 'topup') throw new HttpsError('invalid-argument', 'Unknown order.');
   const id = cleanId(kind, d.id);
   const ref = db().doc(pathOf(kind, id));
   await db().runTransaction(async (tx) => {
@@ -264,7 +274,7 @@ async function expireUnpaid(nowMs = Date.now()) {
   const cfg = await loadPayments();
   const cutoff = nowMs - cfg.unpaidExpiryMinutes * 60000;
   let n = 0;
-  for (const kind of ['delivery', 'order', 'ride']) {
+  for (const kind of ['delivery', 'order', 'ride', 'topup']) {
     const snap = await db().collection(TARGETS[kind]).where('status', '==', 'awaiting_payment').get();
     for (const doc of snap.docs) {
       const created = doc.get('createdAt');
@@ -277,7 +287,7 @@ async function expireUnpaid(nowMs = Date.now()) {
         const stock = kind === 'order' ? await readStockProducts(tx, t) : null;
         if (stock) restoreStock(tx, t, stock);
         const why = { cancelledBy: 'system', cancelReason: 'Card payment wasn’t completed in time', 'payment.status': 'expired' };
-        if (kind === 'ride') tx.update(doc.ref, { ...why, status: 'cancelled', cancelledAt: FieldValue.serverTimestamp() });
+        if (kind === 'ride' || kind === 'topup') tx.update(doc.ref, { ...why, status: 'cancelled', cancelledAt: FieldValue.serverTimestamp() });
         else tx.update(doc.ref, statusPatch('cancelled', why));
         if (kind === 'delivery') addEvent(tx, doc.id, 'cancelled', 'system', 'system', 'Unpaid');
       });

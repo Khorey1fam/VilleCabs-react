@@ -61,9 +61,10 @@ export function PaymentReturn({ go, paymentId, openDelivery, openOrder, openRide
   const [err, setErr] = useState('');
   useEffect(() => { const t = setTimeout(() => setSlow(true), 20000); return () => clearTimeout(t); }, []);
   const p = live.data;
-  const ride = p && (p.targetKind === 'ride' || p.targetKind === 'extra');
-  const open = () => (ride ? openRide(String(p.targetId).split('/')[0], p.targetKind) : p.targetKind === 'order' ? openOrder(p.targetId) : openDelivery(p.targetId));
-  const what = p && p.targetKind === 'extra' ? 'Extra fare for ride' : ride ? 'Ride' : p && p.targetKind === 'order' ? 'Order' : 'Delivery';
+  const topup = p && p.targetKind === 'topup';
+  const ride = p && (p.targetKind === 'ride' || p.targetKind === 'extra' || topup);
+  const open = () => (topup ? go('wallet') : ride ? openRide(String(p.targetId).split('/')[0], p.targetKind) : p.targetKind === 'order' ? openOrder(p.targetId) : openDelivery(p.targetId));
+  const what = topup ? 'VilleCoins top-up' : p && p.targetKind === 'extra' ? 'Extra fare for ride' : ride ? 'Ride' : p && p.targetKind === 'order' ? 'Order' : 'Delivery';
   useEffect(() => {
     if (p && p.status === 'paid' && !p.refundDue) { const t = setTimeout(open, 2500); return () => clearTimeout(t); }
     return undefined;
@@ -96,11 +97,11 @@ export function PaymentReturn({ go, paymentId, openDelivery, openOrder, openRide
       <div className="vd-panel vd-done">
         <div className="vd-done__art"><DoneArt /></div>
         <h1>{p.refundDue ? 'Payment received' : 'Payment received, thank you'}</h1>
-        <p>{p.refundDue
+        <p>{topup ? `${formatJMD(p.amountCents)} paid by card${p.card ? ` (${p.card})` : ''}. ${Math.round(p.amountCents / 100).toLocaleString('en-US')} VilleCoins have been added to your wallet.` : p.refundDue
           ? `Your ${ride ? 'ride' : 'order'} had already closed when the payment arrived. We’ll review a refund to your card.`
           : `${formatJMD(p.amountCents)} paid by card${p.card ? ` (${p.card})` : ''}. ${p.targetKind === 'extra' ? 'Your driver has been told.' : ride ? 'We’re finding your driver now.' : p.targetKind === 'order' ? 'Your order is on its way to the store.' : 'We’re finding your rider now.'}`}</p>
         <span className="vd-done__id">{what} {shortId(String(p.targetId).split('/')[0])}</span>
-        <div style={{ marginTop: 20 }}><button className="vd-btn vd-btn--primary vd-btn--block" onClick={open}>{ride ? 'Continue to your ride' : p.targetKind === 'order' ? 'Track order' : 'Track delivery'}</button></div>
+        <div style={{ marginTop: 20 }}><button className="vd-btn vd-btn--primary vd-btn--block" onClick={open}>{topup ? 'Go to my wallet' : ride ? 'Continue to your ride' : p.targetKind === 'order' ? 'Track order' : 'Track delivery'}</button></div>
       </div>
     );
   } else {
@@ -108,12 +109,12 @@ export function PaymentReturn({ go, paymentId, openDelivery, openOrder, openRide
       <div className="vd-panel vd-done">
         <div style={{ width: 64, height: 64, borderRadius: 32, background: '#fdecec', color: 'var(--vd-red)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}><Icon name="close" size={30} stroke={2.4} /></div>
         <h1>Payment didn’t go through</h1>
-        <p>{p.message || 'Your card wasn’t charged.'} You can try again, pay cash instead, or cancel from your {ride ? 'ride' : 'order'}.</p>
+        <p>{p.message || 'Your card wasn’t charged.'} {topup ? 'No VilleCoins were added. You can try again from your wallet.' : `You can try again, pay cash instead, or cancel from your ${ride ? 'ride' : 'order'}.`}</p>
         {err && <div className="vd-errbox" role="alert">{err}</div>}
         <div style={{ display: 'grid', gap: 10, marginTop: 20 }}>
           <button className="vd-btn vd-btn--primary vd-btn--block" disabled={!!busy} onClick={retry}>{busy === 'card' ? 'Opening WiPay…' : 'Try card again'}</button>
-          <button className="vd-btn vd-btn--secondary vd-btn--block" disabled={!!busy} onClick={cash}>{busy === 'cash' ? 'Switching…' : 'Pay cash instead'}</button>
-          <button className="vd-link" style={{ justifySelf: 'center' }} onClick={open}>{ride ? 'View ride' : 'View order'}</button>
+          {!topup && <button className="vd-btn vd-btn--secondary vd-btn--block" disabled={!!busy} onClick={cash}>{busy === 'cash' ? 'Switching…' : 'Pay cash instead'}</button>}
+          <button className="vd-link" style={{ justifySelf: 'center' }} onClick={open}>{topup ? 'Back to my wallet' : ride ? 'View ride' : 'View order'}</button>
         </div>
       </div>
     );

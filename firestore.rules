@@ -132,7 +132,7 @@ service cloud.firestore {
     function serverRideFieldsUntouched() {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
         'cancelHandled', 'cancelFee', 'cancelFault', 'cancelFeeCollect', 'creator', 'discountCoveredBy',
-        'redispatchCount', 'lastDriverCancel', 'searchStartedAt', 'needsReview']);
+        'redispatchCount', 'lastDriverCancel', 'searchStartedAt', 'needsReview', 'wallet', 'walletCoins']);
     }
     // The customer can't move the clock the cancellation fee is based on, and
     // can only cancel, or expire a ride that is still searching.
@@ -302,6 +302,12 @@ service cloud.firestore {
     match /creator_redemptions/{id} { allow read: if isAdmin(); allow write: if false; }
     match /creator_uses/{id}        { allow read: if isAdmin(); allow write: if false; }
     match /creator_payouts/{id}     { allow read: if isAdmin(); allow write: if false; }
+
+    // ── VilleCoins wallet ────────────────────────────────────────────────────
+    // Balances, history and top-ups are written only by Cloud Functions.
+    match /wallets/{uid}      { allow read: if isOwner(uid) || isAdmin(); allow write: if false; }
+    match /wallet_tx/{id}     { allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid); allow write: if false; }
+    match /wallet_topups/{id} { allow read: if isAdmin() || (signedIn() && resource.data.customerId == request.auth.uid); allow write: if false; }
 
     // ── Ride cancellation fees ───────────────────────────────────────────────
     // Written only by Cloud Functions. The customer sees their own fees and

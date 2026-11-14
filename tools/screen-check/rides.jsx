@@ -2,7 +2,9 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { Timestamp } from 'firebase/firestore';
-import { __VehicleSelect as VehicleSelect, __BookingConfirm as BookingConfirm, __DriverLogin as DriverLogin, __DriverDash as DriverDash, __DriverActive as DriverActive, __LiveRide as LiveRide, __CustomerSignup as CustomerSignup, __CustomerLogin as CustomerLogin } from '@src/App';
+import { __VehicleSelect as VehicleSelect, __BookingConfirm as BookingConfirm, __DriverLogin as DriverLogin, __DriverDash as DriverDash, __DriverActive as DriverActive, __LiveRide as LiveRide, __CustomerSignup as CustomerSignup, __CustomerLogin as CustomerLogin, __CustomerDash as CustomerDash, __CustomerProfile as CustomerProfile, __TopBar as TopBar } from '@src/App';
+import WalletScreen from '@src/wallet/Wallet';
+import AdminWallets from '@src/wallet/AdminWallets';
 import AdminCancellations from '@src/cancel/AdminCancellations';
 import { ExtraFareRequest, ExtraFareList, ExtraFareCustomer } from '@src/RideExtras';
 import { DriverLanding, DriverSiteCustomer, DriverAppBanner } from '@src/DriverSite';
@@ -42,7 +44,19 @@ window.__callables = {
   creatorRecordPayout: async () => ({ ok: true, amountJmd: 400, rides: 2 }),
   creatorRotateLink: async () => ({ ok: true }),
   rideDriverCancel: async (d) => (d.reasonKey === 'rider_no_show' ? { ok: true, outcome: 'cancel', feeJmd: 300 } : ['rider_asked', 'safety'].includes(d.reasonKey) ? { ok: true, outcome: 'cancel', feeJmd: 0 } : { ok: true, outcome: 'redispatch', feeJmd: 0 }),
-  cancelFeeAdmin: async () => ({ ok: true }) };
+  cancelFeeAdmin: async () => ({ ok: true }),
+  walletTopupCreate: async (d) => ({ ok: true, id: 'TOPUP1' }),
+  walletAdminAdjust: async (d) => ({ ok: true, balance: 2000 + d.coins }) };
+// ── Wallet screens ──
+if (params.get('coins')) put('wallets/cust1', { balance: Number(params.get('coins')) });
+if (s && s.startsWith('wallet')) {
+  const T = (ms) => Timestamp.fromMillis(ms); const t = Date.now();
+  put('wallet_tx/W1', { uid: 'cust1', type: 'admin_credit', amount: 2000, balanceAfter: 2000, note: 'Paid cash at office', at: T(t - 86400e3) });
+  put('wallet_tx/W2', { uid: 'cust1', type: 'ride_payment', amount: -800, balanceAfter: 1200, bookingId: 'B1', at: T(t - 3600e3) });
+  if (s === 'wallet-card') put('config/payments', { cardTesters: ['cust1'] });
+  if (s === 'wallet-admin') { put('customers/cust1', { name: 'Keneile Davis', email: 'kd@example.com', phone: '8765550101' }); put('wallets/cust1', { balance: 1200 }); }
+}
+if (s === 'wallet-driver') put('bookings/BK', { customerId: 'cust1', customerName: 'Kim', driverId: 'drv1', driverName: 'Dwayne', status: 'active', fare: 1200, vehicleType: 'VilleRide', paymentMethod: 'cash', wallet: { applied: 500, status: 'held', cashDue: 700 }, pickup: { address: 'Manchester Shopping Centre', lat: 18.04, lng: -77.5 }, dropoff: { address: 'Caledonia Road', lat: 18.03, lng: -77.51 }, acceptedAt: Timestamp.fromMillis(Date.now() - 60e3) });
 // ── Cancellation screens ──
 if (s && s.startsWith('cx-')) {
   const t = Date.now(); const T = (ms) => Timestamp.fromMillis(ms); const MIN = 60e3;
@@ -124,6 +138,12 @@ if (s && (s.startsWith('events') || s === 'ville-home-events' || s === 'admin-ev
 }
 const setDrop = (d) => { window.__drop = d; console.log('DROP ' + JSON.stringify(d)); };
 const SCREENS = {
+  'wallet': <WalletScreen go={nav} user={user} TopBar={TopBar} />,
+  'wallet-card': <WalletScreen go={nav} user={user} TopBar={TopBar} />,
+  'wallet-admin': <div style={{ background: '#f5f6fa', minHeight: '100vh', padding: 14 }}><AdminWallets /></div>,
+  'wallet-dash': <CustomerDash go={nav} user={user} setUser={() => {}} setBookingId={() => {}} setPickupData={() => {}} setDropoffData={() => {}} site="cabs" domains={{}} />,
+  'wallet-profile': <CustomerProfile go={nav} user={user} setUser={() => {}} />,
+  'wallet-driver': <DriverActive go={nav} user={{ uid: 'drv1', name: 'Dwayne', role: 'driver' }} bookingId="BK" setBookingId={() => {}} />,
   'auth-signup-dash': <CustomerSignup go={nav} user={null} setUser={() => {}} site="dash" />,
   'auth-login-dash': <CustomerLogin go={nav} user={null} setUser={() => {}} site="dash" />,
   'auth-signup-ville': <CustomerSignup go={nav} user={null} setUser={() => {}} site="ville" />,
