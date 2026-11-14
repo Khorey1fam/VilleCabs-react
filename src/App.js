@@ -28,6 +28,7 @@ import { PaymentReturn, goToCard } from './dash/Payments';
 import { ExtraFareRequest, ExtraFareList, ExtraFareCustomer, usePendingExtraRides } from './RideExtras';
 import { CustomerCancelSheet, DriverCancelSheet, useCancelConfig, useCancelBalance } from './cancel/CancelSheets';
 import { freeWindowLeft, jmd as cancelJmd } from './cancel/cancelRules';
+import WalletScreen, { useWalletBalance, CoinMark, coins as fmtCoins } from './wallet/Wallet';
 import { StoresList, StorePage, Cart, Checkout, OrderTrack } from './dash/Marketplace';
 import SendPackage from './dash/SendPackage';
 import DeliveryTrack from './dash/DeliveryTrack';
@@ -3749,7 +3750,7 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
     return () => unsub();
   }, [activeRide?.id]);
 
-  const totalSpent = history.reduce((s,r) => s+(r.fare||0), 0);
+  const walletBalance = useWalletBalance(user?.uid);
 
 
 
@@ -3758,7 +3759,7 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
 
       {/* Hamburger top bar */}
       <div style={{ background:'#ffffff', padding:'10px 16px', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'1px solid #e5e7eb', boxShadow:'0 1px 4px rgba(0,0,0,0.06)' }}>
-        <button onClick={() => setMenuOpen(true)} style={{ background:'none', border:'none', cursor:'pointer', padding:4, display:'flex', flexDirection:'column', gap:5 }}>
+        <button onClick={() => setMenuOpen(true)} aria-label="Open menu" style={{ background:'none', border:'none', cursor:'pointer', padding:4, display:'flex', flexDirection:'column', gap:5 }}>
           <div style={{ width:24, height:2.5, background:'#1a1a2e', borderRadius:2 }}/>
           <div style={{ width:18, height:2.5, background:'#1a1a2e', borderRadius:2 }}/>
           <div style={{ width:24, height:2.5, background:'#1a1a2e', borderRadius:2 }}/>
@@ -3810,10 +3811,11 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
                   <div style={{ fontSize:16, fontWeight:700, color:'#e8b400' }}>{history.length}</div>
                   <div style={{ fontSize:9, color:'rgba(255,255,255,0.72)', textTransform:'uppercase', letterSpacing:0.5 }}>Rides</div>
                 </div>
-                <div style={{ textAlign:'center' }}>
-                  <div style={{ fontSize:16, fontWeight:700, color:'#e8b400' }}>J${totalSpent.toLocaleString()}</div>
-                  <div style={{ fontSize:9, color:'rgba(255,255,255,0.72)', textTransform:'uppercase', letterSpacing:0.5 }}>Spent</div>
-                </div>
+                <button type="button" onClick={() => { go('wallet'); setMenuOpen(false); }} aria-label="Open wallet"
+                  style={{ textAlign:'center', background:'none', border:'none', padding:0, cursor:'pointer', fontFamily:'inherit' }}>
+                  <div style={{ fontSize:16, fontWeight:700, color:'#e8b400', display:'flex', alignItems:'center', gap:5, justifyContent:'center' }}><CoinMark size={15}/>{walletBalance === null ? '…' : fmtCoins(walletBalance)}</div>
+                  <div style={{ fontSize:9, color:'rgba(255,255,255,0.72)', textTransform:'uppercase', letterSpacing:0.5 }}>Wallet</div>
+                </button>
                 <div style={{ textAlign:'center' }}>
                   <div style={{ fontSize:16, fontWeight:700, color:'#e8b400' }}>⭐ 5.0</div>
                   <div style={{ fontSize:9, color:'rgba(255,255,255,0.72)', textTransform:'uppercase', letterSpacing:0.5 }}>Rating</div>
@@ -3827,6 +3829,7 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
                 ['🚕', 'Book a Ride',      () => { if (activeRide) { setMenuOpen(false); vcToast('You already have an active ride in progress. Please complete or cancel it first.', 'warn'); return; } setTab('book'); setMenuOpen(false); }],
                 ['🕐', 'Ride History',     () => { setTab('history'); setMenuOpen(false); }],
                 ['👤', 'My Profile',       () => { go('customer-profile'); setMenuOpen(false); }],
+                ['🪙', 'Wallet',           () => { go('wallet'); setMenuOpen(false); }],
                 ['💰', 'Payments',         () => { go('payments'); setMenuOpen(false); }],
                 ['🎁', 'Promotions',       () => { go('promotions'); setMenuOpen(false); }],
                 ['🛡️', 'Safety Centre',   () => { go('safety-centre'); setMenuOpen(false); }],
@@ -4043,10 +4046,11 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
                 <div style={{ fontSize:11, color:'#6b7280', marginBottom:4 }}>Total rides</div>
                 <div style={{ fontSize:26, fontWeight:700, color:'#6b21a8' }}>{history.length}</div>
               </div>
-              <div style={{ background:'#f0fff4', border:'1px solid #86efac', borderRadius:12, padding:14, textAlign:'center' }}>
-                <div style={{ fontSize:11, color:'#6b7280', marginBottom:4 }}>Total spent</div>
-                <div style={{ fontSize:22, fontWeight:700, color:GREEN }}>J${totalSpent.toLocaleString()}</div>
-              </div>
+              <button type="button" onClick={() => go('wallet')}
+                style={{ background:'#fffbea', border:'1px solid #f5d76e', borderRadius:12, padding:14, textAlign:'center', cursor:'pointer', fontFamily:'inherit' }}>
+                <div style={{ fontSize:11, color:'#6b7280', marginBottom:4 }}>VilleCoins</div>
+                <div style={{ fontSize:22, fontWeight:700, color:'#6b21a8', display:'flex', alignItems:'center', gap:6, justifyContent:'center' }}><CoinMark size={20}/>{walletBalance === null ? '…' : fmtCoins(walletBalance)}</div>
+              </button>
             </div>
 
             {loadingH ? (
@@ -4282,7 +4286,7 @@ function CustomerProfile({ go, user, setUser }) {
   const [msg,     setMsg]     = useState('');
   const [error,   setError]   = useState('');
   const [rideCount, setRideCount] = useState(0);
-  const [totalSpent, setTotalSpent] = useState(0);
+  const walletBalance = useWalletBalance(user?.uid);
   const [photoUrl, setPhotoUrl] = useState('');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const set = (k,v) => setForm(p => ({ ...p, [k]:v }));
@@ -4295,7 +4299,6 @@ function CustomerProfile({ go, user, setUser }) {
     getDocs(query(collection(db,'bookings'), where('customerId','==',user.uid))).then(snap => {
       const completed = snap.docs.map(d=>d.data()).filter(b=>b.status==='completed');
       setRideCount(completed.length);
-      setTotalSpent(completed.reduce((s,b)=>s+(b.fare||0),0));
     }).catch(()=>{});
   }, [user]);
 
@@ -4347,7 +4350,7 @@ function CustomerProfile({ go, user, setUser }) {
           <span style={{ fontSize:11, color:'#1a9e5a', fontWeight:600 }}>Verified Rider</span>
         </div>
         <div style={{ display:'flex', justifyContent:'center', gap:32, marginTop:18 }}>
-          {[['Rides', rideCount], ['Spent', `J$${totalSpent.toLocaleString()}`], ['Rating', '⭐ 5.0']].map(([label, val], i) => (
+          {[['Rides', rideCount], ['VilleCoins', walletBalance === null ? '…' : fmtCoins(walletBalance)], ['Rating', '⭐ 5.0']].map(([label, val], i) => (
             <div key={i}>
               <div style={{ fontSize:18, fontWeight:700, color:'#e8b400' }}>{val}</div>
               <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:0.5 }}>{label}</div>
@@ -5097,6 +5100,8 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
   const [completed,  setCompleted]  = useState(false);
   const [promoCode,  setPromoCode]  = useState('');
   const owedCancelFee = useCancelBalance(user?.uid);
+  const walletBalance = useWalletBalance(user?.uid) || 0;
+  const [useCoins, setUseCoins] = useState(true);
   const [referralMsg,   setReferralMsg]   = useState(null); // { text, ok }
   const [referralDocId, setReferralDocId] = useState(null); // referrer's customer id, once validated
   const [referralChecking, setReferralChecking] = useState(false);
@@ -5467,6 +5472,8 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
           surgeMultiplier: SURGE_MULT > 1 ? SURGE_MULT : null,
           promoCode:       promoData?.code || null,
           ...(promoData?.creator ? { creatorCode: promoData.code } : {}),
+          // VilleCoins: the server takes them when the ride is booked (and returns them if it doesn't happen).
+          ...(useCoins && walletBalance > 0 ? { walletCoins: Math.min(walletBalance, finalPrice) } : {}),
           referredBy:      referralDocId || null,
           referralDiscountPct: referralDocId ? REFERRAL_DISCOUNT_PCT : null,
           promoDiscount:   promoData?.discount || null,
@@ -5511,6 +5518,7 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
         surgeMultiplier: SURGE_MULT > 1 ? SURGE_MULT : null,
         promoCode:    promoData?.code || null,
         ...(promoData?.creator ? { creatorCode: promoData.code } : {}),
+        ...(useCoins && walletBalance > 0 && !(cardOn && payBy === 'card') ? { walletCoins: Math.min(walletBalance, finalPrice) } : {}),
         referredBy:   referralDocId || null,
         referralDiscountPct: referralDocId ? REFERRAL_DISCOUNT_PCT : null,
         promoDiscount:promoData?.discount || null,
@@ -5827,6 +5835,25 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
                 <span style={{ fontSize:23, fontWeight:800, color:'#6b21a8' }}>J${calcFinalPrice(v).toLocaleString()}</span>
               </div>
 
+              {walletBalance > 0 && !(cardOn && rideTime === 'now' && payBy === 'card') && (() => {
+                const total = calcFinalPrice(v);
+                const use = useCoins ? Math.min(walletBalance, total) : 0;
+                return (
+                  <div style={{ background:'#fffbea', border:'1px solid #f5d76e', borderRadius:12, padding:'11px 12px', marginBottom:12 }}>
+                    <label style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer', fontSize:13.5, fontWeight:700, color:'#1a1a2e' }}>
+                      <input type="checkbox" checked={useCoins} onChange={e => setUseCoins(e.target.checked)} style={{ width:18, height:18, accentColor:'#6b21a8' }}/>
+                      <CoinMark size={18}/> Pay with VilleCoins <span style={{ fontWeight:500, color:'#6b7280' }}>(you have {fmtCoins(walletBalance)})</span>
+                    </label>
+                    {useCoins && (
+                      <div style={{ marginTop:8, fontSize:13, color:'#1a1a2e', lineHeight:1.6 }}>
+                        <div style={{ display:'flex', justifyContent:'space-between' }}><span>VilleCoins</span><b>−{fmtCoins(use)}</b></div>
+                        <div style={{ display:'flex', justifyContent:'space-between' }}><span>Cash to your driver</span><b>J${(total - use).toLocaleString()}</b></div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {owedCancelFee > 0 && (
                 <div role="status" style={{ background:'#fff7ed', border:'1px solid #fdba74', color:'#9a3412', borderRadius:12, padding:'10px 12px', fontSize:12.5, lineHeight:1.5, marginBottom:12 }}>
                   {payBy === 'card' && cardOn
@@ -6039,6 +6066,8 @@ function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, 
 
   // Get fare from booking (Firestore) or pickupData (passed from VehicleSelect)
   const fare    = booking?.fare || pickupData?.fare || 0;
+  const coinsUsed = ['held','paid'].includes(booking?.wallet?.status) ? (booking.wallet.applied || 0) : 0;
+  const cashDue = Math.max(0, fare - coinsUsed);
   const dist    = booking?.distanceKm || pickupData?.distanceKm || 0;
   const address = booking?.pickup?.address || pickupData?.address || '';
   const dropoff = booking?.dropoff?.address || dropoffData?.address || '';
@@ -6125,7 +6154,7 @@ function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, 
               <div style={{ fontSize:28 }}>💵</div>
               <div>
                 <div style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>Cash Payment</div>
-                <div style={{ fontSize:12, color:'#888', marginTop:2 }}>Pay J${fare.toLocaleString()} directly to your driver on arrival.</div>
+                <div style={{ fontSize:12, color:'#888', marginTop:2 }}>{coinsUsed > 0 ? `${fmtCoins(coinsUsed)} VilleCoins used. ` : ''}{cashDue > 0 ? `Pay J$${cashDue.toLocaleString()} directly to your driver on arrival.` : 'Nothing to pay in cash.'}</div>
               </div>
             </div>
           )}
@@ -6156,7 +6185,7 @@ function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, 
           ) : cardPaid ? (
             <>🚕 Continue — paid by card</>
           ) : (
-            <>🚕 Confirm — Pay J${fare.toLocaleString()} Cash</>
+            <>{cashDue > 0 ? `🚕 Confirm — Pay J$${cashDue.toLocaleString()} Cash` : '🚕 Confirm — paid with VilleCoins'}</>
           )}
         </button>
         )}
@@ -6990,6 +7019,7 @@ function LiveRide({ go, bookingId, setBookingId, user, setUser, pickupData, drop
                 <div style={{ fontSize:24, fontWeight:700, color:GREEN }}>J${((booking.fare||0) + (booking.extrasApprovedTotal||0)).toLocaleString()}</div>
                 {booking.extrasApprovedTotal > 0 && <div style={{ fontSize:11, color:'#8a83a0' }}>fare J${(booking.fare||0).toLocaleString()} + extras J${booking.extrasApprovedTotal.toLocaleString()}</div>}
                 {booking.cancelFeeCollect?.amountJmd > 0 && <div style={{ fontSize:11, color:'#9a3412' }}>+ {cancelJmd(booking.cancelFeeCollect.amountJmd)} cancellation fee from an earlier trip, paid to your driver</div>}
+                {['held','paid'].includes(booking.wallet?.status) && booking.wallet.applied > 0 && <div style={{ fontSize:11, color:'#6b21a8' }}>{fmtCoins(booking.wallet.applied)} VilleCoins used{booking.wallet.cashDue > 0 ? ` · J$${booking.wallet.cashDue.toLocaleString()} in cash` : ' · nothing to pay in cash'}</div>}
               </div>
             </div>
           </div>
@@ -9360,6 +9390,8 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
   const fee  = Math.round(fare * 0.15);
   const earn = Math.round(fare * 0.85);
   const paidByCard = booking?.payment?.method === 'card' && booking?.payment?.status === 'paid';
+  // VilleCoins taken for this ride (the driver collects only the rest in cash).
+  const coinsPaid = ['held', 'paid'].includes(booking?.wallet?.status) ? (booking.wallet.applied || 0) : 0;
   const extrasTotal = booking?.extrasApprovedTotal || 0;   // approved extra fares (J$)
 
   // Completed screen - rendered as conditional JSX (not early return) to preserve hook count
@@ -9367,7 +9399,7 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
     <div style={{ ...s.content, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:24, minHeight:'100vh' }}>
       <div style={{ width:80, height:80, borderRadius:'50%', background:'rgba(26,158,90,0.15)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:36, marginBottom:16 }}>✅</div>
       <div style={{ fontSize:22, fontWeight:800, color:'#1a1a2e', marginBottom:6 }}>Ride Complete!</div>
-      <div style={{ fontSize:14, color:'#888', marginBottom:24, textAlign:'center' }}>Great job! Your earnings have been recorded.{paidByCard ? ' The rider paid by card, so VilleCabs pays you your earnings.' : ''}{extrasTotal > 0 ? ` Approved extras: J$${extrasTotal.toLocaleString()} (${(booking?.extrasCashTotal||0) ? `collect J$${(booking.extrasCashTotal).toLocaleString()} cash` : 'paid by card'}).` : ''}{booking?.cancelFeeCollect?.amountJmd > 0 ? ` Also collect ${cancelJmd(booking.cancelFeeCollect.amountJmd)} cash for the rider’s earlier cancellation fee (it’s passed on to that driver).` : ''}</div>
+      <div style={{ fontSize:14, color:'#888', marginBottom:24, textAlign:'center' }}>Great job! Your earnings have been recorded.{paidByCard ? ' The rider paid by card, so VilleCabs pays you your earnings.' : coinsPaid > 0 ? ` J$${coinsPaid.toLocaleString()} was paid with VilleCoins (VilleCabs pays you that part); collect J$${Math.max(0, (booking?.fare||0) - coinsPaid).toLocaleString()} in cash.` : ''}{extrasTotal > 0 ? ` Approved extras: J$${extrasTotal.toLocaleString()} (${(booking?.extrasCashTotal||0) ? `collect J$${(booking.extrasCashTotal).toLocaleString()} cash` : 'paid by card'}).` : ''}{booking?.cancelFeeCollect?.amountJmd > 0 ? ` Also collect ${cancelJmd(booking.cancelFeeCollect.amountJmd)} cash for the rider’s earlier cancellation fee (it’s passed on to that driver).` : ''}</div>
       <div style={{ background:'#f9f5ff', border:'1px solid #e9d5ff', borderRadius:16, padding:'20px 24px', width:'100%', maxWidth:340, marginBottom:20 }}>
         <div style={{ display:'flex', justifyContent:'space-between', marginBottom:10 }}>
           <span style={{ fontSize:13, color:'#888' }}>Total fare</span>
@@ -9478,14 +9510,15 @@ function DriverActive({ go, user, bookingId, setBookingId }) {
               <div style={{ width:9, height:9, borderRadius:'50%', background:YELLOW }}/>
               <div style={{ fontSize:13, color:WHITE, flex:1 }}>{booking.dropoff?.address}</div>
               <div style={{ textAlign:'right' }}>
-                <div style={{ fontSize:14, fontWeight:500, color:GREEN }}>J${booking.fare?.toLocaleString()}</div>
-                <div style={{ fontSize:10.5, fontWeight:700, color: paidByCard ? '#86efac' : '#fcd34d' }}>{paidByCard ? 'PAID BY CARD · NO CASH' : 'COLLECT CASH'}</div>
+                <div style={{ fontSize:14, fontWeight:500, color:GREEN }}>J${(paidByCard ? booking.fare : Math.max(0, (booking.fare || 0) - (coinsPaid || 0)))?.toLocaleString()}</div>
+                <div style={{ fontSize:10.5, fontWeight:700, color: paidByCard ? '#86efac' : '#fcd34d' }}>{paidByCard ? 'PAID BY CARD · NO CASH' : coinsPaid >= (booking.fare || 0) ? 'PAID WITH VILLECOINS · NO CASH' : 'COLLECT CASH'}</div>
+                {!paidByCard && coinsPaid > 0 && coinsPaid < (booking.fare || 0) && <div style={{ fontSize:10.5, color:'#c3c9d6' }}>J${coinsPaid.toLocaleString()} paid with VilleCoins</div>}
               </div>
             </div>
             {booking?.cancelFeeCollect?.amountJmd > 0 && (
               <div style={{ background:'rgba(252,211,77,0.12)', border:'1px solid rgba(252,211,77,0.45)', borderRadius:10, padding:'10px 12px', marginBottom:14, fontSize:12.5, color:'#fde68a', lineHeight:1.5 }}>
                 Also collect <b>{cancelJmd(booking.cancelFeeCollect.amountJmd)}</b> cash: a cancellation fee the rider owes from an earlier trip.
-                Collect <b>{cancelJmd((booking.fare||0) + (booking.extrasCashTotal||0) + booking.cancelFeeCollect.amountJmd)}</b> in total. The fee goes to the driver they cancelled on, not your earnings.
+                Collect <b>{cancelJmd((paidByCard ? 0 : Math.max(0, (booking.fare||0) - coinsPaid)) + (booking.extrasCashTotal||0) + booking.cancelFeeCollect.amountJmd)}</b> in total. The fee goes to the driver they cancelled on, not your earnings.
               </div>
             )}
 
@@ -10227,9 +10260,17 @@ function PaymentsPage({ go, user }) {
           </div>
           <div style={{ fontSize:13, color:'#555770', lineHeight:1.6 }}>Pay your driver directly in cash at the end of your trip. Have the correct amount or small bills ready.</div>
         </div>
+        <button type="button" onClick={() => go('wallet')}
+          style={{ width:'100%', textAlign:'left', background:'#fffbea', border:'1.5px solid #f5d76e', borderRadius:14, padding:'16px 18px', marginBottom:10, display:'flex', alignItems:'center', gap:14, cursor:'pointer', fontFamily:'inherit' }}>
+          <CoinMark size={30}/>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:14, fontWeight:700, color:'#1a1a2e' }}>VilleCoins wallet</div>
+            <div style={{ fontSize:12, color:'#5b5470', marginTop:2 }}>1 VilleCoin = J$1. Pay for rides with your coins; cash covers the rest.</div>
+          </div>
+          <div style={{ fontSize:11, background:'rgba(107,33,168,0.1)', color:'#6b21a8', padding:'3px 9px', borderRadius:10, fontWeight:700 }}>Open</div>
+        </button>
         {[
           { icon:'💳', title:'Debit / Credit Card',   sub:'Secure card payments coming soon' },
-          { icon:'📱', title:'Mobile Wallet',          sub:'Digital wallet payments coming soon' },
           { icon:'🏢', title:'Business Account',       sub:'Corporate billing coming soon' },
         ].map((item, i) => (
           <div key={i} style={{ background:'#ffffff', border:'1px solid #e2e4ed', borderRadius:14, padding:'16px 18px', marginBottom:10, display:'flex', alignItems:'center', gap:14, opacity:0.6 }}>
@@ -10242,7 +10283,7 @@ function PaymentsPage({ go, user }) {
           </div>
         ))}
         <div style={{ background:'#f5f6fa', border:'1px solid #e2e4ed', borderRadius:12, padding:'12px 14px', marginTop:8, fontSize:12, color:'#666888', lineHeight:1.6 }}>
-          💡 Card and digital wallet payments will be available in a future VilleCabs update.
+          💡 Card payments will be available in a future VilleCabs update.
         </div>
       </div>
     </div>
@@ -12717,7 +12758,7 @@ function PartnerLocations({ go, user, setPickupData }) {
 // Shared with the VilleDash merchant portal (src/dash/MerchantPortal.js)
 export { AddressAutocompleteInput, VilleMap, geocodeLatLng };
 // Exposed for the screen-check harness (tools/screen-check), not used by the app.
-export { VehicleSelect as __VehicleSelect, BookingConfirm as __BookingConfirm, DriverLogin as __DriverLogin, DriverDash as __DriverDash, DriverActive as __DriverActive, LiveRide as __LiveRide, CustomerSignup as __CustomerSignup, CustomerLogin as __CustomerLogin };
+export { VehicleSelect as __VehicleSelect, BookingConfirm as __BookingConfirm, DriverLogin as __DriverLogin, DriverDash as __DriverDash, DriverActive as __DriverActive, LiveRide as __LiveRide, CustomerSignup as __CustomerSignup, CustomerLogin as __CustomerLogin, CustomerDash as __CustomerDash, CustomerProfile as __CustomerProfile, TopBar as __TopBar };
 
 export function LiveTrackShare({ trackId }) {
   const [t, setT] = useState(null);
@@ -13126,6 +13167,7 @@ export default function App() {
                           onHome={() => setScreen(site === 'ville' ? (user ? 'ville-home' : 'splash') : (user ? (user.role === 'driver' ? 'driver-dash' : 'customer-dash') : 'splash'))}/>,
     'charter':          <CharterPage {...props}/>,
     'payments':         <PaymentsPage {...props}/>,
+    'wallet':           <WalletScreen {...props} TopBar={TopBar}/>,
     'promotions':       <PromotionsPage {...props}/>,
     'safety-centre':         <SafetyCentre {...props}/>,
     'privacy':               <PrivacyPolicy {...props}/>,

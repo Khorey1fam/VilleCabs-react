@@ -293,3 +293,7 @@ const creators = require('./creators');
 // ── Ride cancellations (driver cancel button, customer cancellation fee) ────
 const cancels = require('./cancel');
 ['cancelBookingCreated', 'cancelBookingUpdated', 'rideDriverCancel', 'cancelFeeAdmin'].forEach((k) => { exports[k] = cancels[k]; });
+
+// ── VilleCoins wallet (1 coin = J$1, pays for rides) ────────────────────────
+const wallet = require('./wallet');
+['walletTopupCreate', 'walletBookingCreated', 'walletBookingUpdated', 'walletAdminAdjust'].forEach((k) => { exports[k] = wallet[k]; });
