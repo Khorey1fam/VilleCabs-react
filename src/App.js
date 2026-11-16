@@ -3957,15 +3957,11 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
                   <div style={{ fontSize:26, fontWeight:800, color:'#2a1a4a', marginBottom:4, lineHeight:1.2, position:'relative', zIndex:1 }}>
                     Good day, {user?.name?.split(' ')[0]||'Rider'} 👋
                   </div>
-                  <button onClick={tryBook}
-                    style={{ background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', margin:'14px auto 0', padding:0, position:'relative', zIndex:1 }}>
-                    <div style={{ width:190, height:190, borderRadius:'50%', background:'#ffffff', boxShadow:'0 8px 40px rgba(107,33,168,0.18), 0 0 0 6px rgba(107,33,168,0.15)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', position:'relative', overflow:'hidden' }}>
-                      <div style={{ position:'absolute', inset:0, background:'radial-gradient(circle at 50% 60%, rgba(107,33,168,0.12) 0%, transparent 70%)' }}/>
-                      <img src="/villecabs-logo.png" alt="VilleCabs"
-                        onError={(e) => { e.target.style.display='none'; e.target.nextSibling.style.display='block'; }}
-                        style={{ width:118, height:118, objectFit:'contain', position:'relative', zIndex:1, marginTop:6 }}/>
-                      <div style={{ fontSize:72, lineHeight:1, position:'relative', zIndex:1, display:'none' }}>🚕</div>
-                      <div style={{ fontSize:14, fontWeight:800, color:'#2a1a4a', marginTop:2, marginBottom:4, letterSpacing:0.3, position:'relative', zIndex:1 }}>Book a Ride</div>
+                  <button onClick={tryBook} aria-label="Book a Ride"
+                    style={{ background:'none', border:'none', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', margin:'14px auto 0', padding:0, position:'relative', zIndex:1, borderRadius:'50%' }}>
+                    <div style={{ width:190, height:190, borderRadius:'50%', background:'#ffffff', boxShadow:'0 8px 40px rgba(107,33,168,0.18), 0 0 0 6px rgba(107,33,168,0.15)', position:'relative', overflow:'hidden' }}>
+                      <img src="/book-a-ride.png" alt="Book a Ride" width={190} height={190}
+                        style={{ width:'100%', height:'100%', objectFit:'contain', display:'block' }}/>
                     </div>
                   </button>
                   <div style={{ fontSize:14, color:'#8a83a0', marginTop:12, position:'relative', zIndex:1 }}>Where are you going today?</div>
