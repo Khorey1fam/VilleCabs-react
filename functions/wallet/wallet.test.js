@@ -30,7 +30,7 @@ const fakeDb = {
 };
 const W = require('./index');
 W.internal.setDeps({ db: () => fakeDb, serverTime: () => ({ __server: true }), del: () => ({ __del: true }) });
-const { onBookingCreated, onBookingUpdated, adminAdjust, createTopup, creditTopupInTx, bankCreate, bankUpdate, bankDecide } = W.internal;
+const { onBookingCreated, onBookingUpdated, adminAdjust, createTopup, creditTopupInTx, bankCreate, bankUpdate, bankDecide, codeCreate, codeCancel, codeRedeem } = W.internal;
 const ADMIN = { uid: 'a', token: { email: 'admin@villecabs.com' } };
 const ME = { uid: 'c1', token: { email: 'c1@x.jm' } };
 const bal = () => ((store.get('wallets/c1') || {}).balance) || 0;
@@ -158,4 +158,39 @@ test('bank transfer: reject needs a reason, admin can credit what arrived, limit
   await bankCreate(ME, { coins: 500 }); await bankCreate(ME, { coins: 500 }); await bankCreate(ME, { coins: 500 });
   await assert.rejects(bankCreate(ME, { coins: 500 }), /waiting to be checked/);
   assert.equal(bal(), 4500);
+});
+
+test('redeem code: admin makes codes; each works once for one person', async () => {
+  seed();
+  await assert.rejects(codeCreate(ME, { coins: 1000 }), /Admins only/);
+  await assert.rejects(codeCreate(ADMIN, { coins: 0 }), /worth 1 to/);
+  await assert.rejects(codeCreate(ADMIN, { coins: 1000, count: 51 }), /1 to 50 codes/);
+  const { codes } = await codeCreate(ADMIN, { coins: 1000, count: 3, note: 'Office sale' });
+  assert.equal(codes.length, 3); assert.equal(new Set(codes).size, 3);
+  assert.match(codes[0], /^VC-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/);
+  // Typed loosely (lower case, no dashes, spaces) still works
+  const r = await codeRedeem(ME, { code: ` ${codes[0].toLowerCase().replace(/-/g, ' ')} ` });
+  assert.deepEqual([r.coins, r.balance, bal()], [1000, 1000, 1000]);
+  assert.equal(txs()[0].type, 'code_redeem');
+  assert.deepEqual([store.get(`wallet_codes/${codes[0]}`).status, store.get(`wallet_codes/${codes[0]}`).redeemedBy], ['redeemed', 'c1']);
+  await assert.rejects(codeRedeem(ME, { code: codes[0] }), /already used this code/);
+  await assert.rejects(codeRedeem({ uid: 'c2', token: {} }, { code: codes[0] }), /already been used/);
+  assert.equal(bal(), 1000);
+  // Cancelled codes don't work; used codes can't be cancelled
+  await codeCancel(ADMIN, { code: codes[1] });
+  await assert.rejects(codeRedeem(ME, { code: codes[1] }), /no longer valid/);
+  await assert.rejects(codeCancel(ADMIN, { code: codes[0] }), /already been used or cancelled/);
+  await assert.rejects(codeCancel(ME, { code: codes[2] }), /Admins only/);
+  assert.equal((await codeRedeem(ME, { code: codes[2] })).balance, 2000);
+});
+
+test('redeem code: wrong guesses are limited per hour', async () => {
+  seed();
+  const { codes } = await codeCreate(ADMIN, { coins: 500 });
+  const t0 = 1_800_000_000_000;
+  for (let i = 0; i < 8; i += 1) await assert.rejects(codeRedeem(ME, { code: 'VC-AAAA-AAA' + (i % 2 ? 'B' : 'C') }, t0 + i), /isn’t right/);
+  await assert.rejects(codeRedeem(ME, { code: codes[0] }, t0 + 100), /Too many wrong codes/);   // even a real code waits
+  assert.equal(bal(), 0);
+  await assert.rejects(codeRedeem(null, { code: codes[0] }), /sign in/);
+  assert.equal((await codeRedeem(ME, { code: codes[0] }, t0 + 61 * 60 * 1000)).balance, 500);   // after an hour
 });

@@ -10,7 +10,7 @@ import { coins } from './Wallet';
 
 const small = { padding: '7px 11px', fontSize: 12.5, borderRadius: 9, cursor: 'pointer', fontWeight: 600, border: `1px solid ${C.line}`, background: C.white, color: C.ink };
 const when = (t) => (t && t.toDate ? t.toDate().toLocaleString('en-JM', { timeZone: 'America/Jamaica', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '');
-const LABEL = { topup_card: 'Card top-up', topup_bank: 'Bank transfer top-up', admin_credit: 'Added by admin', admin_debit: 'Removed by admin', ride_payment: 'Paid for a ride', ride_refund: 'Ride refund' };
+const LABEL = { topup_card: 'Card top-up', topup_bank: 'Bank transfer top-up', code_redeem: 'Redeemed a code', admin_credit: 'Added by admin', admin_debit: 'Removed by admin', ride_payment: 'Paid for a ride', ride_refund: 'Ride refund' };
 
 function Customer({ c }) {
   const [balance, setBalance] = useState(null);
@@ -151,6 +151,62 @@ function TopupSettings() {
   );
 }
 
+// Redeem codes: each is worth a set number of coins and works once, for one person.
+function RedeemCodes() {
+  const [rows, setRows] = useState(null);
+  const [f, setF] = useState({ coins: '', count: '1', note: '' });
+  const [msg, setMsg] = useState('');
+  const [made, setMade] = useState([]);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => onSnapshot(query(collection(dashDb(), 'wallet_codes'), orderBy('createdAt', 'desc'), limit(100)), (s) => setRows(s.docs.map((d) => ({ id: d.id, ...d.data() }))), () => setRows([])), []);
+  const create = async () => {
+    setMsg(''); setMade([]);
+    const coinsN = Math.floor(Number(f.coins)); const count = Math.floor(Number(f.count)) || 1;
+    if (!coinsN || coinsN < 1) { setMsg('Enter how many coins each code is worth.'); return; }
+    if (count < 1 || count > 50) { setMsg('Make 1 to 50 codes at a time.'); return; }
+    setBusy(true);
+    try {
+      const r = (await httpsCallable(getFunctions(getApp()), 'walletCodeCreate')({ coins: coinsN, count, note: f.note })).data;
+      setMade(r.codes || []); setF({ coins: '', count: '1', note: '' });
+    } catch (e) { setMsg(e.message || 'Could not make the codes.'); }
+    setBusy(false);
+  };
+  const cancel = async (code) => { setMsg(''); try { await httpsCallable(getFunctions(getApp()), 'walletCodeCancel')({ code }); } catch (e) { setMsg(e.message || 'Could not cancel the code.'); } };
+  const copy = async (text) => { try { await navigator.clipboard.writeText(text); setMsg('Copied.'); } catch (e) { /* ignore */ } };
+  const active = (rows || []).filter((r) => r.status === 'active');
+  return (
+    <div style={st.card}>
+      <div style={st.h2}>Redeem codes</div>
+      <div style={st.sub}>Give a code to someone who paid you, or as a gift. They enter it on the Wallet page. Each code works once, for one person. Treat codes like cash: anyone who has one can use it.</div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end', marginTop: 10 }}>
+        <div><label style={st.label} htmlFor="rc-coins">Coins per code</label><input id="rc-coins" style={{ ...st.input, width: 130 }} inputMode="numeric" value={f.coins} onChange={(e) => setF({ ...f, coins: e.target.value.replace(/\D/g, '').slice(0, 5) })} placeholder="e.g. 1000" /></div>
+        <div><label style={st.label} htmlFor="rc-count">How many codes</label><input id="rc-count" style={{ ...st.input, width: 110 }} inputMode="numeric" value={f.count} onChange={(e) => setF({ ...f, count: e.target.value.replace(/\D/g, '').slice(0, 2) })} /></div>
+        <div style={{ flex: 1, minWidth: 200 }}><label style={st.label} htmlFor="rc-note">Note for you (optional)</label><input id="rc-note" style={st.input} value={f.note} onChange={(e) => setF({ ...f, note: e.target.value.slice(0, 120) })} placeholder="e.g. Sold at office, Christmas gift" /></div>
+        <button type="button" style={{ ...st.btn, width: 'auto', padding: '11px 18px' }} disabled={busy} onClick={create}>{busy ? 'Making…' : 'Make codes'}</button>
+      </div>
+      {made.length > 0 && (
+        <div style={st.note} role="status">
+          <b>{made.length} new code{made.length === 1 ? '' : 's'}:</b>
+          <div style={{ fontFamily: 'ui-monospace, monospace', fontSize: 15, fontWeight: 700, margin: '6px 0', lineHeight: 1.7 }}>{made.map((c) => <div key={c}>{c}</div>)}</div>
+          <button type="button" style={small} onClick={() => copy(made.join('\n'))}>Copy {made.length === 1 ? 'code' : 'all'}</button>
+        </div>
+      )}
+      {msg && <div style={msg === 'Copied.' ? st.sub : st.err} role={msg === 'Copied.' ? 'status' : 'alert'}>{msg}</div>}
+      <div style={{ fontWeight: 700, fontSize: 13.5, margin: '14px 0 4px' }}>Codes{rows ? ` · ${active.length} not used yet` : ''}</div>
+      {rows === null ? <Spinner /> : rows.length === 0 ? <div style={st.sub}>No codes yet.</div> : rows.slice(0, 60).map((r) => (
+        <div key={r.id} data-code-row={r.status} style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap', padding: '7px 0', borderTop: `1px solid ${C.line}`, fontSize: 13 }}>
+          <span><b style={{ fontFamily: 'ui-monospace, monospace', fontSize: 14 }}>{r.id}</b> · {coins(r.coins)} coins{r.note ? ` · ${r.note}` : ''} · made {when(r.createdAt)}</span>
+          <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {r.status === 'active' && <><span style={{ color: C.green, fontWeight: 700 }}>Not used</span><button type="button" style={small} onClick={() => copy(r.id)} aria-label={`Copy ${r.id}`}>Copy</button><button type="button" style={{ ...small, color: C.red }} onClick={() => cancel(r.id)} aria-label={`Cancel ${r.id}`}>Cancel</button></>}
+            {r.status === 'redeemed' && <span style={{ color: C.quiet }}>Used {when(r.redeemedAt)}{r.redeemedEmail ? ` by ${r.redeemedEmail}` : r.redeemedBy ? ` by customer ${String(r.redeemedBy).slice(0, 6)}` : ''}</span>}
+            {r.status === 'cancelled' && <span style={{ color: C.red }}>Cancelled</span>}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function AdminWallets() {
   const [recent, setRecent] = useState(null);
   const [wallets, setWallets] = useState([]);
@@ -160,10 +216,11 @@ export default function AdminWallets() {
   useEffect(() => onSnapshot(query(collection(dashDb(), 'wallet_tx'), orderBy('at', 'desc'), limit(300)), (s) => setRecent(s.docs.map((d) => ({ id: d.id, ...d.data() }))), () => setRecent([])), []);
   useEffect(() => onSnapshot(collection(dashDb(), 'wallets'), (s) => setWallets(s.docs.map((d) => ({ id: d.id, ...d.data() }))), () => {}), []);
   const totals = useMemo(() => {
-    const t = { held: wallets.reduce((s, w) => s + (w.balance || 0), 0), card: 0, bank: 0, admin: 0, rides: 0 };
+    const t = { held: wallets.reduce((s, w) => s + (w.balance || 0), 0), card: 0, bank: 0, codes: 0, admin: 0, rides: 0 };
     (recent || []).forEach((r) => {
       if (r.type === 'topup_card') t.card += r.amount;
       if (r.type === 'topup_bank') t.bank += r.amount;
+      if (r.type === 'code_redeem') t.codes += r.amount;
       if (r.type === 'admin_credit' || r.type === 'admin_debit') t.admin += r.amount;
       if (r.type === 'ride_payment' || r.type === 'ride_refund') t.rides -= r.amount;
     });
@@ -188,12 +245,13 @@ export default function AdminWallets() {
   return (
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10, marginBottom: 12 }}>
-        {[['Coins held by customers', totals.held], ['Bought by card', totals.card], ['Bought by bank transfer', totals.bank], ['Added by admin (net)', totals.admin], ['Used on rides', totals.rides]].map(([l, v]) => (
+        {[['Coins held by customers', totals.held], ['Bought by card', totals.card], ['Bought by bank transfer', totals.bank], ['Added by codes', totals.codes], ['Added by admin (net)', totals.admin], ['Used on rides', totals.rides]].map(([l, v]) => (
           <div key={l} style={{ ...st.card, margin: 0 }}><div style={{ fontSize: 12, color: C.quiet }}>{l}</div><div style={{ fontSize: 22, fontWeight: 800 }}>{coins(v)}</div></div>
         ))}
       </div>
       <div style={st.note}>1 VilleCoin = J$1. Coins held by customers is money VilleCabs owes in rides. On rides paid with coins, VilleCabs owes the driver their 85% of that part, the same as card rides. The last 300 changes are counted here.</div>
       <BankRequests />
+      <RedeemCodes />
       <TopupSettings />
       <div style={st.card}>
         <div style={st.h2}>Find a customer</div>

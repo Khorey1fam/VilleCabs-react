@@ -14,7 +14,7 @@ const LINE = '#ece6f5';
 export const coins = (n) => `${Math.round(Number(n) || 0).toLocaleString('en-US')}`;
 const when = (t) => (t && t.toDate ? t.toDate().toLocaleString('en-JM', { timeZone: 'America/Jamaica', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '');
 const LABEL = {
-  topup_card: 'Top-up by card', topup_bank: 'Top-up by bank transfer', admin_credit: 'Added by VilleCabs', admin_debit: 'Removed by VilleCabs',
+  topup_card: 'Top-up by card', topup_bank: 'Top-up by bank transfer', code_redeem: 'Redeemed a code', admin_credit: 'Added by VilleCabs', admin_debit: 'Removed by VilleCabs',
   ride_payment: 'Paid for a ride', ride_refund: 'Returned: ride didn’t go ahead',
 };
 
@@ -175,6 +175,36 @@ function BankRequest({ r, cfg, uid }) {
   );
 }
 
+// Redeem a code (gift voucher or coins bought from VilleCabs). Each code works once.
+function RedeemCode() {
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null); // { ok, text }
+  const redeem = async (e) => {
+    e.preventDefault();
+    if (busy) return;
+    if (code.replace(/[^A-Za-z0-9]/g, '').length < 6) { setMsg({ ok: false, text: 'Enter the code exactly as you got it.' }); return; }
+    setBusy(true); setMsg(null);
+    try {
+      const r = await call('walletRedeem', { code });
+      setMsg({ ok: true, text: `${coins(r.coins)} VilleCoins added to your wallet.` }); setCode('');
+    } catch (er) { setMsg({ ok: false, text: er?.message || 'We couldn’t redeem that code. Try again.' }); }
+    setBusy(false);
+  };
+  return (
+    <section style={card} aria-label="Redeem a code">
+      <h2 style={{ fontSize: 17, margin: '0 0 4px' }}>Redeem a code</h2>
+      <p style={{ margin: '0 0 10px', color: MUTED, fontSize: 13.5 }}>Have a VilleCoins code? Enter it to add the coins to your wallet.</p>
+      <form onSubmit={redeem} style={{ display: 'flex', gap: 8 }}>
+        <input aria-label="VilleCoins code" value={code} onChange={(e) => { setCode(e.target.value.toUpperCase().slice(0, 20)); setMsg(null); }} placeholder="VC-XXXX-XXXX" autoCapitalize="characters" autoCorrect="off" spellCheck={false}
+          style={{ flex: 1, minWidth: 0, minHeight: 46, borderRadius: 12, border: `1.5px solid ${LINE}`, padding: '0 12px', fontSize: 16, letterSpacing: 1, fontWeight: 600 }} />
+        <button type="submit" disabled={busy} style={{ ...primary, width: 'auto', marginTop: 0, minHeight: 46, padding: '0 18px', opacity: busy ? 0.7 : 1 }}>{busy ? 'Checking…' : 'Redeem'}</button>
+      </form>
+      {msg && <div role={msg.ok ? 'status' : 'alert'} style={{ color: msg.ok ? '#13795b' : '#b42318', fontSize: 13.5, fontWeight: msg.ok ? 700 : 400, marginTop: 10 }}>{msg.text}</div>}
+    </section>
+  );
+}
+
 const WAYS = [['card', 'Card', 'Visa or Mastercard'], ['bank', 'Bank transfer', 'From your bank'], ['contact', 'Contact us', 'Cash or other']];
 
 export default function WalletScreen({ user, go, TopBar, dash, onBack }) {
@@ -290,6 +320,8 @@ export default function WalletScreen({ user, go, TopBar, dash, onBack }) {
           {err && <div role="alert" style={{ color: '#b42318', fontSize: 13.5, marginTop: 10 }}>{err}</div>}
           <p style={{ margin: '14px 0 0', color: MUTED, fontSize: 12.5, lineHeight: 1.5 }}>VilleCoins pay for VilleCabs rides. If your coins don’t cover a ride, you pay the rest in cash. Coins can’t be exchanged back for money.</p>
         </section>
+
+        <RedeemCode />
 
         {pastBank.length > 0 && (
           <section style={card} aria-label="Past bank transfers">

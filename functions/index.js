@@ -296,4 +296,4 @@ const cancels = require('./cancel');
 
 // ── VilleCoins wallet (1 coin = J$1, pays for rides) ────────────────────────
 const wallet = require('./wallet');
-['walletTopupCreate', 'walletBookingCreated', 'walletBookingUpdated', 'walletAdminAdjust', 'walletBankCreate', 'walletBankUpdate', 'walletBankDecide'].forEach((k) => { exports[k] = wallet[k]; });
+['walletTopupCreate', 'walletBookingCreated', 'walletBookingUpdated', 'walletAdminAdjust', 'walletBankCreate', 'walletBankUpdate', 'walletBankDecide', 'walletCodeCreate', 'walletCodeCancel', 'walletRedeem'].forEach((k) => { exports[k] = wallet[k]; });

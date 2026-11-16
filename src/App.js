@@ -5865,6 +5865,14 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
                 <span style={{ fontSize:23, fontWeight:800, color:'#6b21a8' }}>J${calcFinalPrice(v).toLocaleString()}</span>
               </div>
 
+              {!(walletBalance > 0) && !(cardOn && rideTime === 'now' && payBy === 'card') && (
+                <div style={{ background:'#faf7ff', border:'1px solid #e3d8f7', borderRadius:12, padding:'11px 12px', marginBottom:12, display:'flex', alignItems:'center', gap:10, fontSize:13.5, color:'#1a1a2e' }}>
+                  <CoinMark size={18}/>
+                  <span style={{ flex:1 }}><b>VilleCoins: 0</b><span style={{ display:'block', fontSize:12, color:'#6b7280' }}>Buy coins or redeem a code to pay with your wallet.</span></span>
+                  <button type="button" onClick={() => { setConfirmOpen(false); go('wallet'); }}
+                    style={{ background:'#6b21a8', color:'#fff', border:'none', borderRadius:10, padding:'9px 12px', fontSize:13, fontWeight:700, cursor:'pointer', whiteSpace:'nowrap' }}>Add coins</button>
+                </div>
+              )}
               {walletBalance > 0 && !(cardOn && rideTime === 'now' && payBy === 'card') && (() => {
                 const total = calcFinalPrice(v);
                 const use = useCoins ? Math.min(walletBalance, total) : 0;

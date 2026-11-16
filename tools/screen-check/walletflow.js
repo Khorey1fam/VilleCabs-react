@@ -77,6 +77,56 @@ const out = []; const check = (n, ok, x = '') => out.push(`${ok ? 'PASS' : 'FAIL
   check('villedash: back goes to VilleDash home', p.navs.includes('dash-home'), JSON.stringify(p.navs));
   await p.close();
 
+  // Redeem a code
+  p = await page('wallet', '&coins=0');
+  await p.fill('input[aria-label="VilleCoins code"]', 'vc-bad1-0000'); await p.click('button:has-text("Redeem")'); await p.waitForTimeout(300);
+  check('redeem: wrong code says so', await p.locator('[role=alert]:has-text("That code isn’t right")').count() === 1);
+  await p.fill('input[aria-label="VilleCoins code"]', 'vc-good-2345');
+  check('redeem: typed code is upper-cased', await p.locator('input[aria-label="VilleCoins code"]').inputValue() === 'VC-GOOD-2345');
+  await p.click('button:has-text("Redeem")'); await p.waitForTimeout(300);
+  check('redeem: right code adds coins', await p.locator('[role=status]:has-text("1,000 VilleCoins added to your wallet.")').count() === 1 && await p.locator('input[aria-label="VilleCoins code"]').inputValue() === '');
+  await p.screenshot({ path: `${D}/wallet-redeem-390.png`, fullPage: true });
+  await p.close();
+
+  // Menu, history, profile: no "spent"
+  p = await page('wallet-dash', '&coins=1500');
+  check('dashboard: no "spent" anywhere', await noSpent(p));
+  const menuBtn = p.locator('button[aria-label="Open menu"], button[aria-label="Menu"]').first();
+  if (await menuBtn.count()) { await menuBtn.click(); await p.waitForTimeout(400); }
+  check('menu: wallet balance instead of spent', await p.locator('text=Wallet').first().count() >= 1 && await p.locator('text=1,500').count() >= 1 && await noSpent(p));
+  check('menu: Wallet item', await p.locator('text=Wallet').count() >= 1);
+  await p.screenshot({ path: `${D}/wallet-menu-390.png` });
+  await p.close();
+  p = await page('wallet-profile', '&coins=1500');
+  check('profile: VilleCoins instead of spent', await p.locator('text=VilleCoins').count() >= 1 && await noSpent(p));
+  await p.close();
+
+  // Checkout uses coins
+  p = await page('choose', '&coins=500');
+  await p.click('button:has-text("Review & Book")'); await p.waitForTimeout(300);
+  check('checkout: coins offered with cash remainder', await p.locator('text=Pay with VilleCoins').count() === 1 && await p.locator('text=−500').count() === 1 && await p.locator('text=Cash to your driver').count() >= 1);
+  await p.click('button:has-text("Confirm — find me a driver")'); await p.waitForTimeout(1500);
+  const bk = p.adds[0] && p.adds[0][1];
+  check('booking: asks to use 500 coins (server applies them)', bk && bk.walletCoins === 500 && bk.wallet === undefined, JSON.stringify(bk && { w: bk.walletCoins }));
+  await p.close();
+  p = await page('choose', '&coins=500');
+  await p.click('button:has-text("Review & Book")'); await p.waitForTimeout(300);
+  await p.click('text=Pay with VilleCoins');
+  await p.click('button:has-text("Confirm — find me a driver")'); await p.waitForTimeout(1500);
+  check('booking: unticked → no coins used', p.adds[0] && p.adds[0][1].walletCoins === undefined);
+  await p.close();
+  p = await page('choose');
+  await p.click('button:has-text("Review & Book")'); await p.waitForTimeout(300);
+  check('checkout: zero balance shows the wallet with Add coins, no tick box', await p.locator('text=Pay with VilleCoins').count() === 0 && await p.locator('text=VilleCoins: 0').count() === 1 && await p.locator('button:has-text("Add coins")').count() === 1);
+  await p.click('button:has-text("Add coins")'); await p.waitForTimeout(200);
+  check('checkout: Add coins opens the wallet', p.navs.includes('wallet'), JSON.stringify(p.navs));
+  await p.close();
+
+  // Driver collects only the cash part
+  p = await page('wallet-driver');
+  check('driver: collects J$700, told J$500 paid with coins', await p.locator('text=J$700').count() >= 1 && await p.locator('text=J$500 paid with VilleCoins').count() === 1);
+  await p.close();
+
   // Admin
   p = await page('wallet-admin', '', 1280, 900);
   check('admin: totals', await p.locator('text=Coins held by customers').count() >= 1 && await p.locator('text=Used on rides').count() === 1);
@@ -95,6 +145,14 @@ const out = []; const check = (n, ok, x = '') => out.push(`${ok ? 'PASS' : 'FAIL
   const bd = p.calls.find((c) => c[0] === 'walletBankDecide');
   check('admin: approve sends the amount that arrived', bd && bd[1].id === 'BR1' && bd[1].approve === true && bd[1].coins === 1800, JSON.stringify(bd));
   check('admin: approved one leaves the list', await p.locator('[data-bank-row="VC-AB12CD"]').count() === 0);
+  await p.click('button:has-text("Make codes")'); await p.waitForTimeout(200);
+  check('admin codes: needs coins', await p.locator('text=Enter how many coins each code is worth').count() === 1);
+  await p.fill('#rc-coins', '1000'); await p.fill('#rc-count', '2'); await p.fill('#rc-note', 'Office sale'); await p.click('button:has-text("Make codes")'); await p.waitForTimeout(400);
+  const cc = p.calls.find((c) => c[0] === 'walletCodeCreate');
+  check('admin codes: makes codes on the server', cc && cc[1].coins === 1000 && cc[1].count === 2 && cc[1].note === 'Office sale', JSON.stringify(cc));
+  check('admin codes: new codes shown to copy', await p.locator('text=2 new codes:').count() === 1 && await p.locator('[data-code-row=active]').count() === 2 && await p.locator('[data-code-row=redeemed] >> text=by kd@example.com').count() === 1);
+  await p.click('button[aria-label="Cancel VC-NEW0-ABCD"]'); await p.waitForTimeout(300);
+  check('admin codes: cancel an unused code', p.calls.some((c) => c[0] === 'walletCodeCancel' && c[1].code === 'VC-NEW0-ABCD') && await p.locator('[data-code-row=cancelled]').count() === 1);
   check('admin: bank transfer off until account number added', await p.locator('text=Bank transfer is off until you add an account number').count() === 1);
   await p.click('button[aria-expanded=false]:has-text("Edit")');
   await p.fill('#ws-bankName', 'My Bank'); await p.fill('#ws-accountNumber', '123456'); await p.click('button:has-text("Save settings")'); await p.waitForTimeout(300);

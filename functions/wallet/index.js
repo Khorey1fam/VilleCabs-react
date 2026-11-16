@@ -6,6 +6,8 @@
 // • wallet_topups/{id}       a card top-up waiting for / paid through WiPay
 // • wallet_bank_requests/{id} a bank-transfer top-up waiting for admin to check
 // • config/wallet            bank details + contact numbers shown to customers
+// • wallet_codes/{CODE}      a redeem code worth coins; works once, for one person
+// • wallet_code_tries/{uid}  wrong-code counter so codes can't be guessed
 //
 // Coins come in three ways: a card top-up (paid through the existing WiPay
 // flow, credited in payments.js by creditTopupInTx), a bank transfer that an
@@ -204,6 +206,74 @@ async function bankDecide(auth, { id, approve, coins, note } = {}) {
   return { ok: true, status: out.status, balance: out.balance == null ? null : out.balance };
 }
 
+// ── Redeem codes ────────────────────────────────────────────────────────────
+// Admin makes codes worth a set number of coins (gift vouchers, cash sold at
+// the office). Each code works once, for one person.
+const CODES_MAX = 50;
+const TRIES_MAX = 8;                 // wrong codes allowed per hour
+const HOUR = 60 * 60 * 1000;
+const giftCode = () => { const r = () => Array.from({ length: 4 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join(''); return `VC-${r()}-${r()}`; };
+const cleanCode = (c) => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const codeId = (c) => { const x = cleanCode(c); return /^VC[A-Z0-9]{8}$/.test(x) ? `VC-${x.slice(2, 6)}-${x.slice(6)}` : null; };
+
+async function codeCreate(auth, { coins, count, note } = {}) {
+  if (!isAdmin(auth)) throw new HttpsError('permission-denied', 'Admins only.');
+  const n = coinsOf(coins); const k = count == null ? 1 : coinsOf(count);
+  if (n < 1 || n > TOPUP_MAX) throw new HttpsError('invalid-argument', `Each code can be worth 1 to ${fmt(TOPUP_MAX)} coins.`);
+  if (k < 1 || k > CODES_MAX) throw new HttpsError('invalid-argument', `Make 1 to ${CODES_MAX} codes at a time.`);
+  const why = String(note || '').trim().slice(0, 120);
+  const codes = [];
+  for (let i = 0; i < k; i += 1) {
+    let id = giftCode();
+    while ((await db().doc(`wallet_codes/${id}`).get()).exists) id = giftCode(); // eslint-disable-line no-await-in-loop
+    await db().doc(`wallet_codes/${id}`).set({ coins: n, status: 'active', note: why, createdBy: auth.token.email || null, createdAt: deps.serverTime() }); // eslint-disable-line no-await-in-loop
+    codes.push(id);
+  }
+  return { ok: true, codes };
+}
+
+async function codeCancel(auth, { code } = {}) {
+  if (!isAdmin(auth)) throw new HttpsError('permission-denied', 'Admins only.');
+  const id = codeId(code);
+  if (!id) throw new HttpsError('invalid-argument', 'Missing code.');
+  const ref = db().doc(`wallet_codes/${id}`);
+  return db().runTransaction(async (tx) => {
+    const s = await tx.get(ref);
+    if (!s.exists) throw new HttpsError('not-found', 'Code not found.');
+    if (s.get('status') !== 'active') throw new HttpsError('failed-precondition', 'This code has already been used or cancelled.');
+    tx.update(ref, { status: 'cancelled', cancelledBy: auth.token.email || null, cancelledAt: deps.serverTime() });
+    return { ok: true };
+  });
+}
+
+async function codeRedeem(auth, { code } = {}, now = Date.now()) {
+  if (!auth) throw new HttpsError('unauthenticated', 'Please sign in first.');
+  const triesRef = db().doc(`wallet_code_tries/${auth.uid}`);
+  const t = await triesRef.get();
+  const since = t.exists ? Number(t.get('since')) || 0 : 0;
+  const fresh = now - since > HOUR;
+  const tries = t.exists && !fresh ? coinsOf(t.get('count')) : 0;
+  if (tries >= TRIES_MAX) throw new HttpsError('resource-exhausted', 'Too many wrong codes. Please try again in an hour, or contact VilleCabs.');
+  const miss = async (msg) => { await triesRef.set({ count: tries + 1, since: fresh || !since ? now : since }); throw new HttpsError('not-found', msg); };
+  const id = codeId(code);
+  if (!id) return miss('That code isn’t right. Check it and try again.');
+  const ref = db().doc(`wallet_codes/${id}`);
+  const out = await db().runTransaction(async (tx) => {
+    const s = await tx.get(ref);
+    if (!s.exists) return { miss: 'That code isn’t right. Check it and try again.' };
+    const c = s.data();
+    if (c.status === 'redeemed') return { miss: c.redeemedBy === auth.uid ? 'You’ve already used this code.' : 'This code has already been used.' };
+    if (c.status !== 'active') return { miss: 'This code is no longer valid.' };
+    const n = coinsOf(c.coins);
+    const ws = await tx.get(db().doc(`wallets/${auth.uid}`));
+    const balance = applyInTx(tx, ws, auth.uid, n, { type: 'code_redeem', code: id, note: 'Redeemed a code' });
+    tx.update(ref, { status: 'redeemed', redeemedBy: auth.uid, redeemedEmail: auth.token.email || null, redeemedAt: deps.serverTime() });
+    return { coins: n, balance };
+  });
+  if (out.miss) return miss(out.miss);
+  return { ok: true, coins: out.coins, balance: out.balance };
+}
+
 exports.walletTopupCreate = onCall(async (req) => {
   const { mergePayments, cardAllowedFor } = require('../dash/logic');
   const cardAllowed = async (uid) => { const s = await db().doc('config/payments').get(); return cardAllowedFor(mergePayments(s.exists ? s.data() : {}), uid); };
@@ -215,6 +285,9 @@ exports.walletAdminAdjust = onCall((req) => adminAdjust(req.auth, req.data || {}
 exports.walletBankCreate = onCall((req) => bankCreate(req.auth, req.data || {}));
 exports.walletBankUpdate = onCall((req) => bankUpdate(req.auth, req.data || {}));
 exports.walletBankDecide = onCall((req) => bankDecide(req.auth, req.data || {}));
+exports.walletCodeCreate = onCall((req) => codeCreate(req.auth, req.data || {}));
+exports.walletCodeCancel = onCall((req) => codeCancel(req.auth, req.data || {}));
+exports.walletRedeem = onCall((req) => codeRedeem(req.auth, req.data || {}));
 
 exports.creditTopupInTx = creditTopupInTx;
-exports.internal = { setDeps: (d) => { deps = { ...deps, ...d }; }, applyInTx, creditTopupInTx, createTopup, onBookingCreated, onBookingUpdated, adminAdjust, bankCreate, bankUpdate, bankDecide };
+exports.internal = { setDeps: (d) => { deps = { ...deps, ...d }; }, applyInTx, creditTopupInTx, createTopup, onBookingCreated, onBookingUpdated, adminAdjust, bankCreate, bankUpdate, bankDecide, codeCreate, codeCancel, codeRedeem };
