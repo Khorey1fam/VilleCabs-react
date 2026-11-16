@@ -1,7 +1,7 @@
 // VilleDash Merchant portal — served at /merchant.
 import React, { useEffect, useMemo, useState } from 'react';
 import { onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, sendPasswordResetEmail } from 'firebase/auth';
-import { collection, doc, onSnapshot, query, where, orderBy, limit, setDoc, updateDoc, deleteDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, where, orderBy, limit, setDoc, updateDoc, deleteDoc, addDoc, writeBatch, serverTimestamp } from 'firebase/firestore';
 import {
   api, dashAuth, dashDb, errText, formatJMD, MERCHANT_CATEGORIES, ORDER_LABEL, DAYS, isOpenAt,
   uploadMerchantImage, centsFromJ,
@@ -151,6 +151,7 @@ function StoreForm({ uid, initial, onSaved, registering }) {
       )}
       {msg && <div style={st.note}>{msg}</div>}
       <button style={{ ...st.btn, marginTop: 12, opacity: ok && !busy ? 1 : 0.5 }} disabled={!ok || busy} onClick={save}>{registering ? 'Send for approval' : 'Save store details'}</button>
+      {registering && <div style={{ ...st.sub, textAlign: 'center', marginTop: 8 }}>Next: add your menu and prices.</div>}
     </div>
   );
 }
@@ -235,48 +236,95 @@ function Orders({ uid, store }) {
   );
 }
 
-// ── Products ─────────────────────────────────────────────────────────────────
-// Options are typed as lines:  Size* | Small:0, Large:400   (* = required, prices in J$)
-//                              Extras (2) | Festival:150, Plantain:200   ((n) = choose up to n)
-function optionsToText(opts) {
-  return (opts || []).map((g) => `${g.name}${g.required ? '*' : ''}${g.maxSelect > 1 ? ` (${g.maxSelect})` : ''} | ${(g.choices || []).map((c) => `${c.label}:${(c.priceCents || 0) / 100}`).join(', ')}`).join('\n');
-}
-function textToOptions(text) {
+// ── Menu (products) ──────────────────────────────────────────────────────────
+// Stored shape (unchanged): options: [{ name, required, maxSelect, choices: [{ label, priceCents }] }]
+const jText = (cents) => { const n = (Number(cents) || 0) / 100; return n ? String(n) : ''; };
+const toEditable = (opts) => (opts || []).map((g) => ({
+  name: g.name || '', required: !!g.required, maxSelect: String(g.maxSelect || 1),
+  choices: (g.choices || []).map((c) => ({ label: c.label || '', price: jText(c.priceCents) })),
+}));
+export function fromEditable(groups) {
   const out = [];
-  for (const raw of String(text || '').split('\n')) {
-    const line = raw.trim(); if (!line) continue;
-    const [head, rest] = line.split('|');
-    if (!rest) throw new Error(`Option line needs a "|": ${line}`);
-    const m = /^(.+?)(\*)?\s*(?:\((\d+)\))?\s*$/.exec(head.trim());
-    const choices = rest.split(',').map((c) => c.trim()).filter(Boolean).map((c) => {
-      const [label, price] = c.split(':');
-      const cents = centsFromJ(price || '0');
-      if (!label.trim() || Number.isNaN(cents)) throw new Error(`Check the choice "${c}".`);
-      return { label: label.trim().slice(0, 40), priceCents: cents };
+  for (const g of groups || []) {
+    const name = String(g.name || '').trim();
+    const filled = (g.choices || []).filter((c) => String(c.label || '').trim() || String(c.price || '').trim());
+    if (!name && !filled.length) continue; // an empty group the merchant never used
+    if (!name) throw new Error('Give each option group a name, like Size or Extras.');
+    const choices = filled.map((c) => {
+      const label = String(c.label || '').trim();
+      if (!label) throw new Error(`One choice in “${name}” has a price but no name.`);
+      const priceCents = centsFromJ(c.price || '0');
+      if (Number.isNaN(priceCents)) throw new Error(`Check the price for “${label}” in ${name}.`);
+      return { label: label.slice(0, 40), priceCents };
     });
-    if (!choices.length) throw new Error(`Add choices for ${m[1]}.`);
-    out.push({ name: m[1].trim().slice(0, 40), required: !!m[2], maxSelect: m[3] ? Number(m[3]) : 1, choices });
+    if (!choices.length) throw new Error(`Add at least one choice to “${name}”.`);
+    const max = Math.max(1, Math.min(choices.length, Math.floor(Number(g.maxSelect) || 1)));
+    out.push({ name: name.slice(0, 40), required: !!g.required, maxSelect: max, choices });
   }
   return out;
 }
+
+function OptionsEditor({ groups, onChange }) {
+  const setGroup = (i, patch) => onChange(groups.map((g, j) => (j === i ? { ...g, ...patch } : g)));
+  const setChoice = (i, k, patch) => setGroup(i, { choices: groups[i].choices.map((c, j) => (j === k ? { ...c, ...patch } : c)) });
+  return (
+    <div>
+      {groups.map((g, i) => (
+        <div key={i} style={{ border: `1px solid ${C.purpleLine}`, borderRadius: 12, padding: 12, margin: '8px 0', background: '#fcfaff' }}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <div style={{ flex: 1 }}>
+              <label style={st.label} htmlFor={`og-name-${i}`}>Option group</label>
+              <input id={`og-name-${i}`} style={st.input} value={g.name} onChange={(e) => setGroup(i, { name: e.target.value })} placeholder="e.g. Size, Sides, Extras" />
+            </div>
+            <button type="button" onClick={() => onChange(groups.filter((_, j) => j !== i))} style={{ ...small, background: 'none', color: C.red, border: 'none', paddingBottom: 12 }}>Remove group</button>
+          </div>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center', margin: '8px 0' }}>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13.5 }}>
+              <input type="checkbox" checked={g.required} onChange={(e) => setGroup(i, { required: e.target.checked })} /> Customer must choose
+            </label>
+            <label style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 13.5 }}>
+              Can pick up to
+              <select value={g.maxSelect} onChange={(e) => setGroup(i, { maxSelect: e.target.value })} style={{ ...st.input, width: 'auto', padding: '6px 8px' }} aria-label={`How many choices for ${g.name || 'this group'}`}>
+                {Array.from({ length: Math.max(1, g.choices.length) }, (_, n) => n + 1).map((n) => <option key={n} value={String(n)}>{n}</option>)}
+              </select>
+            </label>
+          </div>
+          {g.choices.map((c, k) => (
+            <div key={k} style={{ display: 'grid', gridTemplateColumns: '1fr 110px auto', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+              <input style={st.input} value={c.label} onChange={(e) => setChoice(i, k, { label: e.target.value })} placeholder={k === 0 ? 'e.g. Small' : 'Choice'} aria-label={`Choice ${k + 1} name`} />
+              <input style={st.input} inputMode="decimal" value={c.price} onChange={(e) => setChoice(i, k, { price: e.target.value })} placeholder="+J$ 0" aria-label={`Choice ${k + 1} extra price in J$`} />
+              <button type="button" onClick={() => setGroup(i, { choices: g.choices.filter((_, j) => j !== k) })} style={{ ...small, background: 'none', color: C.quiet, border: 'none' }} aria-label={`Remove choice ${k + 1}`}>✕</button>
+            </div>
+          ))}
+          <button type="button" onClick={() => setGroup(i, { choices: [...g.choices, { label: '', price: '' }] })} style={{ ...small, background: C.white, color: C.purple, border: `1px solid ${C.purpleLine}` }}>+ Add choice</button>
+        </div>
+      ))}
+      <button type="button" onClick={() => onChange([...groups, { name: '', required: false, maxSelect: '1', choices: [{ label: '', price: '' }, { label: '', price: '' }] }])}
+        style={{ ...st.btnGhost, padding: 10, fontSize: 13.5 }}>+ Add options (size, sides, extras…)</button>
+      <div style={{ fontSize: 11.5, color: C.quiet, marginTop: 4 }}>The extra price is added to the item price. Leave it blank if a choice costs nothing extra.</div>
+    </div>
+  );
+}
+
 function ProductForm({ uid, p, onDone }) {
   const [f, setF] = useState({
     name: p?.name || '', category: p?.category || '', description: p?.description || '',
     price: p ? String((p.priceCents || 0) / 100) : '', stock: p && Number.isInteger(p.stock) ? String(p.stock) : '',
-    available: p ? p.available !== false : true, imageUrl: p?.imageUrl || '', options: optionsToText(p?.options),
+    available: p ? p.available !== false : true, imageUrl: p?.imageUrl || '',
   });
+  const [groups, setGroups] = useState(() => toEditable(p?.options));
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const save = async () => {
     setMsg('');
     const priceCents = centsFromJ(f.price);
-    if (!f.name.trim()) { setMsg('Add a product name.'); return; }
-    if (Number.isNaN(priceCents)) { setMsg('Enter a price in J$.'); return; }
+    if (!f.name.trim()) { setMsg('Add the item name.'); return; }
+    if (!f.price.trim() || Number.isNaN(priceCents)) { setMsg('Enter a price in J$.'); return; }
     const stock = f.stock.trim() === '' ? null : Number(f.stock);
     if (stock !== null && (!Number.isInteger(stock) || stock < 0)) { setMsg('Stock must be a whole number, or blank for unlimited.'); return; }
     let options;
-    try { options = textToOptions(f.options); } catch (e) { setMsg(e.message); return; }
+    try { options = fromEditable(groups); } catch (e) { setMsg(e.message); return; }
     const data = {
       name: f.name.trim().slice(0, 80), category: f.category.trim().slice(0, 40) || 'Menu', description: f.description.trim().slice(0, 300),
       priceCents, stock, available: f.available, imageUrl: f.imageUrl || null, options, updatedAt: serverTimestamp(),
@@ -286,22 +334,21 @@ function ProductForm({ uid, p, onDone }) {
       if (p) await updateDoc(doc(dashDb(), 'merchants', uid, 'products', p.id), data);
       else await addDoc(collection(dashDb(), 'merchants', uid, 'products'), { ...data, createdAt: serverTimestamp() });
       onDone();
-    } catch (e) { setMsg('Could not save the product.'); }
+    } catch (e) { setMsg('Could not save the item.'); }
     setBusy(false);
   };
   return (
     <div style={{ ...st.card, border: `2px solid ${C.purpleLine}` }}>
-      <div style={st.h2}>{p ? 'Edit product' : 'New product'}</div>
-      <label style={st.label}>Name</label><input style={st.input} value={f.name} onChange={set('name')} />
+      <div style={st.h2}>{p ? 'Edit item' : 'New item'}</div>
+      <label style={st.label} htmlFor="pf-name">Name</label><input id="pf-name" style={st.input} value={f.name} onChange={set('name')} placeholder="e.g. Jerk chicken" />
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-        <div><label style={st.label}>Price (J$)</label><input style={st.input} inputMode="decimal" value={f.price} onChange={set('price')} /></div>
-        <div><label style={st.label}>Stock (blank = unlimited)</label><input style={st.input} inputMode="numeric" value={f.stock} onChange={set('stock')} /></div>
+        <div><label style={st.label} htmlFor="pf-price">Price (J$)</label><input id="pf-price" style={st.input} inputMode="decimal" value={f.price} onChange={set('price')} placeholder="e.g. 1200" /></div>
+        <div><label style={st.label} htmlFor="pf-stock">Stock (blank = unlimited)</label><input id="pf-stock" style={st.input} inputMode="numeric" value={f.stock} onChange={set('stock')} /></div>
       </div>
-      <label style={st.label}>Menu section</label><input style={st.input} value={f.category} onChange={set('category')} placeholder="e.g. Mains, Drinks, Sizes 8–12" />
-      <label style={st.label}>Description</label><textarea style={{ ...st.input, minHeight: 50 }} value={f.description} onChange={set('description')} />
-      <label style={st.label}>Options (one group per line)</label>
-      <textarea style={{ ...st.input, minHeight: 60, fontFamily: 'monospace', fontSize: 12.5 }} value={f.options} onChange={set('options')} placeholder={'Size* | Small:0, Large:400\nExtras (2) | Festival:150, Plantain:200'} />
-      <div style={{ fontSize: 11.5, color: C.quiet }}>* = customer must choose · (2) = can choose up to 2 · prices are added to the base price</div>
+      <label style={st.label} htmlFor="pf-cat">Menu section</label><input id="pf-cat" style={st.input} value={f.category} onChange={set('category')} placeholder="e.g. Mains, Sides, Drinks" />
+      <label style={st.label} htmlFor="pf-desc">Description</label><textarea id="pf-desc" style={{ ...st.input, minHeight: 50 }} value={f.description} onChange={set('description')} placeholder="What comes with it" />
+      <label style={st.label}>Options</label>
+      <OptionsEditor groups={groups} onChange={setGroups} />
       <label style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 14, margin: '10px 0' }}>
         <input type="checkbox" checked={f.available} onChange={(e) => setF({ ...f, available: e.target.checked })} /> Available to order
       </label>
@@ -311,40 +358,186 @@ function ProductForm({ uid, p, onDone }) {
           try { const url = await uploadMerchantImage(uid, e.target.files[0], 'product'); setF((x) => ({ ...x, imageUrl: url })); } catch (er) { setMsg(er.message || 'Upload failed.'); }
         }} />
       </label>
-      {msg && <div style={st.err}>{msg}</div>}
+      {msg && <div style={st.err} role="alert">{msg}</div>}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 10 }}>
         <button style={st.btnGhost} onClick={onDone}>Cancel</button>
-        <button style={st.btn} disabled={busy} onClick={save}>Save</button>
+        <button style={st.btn} disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save item'}</button>
       </div>
     </div>
   );
 }
-function Products({ uid }) {
+
+// Paste a whole menu. One item per line: "Jerk chicken (Mains) - 1200 | Quarter chicken with festival".
+// A line with no price ("Drinks" or "DRINKS:") starts a new section for the lines under it.
+export function parseMenu(text, existing = []) {
+  const have = new Set(existing.map((p) => String(p.name || '').trim().toLowerCase()));
+  const items = []; const problems = []; const seen = new Set();
+  let section = '';
+  String(text || '').split(/\r?\n/).forEach((raw, i) => {
+    const line = raw.trim().replace(/^[•*\-–]\s+/, '');
+    if (!line) return;
+    const [mainRaw, ...descParts] = line.split('|');
+    const main = mainRaw.trim();
+    const m = /^(.*?)[\s.:–—-]*(?:J?\$\s*)?(\d[\d,]*(?:\.\d{1,2})?)\s*(?:JMD|JA?\$)?\s*$/i.exec(main);
+    if (!m) {
+      const head = main.replace(/[:–—-]+\s*$/, '').trim();
+      if (head && head.length <= 40 && !descParts.length) { section = (head === head.toUpperCase() ? head.toLowerCase() : head).replace(/(^|\s)\w/g, (c) => c.toUpperCase()); return; }
+      problems.push({ line: i + 1, text: line, why: 'No price found. End the line with the price, like “- 1200”.' });
+      return;
+    }
+    let name = m[1].trim(); let cat = section;
+    const sec = /\(([^)]{1,40})\)\s*$/.exec(name);
+    if (sec) { cat = sec[1].trim(); name = name.slice(0, sec.index).trim(); }
+    name = name.replace(/[\s.:–—-]+$/, '').trim();
+    if (!name) { problems.push({ line: i + 1, text: line, why: 'Add the item name before the price.' }); return; }
+    const priceCents = centsFromJ(m[2]);
+    if (Number.isNaN(priceCents)) { problems.push({ line: i + 1, text: line, why: 'Check the price.' }); return; }
+    const key = name.toLowerCase();
+    const item = { name: name.slice(0, 80), category: (cat || 'Menu').slice(0, 40), priceCents, description: descParts.join('|').trim().slice(0, 300) };
+    if (have.has(key)) item.skip = 'Already on your menu';
+    else if (seen.has(key)) item.skip = 'Listed twice';
+    seen.add(key);
+    items.push(item);
+  });
+  return { items: items.slice(0, 150), problems, tooMany: items.length > 150 };
+}
+
+function PasteMenu({ uid, existing, onDone }) {
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const r = useMemo(() => parseMenu(text, existing), [text, existing]);
+  const toAdd = r.items.filter((x) => !x.skip);
+  const add = async () => {
+    if (!toAdd.length) return;
+    setBusy(true); setMsg('');
+    try {
+      for (let i = 0; i < toAdd.length; i += 400) {
+        const b = writeBatch(dashDb());
+        toAdd.slice(i, i + 400).forEach((x) => b.set(doc(collection(dashDb(), 'merchants', uid, 'products')), {
+          name: x.name, category: x.category, description: x.description, priceCents: x.priceCents, stock: null, available: true,
+          imageUrl: null, options: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+        }));
+        await b.commit();
+      }
+      onDone(toAdd.length);
+    } catch (e) { setMsg('Could not add the items. Try again.'); setBusy(false); }
+  };
+  return (
+    <div style={{ ...st.card, border: `2px solid ${C.purpleLine}` }}>
+      <div style={st.h2}>Paste your menu</div>
+      <div style={st.sub}>One item per line: name, then the price. Put the section in brackets, or type the section on its own line above its items. Add a description after a <b>|</b>.</div>
+      <pre style={{ ...st.note, fontFamily: 'ui-monospace, monospace', fontSize: 12.5, whiteSpace: 'pre-wrap', margin: '10px 0' }}>{'Mains\nJerk chicken - 1200 | Quarter chicken with festival\nCurry goat - 1500\nDrinks\nSorrel - 300\nFried dumpling (Sides) - 150'}</pre>
+      <label style={st.label} htmlFor="pm-text">Your menu</label>
+      <textarea id="pm-text" style={{ ...st.input, minHeight: 150 }} value={text} onChange={(e) => setText(e.target.value)} placeholder="Type or paste your menu here" />
+      {(r.items.length > 0 || r.problems.length > 0) && (
+        <div style={{ marginTop: 12 }} aria-live="polite">
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 6 }}>Check before adding · {toAdd.length} item{toAdd.length === 1 ? '' : 's'} to add</div>
+          {r.items.map((x, i) => (
+            <div key={i} style={{ ...st.row, borderTop: `1px solid ${C.line}`, opacity: x.skip ? 0.55 : 1 }}>
+              <span style={{ minWidth: 0 }}><b>{x.name}</b> <span style={{ color: C.quiet }}>· {x.category}</span>{x.description ? <span style={{ display: 'block', fontSize: 12, color: C.quiet }}>{x.description}</span> : null}{x.skip ? <span style={{ display: 'block', fontSize: 12, color: C.amber }}>{x.skip}, won’t be added</span> : null}</span>
+              <b style={{ whiteSpace: 'nowrap' }}>{formatJMD(x.priceCents)}</b>
+            </div>
+          ))}
+          {r.problems.map((x) => (
+            <div key={x.line} style={{ ...st.err, margin: '6px 0' }}>Line {x.line}: “{x.text.slice(0, 60)}” · {x.why}</div>
+          ))}
+          {r.tooMany && <div style={st.err}>Only the first 150 items are shown. Add the rest in a second paste.</div>}
+        </div>
+      )}
+      {msg && <div style={st.err} role="alert">{msg}</div>}
+      <div style={st.sub}>You can add photos and options to each item afterwards with Edit.</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 10 }}>
+        <button style={st.btnGhost} onClick={() => onDone(0)}>Cancel</button>
+        <button style={{ ...st.btn, opacity: toAdd.length ? 1 : 0.5 }} disabled={busy || !toAdd.length} onClick={add}>{busy ? 'Adding…' : `Add ${toAdd.length || ''} item${toAdd.length === 1 ? '' : 's'}`.replace('  ', ' ')}</button>
+      </div>
+    </div>
+  );
+}
+
+// What customers will see on the store page: sections, items, prices, options. Nothing can be ordered here.
+const optLine = (g) => `${g.name}${g.required ? ' (must choose' : ' (optional'}${g.maxSelect > 1 ? `, up to ${g.maxSelect})` : ')'}: ${(g.choices || []).map((c) => `${c.label}${c.priceCents ? ` +${formatJMD(c.priceCents)}` : ''}`).join(', ')}`;
+export function MenuPreview({ store, list, onClose }) {
+  const groups = {};
+  list.forEach((p) => { const k = p.category || 'Menu'; (groups[k] = groups[k] || []).push(p); });
+  const name = store?.name || 'Your store';
+  return (
+    <div role="dialog" aria-modal="true" aria-label="Preview as customer" style={{ position: 'fixed', inset: 0, zIndex: 50, background: C.bg, overflowY: 'auto' }}>
+      <div style={{ position: 'sticky', top: 0, zIndex: 1, background: C.purpleDark, color: C.white, padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: 13.5, fontWeight: 600 }}>Preview: this is what customers see{store?.status === 'approved' ? '' : ' once VilleDash approves your store'}</span>
+        <button type="button" onClick={onClose} style={{ ...small, background: C.white, color: C.purpleDark, border: 'none' }}>Close preview</button>
+      </div>
+      <div style={{ height: 150, background: store?.coverUrl ? `center/cover url("${store.coverUrl}")` : `linear-gradient(135deg, ${C.purple}, ${C.purpleDark})` }} />
+      <div style={{ ...st.wrap, marginTop: -36 }}>
+        <div style={st.card}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <div style={{ width: 56, height: 56, borderRadius: 14, flexShrink: 0, display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 22, color: C.purple, background: store?.logoUrl ? `center/cover url("${store.logoUrl}")` : C.purpleSoft, border: `2px solid ${C.white}` }}>{!store?.logoUrl && name.trim().charAt(0).toUpperCase()}</div>
+            <div style={{ minWidth: 0 }}><div style={{ fontSize: 20, fontWeight: 800 }}>{name}</div>{store?.address && <div style={st.sub}>{store.address}</div>}</div>
+          </div>
+          {store?.description && <div style={{ fontSize: 14, marginTop: 8 }}>{store.description}</div>}
+        </div>
+        {list.length === 0 ? <div style={{ ...st.card, ...st.sub, textAlign: 'center' }}>Customers would see “No products listed yet”. Add some items first.</div>
+          : Object.keys(groups).map((s) => (
+            <section key={s} aria-label={s}>
+              <h2 style={{ fontSize: 17, margin: '16px 0 8px' }}>{s}</h2>
+              {groups[s].map((p) => {
+                const soldOut = p.available === false || (Number.isInteger(p.stock) && p.stock <= 0);
+                return (
+                  <div key={p.id} style={{ ...st.card, display: 'flex', gap: 12, opacity: soldOut ? 0.6 : 1 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700 }}>{p.name}</div>
+                      {p.description && <div style={{ ...st.sub, marginTop: 2 }}>{p.description}</div>}
+                      <div style={{ fontWeight: 800, marginTop: 4 }}>{soldOut ? 'Sold out' : formatJMD(p.priceCents)}</div>
+                      {(p.options || []).map((g, i) => <div key={i} style={{ fontSize: 12, color: C.quiet, marginTop: 2 }}>{optLine(g)}</div>)}
+                    </div>
+                    {p.imageUrl && <img src={p.imageUrl} alt="" style={{ width: 84, height: 84, objectFit: 'cover', borderRadius: 12, flexShrink: 0 }} />}
+                  </div>
+                );
+              })}
+            </section>
+          ))}
+        <div style={{ ...st.sub, textAlign: 'center', margin: '8px 0 24px' }}>Customers tap an item to pick options and add it to their cart.</div>
+      </div>
+    </div>
+  );
+}
+
+function Products({ uid, store, onCount }) {
   const [list, setList] = useState(null);
-  const [editing, setEditing] = useState(null); // null | 'new' | product
+  const [editing, setEditing] = useState(null); // null | 'new' | 'paste' | product
+  const [preview, setPreview] = useState(false);
   const [confirmDel, setConfirmDel] = useState(null);
+  const [added, setAdded] = useState('');
   useEffect(() => onSnapshot(collection(dashDb(), 'merchants', uid, 'products'), (s) => setList(s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name))), () => setList([])), [uid]);
+  useEffect(() => { if (list && onCount) onCount(list.length); }, [list, onCount]);
   if (!list) return <Spinner />;
+  if (editing === 'paste') return <PasteMenu uid={uid} existing={list} onDone={(n) => { setEditing(null); setAdded(n ? `Added ${n} item${n === 1 ? '' : 's'} to your menu.` : ''); }} />;
   if (editing) return <ProductForm uid={uid} p={editing === 'new' ? null : editing} onDone={() => setEditing(null)} />;
   const toggle = (p) => updateDoc(doc(dashDb(), 'merchants', uid, 'products', p.id), { available: p.available === false, updatedAt: serverTimestamp() }).catch(() => {});
   return (
     <>
-      <button style={{ ...st.btn, marginBottom: 12 }} onClick={() => setEditing('new')}>+ Add product</button>
-      {list.length === 0 && <div style={{ ...st.card, ...st.sub }}>No products yet. Add your menu or catalogue so customers can order.</div>}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
+        <button style={st.btn} onClick={() => { setAdded(''); setEditing('new'); }}>+ Add item</button>
+        <button style={st.btnGhost} onClick={() => { setAdded(''); setEditing('paste'); }}>Paste a menu</button>
+      </div>
+      <button style={{ ...st.btnGhost, marginBottom: 12 }} onClick={() => setPreview(true)}>Preview as customer</button>
+      {added && <div style={st.note} role="status">{added} Tap Edit on an item to add a photo or options.</div>}
+      {list.length === 0 && <div style={{ ...st.card, ...st.sub }}>No items yet. Add your menu or catalogue so customers can order.</div>}
       {list.map((p) => (
         <div key={p.id} style={{ ...st.card, display: 'flex', gap: 10, alignItems: 'center' }}>
           {p.imageUrl ? <img src={p.imageUrl} alt="" style={{ width: 48, height: 48, objectFit: 'cover', borderRadius: 10 }} /> : <div style={{ width: 48, height: 48, borderRadius: 10, background: C.purpleSoft }} />}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 700 }}>{p.name}</div>
-            <div style={{ fontSize: 12.5, color: C.quiet }}>{p.category} · {formatJMD(p.priceCents)}{Number.isInteger(p.stock) ? ` · ${p.stock} left` : ''}{p.options?.length ? ` · ${p.options.length} option group(s)` : ''}</div>
+            <div style={{ fontSize: 12.5, color: C.quiet }}>{p.category} · {formatJMD(p.priceCents)}{Number.isInteger(p.stock) ? ` · ${p.stock} left` : ''}{p.options?.length ? ` · ${p.options.length} option group${p.options.length === 1 ? '' : 's'}` : ''}</div>
           </div>
-          <button onClick={() => toggle(p)} style={{ ...small, background: p.available === false ? '#f3f4f6' : '#e8f7ef', color: p.available === false ? C.quiet : C.green, border: 'none' }}>{p.available === false ? 'Off' : 'On'}</button>
+          <button onClick={() => toggle(p)} aria-label={`${p.name}: ${p.available === false ? 'off, turn on' : 'on, turn off'}`} style={{ ...small, background: p.available === false ? '#f3f4f6' : '#e8f7ef', color: p.available === false ? C.quiet : C.green, border: 'none' }}>{p.available === false ? 'Off' : 'On'}</button>
           <button onClick={() => setEditing(p)} style={{ ...small, background: C.purpleSoft, color: C.purple, border: 'none' }}>Edit</button>
           {confirmDel === p.id
             ? <button onClick={() => deleteDoc(doc(dashDb(), 'merchants', uid, 'products', p.id)).then(() => setConfirmDel(null))} style={{ ...small, background: C.red, color: C.white, border: 'none' }}>Delete?</button>
-            : <button onClick={() => setConfirmDel(p.id)} style={{ ...small, background: 'none', color: C.red, border: 'none' }}>✕</button>}
+            : <button onClick={() => setConfirmDel(p.id)} aria-label={`Delete ${p.name}`} style={{ ...small, background: 'none', color: C.red, border: 'none' }}>✕</button>}
         </div>
       ))}
+      {preview && <MenuPreview store={store} list={list} onClose={() => setPreview(false)} />}
     </>
   );
 }
@@ -416,12 +609,12 @@ function Dashboard({ user, store }) {
           </button>
         </div>
         <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
-          {[['orders', 'Orders'], ['products', 'Products'], ['sales', 'Sales & payouts'], ['store', 'Store details']].map(([k, l]) => (
+          {[['orders', 'Orders'], ['products', 'Menu'], ['sales', 'Sales & payouts'], ['store', 'Store details']].map(([k, l]) => (
             <button key={k} onClick={() => setTab(k)} style={{ ...small, borderRadius: 20, padding: '8px 14px', background: tab === k ? C.purple : '#f3f4f6', color: tab === k ? C.white : '#555', border: 'none' }}>{l}</button>
           ))}
         </div>
         {tab === 'orders' && <Orders uid={user.uid} store={store} />}
-        {tab === 'products' && <Products uid={user.uid} />}
+        {tab === 'products' && <Products uid={user.uid} store={store} />}
         {tab === 'sales' && <Sales uid={user.uid} />}
         {tab === 'store' && <StoreForm uid={user.uid} initial={store} />}
       </div>
@@ -442,19 +635,70 @@ export default function MerchantPortal() {
   if (!store) {
     return (
       <div style={st.page}><Header title="Register your store" right={<SignOutBtn />} />
-        <div style={st.wrap}><StoreForm uid={user.uid} registering /></div></div>
+        <div style={st.wrap}><Steps at={1} /><StoreForm uid={user.uid} registering /></div></div>
     );
   }
   if (store.status === 'approved') return <Dashboard user={user} store={store} />;
+  if (store.status === 'pending') return <PendingStore user={user} store={store} />;
   return (
     <div style={st.page}><Header title={store.name} right={<SignOutBtn />} />
       <div style={st.wrap}>
         <div style={{ ...st.card, textAlign: 'center' }}>
-          <div style={{ fontSize: 40 }}>{store.status === 'pending' ? '⏳' : '⛔'}</div>
-          <div style={st.h2}>{store.status === 'pending' ? 'Waiting for approval' : 'Store not active'}</div>
-          <div style={st.sub}>{store.status === 'pending' ? 'VilleDash will contact you to confirm your documents and settlement details. You can add products now so you’re ready.' : 'Contact VilleDash at admin@villecabs.com.'}</div>
+          <div style={{ fontSize: 40 }}>⛔</div>
+          <div style={st.h2}>Store not active</div>
+          <div style={st.sub}>Contact VilleDash at admin@villecabs.com.</div>
         </div>
-        {store.status === 'pending' && <Products uid={user.uid} />}
+      </div>
+    </div>
+  );
+}
+
+function Steps({ at }) {
+  return (
+    <div style={{ display: 'flex', gap: 6, marginBottom: 12 }} aria-label={`Step ${at} of 2`}>
+      {['Store details', 'Your menu'].map((l, i) => (
+        <div key={l} style={{ flex: 1 }}>
+          <div style={{ height: 5, borderRadius: 3, background: i < at ? C.purple : C.purpleLine }} />
+          <div style={{ fontSize: 12, marginTop: 4, color: i + 1 === at ? C.purple : C.quiet, fontWeight: i + 1 === at ? 700 : 500 }}>Step {i + 1} · {l}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// After "Send for approval": step 2 (add the menu, or skip), then the waiting screen with the menu below it.
+function PendingStore({ user, store }) {
+  const key = `vd_menu_step_${user.uid}`;
+  const [done, setDone] = useState(() => { try { return localStorage.getItem(key) === '1'; } catch (e) { return false; } });
+  const [count, setCount] = useState(0);
+  const finish = () => { try { localStorage.setItem(key, '1'); } catch (e) { /* ignore */ } setDone(true); window.scrollTo && window.scrollTo(0, 0); };
+  if (!done) {
+    return (
+      <div style={st.page}><Header title={store.name} right={<SignOutBtn />} />
+        <div style={st.wrap}>
+          <Steps at={2} />
+          <div style={st.card}>
+            <div style={{ fontSize: 13, color: C.green, fontWeight: 700 }}>✓ Store details sent for approval</div>
+            <div style={{ ...st.h2, marginTop: 6 }}>Add your menu</div>
+            <div style={st.sub}>Add what you sell and the prices. Customers will see your menu, choose what they want and add it to their cart once VilleDash approves your store. You can change it any time.</div>
+          </div>
+          <Products uid={user.uid} store={store} onCount={setCount} />
+          <button style={{ ...(count ? st.btn : st.btnGhost), marginTop: 4 }} onClick={finish}>{count ? `Done, ${count} item${count === 1 ? '' : 's'} added` : 'Skip for now'}</button>
+          {!count && <div style={{ ...st.sub, textAlign: 'center', marginTop: 6 }}>You can add your menu later from this page.</div>}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div style={st.page}><Header title={store.name} right={<SignOutBtn />} />
+      <div style={st.wrap}>
+        <div style={{ ...st.card, textAlign: 'center' }}>
+          <div style={{ fontSize: 40 }}>⏳</div>
+          <div style={st.h2}>Waiting for approval</div>
+          <div style={st.sub}>VilleDash will contact you to confirm your documents and settlement details. Your menu goes live when your store is approved. You can keep adding to it below.</div>
+        </div>
+        <div style={st.h2}>Your menu</div>
+        <Products uid={user.uid} store={store} />
       </div>
     </div>
   );
