@@ -19,14 +19,18 @@ const docRef = (path) => ({
   async set(v, o) { const prev = store.get(path); store.set(path, o && o.merge ? { ...(prev || {}), ...resolve(v) } : resolve(v)); },
   async update(v) { const prev = store.get(path); if (!prev) throw new Error(`no doc ${path}`); const n = { ...prev }; for (const [k, x] of Object.entries(v)) { const r = resolve(x); if (r === undefined) delete n[k]; else n[k] = r; } store.set(path, n); },
 });
-const col = (c) => ({ doc: (id) => docRef(`${c}/${id || `auto${++auto}`}`), async add(v) { const r = docRef(`${c}/auto${++auto}`); await r.set(v); return r; } });
+const colQuery = (c, f) => ({
+  where: (k, op, v) => colQuery(c, [...f, [k, v]]),
+  async get() { const docs = [...store].filter(([p, d]) => p.startsWith(`${c}/`) && f.every(([k, v]) => d[k] === v)).map(([p, d]) => ({ id: p.split('/').pop(), data: () => ({ ...d }) })); return { size: docs.length, docs, empty: !docs.length }; },
+});
+const col = (c) => ({ doc: (id) => docRef(`${c}/${id || `auto${++auto}`}`), async add(v) { const r = docRef(`${c}/auto${++auto}`); await r.set(v); return r; }, where: (k, op, v) => colQuery(c, [[k, v]]) });
 const fakeDb = {
   doc: docRef, collection: col,
   async runTransaction(fn) { const ops = []; const tx = { get: (r) => r.get(), set: (r, v, o) => ops.push(() => r.set(v, o)), update: (r, v) => ops.push(() => r.update(v)) }; const out = await fn(tx); for (const o of ops) await o(); return out; },
 };
 const W = require('./index');
 W.internal.setDeps({ db: () => fakeDb, serverTime: () => ({ __server: true }), del: () => ({ __del: true }) });
-const { onBookingCreated, onBookingUpdated, adminAdjust, createTopup, creditTopupInTx } = W.internal;
+const { onBookingCreated, onBookingUpdated, adminAdjust, createTopup, creditTopupInTx, bankCreate, bankUpdate, bankDecide } = W.internal;
 const ADMIN = { uid: 'a', token: { email: 'admin@villecabs.com' } };
 const ME = { uid: 'c1', token: { email: 'c1@x.jm' } };
 const bal = () => ((store.get('wallets/c1') || {}).balance) || 0;
@@ -106,4 +110,52 @@ test('card top-up: limits, card switch, and crediting', async () => {
   await fakeDb.runTransaction(async (tx) => { const ws = await tx.get(docRef('wallets/c1')); creditTopupInTx(tx, ws, r.id, t); });
   assert.equal(bal(), 1000);
   assert.equal(txs()[0].type, 'topup_card');
+});
+
+test('bank transfer: request, receipt, approve credits once', async () => {
+  seed();
+  await assert.rejects(bankCreate(ME, { coins: 2000 }), /aren’t set up yet/);
+  store.set('config/wallet', { bankName: 'Test Bank', accountNumber: '000111' });
+  await assert.rejects(bankCreate(null, { coins: 2000 }), /sign in/);
+  await assert.rejects(bankCreate(ME, { coins: 100 }), /between 500/);
+  await assert.rejects(bankCreate(ME, { coins: 2000, receiptPath: 'wallet_receipts/other/x.jpg' }), /receipt photo/);
+  const r = await bankCreate(ME, { coins: 2000 });
+  assert.match(r.code, /^VC-[A-HJ-NP-Z2-9]{6}$/);
+  const req = () => store.get(`wallet_bank_requests/${r.id}`);
+  assert.deepEqual([req().status, req().coins, req().customerName, req().receiptPath], ['pending', 2000, 'Kim', null]);
+  assert.equal(bal(), 0);                                   // nothing credited until admin approves
+  // Receipt: only the owner, only into their own folder
+  await assert.rejects(bankUpdate({ uid: 'c2', token: {} }, { id: r.id, receiptPath: 'wallet_receipts/c2/a.jpg' }), /not found/i);
+  await assert.rejects(bankUpdate(ME, { id: r.id, receiptPath: 'wallet_receipts/c2/a.jpg' }), /receipt photo/);
+  await bankUpdate(ME, { id: r.id, receiptPath: 'wallet_receipts/c1/a.jpg' });
+  assert.equal(req().receiptPath, 'wallet_receipts/c1/a.jpg');
+  // Only admin decides
+  await assert.rejects(bankDecide(ME, { id: r.id, approve: true }), /Admins only/);
+  const d = await bankDecide(ADMIN, { id: r.id, approve: true });
+  assert.deepEqual([d.status, d.balance, bal(), req().status, req().creditedCoins], ['approved', 2000, 2000, 'approved', 2000]);
+  assert.equal(txs()[0].type, 'topup_bank');
+  assert.ok([...store].some(([p, x]) => p.startsWith('notifications/') && /2,000 VilleCoins were added/.test(x.message)));
+  await assert.rejects(bankDecide(ADMIN, { id: r.id, approve: true }), /already been checked/);
+  await assert.rejects(bankUpdate(ME, { id: r.id, cancel: true }), /already been checked/);
+  assert.equal(bal(), 2000);
+});
+
+test('bank transfer: reject needs a reason, admin can credit what arrived, limits, cancel', async () => {
+  seed();
+  store.set('config/wallet', { accountNumber: '000111' });
+  const a = await bankCreate(ME, { coins: 5000 });
+  await assert.rejects(bankDecide(ADMIN, { id: a.id, approve: false }), /short reason/);
+  await bankDecide(ADMIN, { id: a.id, approve: false, note: 'No transfer received' });
+  assert.equal(store.get(`wallet_bank_requests/${a.id}`).status, 'rejected');
+  assert.equal(bal(), 0);
+  assert.ok([...store].some(([p, x]) => p.startsWith('notifications/') && /No transfer received/.test(x.message)));
+  const b = await bankCreate(ME, { coins: 5000 });
+  assert.equal((await bankDecide(ADMIN, { id: b.id, approve: true, coins: 4500, note: 'J$4,500 arrived' })).balance, 4500);
+  const c = await bankCreate(ME, { coins: 500 });
+  await bankUpdate(ME, { id: c.id, cancel: true });
+  assert.equal(store.get(`wallet_bank_requests/${c.id}`).status, 'cancelled');
+  await assert.rejects(bankDecide(ADMIN, { id: c.id, approve: true }), /already been checked/);
+  await bankCreate(ME, { coins: 500 }); await bankCreate(ME, { coins: 500 }); await bankCreate(ME, { coins: 500 });
+  await assert.rejects(bankCreate(ME, { coins: 500 }), /waiting to be checked/);
+  assert.equal(bal(), 4500);
 });

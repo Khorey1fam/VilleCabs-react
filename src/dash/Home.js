@@ -1,5 +1,6 @@
 // VilleDash home (signed-in customers) and the public VilleDash landing page.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useWalletBalance, CoinMark, coins } from '../wallet/Wallet';
 import { addDoc, collection, getDocs, query, serverTimestamp, where } from 'firebase/firestore';
 import { dashDb, MERCHANT_CATEGORIES, isOpenAt, hoursToday, formatJMD } from './dashApi';
 import { Shell, Icon, Chip, Skeleton, EmptyState, ErrorState, useLive, docsOf } from './kit';
@@ -312,6 +313,7 @@ const toMerchant = () => { window.location.href = '/merchant'; };
 export function DashHome({ go, user, openDelivery, openOrder, openStore, domains }) {
   const merchants = useApprovedMerchants();
   const activity = useActivity(user?.uid);
+  const coinBalance = useWalletBalance(user?.uid);
   const activeCount = activity.active.length;
   const pickCategory = (g) => {
     if (g.send) return go('dash-send');
@@ -332,6 +334,15 @@ export function DashHome({ go, user, openDelivery, openOrder, openStore, domains
       <section className="vd-section" style={{ paddingTop: 20 }}>
         <div className="vd-wrap">
           <ServiceCards onSend={() => go('dash-send')} onStores={() => go('dash-stores')} />
+          <button type="button" onClick={() => go('wallet')} aria-label="Open your VilleCoins wallet"
+            style={{ marginTop: 14, width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 14, border: '1px solid #e3d8f7', background: '#faf7ff', cursor: 'pointer', textAlign: 'left' }}>
+            <CoinMark size={28} />
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ display: 'block', fontWeight: 700, fontSize: 14.5, color: '#1a1530' }}>VilleCoins: {coinBalance === null ? '…' : coins(coinBalance)}</span>
+              <span style={{ display: 'block', fontSize: 12.5, color: '#5f5873' }}>Buy coins here and use them on VilleCabs rides</span>
+            </span>
+            <span style={{ fontWeight: 700, fontSize: 13.5, color: '#6b21a8', whiteSpace: 'nowrap' }}>Buy coins →</span>
+          </button>
           <div style={{ marginTop: 22 }}>
             <SearchBox merchants={merchants.data} openStore={openStore} onQuery={searchQuery} />
           </div>

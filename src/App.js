@@ -13223,7 +13223,7 @@ export default function App() {
                           onHome={() => setScreen(site === 'ville' ? (user ? 'ville-home' : 'splash') : (user ? (user.role === 'driver' ? 'driver-dash' : 'customer-dash') : 'splash'))}/>,
     'charter':          <CharterPage {...props}/>,
     'payments':         <PaymentsPage {...props}/>,
-    'wallet':           <WalletScreen {...props} TopBar={TopBar}/>,
+    'wallet':           (site === 'dash' && dashOn) ? <WalletScreen {...props} dash onBack={() => setScreen('dash-home')}/> : <WalletScreen {...props} TopBar={TopBar}/>,
     'promotions':       <PromotionsPage {...props}/>,
     'safety-centre':         <SafetyCentre {...props}/>,
     'privacy':               <PrivacyPolicy {...props}/>,

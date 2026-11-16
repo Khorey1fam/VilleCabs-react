@@ -4,9 +4,12 @@
 // • wallets/{uid}            { balance }            owner reads, functions write
 // • wallet_tx/{id}           one line per change     owner reads, functions write
 // • wallet_topups/{id}       a card top-up waiting for / paid through WiPay
+// • wallet_bank_requests/{id} a bank-transfer top-up waiting for admin to check
+// • config/wallet            bank details + contact numbers shown to customers
 //
-// Coins come in two ways: a card top-up (paid through the existing WiPay flow,
-// credited in payments.js by creditTopupInTx) or an admin credit. A ride that
+// Coins come in three ways: a card top-up (paid through the existing WiPay
+// flow, credited in payments.js by creditTopupInTx), a bank transfer that an
+// admin approves after checking the bank account, or an admin credit. A ride that
 // asks to use coins has them taken when it is booked; if the ride never
 // happens they go straight back.
 const { onDocumentCreated, onDocumentUpdated } = require('firebase-functions/v2/firestore');
@@ -126,6 +129,81 @@ async function adminAdjust(auth, { uid, coins, reason } = {}) {
   return { ok: true, balance };
 }
 
+// ── Bank transfer top-ups ───────────────────────────────────────────────────
+// The customer asks for an amount and gets a reference code to put on the
+// transfer, then attaches a photo of the receipt. Nothing is credited until an
+// admin has checked the bank account and approved it.
+const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I
+const makeCode = () => `VC-${Array.from({ length: 6 }, () => CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]).join('')}`;
+const BANK_OPEN_MAX = 3;
+const receiptOk = (uid, path) => typeof path === 'string' && path.length < 300 && path.startsWith(`wallet_receipts/${uid}/`) && !path.includes('..');
+
+async function bankCreate(auth, { coins, receiptPath } = {}) {
+  if (!auth) throw new HttpsError('unauthenticated', 'Please sign in first.');
+  const n = coinsOf(coins);
+  if (n < TOPUP_MIN || n > TOPUP_MAX) throw new HttpsError('invalid-argument', `Top up between ${fmt(TOPUP_MIN)} and ${fmt(TOPUP_MAX)} VilleCoins.`);
+  if (receiptPath != null && !receiptOk(auth.uid, receiptPath)) throw new HttpsError('invalid-argument', 'That receipt photo can’t be used.');
+  const cfg = await db().doc('config/wallet').get();
+  if (!cfg.exists || !String(cfg.get('accountNumber') || '').trim()) throw new HttpsError('failed-precondition', 'Bank transfers aren’t set up yet. Please contact VilleCabs.');
+  const open = await db().collection('wallet_bank_requests').where('uid', '==', auth.uid).where('status', '==', 'pending').get();
+  if (open.size >= BANK_OPEN_MAX) throw new HttpsError('resource-exhausted', 'You already have bank transfers waiting to be checked. Finish or cancel one first.');
+  const cust = await db().doc(`customers/${auth.uid}`).get();
+  const ref = db().collection('wallet_bank_requests').doc();
+  const code = makeCode();
+  await ref.set({
+    uid: auth.uid, coins: n, amountJ: n, code, status: 'pending', receiptPath: receiptPath || null,
+    customerName: cust.exists ? (cust.get('name') || '') : '', customerPhone: cust.exists ? (cust.get('phone') || '') : '',
+    customerEmail: auth.token.email || '', createdAt: deps.serverTime(),
+  });
+  return { ok: true, id: ref.id, code };
+}
+
+async function bankUpdate(auth, { id, receiptPath, cancel } = {}) {
+  if (!auth) throw new HttpsError('unauthenticated', 'Please sign in first.');
+  if (!id || typeof id !== 'string') throw new HttpsError('invalid-argument', 'Missing request.');
+  const ref = db().doc(`wallet_bank_requests/${id}`);
+  return db().runTransaction(async (tx) => {
+    const s = await tx.get(ref);
+    if (!s.exists || s.get('uid') !== auth.uid) throw new HttpsError('not-found', 'Request not found.');
+    if (s.get('status') !== 'pending') throw new HttpsError('failed-precondition', 'This transfer has already been checked.');
+    if (cancel === true) { tx.update(ref, { status: 'cancelled', decidedAt: deps.serverTime() }); return { ok: true, status: 'cancelled' }; }
+    if (!receiptOk(auth.uid, receiptPath)) throw new HttpsError('invalid-argument', 'That receipt photo can’t be used.');
+    tx.update(ref, { receiptPath, receiptAt: deps.serverTime() });
+    return { ok: true, status: 'pending' };
+  });
+}
+
+async function bankDecide(auth, { id, approve, coins, note } = {}) {
+  if (!isAdmin(auth)) throw new HttpsError('permission-denied', 'Admins only.');
+  if (!id || typeof id !== 'string') throw new HttpsError('invalid-argument', 'Missing request.');
+  const why = String(note || '').trim().slice(0, 200);
+  if (approve !== true && !why) throw new HttpsError('invalid-argument', 'Write a short reason the customer will see.');
+  const ref = db().doc(`wallet_bank_requests/${id}`);
+  const out = await db().runTransaction(async (tx) => {
+    const s = await tx.get(ref);
+    if (!s.exists) throw new HttpsError('not-found', 'Request not found.');
+    const r = s.data();
+    if (r.status !== 'pending') throw new HttpsError('failed-precondition', 'This transfer has already been checked.');
+    const by = auth.token.email || null;
+    if (approve !== true) {
+      tx.update(ref, { status: 'rejected', note: why, decidedBy: by, decidedAt: deps.serverTime() });
+      return { status: 'rejected', uid: r.uid, code: r.code, why };
+    }
+    // The admin can credit what actually arrived if it differs from what was asked.
+    const n = coins == null ? coinsOf(r.coins) : coinsOf(coins);
+    if (n < 1 || n > TOPUP_MAX) throw new HttpsError('invalid-argument', `Enter between 1 and ${fmt(TOPUP_MAX)} coins.`);
+    const ws = await tx.get(db().doc(`wallets/${r.uid}`));
+    const balance = applyInTx(tx, ws, r.uid, n, { type: 'topup_bank', requestId: id, note: `Bank transfer ${r.code}`, by });
+    tx.update(ref, { status: 'approved', creditedCoins: n, note: why || null, decidedBy: by, decidedAt: deps.serverTime() });
+    return { status: 'approved', uid: r.uid, code: r.code, coins: n, balance };
+  });
+  const message = out.status === 'approved'
+    ? `Your bank transfer ${out.code} was confirmed. ${fmt(out.coins)} VilleCoins were added to your wallet.`
+    : `We couldn’t confirm bank transfer ${out.code}: ${out.why}`;
+  await db().collection('notifications').add({ customerId: out.uid, type: 'wallet', read: false, createdAt: deps.serverTime(), message }).catch(() => {});
+  return { ok: true, status: out.status, balance: out.balance == null ? null : out.balance };
+}
+
 exports.walletTopupCreate = onCall(async (req) => {
   const { mergePayments, cardAllowedFor } = require('../dash/logic');
   const cardAllowed = async (uid) => { const s = await db().doc('config/payments').get(); return cardAllowedFor(mergePayments(s.exists ? s.data() : {}), uid); };
@@ -134,6 +212,9 @@ exports.walletTopupCreate = onCall(async (req) => {
 exports.walletBookingCreated = onDocumentCreated('bookings/{id}', (e) => (e.data ? onBookingCreated(e.params.id, e.data.data()) : null));
 exports.walletBookingUpdated = onDocumentUpdated('bookings/{id}', (e) => onBookingUpdated(e.params.id, e.data.before.data(), e.data.after.data()));
 exports.walletAdminAdjust = onCall((req) => adminAdjust(req.auth, req.data || {}));
+exports.walletBankCreate = onCall((req) => bankCreate(req.auth, req.data || {}));
+exports.walletBankUpdate = onCall((req) => bankUpdate(req.auth, req.data || {}));
+exports.walletBankDecide = onCall((req) => bankDecide(req.auth, req.data || {}));
 
 exports.creditTopupInTx = creditTopupInTx;
-exports.internal = { setDeps: (d) => { deps = { ...deps, ...d }; }, applyInTx, creditTopupInTx, createTopup, onBookingCreated, onBookingUpdated, adminAdjust };
+exports.internal = { setDeps: (d) => { deps = { ...deps, ...d }; }, applyInTx, creditTopupInTx, createTopup, onBookingCreated, onBookingUpdated, adminAdjust, bankCreate, bankUpdate, bankDecide };
