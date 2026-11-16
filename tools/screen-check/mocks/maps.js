@@ -125,3 +125,4 @@ export function OverlayViewF({ position, children, getPixelPositionOffset }) {
   const p = map.px(position);
   return <div ref={ref} style={{ position: 'absolute', left: p.x + off.x, top: p.y + off.y, zIndex: 30 }}>{children}</div>;
 }
+export const InfoWindow = ({ children }) => null;
