@@ -48,6 +48,7 @@ window.__callables = {
   cancelFeeAdmin: async () => ({ ok: true }),
   walletTopupCreate: async (d) => ({ ok: true, id: 'TOPUP1' }),
   walletAdminAdjust: async (d) => ({ ok: true, balance: 2000 + d.coins }) };
+if (params.get('dash')) { put('config/features', { dash: true }); if (params.get('dash') === 'stores') { put('merchants/m1', { name: 'Juici', status: 'approved', category: 'restaurant' }); put('merchants/m2', { name: 'Hilo', status: 'approved', category: 'supermarket' }); put('merchants/m3', { name: 'Pending shop', status: 'pending', category: 'boutique' }); } }
 // ── Wallet screens ──
 if (params.get('coins')) put('wallets/cust1', { balance: Number(params.get('coins')) });
 if (s && s.startsWith('wallet')) {

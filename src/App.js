@@ -24,6 +24,7 @@ import VilleEvents from './events/VilleEvents';
 import { DashHome, DashPublic } from './dash/Home';
 import { MyOrders } from './dash/Orders';
 import { DashAbout, DashTerms } from './dash/Info';
+import DashSlides from './dash/DashSlides';
 import { PaymentReturn, goToCard } from './dash/Payments';
 import { ExtraFareRequest, ExtraFareList, ExtraFareCustomer, usePendingExtraRides } from './RideExtras';
 import { CustomerCancelSheet, DriverCancelSheet, useCancelConfig, useCancelBalance } from './cancel/CancelSheets';
@@ -37,7 +38,7 @@ import { DriverLanding, DriverSiteCustomer, DriverAppBanner } from './DriverSite
 import { Icon as DrIcon, Brand as DrBrand } from './driver/DriverUI';
 import { fmtDistance as fmtKm } from './liveRoute';
 import { useDashEnabled, useCardPayments, CARD_MIN_CENTS, api as dashApiCalls } from './dash/dashApi';
-import { useSites, SiteLanding, FamilyBar, HouseAd } from './dash/sites';
+import { useSites, SiteLanding, FamilyBar } from './dash/sites';
 import dashLogoRow from './dash/img/logo-villedash-row.webp';
 import villeLogoRow from './ville/img/ville-logo-row.png';
 
@@ -3778,7 +3779,7 @@ function CustomerDash({ go, user, setUser, setBookingId, bookingId, setPickupDat
       </div>
 
       {/* VILLE family: cross-promotion for VilleDash / VilleEvents */}
-      {dashOn && <HouseAd site={site || 'cabs'} domains={domains || {}} go={go} variant="banner"/>}
+      {dashOn && <DashSlides site={site || 'cabs'} domains={domains || {}} go={go}/>}
 
       {/* Extra fare requests waiting for this customer's answer (e.g. sent by admin after a ride) */}
       {extraRides.map(r => (
@@ -12975,6 +12976,18 @@ export default function App() {
     if (site === 'cabs' || site === 'driver') return;
     siteHomeShownRef.current = true;
     if (site === 'dash' && !dashOn) { setScreen('splash'); return; }
+    // From the VilleDash slideshow on VilleCabs: ?go=send or ?go=stores&group=food
+    if (site === 'dash') {
+      try {
+        const q = new URLSearchParams(window.location.search);
+        if (q.get('go') === 'send') { setScreen('dash-send'); return; }
+        if (q.get('go') === 'stores') {
+          const g = q.get('group');
+          if (g && /^[a-z]{1,20}$/.test(g)) sessionStorage.setItem('vd_store_group', g);
+          setScreen('dash-stores'); return;
+        }
+      } catch (e) { /* ignore */ }
+    }
     setScreen(site === 'dash' ? 'dash-home' : 'ville-home');
   }, [dashOn, user, screen, site]);
 
