@@ -13,6 +13,7 @@ rules_version = '2';
 //    • dash_proof/{deliveryId}/... — VilleDash rider pickup / drop-off photos
 //                                    (only the rider assigned to that delivery)
 //    • site_ads/...                — VILLE cross-site ad images (admin)
+//    • wallet_receipts/{uid}/...   — VilleCoins bank-transfer receipt photos (owner + admin)
 //
 //  Deploy with:  firebase deploy --only storage
 //  (Storage rules are SEPARATE from Firestore rules.)
@@ -75,6 +76,15 @@ service firebase.storage {
       allow write: if request.auth != null
                    && firestore.get(/databases/(default)/documents/dash_deliveries/$(deliveryId)).data.riderId == request.auth.uid
                    && isValidImage();
+    }
+
+    // ── VilleCoins bank-transfer receipts — private: the customer and admin ───
+    match /wallet_receipts/{uid}/{file} {
+      allow read:  if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow create: if request.auth != null && request.auth.uid == uid
+                   && request.resource.size < 8 * 1024 * 1024
+                   && request.resource.contentType.matches('image/(png|jpeg|webp)');
+      allow update, delete: if false;
     }
 
     // ── VILLE cross-site ad images — admin only ───────────────────────────────

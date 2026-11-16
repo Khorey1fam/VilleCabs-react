@@ -135,6 +135,7 @@ export function Footer({ go, domains = {}, publicMode }) {
               <li><button onClick={() => go('dash-about')}>About</button></li>
               <li><button onClick={() => go('dash-terms')}>Delivery terms</button></li>
               <li><a href="/privacy.html">Privacy policy</a></li>
+              {!publicMode && <li><button onClick={() => go('wallet')}>VilleCoins wallet</button></li>}
               <li><button onClick={() => go('contact-us')}>Contact & support</button></li>
             </ul>
           </div>

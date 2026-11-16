@@ -1,7 +1,7 @@
 // Renders the real VilleCabs ride checkout screens (from App.js) with mock Firebase.
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp, doc as fsDoc, setDoc as fsSet, updateDoc as fsUpdate } from 'firebase/firestore';
 import { __VehicleSelect as VehicleSelect, __BookingConfirm as BookingConfirm, __DriverLogin as DriverLogin, __DriverDash as DriverDash, __DriverActive as DriverActive, __LiveRide as LiveRide, __CustomerSignup as CustomerSignup, __CustomerLogin as CustomerLogin, __CustomerDash as CustomerDash, __CustomerProfile as CustomerProfile, __TopBar as TopBar } from '@src/App';
 import WalletScreen from '@src/wallet/Wallet';
 import AdminWallets from '@src/wallet/AdminWallets';
@@ -47,7 +47,13 @@ window.__callables = {
   rideDriverCancel: async (d) => (d.reasonKey === 'rider_no_show' ? { ok: true, outcome: 'cancel', feeJmd: 300 } : ['rider_asked', 'safety'].includes(d.reasonKey) ? { ok: true, outcome: 'cancel', feeJmd: 0 } : { ok: true, outcome: 'redispatch', feeJmd: 0 }),
   cancelFeeAdmin: async () => ({ ok: true }),
   walletTopupCreate: async (d) => ({ ok: true, id: 'TOPUP1' }),
-  walletAdminAdjust: async (d) => ({ ok: true, balance: 2000 + d.coins }) };
+  walletAdminAdjust: async (d) => ({ ok: true, balance: 2000 + d.coins }),
+  walletBankCreate: async (d) => { await fsSet(fsDoc({}, 'wallet_bank_requests', 'BRNEW'), { uid: 'cust1', coins: d.coins, code: 'VC-K7M2QX', status: 'pending', receiptPath: null, createdAt: Timestamp.fromMillis(Date.now()) }); return { ok: true, id: 'BRNEW', code: 'VC-K7M2QX' }; },
+  walletBankUpdate: async (d) => { await fsUpdate(fsDoc({}, 'wallet_bank_requests', d.id), d.cancel ? { status: 'cancelled' } : { receiptPath: d.receiptPath }); return { ok: true }; },
+  walletRedeem: async (d) => { if (d.code.replace(/[^A-Z0-9]/g, '') !== 'VCGOOD2345') { const e = new Error('That code isn’t right. Check it and try again.'); throw e; } return { ok: true, coins: 1000, balance: 1000 }; },
+  walletCodeCreate: async (d) => { const codes = Array.from({ length: d.count }, (_, i) => `VC-NEW${i}-ABCD`); for (const c of codes) await fsSet(fsDoc({}, 'wallet_codes', c), { coins: d.coins, status: 'active', note: d.note, createdAt: Timestamp.fromMillis(Date.now()) }); return { ok: true, codes }; },
+  walletCodeCancel: async (d) => { await fsUpdate(fsDoc({}, 'wallet_codes', d.code), { status: 'cancelled' }); return { ok: true }; },
+  walletBankDecide: async (d) => { await fsUpdate(fsDoc({}, 'wallet_bank_requests', d.id), { status: d.approve ? 'approved' : 'rejected' }); return { ok: true }; } };
 if (params.get('dash')) { put('config/features', { dash: true }); if (params.get('dash') === 'stores') { put('merchants/m1', { name: 'Juici', status: 'approved', category: 'restaurant' }); put('merchants/m2', { name: 'Hilo', status: 'approved', category: 'supermarket' }); put('merchants/m3', { name: 'Pending shop', status: 'pending', category: 'boutique' }); } }
 // ── Wallet screens ──
 if (params.get('coins')) put('wallets/cust1', { balance: Number(params.get('coins')) });
@@ -56,6 +62,9 @@ if (s && s.startsWith('wallet')) {
   put('wallet_tx/W1', { uid: 'cust1', type: 'admin_credit', amount: 2000, balanceAfter: 2000, note: 'Paid cash at office', at: T(t - 86400e3) });
   put('wallet_tx/W2', { uid: 'cust1', type: 'ride_payment', amount: -800, balanceAfter: 1200, bookingId: 'B1', at: T(t - 3600e3) });
   if (s === 'wallet-card') put('config/payments', { cardTesters: ['cust1'] });
+  if (params.get('bank')) put('config/wallet', { bankName: 'Test Bank', branch: 'Mandeville', accountName: 'VilleCabs Test', accountNumber: '000111222', accountType: 'Savings (JMD)' });
+  if (params.get('past')) put('wallet_bank_requests/BROLD', { uid: 'cust1', coins: 1000, code: 'VC-OLD222', status: 'rejected', note: 'No transfer with this code', createdAt: T(t - 5 * 86400e3) });
+  if (s === 'wallet-admin') { put('wallet_codes/VC-USED-2222', { coins: 500, status: 'redeemed', redeemedEmail: 'kd@example.com', redeemedAt: T(t - 3600e3), createdAt: T(t - 86400e3) }); put('wallet_bank_requests/BR1', { uid: 'cust1', coins: 2000, code: 'VC-AB12CD', status: 'pending', receiptPath: 'wallet_receipts/cust1/1.jpg', customerName: 'Keneile Davis', customerPhone: '8765550101', createdAt: T(t - 3600e3) }); put('wallet_bank_requests/BR2', { uid: 'cust2', coins: 500, code: 'VC-ZZ99YY', status: 'pending', receiptPath: null, customerName: 'Pat', createdAt: T(t - 600e3) }); }
   if (s === 'wallet-admin') { put('customers/cust1', { name: 'Keneile Davis', email: 'kd@example.com', phone: '8765550101' }); put('wallets/cust1', { balance: 1200 }); }
 }
 if (s === 'wallet-driver') put('bookings/BK', { customerId: 'cust1', customerName: 'Kim', driverId: 'drv1', driverName: 'Dwayne', status: 'active', fare: 1200, vehicleType: 'VilleRide', paymentMethod: 'cash', wallet: { applied: 500, status: 'held', cashDue: 700 }, pickup: { address: 'Manchester Shopping Centre', lat: 18.04, lng: -77.5 }, dropoff: { address: 'Caledonia Road', lat: 18.03, lng: -77.51 }, acceptedAt: Timestamp.fromMillis(Date.now() - 60e3) });
@@ -145,6 +154,7 @@ const SCREENS = {
   'admin-site': <AdminPanel />,
   'wallet': <WalletScreen go={nav} user={user} TopBar={TopBar} />,
   'wallet-card': <WalletScreen go={nav} user={user} TopBar={TopBar} />,
+  'wallet-vd': <WalletScreen go={nav} user={user} dash onBack={() => nav('dash-home')} />,
   'wallet-admin': <div style={{ background: '#f5f6fa', minHeight: '100vh', padding: 14 }}><AdminWallets /></div>,
   'wallet-dash': <CustomerDash go={nav} user={user} setUser={() => {}} setBookingId={() => {}} setPickupData={() => {}} setDropoffData={() => {}} site="cabs" domains={{}} />,
   'wallet-profile': <CustomerProfile go={nav} user={user} setUser={() => {}} />,

@@ -308,6 +308,11 @@ service cloud.firestore {
     match /wallets/{uid}      { allow read: if isOwner(uid) || isAdmin(); allow write: if false; }
     match /wallet_tx/{id}     { allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid); allow write: if false; }
     match /wallet_topups/{id} { allow read: if isAdmin() || (signedIn() && resource.data.customerId == request.auth.uid); allow write: if false; }
+    // Bank-transfer top-ups: the customer and admin read; only functions write.
+    match /wallet_bank_requests/{id} { allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid); allow write: if false; }
+    // Redeem codes: admin reads the list; only functions write. Customers never read codes.
+    match /wallet_codes/{id}      { allow read: if isAdmin(); allow write: if false; }
+    match /wallet_code_tries/{id} { allow read, write: if false; }
 
     // ── Ride cancellation fees ───────────────────────────────────────────────
     // Written only by Cloud Functions. The customer sees their own fees and
