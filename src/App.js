@@ -5387,7 +5387,20 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
     }
   };
 
+  const bookingBusyRef = useRef(false);
   const handleBook = async () => {
+    if (bookingBusyRef.current) return;
+    bookingBusyRef.current = true;
+    try { await doBook(); } finally { bookingBusyRef.current = false; }
+  };
+  // Coming back from WiPay with the browser's Back button can restore this page
+  // mid-booking ("Creating booking…"). Reset it so nothing is stuck or sent twice.
+  useEffect(() => {
+    const onShow = (e) => { if (e.persisted) { setLoading(false); setChecking(false); setConfirmOpen(false); } };
+    window.addEventListener('pageshow', onShow);
+    return () => window.removeEventListener('pageshow', onShow);
+  }, []);
+  const doBook = async () => {
     setLoading(true); setError(''); setChecking(true);
     try {
       const v          = vehicles[sel];
@@ -5502,6 +5515,26 @@ function VehicleSelect({ go, user, pickupData, setPickupData, dropoffData, setBo
       // Card: the ride waits as 'awaiting_payment' (drivers can't see it) until
       // WiPay confirms payment; the server then opens it to drivers.
       const byCard = payBy === 'card' && cardOn && finalPrice * 100 >= CARD_MIN_CENTS;
+
+      // A card ride that was started but not paid (they left WiPay, or came back
+      // with the Back button) must not turn into a second booking. Same trip and
+      // price → send them back to pay for that one. Anything else → cancel it.
+      try {
+        const unpaid = await getDocs(query(collection(db,'bookings'), where('customerId','==',user.uid), where('status','==','awaiting_payment')));
+        const pickAddr = pickupData?.address||'Manchester, Jamaica', dropAddr = dropoffData?.address||'Destination';
+        for (const d of unpaid.docs) {
+          const b = d.data();
+          const same = byCard && b.payment?.status !== 'paid' && b.fare === finalPrice && b.vehicleType === v.name && b.pickup?.address === pickAddr && b.dropoff?.address === dropAddr;
+          if (same) {
+            setBookingId(d.id);
+            if (typeof setPickupData === 'function') setPickupData(prev => ({ ...prev, fare: finalPrice, vehicleType: v.name, distanceKm: dist }));
+            try { await goToCard('ride', d.id); return; } catch (e) { setLoading(false); go('booking-confirm'); return; }
+          }
+          if (b.payment?.status !== 'paid') {
+            await updateDoc(d.ref, { status:'cancelled', cancelledBy:'customer', cancelReason:'Replaced by a new booking', cancelledAt: serverTimestamp() }).catch(() => {});
+          }
+        }
+      } catch (e) { console.error('Unpaid ride check failed:', e); }
 
       const ref = await addDoc(collection(db,'bookings'), {
         customerId:   user.uid,
@@ -6003,6 +6036,9 @@ function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, 
   const isCardRide = booking?.payment?.method === 'card';
   const cardPaid = isCardRide && booking?.payment?.status === 'paid';
   const awaitingCard = booking?.status === 'awaiting_payment';
+  useEffect(() => {
+    if (cardPaid && booking?.status === 'searching' && !navigatedRef.current) { navigatedRef.current = true; go('live-ride'); }
+  }, [cardPaid, booking?.status]); // eslint-disable-line
   const payCard = async () => {
     if (loading || !bookingId) return;
     setLoading(true); setError('');
@@ -6043,6 +6079,13 @@ function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, 
         // cancellation fee is shown first.
         if (cur && ['active','arrived','enroute'].includes(cur.status)) {
           vcToast('A driver has already accepted your ride. To cancel, use Cancel ride on the trip screen.', 'warn');
+          go('live-ride');
+          return;
+        }
+        // Paid by card: the trip can't be changed any more. Cancelling (with a
+        // refund for admin to review) is on the ride screen.
+        if (cur && cur.payment?.method === 'card' && cur.payment?.status === 'paid') {
+          vcToast('Your ride is paid, so it can’t be changed. To cancel, use Cancel ride on the ride screen.', 'warn');
           go('live-ride');
           return;
         }
@@ -6090,7 +6133,7 @@ function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, 
 
   return (
     <div style={{ background:'linear-gradient(160deg, #ffffff 0%, #f6f2fb 45%, #efe8f7 100%)', minHeight:'100vh' }}>
-      <TopBar title="Confirm Booking" onBack={handleChangeRide} go={go} user={user}/>
+      <TopBar title={cardPaid ? "Ride paid" : "Confirm Booking"} onBack={cardPaid ? () => go('live-ride') : handleChangeRide} go={go} user={user}/>
 
       <div style={{ padding:16, maxWidth:520, margin:'0 auto' }}>
 
@@ -6189,10 +6232,12 @@ function BookingConfirm({ go, bookingId, setBookingId, pickupData, dropoffData, 
           )}
         </button>
         )}
+{!cardPaid && (
         <button onClick={handleChangeRide} disabled={loading}
           style={{ width:'100%', padding:'13px', background:'#fff', color:'#888', border:'1px solid #e5e7eb', borderRadius:14, fontSize:14, cursor:'pointer' }}>
           ← Change Ride
         </button>
+        )}
       </div>
     </div>
   );
@@ -12957,9 +13002,11 @@ export default function App() {
 
   // Back from WiPay's card page: ?vdpay=<paymentId> → show the payment result.
   const [payId] = useState(() => { try { return new URLSearchParams(window.location.search).get('vdpay'); } catch (e) { return null; } });
+  const payShownRef = useRef(false);
   useEffect(() => {
     // Works for VilleCabs rides (everyone) and VilleDash (when it's on).
-    if (!payId || user?.role !== 'customer') return;
+    if (!payId || user?.role !== 'customer' || payShownRef.current) return;
+    payShownRef.current = true;
     siteHomeShownRef.current = true;
     setScreen('pay-result');
     try {
@@ -13190,7 +13237,7 @@ export default function App() {
     'dash-track':             dash(<DeliveryTrack {...dashProps}/>),
     'dash-history':           dash(<MyOrders {...dashProps}/>),
     'dash-cart':              dash(<Cart {...dashProps}/>),
-    'pay-result':             <PaymentReturn {...dashProps} paymentId={payId} openRide={(id, kind) => { setBookingId(id); setScreen(kind === 'extra' ? 'live-ride' : 'booking-confirm'); }} />,
+    'pay-result':             <PaymentReturn {...dashProps} paymentId={payId} openRide={(id, kind, paid) => { setBookingId(id); setScreen(kind === 'extra' || paid ? 'live-ride' : 'booking-confirm'); }} />,
     'dash-about':             <DashAbout {...dashProps} publicMode={!user || !dashOn}/>,
     'dash-terms':             <DashTerms {...dashProps} publicMode={!user || !dashOn}/>,
     'dash-stores':            dash(<StoresList {...dashProps}/>),

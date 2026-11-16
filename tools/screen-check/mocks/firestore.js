@@ -74,7 +74,7 @@ export async function updateDoc(ref, patch) {
   const cur = store.get(ref.path);
   Object.entries(patch).forEach(([k, v]) => { const parts = k.split('.'); let o = d; parts.slice(0, -1).forEach((p) => { o[p] = o[p] || {}; o = o[p]; }); o[parts.at(-1)] = resolve(v); });
   Object.keys(cur).forEach((k) => { if (cur[k] instanceof Timestamp && !(k in patch)) d[k] = cur[k]; });
-  store.set(ref.path, d); window.__writes.push(['update', ref.path, patch]); emit();
+  store.set(ref.path, d); window.__writes.push(['update', ref.path, patch]); try { if (ref.path.startsWith('bookings/')) console.log('UPD ' + ref.path + ' ' + JSON.stringify(patch)); } catch (e) { /* ignore */ } emit();
 }
 export async function deleteDoc(ref) { store.delete(ref.path); window.__writes.push(['delete', ref.path]); emit(); }
 export function writeBatch() { const ops = []; return { set: (r, d) => ops.push(() => setDoc(r, d)), update: (r, d) => ops.push(() => updateDoc(r, d)), delete: (r) => ops.push(() => deleteDoc(r)), commit: async () => { for (const o of ops) await o(); } }; }

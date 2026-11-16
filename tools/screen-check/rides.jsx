@@ -91,6 +91,7 @@ if (s === 'admin-creators') {
 }
 const user = { uid: 'cust1', name: 'Keneile Davis', role: 'customer', email: 'k@x.jm' };
 const nav = (x) => { window.__nav = x; console.log('NAV', x); };
+if (params.get('samefare')) put('bookings/RSAME', { customerId: 'cust1', fare: Number(params.get('samefare')), vehicleType: params.get('veh') || 'VilleRide', status: 'awaiting_payment', paymentMethod: 'Card', payment: { method: 'card', status: 'pending' }, pickup: { address: 'Manchester Shopping Centre, Mandeville' }, dropoff: { address: '12 Caledonia Road, Mandeville' }, createdAt: Timestamp.fromMillis(Date.now() - 60000) });
 const pickup = { address: 'Manchester Shopping Centre, Mandeville', coords: { lat: 18.0416, lng: -77.5036 }, passengers: 1 };
 const dropoff = { address: '12 Caledonia Road, Mandeville', coords: { lat: 18.03, lng: -77.51 } };
 if (s && s.startsWith('driver-dash')) {
