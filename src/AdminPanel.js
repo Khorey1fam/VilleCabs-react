@@ -10,6 +10,18 @@ import AdminEventsTab from './events/AdminEvents';
 import AdminCreatorsTab from './creators/AdminCreators';
 import AdminCancellationsTab from './cancel/AdminCancellations';
 import AdminWalletsTab from './wallet/AdminWallets';
+import { useSites } from './dash/sites';
+import { SitesTab } from './dash/AdminSites';
+import { PaymentsTab } from './dash/AdminPayments';
+import dashLogoRow from './dash/img/logo-villedash-row.webp';
+
+// Link to the other admin. On preview links (*.vercel.app) both admins live on
+// the same address, chosen with ?site=.
+function otherAdminHref(target, domains) {
+  const host = window.location.hostname;
+  if (/\.vercel\.app$|^localhost$|^127\.0\.0\.1$/.test(host)) return `${window.location.origin}/admin?site=${target}`;
+  return `https://${domains[target]}/admin`;
+}
 
 const GOOGLE_MAPS_KEY = process.env.REACT_APP_GOOGLE_MAPS_KEY || '';
 const MAP_LIBRARIES = ['places'];
@@ -56,7 +68,8 @@ const s = {
 };
 
 // ── ADMIN LOGIN ───────────────────────────────────────────────────────────────
-function AdminLogin({ onLogin }) {
+function AdminLogin({ onLogin, brand }) {
+  const dash = brand === 'dash';
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [loading,  setLoading]  = useState(false);
@@ -96,9 +109,11 @@ function AdminLogin({ onLogin }) {
     <div style={{ minHeight:'100vh', background:'#f5f6fa', display:'flex', alignItems:'center', justifyContent:'center', fontFamily:"'Segoe UI', sans-serif" }}>
       <div style={{ width:380, background:'#ffffff', border:'1px solid #e5e7eb', borderRadius:20, padding:32 }}>
         <div style={{ textAlign:'center', marginBottom:28 }}>
-          <div style={{ fontSize:40, marginBottom:10 }}>🚕</div>
-          <div style={{ fontSize:22, fontWeight:700, color:'#1a1a2e', letterSpacing:2 }}>VilleCabs</div>
-          <div style={{ fontSize:13, color:'#9199ad', marginTop:4 }}>Admin Panel</div>
+          {dash
+            ? <img src={dashLogoRow} alt="VilleDash" style={{ height:40, width:'auto', margin:'0 auto 12px', display:'block' }}/>
+            : <><div style={{ fontSize:40, marginBottom:10 }}>🚕</div>
+               <div style={{ fontSize:22, fontWeight:700, color:'#1a1a2e', letterSpacing:2 }}>VilleCabs</div></>}
+          <div style={{ fontSize:13, color:'#9199ad', marginTop:4 }}>{dash ? 'VilleDash Admin · same login as VilleCabs admin' : 'Admin Panel'}</div>
         </div>
         {error && <div style={s.errBox}>⚠️ {error}</div>}
         {resetSent && (
@@ -3788,6 +3803,10 @@ function DemandTab() {
 }
 
 export default function AdminPanel() {
+  // villedash.com/admin shows only VilleDash; villecabs.com/admin the rest.
+  // Same admin account on both.
+  const { site, domains } = useSites();
+  const dashAdmin = site === 'dash';
   const [adminUser, setAdminUser] = useState(null);
   const [loading,   setLoading]   = useState(true);
   const [tab,       setTab]       = useState('overview');
@@ -3812,7 +3831,7 @@ export default function AdminPanel() {
     </div>
   );
 
-  if (!adminUser) return <AdminLogin onLogin={setAdminUser}/>;
+  if (!adminUser) return <AdminLogin onLogin={setAdminUser} brand={dashAdmin ? 'dash' : 'cabs'}/>;
 
   // Signed in but NOT an admin — deny access (data is also protected by Firestore rules)
   if (!isAdminEmail(adminUser)) return (
@@ -3826,9 +3845,24 @@ export default function AdminPanel() {
     </div>
   );
 
+  if (dashAdmin) return (
+    <div style={{ minHeight:'100vh', background:'#f5f6fa', fontFamily:"'Segoe UI', sans-serif" }}>
+      <div style={{ ...s.topbar }}>
+        <img src={dashLogoRow} style={{ height:26, width:'auto', objectFit:'contain' }} alt="VilleDash"/>
+        <span style={{ fontSize:15, fontWeight:700, color:'#6b21a8', marginLeft:4 }}>Admin</span>
+        <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:8 }}>
+          <a href={otherAdminHref('cabs', domains)} style={{ padding:'6px 12px', background:'#fff', border:'1px solid #e5e7eb', borderRadius:10, color:'#1a1a2e', fontSize:11.5, fontWeight:600, textDecoration:'none' }}>VilleCabs admin ↗</a>
+          <button onClick={handleLogout} style={{ padding:'6px 12px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:10, color:'#6b21a8', fontSize:11, fontWeight:600, cursor:'pointer' }}>Logout</button>
+        </div>
+      </div>
+      <div style={s.main}>
+        <AdminDashTab/>
+      </div>
+    </div>
+  );
+
   const tabs = [
     { id:'overview',  label:'Overview',    icon:'📊' },
-    { id:'villedash', label:'VilleDash',   icon:'📦' },
     { id:'villeevents', label:'VilleEvents', icon:'🎟️' },
     { id:'analytics', label:'Analytics',   icon:'📉' },
     { id:'drivers',   label:'Drivers',     icon:'🚗' },
@@ -3849,6 +3883,8 @@ export default function AdminPanel() {
     { id:'creators',  label:'Creators',    icon:'📣' },
     { id:'cancellations', label:'Cancellations', icon:'✖️' },
     { id:'wallets',   label:'Wallets',     icon:'🪙' },
+    { id:'cardpay',   label:'Card payments', icon:'💳' },
+    { id:'sites',     label:'Sites & ads', icon:'🌐' },
   ];
 
   return (
@@ -3859,6 +3895,7 @@ export default function AdminPanel() {
       <div style={s.topbar}>
         <img src="/logo.png" style={{ height:28, objectFit:'contain' }} alt="VilleCabs"/>
         <span style={{ fontSize:15, fontWeight:700, color:'#6b21a8', marginLeft:2 }}>Admin Dashboard</span>        <div style={{ marginLeft:'auto', display:'flex', alignItems:'center', gap:10 }}>
+          <a href={otherAdminHref('dash', domains)} style={{ padding:'6px 12px', background:'#fff', border:'1px solid #e5e7eb', borderRadius:10, color:'#1a1a2e', fontSize:11.5, fontWeight:600, textDecoration:'none' }}>VilleDash admin ↗</a>
           <span style={{ fontSize:12, color:'#888', display:'none' }} className="admin-email">{adminUser.email}</span>
           <button onClick={handleLogout} style={{ padding:'6px 12px', background:'#f5f0ff', border:'1px solid #e9d5ff', borderRadius:10, color:'#6b21a8', fontSize:11, fontWeight:600, cursor:'pointer' }}>Logout</button>
         </div>
@@ -3879,10 +3916,9 @@ export default function AdminPanel() {
       {/* ── CONTENT ── */}
       <div style={s.main}>
         <div style={{ fontSize:18, fontWeight:800, marginBottom:16, color:'#1a1a2e' }}>
-          {tab==='overview'?'📊 Dashboard Overview':tab==='villedash'?'📦 VilleDash':tab==='villeevents'?'🎟️ VilleEvents':tab==='creators'?'📣 Creator Program':tab==='cancellations'?'✖️ Cancellations':tab==='wallets'?'🪙 VilleCoins Wallets':tab==='analytics'?'📉 Analytics':tab==='drivers'?'🚗 Driver Management':tab==='rides'?'🚕 Ride Management':tab==='livemap'?'🗺️ Live Operations Map':tab==='scheduled'?'🗓️ Scheduled Rides':tab==='customers'?'👥 Customers':tab==='revenue'?'💰 Revenue':tab==='demand'?'📅 Demand Schedule':tab==='performance'?'📈 Driver Performance':tab==='partners'?'🤝 Partner Requests':tab==='charter'?'🚘 Charter Bookings':tab==='contacts'?'📬 Messages':tab==='alerts'?'🆘 Safety Alerts':tab==='unfulfilled'?'📍 No Driver Available':tab==='broadcast'?'📢 Broadcast to Drivers':'🎟️ Promo Codes'}
+          {tab==='overview'?'📊 Dashboard Overview':tab==='villeevents'?'🎟️ VilleEvents':tab==='creators'?'📣 Creator Program':tab==='cancellations'?'✖️ Cancellations':tab==='wallets'?'🪙 VilleCoins Wallets':tab==='cardpay'?'💳 Card payments (VilleCabs + VilleDash)':tab==='sites'?'🌐 Sites & ads':tab==='analytics'?'📉 Analytics':tab==='drivers'?'🚗 Driver Management':tab==='rides'?'🚕 Ride Management':tab==='livemap'?'🗺️ Live Operations Map':tab==='scheduled'?'🗓️ Scheduled Rides':tab==='customers'?'👥 Customers':tab==='revenue'?'💰 Revenue':tab==='demand'?'📅 Demand Schedule':tab==='performance'?'📈 Driver Performance':tab==='partners'?'🤝 Partner Requests':tab==='charter'?'🚘 Charter Bookings':tab==='contacts'?'📬 Messages':tab==='alerts'?'🆘 Safety Alerts':tab==='unfulfilled'?'📍 No Driver Available':tab==='broadcast'?'📢 Broadcast to Drivers':'🎟️ Promo Codes'}
         </div>
         {tab === 'overview'  && <OverviewTab setTab={setTab}/>}
-        {tab === 'villedash' && <AdminDashTab/>}
         {tab === 'villeevents' && <AdminEventsTab/>}
         {tab === 'analytics' && <AnalyticsTab/>}
         {tab === 'drivers'   && <DriversTab/>}
@@ -3903,6 +3939,8 @@ export default function AdminPanel() {
         {tab === 'creators'  && <AdminCreatorsTab/>}
         {tab === 'cancellations' && <AdminCancellationsTab/>}
         {tab === 'wallets' && <AdminWalletsTab/>}
+        {tab === 'cardpay' && <PaymentsTab/>}
+        {tab === 'sites' && <SitesTab/>}
       </div>
     </div>
   );

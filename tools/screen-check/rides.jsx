@@ -5,6 +5,7 @@ import { Timestamp } from 'firebase/firestore';
 import { __VehicleSelect as VehicleSelect, __BookingConfirm as BookingConfirm, __DriverLogin as DriverLogin, __DriverDash as DriverDash, __DriverActive as DriverActive, __LiveRide as LiveRide, __CustomerSignup as CustomerSignup, __CustomerLogin as CustomerLogin, __CustomerDash as CustomerDash, __CustomerProfile as CustomerProfile, __TopBar as TopBar } from '@src/App';
 import WalletScreen from '@src/wallet/Wallet';
 import AdminWallets from '@src/wallet/AdminWallets';
+import AdminPanel from '@src/AdminPanel';
 import AdminCancellations from '@src/cancel/AdminCancellations';
 import { ExtraFareRequest, ExtraFareList, ExtraFareCustomer } from '@src/RideExtras';
 import { DriverLanding, DriverSiteCustomer, DriverAppBanner } from '@src/DriverSite';
@@ -137,7 +138,9 @@ if (s && (s.startsWith('events') || s === 'ville-home-events' || s === 'admin-ev
   window.__enablePush = params.get('push') || 'granted';
 }
 const setDrop = (d) => { window.__drop = d; console.log('DROP ' + JSON.stringify(d)); };
+if (s && s.startsWith('admin-site') && params.get('signedin')) window.__user = { uid: 'adm', email: 'admin@villecabs.com' };
 const SCREENS = {
+  'admin-site': <AdminPanel />,
   'wallet': <WalletScreen go={nav} user={user} TopBar={TopBar} />,
   'wallet-card': <WalletScreen go={nav} user={user} TopBar={TopBar} />,
   'wallet-admin': <div style={{ background: '#f5f6fa', minHeight: '100vh', padding: 14 }}><AdminWallets /></div>,
