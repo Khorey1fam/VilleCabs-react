@@ -63,7 +63,7 @@ export function PaymentReturn({ go, paymentId, openDelivery, openOrder, openRide
   const p = live.data;
   const topup = p && p.targetKind === 'topup';
   const ride = p && (p.targetKind === 'ride' || p.targetKind === 'extra' || topup);
-  const open = () => (topup ? go('wallet') : ride ? openRide(String(p.targetId).split('/')[0], p.targetKind) : p.targetKind === 'order' ? openOrder(p.targetId) : openDelivery(p.targetId));
+  const open = () => (topup ? go('wallet') : ride ? openRide(String(p.targetId).split('/')[0], p.targetKind, p.status === 'paid' && !p.refundDue) : p.targetKind === 'order' ? openOrder(p.targetId) : openDelivery(p.targetId));
   const what = topup ? 'VilleCoins top-up' : p && p.targetKind === 'extra' ? 'Extra fare for ride' : ride ? 'Ride' : p && p.targetKind === 'order' ? 'Order' : 'Delivery';
   useEffect(() => {
     if (p && p.status === 'paid' && !p.refundDue) { const t = setTimeout(open, 2500); return () => clearTimeout(t); }

@@ -7,7 +7,7 @@ const out = []; const check = (n, ok, x = '') => out.push(`${ok ? 'PASS' : 'FAIL
   const page = async (s) => {
     const p = await b.newPage({ viewport: { width: 390, height: 844 } });
     p.errs = []; p.on('pageerror', (e) => p.errs.push(e.message));
-    p.calls = []; p.adds = []; p.on('console', (m) => { const t = m.text(); if (t.startsWith('ADD bookings/')) { const [, path, ...r] = t.split(' '); p.adds.push([path, JSON.parse(r.join(' '))]); } if (t.startsWith('CALL ')) { const [, n, ...r] = t.split(' '); p.calls.push([n, JSON.parse(r.join(' ') || 'null')]); } });
+    p.calls = []; p.adds = []; p.navs = []; p.on('console', (m) => { const t = m.text(); if (t.startsWith('NAV ')) p.navs.push(t.slice(4)); if (t.startsWith('UPD ')) { const [, path, ...r] = t.split(' '); (p.upds = p.upds || []).push([path, JSON.parse(r.join(' '))]); } if (t.startsWith('ADD bookings/')) { const [, path, ...r] = t.split(' '); p.adds.push([path, JSON.parse(r.join(' '))]); } if (t.startsWith('CALL ')) { const [, n, ...r] = t.split(' '); p.calls.push([n, JSON.parse(r.join(' ') || 'null')]); } });
     await p.route('https://jm.wipayfinancial.com/**', (r) => r.fulfill({ status: 200, contentType: 'text/html', body: 'WIPAY' }));
     await p.goto(URL(s)); await p.waitForTimeout(800); return p;
   };
@@ -30,6 +30,30 @@ const out = []; const check = (n, ok, x = '') => out.push(`${ok ? 'PASS' : 'FAIL
   check('card on: ride saved as awaiting card payment (hidden from drivers)', bk && bk.status === 'awaiting_payment' && bk.paymentMethod === 'Card' && bk.payment.status === 'pending', JSON.stringify(bk && { s: bk.status, m: bk.paymentMethod }));
   check('card on: WiPay page opened for the ride', !!started && started[1].kind === 'ride' && p.url().startsWith('https://jm.wipayfinancial.com/'), `${p.url()} ${JSON.stringify(started)} ${p.errs.join('|')}`);
   await p.close();
+  // The older unpaid card ride for a different trip is cancelled, not left alongside the new one.
+  // (Checked on a fresh page: the first one has gone to WiPay.)
+  const fare1 = bk && bk.fare; const veh1 = bk && bk.vehicleType;
+  p = await page('choose&card=1');
+  await p.click('button:has-text("Review & Book")'); await p.waitForTimeout(300);
+  await p.click('text=💳 Card now'); await p.click('button:has-text("by card")'); await p.waitForTimeout(1500);
+  check('card on: old unpaid ride for another trip cancelled', (p.upds || []).some(([k, v]) => k === 'bookings/RCARD' && v.status === 'cancelled') && p.adds.length === 1, JSON.stringify(p.upds));
+  await p.close();
+  // Same trip, not paid yet (came back from WiPay) → pay for that ride again, no second booking.
+  p = await page(`choose&card=1&samefare=${fare1}&veh=${encodeURIComponent(veh1 || '')}`);
+  await p.click('button:has-text("Review & Book")'); await p.waitForTimeout(300);
+  await p.click('text=💳 Card now'); await p.click('button:has-text("by card")'); await p.waitForTimeout(1500);
+  const st2 = p.calls.filter((c) => c[0] === 'payCardStart');
+  check('card on: same unpaid trip reused, no second booking', p.adds.length === 0 && st2.length === 1 && st2[0][1].id === 'RSAME', JSON.stringify({ adds: p.adds.length, st2 }));
+  await p.close();
+  // Double tap on "Pay by card" makes one booking.
+  p = await page('choose&card=1');
+  await p.click('button:has-text("Review & Book")'); await p.waitForTimeout(300);
+  await p.click('text=💳 Card now');
+  // Two taps before the screen updates (the old button is still in hand for the second tap).
+  await p.evaluate(() => { const b = [...document.querySelectorAll('button')].find((x) => /by card/.test(x.textContent)); b.click(); b.click(); });
+  await p.waitForTimeout(1500);
+  check('card on: double tap makes one booking', p.adds.length === 1, String(p.adds.length));
+  await p.close();
 
   p = await page('confirm-unpaid');
   await p.screenshot({ path: 'shots/ride-unpaid.png' });
@@ -41,7 +65,8 @@ const out = []; const check = (n, ok, x = '') => out.push(`${ok ? 'PASS' : 'FAIL
 
   p = await page('confirm-paid');
   await p.screenshot({ path: 'shots/ride-paid.png' });
-  check('paid ride: says paid by card, continue button', await p.locator('text=Paid by card').count() >= 1 && await p.locator('text=Continue — paid by card').count() === 1);
+  check('paid ride: goes straight to the ride (finding a driver)', p.navs.includes('live-ride'), JSON.stringify(p.navs));
+  check('paid ride: no Change Ride option', await p.locator('text=Change Ride').count() === 0);
   await p.close();
   // Extra fare: driver asks, customer answers
   p = await page('extras-driver');
