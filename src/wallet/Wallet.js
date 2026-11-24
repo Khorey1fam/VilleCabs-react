@@ -14,7 +14,7 @@ const LINE = '#ece6f5';
 export const coins = (n) => `${Math.round(Number(n) || 0).toLocaleString('en-US')}`;
 const when = (t) => (t && t.toDate ? t.toDate().toLocaleString('en-JM', { timeZone: 'America/Jamaica', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '');
 const LABEL = {
-  topup_card: 'Top-up by card', topup_bank: 'Top-up by bank transfer', code_redeem: 'Redeemed a code', admin_credit: 'Added by VilleCabs', admin_debit: 'Removed by VilleCabs',
+  topup_card: 'Top-up by card', topup_bank: 'Top-up by bank transfer', code_redeem: 'Redeemed a code', ride_cashback: '2% back on a ride', ride_cashback_reversed: '2% back removed: ride cancelled', admin_credit: 'Added by VilleCabs', admin_debit: 'Removed by VilleCabs',
   ride_payment: 'Paid for a ride', ride_refund: 'Returned: ride didn’t go ahead',
 };
 
@@ -255,6 +255,7 @@ export default function WalletScreen({ user, go, TopBar, dash, onBack }) {
           </div>
           <div style={{ fontSize: 40, fontWeight: 800, margin: '6px 0 2px', color: '#ffd84d' }}>{balance === null ? '…' : coins(balance)}</div>
           <div style={{ fontSize: 13.5, color: '#e9e3f5' }}>1 VilleCoin = J$1 · use them to pay for VilleCabs rides</div>
+          <div style={{ marginTop: 10, display: 'inline-block', background: 'rgba(255,216,77,0.16)', color: '#ffd84d', borderRadius: 20, padding: '5px 12px', fontSize: 12.5, fontWeight: 700 }}>Earn 2% back in VilleCoins on every completed ride</div>
         </section>
 
         {openBank.length > 0 && (

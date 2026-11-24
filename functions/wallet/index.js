@@ -95,6 +95,13 @@ async function onBookingCreated(id, b) {
 // ── Ride finished: keep the coins, or give them back ────────────────────────
 async function onBookingUpdated(id, before, after) {
   if (!before || !after || before.status === after.status) return null;
+  const held = await settleHeld(id, after);
+  const back = await cashback(id, before, after);
+  return held || back;
+}
+
+// Coins held at booking: paid on completion, returned if the ride didn't happen.
+async function settleHeld(id, after) {
   if (!after.wallet || after.wallet.status !== 'held') return null;
   const done = after.status === 'completed';
   if (!done && !ENDED.includes(after.status)) return null;
@@ -109,6 +116,53 @@ async function onBookingUpdated(id, before, after) {
     tx.update(ref, { wallet: { ...w, status: 'refunded' } });
     return 'refunded';
   });
+}
+
+// ── 2% back ─────────────────────────────────────────────────────────────────
+// A completed ride earns 2% of its fare in VilleCoins (rounded down). If the
+// ride is later changed to cancelled (e.g. by admin), the coins come back off
+// the wallet — as many as are still there if some were already spent.
+const CASHBACK_PCT = 2;
+const CASHBACK_MAX = 1000; // per ride
+const cashbackFor = (fare) => Math.min(CASHBACK_MAX, Math.floor((coinsOf(fare) * CASHBACK_PCT) / 100));
+
+async function cashback(id, before, after) {
+  const uid = after.customerId;
+  if (!uid || typeof uid !== 'string') return null;
+  const earn = after.status === 'completed';
+  const undo = before.status === 'completed' && ENDED.includes(after.status);
+  if (!earn && !undo) return null;
+  const ref = db().doc(`bookings/${id}`);
+  const out = await db().runTransaction(async (tx) => {
+    const cur = await tx.get(ref);
+    if (!cur.exists) return null;
+    const b = cur.data();
+    const cb = b.cashback || null;
+    if (earn) {
+      if (b.status !== 'completed' || (cb && cb.status === 'credited')) return null;
+      const n = cashbackFor(b.fare);
+      if (n < 1) return null;
+      const ws = await tx.get(db().doc(`wallets/${uid}`));
+      const balance = applyInTx(tx, ws, uid, n, { type: 'ride_cashback', bookingId: id, note: `${CASHBACK_PCT}% back on a completed ride` });
+      tx.update(ref, { cashback: { coins: n, pct: CASHBACK_PCT, status: 'credited', at: deps.serverTime() } });
+      return { kind: 'credited', coins: n, balance };
+    }
+    if (!cb || cb.status !== 'credited' || !ENDED.includes(b.status)) return null;
+    const ws = await tx.get(db().doc(`wallets/${uid}`));
+    const have = ws.exists ? coinsOf(ws.get('balance')) : 0;
+    const take = Math.min(have, coinsOf(cb.coins));
+    if (take > 0) applyInTx(tx, ws, uid, -take, { type: 'ride_cashback_reversed', bookingId: id, note: 'Ride was cancelled' });
+    tx.update(ref, { cashback: { ...cb, status: 'reversed', reversedCoins: take, shortBy: coinsOf(cb.coins) - take, reversedAt: deps.serverTime() } });
+    return { kind: 'reversed', coins: take };
+  });
+  if (!out) return null;
+  const message = out.kind === 'credited'
+    ? `You earned ${fmt(out.coins)} VilleCoins (${CASHBACK_PCT}% back) on your ride.`
+    : `Your ride was cancelled, so the ${CASHBACK_PCT}% back reward was removed from your wallet.`;
+  if (out.kind === 'credited' || out.coins > 0) {
+    await db().collection('notifications').add({ customerId: uid, type: 'wallet', read: false, createdAt: deps.serverTime(), message }).catch(() => {});
+  }
+  return out.kind === 'credited' ? 'cashback' : 'cashback_reversed';
 }
 
 // ── Admin: add or remove coins ──────────────────────────────────────────────
@@ -290,4 +344,4 @@ exports.walletCodeCancel = onCall((req) => codeCancel(req.auth, req.data || {}))
 exports.walletRedeem = onCall((req) => codeRedeem(req.auth, req.data || {}));
 
 exports.creditTopupInTx = creditTopupInTx;
-exports.internal = { setDeps: (d) => { deps = { ...deps, ...d }; }, applyInTx, creditTopupInTx, createTopup, onBookingCreated, onBookingUpdated, adminAdjust, bankCreate, bankUpdate, bankDecide, codeCreate, codeCancel, codeRedeem };
+exports.internal = { setDeps: (d) => { deps = { ...deps, ...d }; }, applyInTx, creditTopupInTx, createTopup, onBookingCreated, onBookingUpdated, adminAdjust, bankCreate, bankUpdate, bankDecide, codeCreate, codeCancel, codeRedeem, cashbackFor, CASHBACK_PCT };

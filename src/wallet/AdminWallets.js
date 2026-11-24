@@ -10,7 +10,7 @@ import { coins } from './Wallet';
 
 const small = { padding: '7px 11px', fontSize: 12.5, borderRadius: 9, cursor: 'pointer', fontWeight: 600, border: `1px solid ${C.line}`, background: C.white, color: C.ink };
 const when = (t) => (t && t.toDate ? t.toDate().toLocaleString('en-JM', { timeZone: 'America/Jamaica', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '');
-const LABEL = { topup_card: 'Card top-up', topup_bank: 'Bank transfer top-up', code_redeem: 'Redeemed a code', admin_credit: 'Added by admin', admin_debit: 'Removed by admin', ride_payment: 'Paid for a ride', ride_refund: 'Ride refund' };
+const LABEL = { topup_card: 'Card top-up', topup_bank: 'Bank transfer top-up', code_redeem: 'Redeemed a code', ride_cashback: '2% back on a ride', ride_cashback_reversed: '2% back removed (ride cancelled)', admin_credit: 'Added by admin', admin_debit: 'Removed by admin', ride_payment: 'Paid for a ride', ride_refund: 'Ride refund' };
 
 function Customer({ c }) {
   const [balance, setBalance] = useState(null);
@@ -216,11 +216,12 @@ export default function AdminWallets() {
   useEffect(() => onSnapshot(query(collection(dashDb(), 'wallet_tx'), orderBy('at', 'desc'), limit(300)), (s) => setRecent(s.docs.map((d) => ({ id: d.id, ...d.data() }))), () => setRecent([])), []);
   useEffect(() => onSnapshot(collection(dashDb(), 'wallets'), (s) => setWallets(s.docs.map((d) => ({ id: d.id, ...d.data() }))), () => {}), []);
   const totals = useMemo(() => {
-    const t = { held: wallets.reduce((s, w) => s + (w.balance || 0), 0), card: 0, bank: 0, codes: 0, admin: 0, rides: 0 };
+    const t = { held: wallets.reduce((s, w) => s + (w.balance || 0), 0), card: 0, bank: 0, codes: 0, cashback: 0, admin: 0, rides: 0 };
     (recent || []).forEach((r) => {
       if (r.type === 'topup_card') t.card += r.amount;
       if (r.type === 'topup_bank') t.bank += r.amount;
       if (r.type === 'code_redeem') t.codes += r.amount;
+      if (r.type === 'ride_cashback' || r.type === 'ride_cashback_reversed') t.cashback += r.amount;
       if (r.type === 'admin_credit' || r.type === 'admin_debit') t.admin += r.amount;
       if (r.type === 'ride_payment' || r.type === 'ride_refund') t.rides -= r.amount;
     });
@@ -245,7 +246,7 @@ export default function AdminWallets() {
   return (
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10, marginBottom: 12 }}>
-        {[['Coins held by customers', totals.held], ['Bought by card', totals.card], ['Bought by bank transfer', totals.bank], ['Added by codes', totals.codes], ['Added by admin (net)', totals.admin], ['Used on rides', totals.rides]].map(([l, v]) => (
+        {[['Coins held by customers', totals.held], ['Bought by card', totals.card], ['Bought by bank transfer', totals.bank], ['Added by codes', totals.codes], ['2% back on rides (net)', totals.cashback], ['Added by admin (net)', totals.admin], ['Used on rides', totals.rides]].map(([l, v]) => (
           <div key={l} style={{ ...st.card, margin: 0 }}><div style={{ fontSize: 12, color: C.quiet }}>{l}</div><div style={{ fontSize: 22, fontWeight: 800 }}>{coins(v)}</div></div>
         ))}
       </div>

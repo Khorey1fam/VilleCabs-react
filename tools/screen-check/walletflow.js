@@ -17,6 +17,7 @@ const out = []; const check = (n, ok, x = '') => out.push(`${ok ? 'PASS' : 'FAIL
   // Wallet screen
   let p = await page('wallet', '&coins=1200');
   check('wallet: balance shown', await p.locator('text=1,200').first().count() === 1 && await p.locator('text=1 VilleCoin = J$1').count() === 1);
+  check('wallet: 2% back shown', await p.locator('text=Earn 2% back in VilleCoins on every completed ride').count() === 1);
   check('wallet: three ways to pay', await p.locator('[aria-label="How to pay"] button[role=radio]').count() === 3);
   check('wallet: live amount line', await p.locator('text=1,000 VilleCoins = J$1,000').count() === 1);
   await p.click('button[role=radio]:has-text("Card")');

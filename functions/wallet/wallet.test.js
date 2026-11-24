@@ -30,7 +30,7 @@ const fakeDb = {
 };
 const W = require('./index');
 W.internal.setDeps({ db: () => fakeDb, serverTime: () => ({ __server: true }), del: () => ({ __del: true }) });
-const { onBookingCreated, onBookingUpdated, adminAdjust, createTopup, creditTopupInTx, bankCreate, bankUpdate, bankDecide, codeCreate, codeCancel, codeRedeem } = W.internal;
+const { onBookingCreated, onBookingUpdated, adminAdjust, createTopup, creditTopupInTx, bankCreate, bankUpdate, bankDecide, codeCreate, codeCancel, codeRedeem, cashbackFor } = W.internal;
 const ADMIN = { uid: 'a', token: { email: 'admin@villecabs.com' } };
 const ME = { uid: 'c1', token: { email: 'c1@x.jm' } };
 const bal = () => ((store.get('wallets/c1') || {}).balance) || 0;
@@ -66,7 +66,7 @@ test('coins cover the whole ride', async () => {
   assert.equal(bal(), 800);
   assert.equal(await move('B1', 'completed'), 'paid');
   assert.equal(store.get('bookings/B1').wallet.status, 'paid');
-  assert.equal(bal(), 800);
+  assert.equal(bal(), 824);   // 800 left + 24 (2% back on J$1,200)
 });
 
 test('short balance: coins first, cash for the rest', async () => {
@@ -193,4 +193,45 @@ test('redeem code: wrong guesses are limited per hour', async () => {
   assert.equal(bal(), 0);
   await assert.rejects(codeRedeem(null, { code: codes[0] }), /sign in/);
   assert.equal((await codeRedeem(ME, { code: codes[0] }, t0 + 61 * 60 * 1000)).balance, 500);   // after an hour
+});
+
+test('2% back: completed rides earn coins once; cancelling takes them back', async () => {
+  seed(0);
+  assert.deepEqual([cashbackFor(1200), cashbackFor(999), cashbackFor(40), cashbackFor(10000000), cashbackFor('x')], [24, 19, 0, 1000, 0]);
+  await book('B1', { walletCoins: 0 });
+  assert.equal(await move('B1', 'active'), null);
+  assert.equal(bal(), 0);                                  // nothing until the ride is completed
+  assert.equal(await move('B1', 'completed'), 'cashback');
+  assert.equal(bal(), 24);
+  const cb = store.get('bookings/B1').cashback; assert.deepEqual([cb.coins, cb.pct, cb.status], [24, 2, 'credited']);
+  assert.ok([...store].some(([p, x]) => p.startsWith('notifications/') && /earned 24 VilleCoins \(2% back\)/.test(x.message)));
+  // A repeat "completed" write doesn't pay twice
+  const b = store.get('bookings/B1'); assert.equal(await onBookingUpdated('B1', { ...b, status: 'arrived' }, b), null);
+  assert.equal(bal(), 24);
+  // Admin changes it to cancelled: coins removed
+  assert.equal(await move('B1', 'cancelled'), 'cashback_reversed');
+  assert.equal(bal(), 0);
+  assert.equal(store.get('bookings/B1').cashback.status, 'reversed');
+  assert.deepEqual(txs().map((t) => t.type), ['ride_cashback', 'ride_cashback_reversed']);
+  assert.ok([...store].some(([p, x]) => p.startsWith('notifications/') && /reward was removed/.test(x.message)));
+  // Cancelled again later: nothing more taken
+  assert.equal(await move('B1', 'expired'), null);
+  assert.equal(bal(), 0);
+});
+
+test('2% back: rides that never completed earn nothing; spent coins are taken only as far as the balance goes', async () => {
+  seed(0);
+  await book('B1', { walletCoins: 0 }); assert.equal(await move('B1', 'cancelled'), null);
+  await book('B2', { walletCoins: 0, fare: 40 }); assert.equal(await move('B2', 'completed'), null);   // under 1 coin
+  assert.equal(bal(), 0);
+  await book('B3', { walletCoins: 0, fare: 5000 }); await move('B3', 'completed');
+  assert.equal(bal(), 100);
+  // Customer spends 70 of them on another ride, then admin cancels B3
+  await book('B4', { fare: 70, walletCoins: 70 }); assert.equal(bal(), 30);
+  await move('B3', 'cancelled');
+  assert.equal(bal(), 0);
+  assert.deepEqual([store.get('bookings/B3').cashback.reversedCoins, store.get('bookings/B3').cashback.shortBy], [30, 70]);
+  // Card-paid completed rides earn too
+  seed(0); await book('C1', { paymentMethod: 'Card', payment: { method: 'card' }, fare: 2500 }); await move('C1', 'completed');
+  assert.equal(bal(), 50);
 });
