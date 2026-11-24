@@ -128,6 +128,20 @@ const out = []; const check = (n, ok, x = '') => out.push(`${ok ? 'PASS' : 'FAIL
   check('driver: collects J$700, told J$500 paid with coins', await p.locator('text=J$700').count() >= 1 && await p.locator('text=J$500 paid with VilleCoins').count() === 1);
   await p.close();
 
+  // Welcome pop-up (once)
+  p = await page('welcome', '&coins=200&welcome=1');
+  check('welcome: pop-up shows the gift', await p.locator('[role=dialog] >> text=200 VilleCoins').count() === 1 && await p.locator('text=J$200 has been added to your wallet.').count() === 1);
+  await p.screenshot({ path: `${D}/welcome-390.png` });
+  await p.click('button:has-text("View my wallet")'); await p.waitForTimeout(300);
+  check('welcome: closing marks it seen and opens the wallet', p.calls.some((c) => c[0] === 'walletWelcomeSeen') && p.navs.includes('wallet') && await p.locator('[role=dialog]').count() === 0);
+  await p.close();
+  p = await page('welcome', '&coins=200&welcome=seen');
+  check('welcome: not shown again once seen', await p.locator('[role=dialog]').count() === 0);
+  await p.close();
+  p = await page('welcome', '&coins=200');
+  check('welcome: not shown without a gift', await p.locator('[role=dialog]').count() === 0);
+  await p.close();
+
   // Admin
   p = await page('wallet-admin', '', 1280, 900);
   check('admin: totals', await p.locator('text=Coins held by customers').count() >= 1 && await p.locator('text=Used on rides').count() === 1);
@@ -138,6 +152,16 @@ const out = []; const check = (n, ok, x = '') => out.push(`${ok ? 'PASS' : 'FAIL
   await p.fill('#aw-amt', '1000'); await p.fill('#aw-why', 'Paid cash at office'); await p.click('button:has-text("Add")'); await p.waitForTimeout(400);
   const aj = p.calls.find((c) => c[0] === 'walletAdminAdjust');
   check('admin: adjustment goes through the server with a reason', aj && aj[1].coins === 1000 && aj[1].reason === 'Paid cash at office' && aj[1].uid === 'cust1', JSON.stringify(aj));
+  check('admin rewards: welcome off by default', await p.locator('[data-welcome=off]').count() === 1 && await p.locator('text=Give welcome coins to all existing customers').count() === 0);
+  await p.click('button:has-text("Turn on")'); await p.waitForTimeout(300);
+  const wc = await p.evaluate(() => window.__store.get('config/wallet'));
+  check('admin rewards: turn on saves 200', wc && wc.welcomeOn === true && wc.welcomeCoins === 200, JSON.stringify(wc));
+  await p.click('button:has-text("Give welcome coins to all existing customers")'); await p.waitForTimeout(100);
+  check('admin rewards: asks before giving to everyone', await p.locator('text=Yes, give to everyone').count() === 1 && !p.calls.some((c) => c[0] === 'walletWelcomeAll'));
+  await p.click('button:has-text("Yes, give to everyone")'); await p.waitForTimeout(300);
+  check('admin rewards: gives to all and reports', p.calls.some((c) => c[0] === 'walletWelcomeAll') && await p.locator('text=12 customers got 200 VilleCoins').count() === 1);
+  await p.click('button:has-text("Turn off")'); await p.waitForTimeout(300);
+  check('admin rewards: turn off', (await p.evaluate(() => window.__store.get('config/wallet'))).welcomeOn === false);
   check('admin: bank transfers waiting', await p.locator('text=Bank transfers to check (2)').count() === 1 && await p.locator('[data-bank-row="VC-AB12CD"] >> text=View receipt').count() === 1 && await p.locator('[data-bank-row="VC-ZZ99YY"] >> text=No receipt yet').count() === 1);
   await p.locator('[data-bank-row="VC-ZZ99YY"] >> button:has-text("Reject")').click(); await p.waitForTimeout(200);
   check('admin: reject needs a reason', await p.locator('[data-bank-row="VC-ZZ99YY"] >> text=Write a short reason').count() === 1);

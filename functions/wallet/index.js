@@ -8,6 +8,8 @@
 // • config/wallet            bank details + contact numbers shown to customers
 // • wallet_codes/{CODE}      a redeem code worth coins; works once, for one person
 // • wallet_code_tries/{uid}  wrong-code counter so codes can't be guessed
+// Rewards: 2% back on completed rides, 50 coins on a first completed ride,
+// welcome coins (config/wallet.welcomeOn / welcomeCoins).
 //
 // Coins come in three ways: a card top-up (paid through the existing WiPay
 // flow, credited in payments.js by creditTopupInTx), a bank transfer that an
@@ -97,6 +99,7 @@ async function onBookingUpdated(id, before, after) {
   if (!before || !after || before.status === after.status) return null;
   const held = await settleHeld(id, after);
   const back = await cashback(id, before, after);
+  await firstRide(id, before, after);
   return held || back;
 }
 
@@ -163,6 +166,111 @@ async function cashback(id, before, after) {
     await db().collection('notifications').add({ customerId: uid, type: 'wallet', read: false, createdAt: deps.serverTime(), message }).catch(() => {});
   }
   return out.kind === 'credited' ? 'cashback' : 'cashback_reversed';
+}
+
+// ── First completed ride: 50 coins ──────────────────────────────────────────
+// Once per customer, on their first completed ride. If that ride is changed to
+// cancelled, the coins come back off (as far as the balance allows) and the
+// next completed ride can earn it instead.
+const FIRST_RIDE_COINS = 50;
+
+async function firstRide(id, before, after) {
+  const uid = after.customerId;
+  if (!uid || typeof uid !== 'string') return null;
+  const earn = after.status === 'completed';
+  const undo = before.status === 'completed' && ENDED.includes(after.status);
+  if (!earn && !undo) return null;
+  const wRef = db().doc(`wallets/${uid}`);
+  const bRef = db().doc(`bookings/${id}`);
+  if (earn) {
+    const w0 = await wRef.get();
+    if (w0.exists && w0.get('firstRide')) return null;
+    // Customers who already finished a ride before this reward started don't get it.
+    const done = await db().collection('bookings').where('customerId', '==', uid).where('status', '==', 'completed').get();
+    if (done.docs.some((d) => d.id !== id)) {
+      await wRef.set({ firstRide: { status: 'earlier' } }, { merge: true });
+      return null;
+    }
+  }
+  const out = await db().runTransaction(async (tx) => {
+    const ws = await tx.get(wRef);
+    const b = await tx.get(bRef);
+    if (!b.exists) return null;
+    const fr = ws.exists ? ws.get('firstRide') : null;
+    if (earn) {
+      if (fr || b.get('status') !== 'completed') return null;
+      const balance = applyInTx(tx, ws, uid, FIRST_RIDE_COINS, { type: 'first_ride_bonus', bookingId: id, note: 'First ride reward' });
+      tx.set(wRef, { firstRide: { status: 'credited', bookingId: id, coins: FIRST_RIDE_COINS } }, { merge: true });
+      tx.update(bRef, { firstRideBonus: { coins: FIRST_RIDE_COINS, status: 'credited' } });
+      return { kind: 'credited', balance };
+    }
+    const fb = b.get('firstRideBonus');
+    if (!fb || fb.status !== 'credited' || !ENDED.includes(b.get('status'))) return null;
+    const have = ws.exists ? coinsOf(ws.get('balance')) : 0;
+    const take = Math.min(have, coinsOf(fb.coins));
+    if (take > 0) applyInTx(tx, ws, uid, -take, { type: 'first_ride_bonus_reversed', bookingId: id, note: 'Ride was cancelled' });
+    tx.set(wRef, { firstRide: deps.del() }, { merge: true });
+    tx.update(bRef, { firstRideBonus: { ...fb, status: 'reversed', reversedCoins: take } });
+    return { kind: 'reversed', coins: take };
+  });
+  if (!out) return null;
+  if (out.kind === 'credited') {
+    await db().collection('notifications').add({ customerId: uid, type: 'wallet', read: false, createdAt: deps.serverTime(), message: `Thanks for your first ride! ${FIRST_RIDE_COINS} VilleCoins were added to your wallet.` }).catch(() => {});
+  }
+  return out.kind;
+}
+
+// ── Welcome coins ───────────────────────────────────────────────────────────
+// config/wallet: { welcomeOn: true|false, welcomeCoins: 200 }. While on, every
+// new customer gets the coins when their account is created. Admin can also
+// give them to every customer who already has an account. Each customer gets
+// them once; wallets/{uid}.welcome records it and whether the pop-up was seen.
+const WELCOME_DEFAULT = 200;
+const WELCOME_MAX = 5000;
+async function welcomeConfig() {
+  const c = await db().doc('config/wallet').get();
+  const on = c.exists && c.get('welcomeOn') === true;
+  const n = c.exists && c.get('welcomeCoins') != null ? coinsOf(c.get('welcomeCoins')) : WELCOME_DEFAULT;
+  return { on, coins: Math.max(0, Math.min(WELCOME_MAX, n)) };
+}
+async function grantWelcome(uid, coins, how) {
+  if (!uid || coins < 1) return false;
+  const wRef = db().doc(`wallets/${uid}`);
+  return db().runTransaction(async (tx) => {
+    const ws = await tx.get(wRef);
+    if (ws.exists && ws.get('welcome')) return false;
+    applyInTx(tx, ws, uid, coins, { type: 'welcome_bonus', note: 'Welcome gift' });
+    tx.set(wRef, { welcome: { coins, how, seen: false, at: deps.serverTime() } }, { merge: true });
+    return true;
+  });
+}
+async function onCustomerCreated(uid) {
+  const cfg = await welcomeConfig();
+  if (!cfg.on) return null;
+  return (await grantWelcome(uid, cfg.coins, 'signup')) ? 'granted' : 'skipped';
+}
+async function welcomeAll(auth) {
+  if (!isAdmin(auth)) throw new HttpsError('permission-denied', 'Admins only.');
+  const cfg = await welcomeConfig();
+  if (!cfg.on) throw new HttpsError('failed-precondition', 'Turn welcome coins on first.');
+  const all = await db().collection('customers').get();
+  let given = 0; let had = 0;
+  for (const d of all.docs) {
+    // eslint-disable-next-line no-await-in-loop
+    if (await grantWelcome(d.id, cfg.coins, 'existing')) given += 1; else had += 1;
+  }
+  return { ok: true, given, had, coins: cfg.coins };
+}
+async function welcomeSeen(auth) {
+  if (!auth) throw new HttpsError('unauthenticated', 'Please sign in first.');
+  const wRef = db().doc(`wallets/${auth.uid}`);
+  return db().runTransaction(async (tx) => {
+    const ws = await tx.get(wRef);
+    const w = ws.exists ? ws.get('welcome') : null;
+    if (!w || w.seen) return { ok: true };
+    tx.set(wRef, { welcome: { ...w, seen: true } }, { merge: true });
+    return { ok: true };
+  });
 }
 
 // ── Admin: add or remove coins ──────────────────────────────────────────────
@@ -335,6 +443,9 @@ exports.walletTopupCreate = onCall(async (req) => {
 });
 exports.walletBookingCreated = onDocumentCreated('bookings/{id}', (e) => (e.data ? onBookingCreated(e.params.id, e.data.data()) : null));
 exports.walletBookingUpdated = onDocumentUpdated('bookings/{id}', (e) => onBookingUpdated(e.params.id, e.data.before.data(), e.data.after.data()));
+exports.walletCustomerCreated = onDocumentCreated('customers/{uid}', (e) => onCustomerCreated(e.params.uid));
+exports.walletWelcomeAll = onCall({ timeoutSeconds: 540 }, (req) => welcomeAll(req.auth));
+exports.walletWelcomeSeen = onCall((req) => welcomeSeen(req.auth));
 exports.walletAdminAdjust = onCall((req) => adminAdjust(req.auth, req.data || {}));
 exports.walletBankCreate = onCall((req) => bankCreate(req.auth, req.data || {}));
 exports.walletBankUpdate = onCall((req) => bankUpdate(req.auth, req.data || {}));
@@ -344,4 +455,4 @@ exports.walletCodeCancel = onCall((req) => codeCancel(req.auth, req.data || {}))
 exports.walletRedeem = onCall((req) => codeRedeem(req.auth, req.data || {}));
 
 exports.creditTopupInTx = creditTopupInTx;
-exports.internal = { setDeps: (d) => { deps = { ...deps, ...d }; }, applyInTx, creditTopupInTx, createTopup, onBookingCreated, onBookingUpdated, adminAdjust, bankCreate, bankUpdate, bankDecide, codeCreate, codeCancel, codeRedeem, cashbackFor, CASHBACK_PCT };
+exports.internal = { setDeps: (d) => { deps = { ...deps, ...d }; }, applyInTx, creditTopupInTx, createTopup, onBookingCreated, onBookingUpdated, adminAdjust, bankCreate, bankUpdate, bankDecide, codeCreate, codeCancel, codeRedeem, cashbackFor, CASHBACK_PCT, firstRide, onCustomerCreated, welcomeAll, welcomeSeen, FIRST_RIDE_COINS };

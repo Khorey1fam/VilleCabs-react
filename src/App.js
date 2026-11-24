@@ -29,7 +29,7 @@ import { PaymentReturn, goToCard } from './dash/Payments';
 import { ExtraFareRequest, ExtraFareList, ExtraFareCustomer, usePendingExtraRides } from './RideExtras';
 import { CustomerCancelSheet, DriverCancelSheet, useCancelConfig, useCancelBalance } from './cancel/CancelSheets';
 import { freeWindowLeft, jmd as cancelJmd } from './cancel/cancelRules';
-import WalletScreen, { useWalletBalance, CoinMark, coins as fmtCoins } from './wallet/Wallet';
+import WalletScreen, { useWalletBalance, CoinMark, coins as fmtCoins, WelcomePopup } from './wallet/Wallet';
 import { StoresList, StorePage, Cart, Checkout, OrderTrack } from './dash/Marketplace';
 import SendPackage from './dash/SendPackage';
 import DeliveryTrack from './dash/DeliveryTrack';
@@ -13269,6 +13269,7 @@ export default function App() {
         <GlobalStyles/>
         <ToastHost/>
         <MapBg/>
+        {user?.role === 'customer' && <WelcomePopup user={user} onWallet={() => setScreen('wallet')}/>}
         {showOnboarding && !user && screen === 'splash' && site === 'cabs'
           ? <OnboardingFlow onDone={() => { try { localStorage.setItem('vc_onboarded','1'); } catch(e) {} setShowOnboarding(false); }}/>
           : (screens[screen]||screens.splash)}
