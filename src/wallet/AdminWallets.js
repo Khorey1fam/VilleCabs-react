@@ -10,7 +10,7 @@ import { coins } from './Wallet';
 
 const small = { padding: '7px 11px', fontSize: 12.5, borderRadius: 9, cursor: 'pointer', fontWeight: 600, border: `1px solid ${C.line}`, background: C.white, color: C.ink };
 const when = (t) => (t && t.toDate ? t.toDate().toLocaleString('en-JM', { timeZone: 'America/Jamaica', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '');
-const LABEL = { topup_card: 'Card top-up', topup_bank: 'Bank transfer top-up', code_redeem: 'Redeemed a code', admin_credit: 'Added by admin', admin_debit: 'Removed by admin', ride_payment: 'Paid for a ride', ride_refund: 'Ride refund' };
+const LABEL = { topup_card: 'Card top-up', topup_bank: 'Bank transfer top-up', code_redeem: 'Redeemed a code', ride_cashback: '2% back on a ride', ride_cashback_reversed: '2% back removed (ride cancelled)', first_ride_bonus: 'First ride reward', first_ride_bonus_reversed: 'First ride reward removed (ride cancelled)', welcome_bonus: 'Welcome gift', admin_credit: 'Added by admin', admin_debit: 'Removed by admin', ride_payment: 'Paid for a ride', ride_refund: 'Ride refund' };
 
 function Customer({ c }) {
   const [balance, setBalance] = useState(null);
@@ -207,6 +207,66 @@ function RedeemCodes() {
   );
 }
 
+// Rewards: welcome coins (switchable), first ride 50, 2% back.
+function Rewards() {
+  const [cfg, setCfg] = useState(null);
+  const [amt, setAmt] = useState('200');
+  const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState('');
+  const [confirmAll, setConfirmAll] = useState(false);
+  useEffect(() => onSnapshot(doc(dashDb(), 'config', 'wallet'), (s) => {
+    const c = s.exists() ? s.data() : {}; setCfg(c); setAmt((a) => (a === '200' && c.welcomeCoins ? String(c.welcomeCoins) : a));
+  }, () => setCfg({})), []);
+  if (!cfg) return null;
+  const on = cfg.welcomeOn === true;
+  const save = async (next) => {
+    const n = Math.floor(Number(amt));
+    if (!n || n < 1 || n > 5000) { setMsg('Welcome coins must be between 1 and 5,000.'); return; }
+    setBusy('save'); setMsg('');
+    try { await setDoc(doc(dashDb(), 'config', 'wallet'), { welcomeOn: next, welcomeCoins: n }, { merge: true }); setMsg(next ? `On. New customers get ${coins(n)} VilleCoins when they sign up.` : 'Off. New customers won’t get welcome coins.'); } catch (e) { setMsg('Could not save.'); }
+    setBusy('');
+  };
+  const giveAll = async () => {
+    setBusy('all'); setMsg(''); setConfirmAll(false);
+    try { const r = (await httpsCallable(getFunctions(getApp()), 'walletWelcomeAll')({})).data; setMsg(`Done. ${r.given} customer${r.given === 1 ? '' : 's'} got ${coins(r.coins)} VilleCoins. ${r.had} already had their welcome gift.`); } catch (e) { setMsg(e.message || 'Could not give the coins.'); }
+    setBusy('');
+  };
+  return (
+    <div style={st.card}>
+      <div style={st.h2}>Rewards</div>
+      <div style={{ ...st.sub, lineHeight: 1.6 }}>Always on: <b>2% back</b> in VilleCoins on every completed ride, and <b>50 VilleCoins</b> on a customer’s first completed ride. Both are taken back if the ride is changed to cancelled.</div>
+      <div style={{ borderTop: `1px solid ${C.line}`, marginTop: 12, paddingTop: 12 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <div><div style={{ fontWeight: 800 }}>Welcome coins</div><div style={st.sub} data-welcome={on ? 'on' : 'off'}>{on ? `On · new customers get ${coins(cfg.welcomeCoins || 200)} VilleCoins when they sign up` : 'Off'}</div></div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+            <div><label style={st.label} htmlFor="rw-amt">Coins</label><input id="rw-amt" style={{ ...st.input, width: 100 }} inputMode="numeric" value={amt} onChange={(e) => setAmt(e.target.value.replace(/\D/g, '').slice(0, 4))} /></div>
+            <button type="button" disabled={!!busy} style={{ ...small, padding: '11px 16px', background: on ? C.white : C.purple, color: on ? C.red : C.white, border: on ? `1px solid ${C.line}` : 'none' }} onClick={() => save(!on)}>{on ? 'Turn off' : 'Turn on'}</button>
+            {on && <button type="button" disabled={!!busy} style={{ ...small, padding: '11px 16px' }} onClick={() => save(true)}>Save amount</button>}
+          </div>
+        </div>
+        {on && (
+          <div style={{ marginTop: 12 }}>
+            {!confirmAll
+              ? <button type="button" disabled={!!busy} style={{ ...small, padding: '11px 16px' }} onClick={() => setConfirmAll(true)}>Give welcome coins to all existing customers</button>
+              : (
+                <div style={st.note}>
+                  Give {coins(cfg.welcomeCoins || 200)} VilleCoins to every customer who already has an account? Customers who already got their welcome gift are skipped. This can’t be undone here.
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    <button type="button" style={{ ...small, background: C.purple, color: C.white, border: 'none' }} onClick={giveAll}>Yes, give to everyone</button>
+                    <button type="button" style={small} onClick={() => setConfirmAll(false)}>Cancel</button>
+                  </div>
+                </div>
+              )}
+            {busy === 'all' && <div style={st.sub}>Giving coins…</div>}
+          </div>
+        )}
+        {msg && <div style={st.note} role="status">{msg}</div>}
+        <div style={{ ...st.sub, marginTop: 8 }}>Customers see a one-time pop-up telling them the coins were added.</div>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminWallets() {
   const [recent, setRecent] = useState(null);
   const [wallets, setWallets] = useState([]);
@@ -216,11 +276,13 @@ export default function AdminWallets() {
   useEffect(() => onSnapshot(query(collection(dashDb(), 'wallet_tx'), orderBy('at', 'desc'), limit(300)), (s) => setRecent(s.docs.map((d) => ({ id: d.id, ...d.data() }))), () => setRecent([])), []);
   useEffect(() => onSnapshot(collection(dashDb(), 'wallets'), (s) => setWallets(s.docs.map((d) => ({ id: d.id, ...d.data() }))), () => {}), []);
   const totals = useMemo(() => {
-    const t = { held: wallets.reduce((s, w) => s + (w.balance || 0), 0), card: 0, bank: 0, codes: 0, admin: 0, rides: 0 };
+    const t = { held: wallets.reduce((s, w) => s + (w.balance || 0), 0), card: 0, bank: 0, codes: 0, cashback: 0, gifts: 0, admin: 0, rides: 0 };
     (recent || []).forEach((r) => {
       if (r.type === 'topup_card') t.card += r.amount;
       if (r.type === 'topup_bank') t.bank += r.amount;
       if (r.type === 'code_redeem') t.codes += r.amount;
+      if (r.type === 'ride_cashback' || r.type === 'ride_cashback_reversed') t.cashback += r.amount;
+      if (r.type === 'welcome_bonus' || r.type === 'first_ride_bonus' || r.type === 'first_ride_bonus_reversed') t.gifts += r.amount;
       if (r.type === 'admin_credit' || r.type === 'admin_debit') t.admin += r.amount;
       if (r.type === 'ride_payment' || r.type === 'ride_refund') t.rides -= r.amount;
     });
@@ -245,11 +307,12 @@ export default function AdminWallets() {
   return (
     <div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10, marginBottom: 12 }}>
-        {[['Coins held by customers', totals.held], ['Bought by card', totals.card], ['Bought by bank transfer', totals.bank], ['Added by codes', totals.codes], ['Added by admin (net)', totals.admin], ['Used on rides', totals.rides]].map(([l, v]) => (
+        {[['Coins held by customers', totals.held], ['Bought by card', totals.card], ['Bought by bank transfer', totals.bank], ['Added by codes', totals.codes], ['2% back on rides (net)', totals.cashback], ['Welcome + first ride gifts', totals.gifts], ['Added by admin (net)', totals.admin], ['Used on rides', totals.rides]].map(([l, v]) => (
           <div key={l} style={{ ...st.card, margin: 0 }}><div style={{ fontSize: 12, color: C.quiet }}>{l}</div><div style={{ fontSize: 22, fontWeight: 800 }}>{coins(v)}</div></div>
         ))}
       </div>
       <div style={st.note}>1 VilleCoin = J$1. Coins held by customers is money VilleCabs owes in rides. On rides paid with coins, VilleCabs owes the driver their 85% of that part, the same as card rides. The last 300 changes are counted here.</div>
+      <Rewards />
       <BankRequests />
       <RedeemCodes />
       <TopupSettings />

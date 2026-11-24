@@ -14,7 +14,7 @@ const LINE = '#ece6f5';
 export const coins = (n) => `${Math.round(Number(n) || 0).toLocaleString('en-US')}`;
 const when = (t) => (t && t.toDate ? t.toDate().toLocaleString('en-JM', { timeZone: 'America/Jamaica', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '');
 const LABEL = {
-  topup_card: 'Top-up by card', topup_bank: 'Top-up by bank transfer', code_redeem: 'Redeemed a code', admin_credit: 'Added by VilleCabs', admin_debit: 'Removed by VilleCabs',
+  topup_card: 'Top-up by card', topup_bank: 'Top-up by bank transfer', code_redeem: 'Redeemed a code', ride_cashback: '2% back on a ride', ride_cashback_reversed: '2% back removed: ride cancelled', first_ride_bonus: 'First ride reward', first_ride_bonus_reversed: 'First ride reward removed: ride cancelled', welcome_bonus: 'Welcome gift', admin_credit: 'Added by VilleCabs', admin_debit: 'Removed by VilleCabs',
   ride_payment: 'Paid for a ride', ride_refund: 'Returned: ride didn’t go ahead',
 };
 
@@ -53,6 +53,41 @@ export function CoinMark({ size = 20 }) {
       <circle cx="12" cy="12" r="8.5" fill="none" stroke="#fff3c4" strokeWidth="1.2" />
       <path d="M8 8l4 9 4-9" fill="none" stroke="#5b3d00" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
+  );
+}
+
+// One-time pop-up when welcome coins have been added (wallets/{uid}.welcome.seen).
+export function WelcomePopup({ user, onWallet }) {
+  const uid = user?.uid;
+  const [w, setW] = useState(null);
+  const [closed, setClosed] = useState(false);
+  useEffect(() => {
+    if (!uid) return undefined;
+    return onSnapshot(doc(dashDb(), 'wallets', uid), (s) => setW(s.exists() ? s.data().welcome || null : null), () => setW(null));
+  }, [uid]);
+  if (!uid || closed || !w || w.seen) return null;
+  const close = (then) => {
+    setClosed(true);
+    call('walletWelcomeSeen', {}).catch(() => {});
+    if (then) then();
+  };
+  const n = coins(w.coins);
+  return (
+    <div role="dialog" aria-modal="true" aria-labelledby="vc-welcome-title" style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(20,12,40,0.55)', display: 'grid', placeItems: 'center', padding: 16 }}>
+      <div style={{ width: '100%', maxWidth: 380, background: '#fff', borderRadius: 24, overflow: 'hidden', boxShadow: '0 24px 70px rgba(0,0,0,0.35)', textAlign: 'center', color: INK }}>
+        <div style={{ background: 'linear-gradient(135deg, #1a2744 0%, #2d1650 100%)', padding: '26px 20px 22px', color: '#fff' }}>
+          <div style={{ display: 'flex', justifyContent: 'center' }}><CoinMark size={64} /></div>
+          <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: '#e9e3f5', marginTop: 12 }}>Welcome gift</div>
+          <div id="vc-welcome-title" style={{ fontSize: 34, fontWeight: 800, color: '#ffd84d', marginTop: 2 }}>{n} VilleCoins</div>
+        </div>
+        <div style={{ padding: '18px 22px 22px' }}>
+          <p style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>J${n} has been added to your wallet.</p>
+          <p style={{ margin: '6px 0 0', color: MUTED, fontSize: 14, lineHeight: 1.5 }}>Use it toward your next VilleCabs ride. 1 VilleCoin = J$1.</p>
+          <button type="button" onClick={() => close(onWallet)} style={{ ...primary, marginTop: 18 }}>View my wallet</button>
+          <button type="button" onClick={() => close()} style={{ ...ghost, width: '100%', marginTop: 8, minHeight: 46 }}>Got it</button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -255,6 +290,7 @@ export default function WalletScreen({ user, go, TopBar, dash, onBack }) {
           </div>
           <div style={{ fontSize: 40, fontWeight: 800, margin: '6px 0 2px', color: '#ffd84d' }}>{balance === null ? '…' : coins(balance)}</div>
           <div style={{ fontSize: 13.5, color: '#e9e3f5' }}>1 VilleCoin = J$1 · use them to pay for VilleCabs rides</div>
+          <div style={{ marginTop: 10, display: 'inline-block', background: 'rgba(255,216,77,0.16)', color: '#ffd84d', borderRadius: 20, padding: '5px 12px', fontSize: 12.5, fontWeight: 700 }}>Earn 2% back in VilleCoins on every completed ride, plus 50 on your first</div>
         </section>
 
         {openBank.length > 0 && (

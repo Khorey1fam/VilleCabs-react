@@ -16,25 +16,26 @@ function resolve(v) {
 const docRef = (path) => ({
   path, id: path.split('/').pop(),
   async get() { const d = store.get(path); return { exists: !!d, id: path.split('/').pop(), data: () => d && { ...d }, get: (k) => d && d[k] }; },
-  async set(v, o) { const prev = store.get(path); store.set(path, o && o.merge ? { ...(prev || {}), ...resolve(v) } : resolve(v)); },
+  async set(v, o) { const prev = store.get(path); if (!(o && o.merge)) { store.set(path, resolve(v)); return; } const n = { ...(prev || {}), ...resolve(v) }; for (const [k, x] of Object.entries(v)) if (x && x.__del) delete n[k]; store.set(path, n); },
   async update(v) { const prev = store.get(path); if (!prev) throw new Error(`no doc ${path}`); const n = { ...prev }; for (const [k, x] of Object.entries(v)) { const r = resolve(x); if (r === undefined) delete n[k]; else n[k] = r; } store.set(path, n); },
 });
 const colQuery = (c, f) => ({
   where: (k, op, v) => colQuery(c, [...f, [k, v]]),
   async get() { const docs = [...store].filter(([p, d]) => p.startsWith(`${c}/`) && f.every(([k, v]) => d[k] === v)).map(([p, d]) => ({ id: p.split('/').pop(), data: () => ({ ...d }) })); return { size: docs.length, docs, empty: !docs.length }; },
 });
-const col = (c) => ({ doc: (id) => docRef(`${c}/${id || `auto${++auto}`}`), async add(v) { const r = docRef(`${c}/auto${++auto}`); await r.set(v); return r; }, where: (k, op, v) => colQuery(c, [[k, v]]) });
+const col = (c) => ({ doc: (id) => docRef(`${c}/${id || `auto${++auto}`}`), async add(v) { const r = docRef(`${c}/auto${++auto}`); await r.set(v); return r; }, where: (k, op, v) => colQuery(c, [[k, v]]), get: () => colQuery(c, []).get() });
 const fakeDb = {
   doc: docRef, collection: col,
   async runTransaction(fn) { const ops = []; const tx = { get: (r) => r.get(), set: (r, v, o) => ops.push(() => r.set(v, o)), update: (r, v) => ops.push(() => r.update(v)) }; const out = await fn(tx); for (const o of ops) await o(); return out; },
 };
 const W = require('./index');
 W.internal.setDeps({ db: () => fakeDb, serverTime: () => ({ __server: true }), del: () => ({ __del: true }) });
-const { onBookingCreated, onBookingUpdated, adminAdjust, createTopup, creditTopupInTx, bankCreate, bankUpdate, bankDecide, codeCreate, codeCancel, codeRedeem } = W.internal;
+const { onBookingCreated, onBookingUpdated, adminAdjust, createTopup, creditTopupInTx, bankCreate, bankUpdate, bankDecide, codeCreate, codeCancel, codeRedeem, cashbackFor, firstRide, onCustomerCreated, welcomeAll, welcomeSeen } = W.internal;
 const ADMIN = { uid: 'a', token: { email: 'admin@villecabs.com' } };
 const ME = { uid: 'c1', token: { email: 'c1@x.jm' } };
 const bal = () => ((store.get('wallets/c1') || {}).balance) || 0;
 const txs = () => [...store].filter(([p]) => p.startsWith('wallet_tx/')).map(([, d]) => d);
+const noFirst = () => store.set('wallets/c1', { ...(store.get('wallets/c1') || { balance: 0 }), firstRide: { status: 'earlier' } });
 function seed(coins) { store.clear(); auto = 0; store.set('customers/c1', { name: 'Kim' }); if (coins != null) store.set('wallets/c1', { balance: coins }); }
 async function book(id, over = {}) {
   const b = { customerId: 'c1', status: 'searching', fare: 1200, paymentMethod: 'Cash', walletCoins: 1200, ...over };
@@ -66,7 +67,7 @@ test('coins cover the whole ride', async () => {
   assert.equal(bal(), 800);
   assert.equal(await move('B1', 'completed'), 'paid');
   assert.equal(store.get('bookings/B1').wallet.status, 'paid');
-  assert.equal(bal(), 800);
+  assert.equal(bal(), 874);   // 800 left + 24 (2% back on J$1,200) + 50 (first ride)
 });
 
 test('short balance: coins first, cash for the rest', async () => {
@@ -193,4 +194,104 @@ test('redeem code: wrong guesses are limited per hour', async () => {
   assert.equal(bal(), 0);
   await assert.rejects(codeRedeem(null, { code: codes[0] }), /sign in/);
   assert.equal((await codeRedeem(ME, { code: codes[0] }, t0 + 61 * 60 * 1000)).balance, 500);   // after an hour
+});
+
+test('2% back: completed rides earn coins once; cancelling takes them back', async () => {
+  seed(0); noFirst();
+  assert.deepEqual([cashbackFor(1200), cashbackFor(999), cashbackFor(40), cashbackFor(10000000), cashbackFor('x')], [24, 19, 0, 1000, 0]);
+  await book('B1', { walletCoins: 0 });
+  assert.equal(await move('B1', 'active'), null);
+  assert.equal(bal(), 0);                                  // nothing until the ride is completed
+  assert.equal(await move('B1', 'completed'), 'cashback');
+  assert.equal(bal(), 24);
+  const cb = store.get('bookings/B1').cashback; assert.deepEqual([cb.coins, cb.pct, cb.status], [24, 2, 'credited']);
+  assert.ok([...store].some(([p, x]) => p.startsWith('notifications/') && /earned 24 VilleCoins \(2% back\)/.test(x.message)));
+  // A repeat "completed" write doesn't pay twice
+  const b = store.get('bookings/B1'); assert.equal(await onBookingUpdated('B1', { ...b, status: 'arrived' }, b), null);
+  assert.equal(bal(), 24);
+  // Admin changes it to cancelled: coins removed
+  assert.equal(await move('B1', 'cancelled'), 'cashback_reversed');
+  assert.equal(bal(), 0);
+  assert.equal(store.get('bookings/B1').cashback.status, 'reversed');
+  assert.deepEqual(txs().map((t) => t.type), ['ride_cashback', 'ride_cashback_reversed']);
+  assert.ok([...store].some(([p, x]) => p.startsWith('notifications/') && /reward was removed/.test(x.message)));
+  // Cancelled again later: nothing more taken
+  assert.equal(await move('B1', 'expired'), null);
+  assert.equal(bal(), 0);
+});
+
+test('2% back: rides that never completed earn nothing; spent coins are taken only as far as the balance goes', async () => {
+  seed(0); noFirst();
+  await book('B1', { walletCoins: 0 }); assert.equal(await move('B1', 'cancelled'), null);
+  await book('B2', { walletCoins: 0, fare: 40 }); assert.equal(await move('B2', 'completed'), null);   // under 1 coin
+  assert.equal(bal(), 0);
+  await book('B3', { walletCoins: 0, fare: 5000 }); await move('B3', 'completed');
+  assert.equal(bal(), 100);
+  // Customer spends 70 of them on another ride, then admin cancels B3
+  await book('B4', { fare: 70, walletCoins: 70 }); assert.equal(bal(), 30);
+  await move('B3', 'cancelled');
+  assert.equal(bal(), 0);
+  assert.deepEqual([store.get('bookings/B3').cashback.reversedCoins, store.get('bookings/B3').cashback.shortBy], [30, 70]);
+  // Card-paid completed rides earn too
+  seed(0); noFirst(); await book('C1', { paymentMethod: 'Card', payment: { method: 'card' }, fare: 2500 }); await move('C1', 'completed');
+  assert.equal(bal(), 50);
+});
+
+test('first completed ride: 50 coins once; cancelled gives it back to the next ride', async () => {
+  seed(0);
+  await book('B1', { walletCoins: 0, fare: 1000 });
+  await move('B1', 'completed');
+  assert.equal(bal(), 70);                                   // 20 (2%) + 50
+  assert.equal(store.get('wallets/c1').firstRide.bookingId, 'B1');
+  assert.ok([...store].some(([p, x]) => p.startsWith('notifications/') && /first ride! 50 VilleCoins/.test(x.message)));
+  await book('B2', { walletCoins: 0, fare: 1000 }); await move('B2', 'completed');
+  assert.equal(bal(), 90);                                   // second ride: only 2%
+  // Admin cancels the first ride: 20 + 50 come off, and the next ride can earn the 50
+  await move('B1', 'cancelled');
+  assert.equal(bal(), 20);
+  assert.equal(store.get('wallets/c1').firstRide, undefined);
+  assert.equal(store.get('bookings/B1').firstRideBonus.status, 'reversed');
+  // B2 is already completed, so a new ride B3 is the next "first" — but B2 already
+  // counts as a completed ride, so no second bonus.
+  await book('B3', { walletCoins: 0, fare: 1000 }); await move('B3', 'completed');
+  assert.equal(bal(), 40);
+  assert.deepEqual(store.get('wallets/c1').firstRide, { status: 'earlier' });
+});
+
+test('first ride: customers who already finished a ride before don\'t get it', async () => {
+  seed(0);
+  store.set('bookings/OLD', { customerId: 'c1', status: 'completed', fare: 800 });
+  await book('B1', { walletCoins: 0, fare: 1000 }); await move('B1', 'completed');
+  assert.equal(bal(), 20);
+  assert.deepEqual(txs().map((t) => t.type), ['ride_cashback']);
+});
+
+test('welcome coins: off by default; on gives new and existing customers 200 once', async () => {
+  seed(); store.set('customers/c2', { name: 'Pat' }); store.set('customers/c3', { name: 'Lee' });
+  assert.equal(await onCustomerCreated('c1'), null);       // off
+  assert.equal(bal(), 0);
+  await assert.rejects(welcomeAll(ADMIN), /Turn welcome coins on first/);
+  store.set('config/wallet', { welcomeOn: true });           // default 200
+  assert.equal(await onCustomerCreated('c1'), 'granted');
+  assert.equal(bal(), 200);
+  assert.deepEqual([store.get('wallets/c1').welcome.coins, store.get('wallets/c1').welcome.seen, store.get('wallets/c1').welcome.how], [200, false, 'signup']);
+  assert.equal(await onCustomerCreated('c1'), 'skipped');  // never twice
+  await assert.rejects(welcomeAll(ME), /Admins only/);
+  const r = await welcomeAll(ADMIN);
+  assert.deepEqual([r.given, r.had, r.coins], [2, 1, 200]);
+  assert.equal(store.get('wallets/c2').balance, 200);
+  assert.equal(store.get('wallets/c3').welcome.how, 'existing');
+  assert.deepEqual((await welcomeAll(ADMIN)).given, 0);   // running it again gives nothing
+  assert.equal(bal(), 200);
+  // Pop-up seen
+  await assert.rejects(welcomeSeen(null), /sign in/);
+  await welcomeSeen(ME);
+  assert.equal(store.get('wallets/c1').welcome.seen, true);
+  assert.equal(store.get('wallets/c1').balance, 200);
+  // Turned off: new customers get nothing; custom amount respected when on
+  store.set('config/wallet', { welcomeOn: false }); store.set('customers/c4', {});
+  assert.equal(await onCustomerCreated('c4'), null);
+  store.set('config/wallet', { welcomeOn: true, welcomeCoins: 300 });
+  assert.equal(await onCustomerCreated('c4'), 'granted');
+  assert.equal(store.get('wallets/c4').balance, 300);
 });

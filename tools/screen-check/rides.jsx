@@ -3,7 +3,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { Timestamp, doc as fsDoc, setDoc as fsSet, updateDoc as fsUpdate } from 'firebase/firestore';
 import { __VehicleSelect as VehicleSelect, __BookingConfirm as BookingConfirm, __DriverLogin as DriverLogin, __DriverDash as DriverDash, __DriverActive as DriverActive, __LiveRide as LiveRide, __CustomerSignup as CustomerSignup, __CustomerLogin as CustomerLogin, __CustomerDash as CustomerDash, __CustomerProfile as CustomerProfile, __TopBar as TopBar } from '@src/App';
-import WalletScreen from '@src/wallet/Wallet';
+import WalletScreen, { WelcomePopup } from '@src/wallet/Wallet';
 import AdminWallets from '@src/wallet/AdminWallets';
 import AdminPanel from '@src/AdminPanel';
 import AdminCancellations from '@src/cancel/AdminCancellations';
@@ -53,10 +53,12 @@ window.__callables = {
   walletRedeem: async (d) => { if (d.code.replace(/[^A-Z0-9]/g, '') !== 'VCGOOD2345') { const e = new Error('That code isn’t right. Check it and try again.'); throw e; } return { ok: true, coins: 1000, balance: 1000 }; },
   walletCodeCreate: async (d) => { const codes = Array.from({ length: d.count }, (_, i) => `VC-NEW${i}-ABCD`); for (const c of codes) await fsSet(fsDoc({}, 'wallet_codes', c), { coins: d.coins, status: 'active', note: d.note, createdAt: Timestamp.fromMillis(Date.now()) }); return { ok: true, codes }; },
   walletCodeCancel: async (d) => { await fsUpdate(fsDoc({}, 'wallet_codes', d.code), { status: 'cancelled' }); return { ok: true }; },
+  walletWelcomeSeen: async () => { await fsUpdate(fsDoc({}, 'wallets', 'cust1'), { 'welcome.seen': true }); return { ok: true }; },
+  walletWelcomeAll: async () => ({ ok: true, given: 12, had: 3, coins: 200 }),
   walletBankDecide: async (d) => { await fsUpdate(fsDoc({}, 'wallet_bank_requests', d.id), { status: d.approve ? 'approved' : 'rejected' }); return { ok: true }; } };
 if (params.get('dash')) { put('config/features', { dash: true }); if (params.get('dash') === 'stores') { put('merchants/m1', { name: 'Juici', status: 'approved', category: 'restaurant' }); put('merchants/m2', { name: 'Hilo', status: 'approved', category: 'supermarket' }); put('merchants/m3', { name: 'Pending shop', status: 'pending', category: 'boutique' }); } }
 // ── Wallet screens ──
-if (params.get('coins')) put('wallets/cust1', { balance: Number(params.get('coins')) });
+if (params.get('coins')) put('wallets/cust1', { balance: Number(params.get('coins')), ...(params.get('welcome') ? { welcome: { coins: 200, seen: params.get('welcome') === 'seen', how: 'existing' } } : {}) });
 if (s && s.startsWith('wallet')) {
   const T = (ms) => Timestamp.fromMillis(ms); const t = Date.now();
   put('wallet_tx/W1', { uid: 'cust1', type: 'admin_credit', amount: 2000, balanceAfter: 2000, note: 'Paid cash at office', at: T(t - 86400e3) });
@@ -154,6 +156,7 @@ const SCREENS = {
   'admin-site': <AdminPanel />,
   'wallet': <WalletScreen go={nav} user={user} TopBar={TopBar} />,
   'wallet-card': <WalletScreen go={nav} user={user} TopBar={TopBar} />,
+  'welcome': <div style={{ minHeight: '100vh', background: '#eee' }}><WelcomePopup user={user} onWallet={() => nav('wallet')} /></div>,
   'wallet-vd': <WalletScreen go={nav} user={user} dash onBack={() => nav('dash-home')} />,
   'wallet-admin': <div style={{ background: '#f5f6fa', minHeight: '100vh', padding: 14 }}><AdminWallets /></div>,
   'wallet-dash': <CustomerDash go={nav} user={user} setUser={() => {}} setBookingId={() => {}} setPickupData={() => {}} setDropoffData={() => {}} site="cabs" domains={{}} />,
